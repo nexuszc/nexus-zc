@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nexus Brain</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a0a; color: #e5e5e5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  .card { background: #161616; border: 1px solid #262626; transition: all 0.15s ease; position: relative; }
+  .card:hover { border-color: #404040; background: #1a1a1a; cursor: pointer; }
+  .card.selected { border-color: #a78bfa; background: #1c1432; }
+  .card.selected::after { content: '✓'; position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; background: #a78bfa; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
+  .card-platform { border-left: 3px solid #a78bfa; }
+  .card-vertical { border-left: 3px solid #34d399; }
+  .card-personal { border-left: 3px solid #60a5fa; }
+  .card-external { border-left: 3px solid #fbbf24; }
+  .card-idea { border-left: 3px solid #525252; }
+  .accent { color: #a78bfa; }
+  .badge { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #262626; color: #a3a3a3; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .badge-imp { background: #2e1065; color: #c4b5fd; }
+  .badge-attn { padding: 3px 10px; font-size: 10px; font-weight: 600; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .attn-decision { background: #7f1d1d; color: #fca5a5; }
+  .attn-focus { background: #92400e; color: #fcd34d; }
+  .attn-appropriate { background: #064e3b; color: #6ee7b7; }
+  .attn-overinvested { background: #1e3a8a; color: #93c5fd; }
+  .attn-archive { background: #44403c; color: #d6d3d1; }
+  .entry { background: #141414; border-left: 3px solid #262626; transition: all 0.15s ease; }
+  .entry.high-importance { border-left-color: #a78bfa; }
+  .entry:hover { background: #1a1a1a; }
+  .entry.expandable { cursor: pointer; }
+  .merge-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #161616; border-top: 1px solid #404040; padding: 16px 32px; display: flex; align-items: center; gap: 12px; z-index: 50; flex-wrap: wrap; }
+  .btn { padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 500; transition: all 0.15s ease; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #7c3aed; color: white; }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-ghost { background: transparent; color: #a3a3a3; border: 1px solid #404040; }
+  .btn-ghost:hover { color: white; border-color: #737373; }
+  .btn-success { background: #047857; color: white; }
+  .btn-success:hover { background: #065f46; }
+  .btn-warn { background: #92400e; color: white; }
+  .btn-warn:hover { background: #78350f; }
+  .btn-danger { background: transparent; color: #fca5a5; border: 1px solid #7f1d1d; }
+  .btn-danger:hover { background: #7f1d1d; color: white; }
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; margin-top: 28px; }
+  .section-header:first-child { margin-top: 0; }
+  .section-header h2 { font-size: 13px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.12em; }
+  .section-header .line { flex: 1; height: 1px; background: #262626; }
+  .section-platform h2 { color: #c4b5fd; }
+  .section-vertical h2 { color: #6ee7b7; }
+  .section-personal h2 { color: #93c5fd; }
+  .section-external h2 { color: #fcd34d; }
+  .section-idea h2 { color: #a3a3a3; }
+  .brief-banner { background: linear-gradient(180deg, #1c1432 0%, #0a0a0a 100%); border: 1px solid #2e1065; border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+  .brief-headline { font-size: 18px; font-weight: 600; color: #c4b5fd; line-height: 1.5; margin-bottom: 12px; }
+  .brief-leverage { font-size: 14px; color: #e5e5e5; line-height: 1.6; }
+  .brief-leverage-label { font-size: 11px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 6px; }
+  .brief-meta { display: flex; gap: 16px; margin-top: 16px; font-size: 12px; color: #737373; }
+  .brief-expand { font-size: 12px; color: #a78bfa; cursor: pointer; margin-top: 12px; user-select: none; }
+  .brief-expand:hover { color: #c4b5fd; }
+  .brief-full { margin-top: 16px; padding-top: 16px; border-top: 1px solid #2e1065; font-size: 13px; line-height: 1.7; color: #d4d4d4; white-space: pre-wrap; }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: #262626; border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: #404040; }
+  .fade-in { animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  select, input[type="text"] { background: #0a0a0a; color: white; border: 1px solid #404040; padding: 6px 10px; border-radius: 4px; font-size: 14px; }
+  select:focus, input[type="text"]:focus { outline: none; border-color: #a78bfa; }
+</style>
+</head>
+<body class="min-h-screen pb-32">
+
+<div id="app"></div>
+
+<script>
+const API_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/brain-api';
+const REFRESH_ASSESSMENTS_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/refresh-assessments';
+
+const CATEGORY_ORDER = ['platform', 'vertical', 'personal', 'external', 'idea'];
+const CATEGORY_LABELS = {
+  platform: 'Platform',
+  vertical: 'Verticals',
+  personal: 'Personal',
+  external: 'External',
+  idea: 'Ideas',
+};
+const CATEGORY_DESCRIPTIONS = {
+  platform: 'The engine you\'re building',
+  vertical: 'GTM channels — built on the platform',
+  personal: 'Your investments, separate from platform',
+  external: 'Companies you contribute to but don\'t drive',
+  idea: 'Loose threads not yet committed',
+};
+
+let state = {
+  password: localStorage.getItem('nexus_brain_password') || null,
+  view: 'dashboard',
+  currentProject: null,
+  projects: [],
+  entries: [],
+  stats: null,
+  brief: null,
+  briefExpanded: false,
+  expandedEntries: new Set(),
+  manageMode: false,
+  selectedProjects: new Set(),
+  refreshing: false,
+};
+
+async function callAPI(action, params = {}) {
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-brain-password': state.password },
+    body: JSON.stringify({ action, ...params }),
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('nexus_brain_password');
+    state.password = null;
+    render();
+    throw new Error('Unauthorized');
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data.data;
+}
+
+function loginView() {
+  return `
+    <div class="min-h-screen flex items-center justify-center px-4">
+      <div class="w-full max-w-sm">
+        <div class="text-center mb-8">
+          <div class="text-3xl font-bold accent mb-2">NEXUS</div>
+          <div class="text-sm text-neutral-500">Enter password to access your brain</div>
+        </div>
+        <input id="password-input" type="password" placeholder="Password"
+          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-white focus:outline-none focus:border-violet-500" autofocus />
+        <button id="login-btn" class="w-full mt-3 bg-violet-600 hover:bg-violet-500 text-white font-medium py-3 rounded transition">Unlock</button>
+        <div id="login-error" class="text-red-400 text-sm mt-3 text-center hidden"></div>
+      </div>
+    </div>
+  `;
+}
+
+function header() {
+  const stats = state.stats;
+  const statsText = stats
+    ? `${stats.total_entries} entries · ${stats.platform || 0} platform · ${stats.vertical || 0} verticals · ${stats.idea || 0} ideas · ${stats.total_people} people`
+    : '';
+  return `
+    <header class="border-b border-neutral-900 px-8 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur z-10">
+      <div class="flex items-center gap-8">
+        <div class="font-bold text-lg accent">NEXUS</div>
+        <nav class="flex gap-6 text-sm">
+          <button data-view="dashboard" class="nav-btn ${state.view === 'dashboard' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'}">Projects</button>
+          <button data-view="all" class="nav-btn ${state.view === 'all' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'}">All Entries</button>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="text-xs text-neutral-600">${statsText}</div>
+        ${state.view === 'dashboard' ? `
+          <button
+            id="refresh-assessments"
+            class="btn btn-ghost ${state.refreshing ? 'opacity-60 cursor-not-allowed' : ''}"
+            title="Re-run COO assessment of all projects"
+            ${state.refreshing ? 'disabled' : ''}
+          >
+            ${state.refreshing ? '⟳ Thinking…' : '↻ Refresh'}
+          </button>
+          <button id="manage-toggle" class="btn ${state.manageMode ? 'btn-primary' : 'btn-ghost'}">
+            ${state.manageMode ? 'Done' : 'Manage'}
+          </button>
+        ` : ''}
+      </div>
+    </header>
+  `;
+}
+
+function briefBanner() {
+  if (!state.brief) return '';
+  const b = state.brief;
+  const date = new Date(b.generated_at);
+  const ago = formatRelativeDate(date);
+  return `
+    <div class="brief-banner fade-in">
+      <div class="brief-leverage-label">COO Brief — ${ago}</div>
+      <div class="brief-headline">${escapeHTML(b.headline || '')}</div>
+      <div class="brief-leverage">
+        <span class="text-violet-300 font-semibold">Highest leverage move:</span> ${escapeHTML(b.highest_leverage_move || '')}
+      </div>
+      <div class="brief-meta">
+        <span>${b.projects_assessed || 0} projects assessed</span>
+        <span>${b.decisions_needed_count || 0} decisions needed</span>
+      </div>
+      <div class="brief-expand" id="brief-toggle">${state.briefExpanded ? '↑ collapse full brief' : '↓ read full brief'}</div>
+      ${state.briefExpanded ? `
+        <div class="brief-full">${escapeHTML(b.full_brief || '')}</div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function projectCard(p) {
+  const last = p.last_activity ? new Date(p.last_activity) : null;
+  const daysAgo = last ? Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const dotColor = daysAgo === null ? '#525252' : daysAgo < 3 ? '#22c55e' : daysAgo < 14 ? '#eab308' : '#737373';
+  const preview = p.latest_thought ? (p.latest_thought.length > 140 ? p.latest_thought.slice(0, 140) + '…' : p.latest_thought) : 'No entries yet';
+  const isSelected = state.selectedProjects.has(p.name);
+  
+  const attnBadge = p.attention_call ? `
+    <span class="badge-attn attn-${p.attention_call.replace(/[^a-z]/g, '').replace('decisionneeded','decision').replace('needsmorefocus','focus').replace('considerarchiving','archive')}">${p.attention_call}</span>
+  ` : '';
+
+  return `
+    <div class="card card-${p.category} rounded-lg p-5 ${isSelected ? 'selected' : ''}" data-project="${escapeAttr(p.name)}">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full" style="background:${dotColor}"></div>
+          <div class="font-semibold text-base">${escapeHTML(p.name)}</div>
+        </div>
+        <div class="text-xs text-neutral-500 ${isSelected ? 'mr-7' : ''}">${p.entry_count} ${p.entry_count === 1 ? 'entry' : 'entries'}</div>
+      </div>
+      ${attnBadge ? `<div class="mb-2">${attnBadge}</div>` : ''}
+      <div class="text-sm text-neutral-400 leading-relaxed mb-3">${escapeHTML(preview)}</div>
+      ${p.next_step ? `<div class="text-xs text-violet-400/70 mb-3 italic">→ ${escapeHTML(p.next_step.slice(0, 120))}</div>` : ''}
+      <div class="text-xs text-neutral-600">${last ? formatRelativeDate(last) : '—'}</div>
+    </div>
+  `;
+}
+
+function dashboardView() {
+  if (state.projects.length === 0) {
+    return `<div class="px-8 py-16 text-center text-neutral-500">No projects yet.</div>`;
+  }
+  
+  const grouped = {};
+  for (const cat of CATEGORY_ORDER) grouped[cat] = [];
+  for (const p of state.projects) {
+    if (grouped[p.category]) grouped[p.category].push(p);
+  }
+  
+  const sections = CATEGORY_ORDER.map(cat => {
+    const items = grouped[cat].sort((a, b) => (b.entry_count || 0) - (a.entry_count || 0));
+    if (items.length === 0) return '';
+    return `
+      <div class="section-header section-${cat}">
+        <h2>${CATEGORY_LABELS[cat]}</h2>
+        <span class="text-xs text-neutral-600">${items.length} · ${CATEGORY_DESCRIPTIONS[cat]}</span>
+        <div class="line"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        ${items.map(projectCard).join('')}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="px-8 py-8 fade-in">
+      <h1 class="text-2xl font-bold mb-2">Your brain</h1>
+      ${state.manageMode ? `<div class="text-sm text-neutral-500 mb-6">Click projects to select. Set category, archive, or merge.</div>` : `<div class="mb-6"></div>`}
+      ${!state.manageMode ? briefBanner() : ''}
+      ${sections}
+    </div>
+    ${state.manageMode && state.selectedProjects.size > 0 ? manageBar() : ''}
+  `;
+}
+
+function manageBar() {
+  const selected = Array.from(state.selectedProjects);
+  const canMerge = selected.length >= 2;
+  return `
+    <div class="merge-bar fade-in">
+      <div class="text-sm text-neutral-300 flex-1 min-w-0">
+        <span class="text-white font-semibold">${selected.length} selected:</span>
+        <span class="text-neutral-400">${selected.map(escapeHTML).join(', ')}</span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        ${selected.length === 1 ? `<button id="rename-btn" class="btn btn-ghost">Rename</button>` : ''}
+        <span class="text-sm text-neutral-500">Set category:</span>
+        <select id="category-select">
+          <option value="platform">Platform</option>
+          <option value="vertical">Vertical</option>
+          <option value="personal">Personal</option>
+          <option value="external">External</option>
+          <option value="idea">Idea</option>
+          <option value="archived">Archived</option>
+        </select>
+        <button id="apply-category-btn" class="btn btn-success">Apply</button>
+        ${canMerge ? `
+          <span class="text-sm text-neutral-500 ml-2">Merge into:</span>
+          <select id="merge-target">
+            ${selected.map(n => `<option value="${escapeAttr(n)}">${escapeHTML(n)}</option>`).join('')}
+          </select>
+          <button id="merge-confirm" class="btn btn-primary">Merge ${selected.length}</button>
+        ` : ''}
+        ${selected.length === 1 ? `<button id="delete-btn" class="btn btn-danger">Delete</button>` : ''}
+        <button id="clear-selection" class="btn btn-ghost">Clear</button>
+      </div>
+    </div>
+  `;
+}
+
+function entryCard(e) {
+  const date = new Date(e.created_at);
+  const isHighImp = e.importance >= 8;
+  const typeColor = {
+    idea: '#a78bfa', task: '#60a5fa', decision: '#34d399', note: '#737373',
+    question: '#fbbf24', observation: '#f472b6', meta: '#94a3b8',
+  }[e.entry_type] || '#737373';
+  const isExpanded = state.expandedEntries.has(e.id);
+  const canExpand = e.content.length > 200;
+  const displayContent = canExpand && !isExpanded
+    ? escapeHTML(e.content.slice(0, 200)) + '<span class="text-neutral-600">…</span>'
+    : escapeHTML(e.content);
+  return `
+    <div class="entry rounded p-4 mb-2 ${isHighImp ? 'high-importance' : ''} ${canExpand ? 'expandable' : ''}" data-entry-id="${e.id}">
+      <div class="flex items-center gap-3 mb-2 text-xs">
+        <span class="badge" style="color:${typeColor}; border:1px solid ${typeColor}40">${e.entry_type || 'other'}</span>
+        ${e.importance ? `<span class="badge badge-imp">${e.importance}/10</span>` : ''}
+        <span class="text-neutral-600">${formatDate(date)}</span>
+        ${canExpand ? `<span class="text-neutral-700 ml-auto">${isExpanded ? '↑ collapse' : '↓ expand'}</span>` : ''}
+      </div>
+      <div class="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">${displayContent}</div>
+      ${isExpanded && e.tags && e.tags.length ? `
+        <div class="flex flex-wrap gap-1 mt-3">
+          ${e.tags.map(t => `<span class="badge" style="color:#a3a3a3">#${escapeHTML(t)}</span>`).join('')}
+        </div>
+      ` : ''}
+      ${(e.project_names && e.project_names.length) || (e.people_names && e.people_names.length) ? `
+        <div class="flex flex-wrap gap-1 mt-3">
+          ${(e.project_names || []).map(n => `<span class="badge">${escapeHTML(n)}</span>`).join('')}
+          ${(e.people_names || []).map(n => `<span class="badge" style="color:#fbbf24">${escapeHTML(n)}</span>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function projectDetailView() {
+  return `
+    <div class="px-8 py-8 fade-in">
+      <button id="back-btn" class="text-sm text-neutral-500 hover:text-white mb-4">← back to projects</button>
+      <h1 class="text-2xl font-bold mb-1">${escapeHTML(state.currentProject)}</h1>
+      <div class="text-sm text-neutral-500 mb-6">${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}</div>
+      <div id="entry-list" class="max-w-3xl">
+        ${state.entries.length === 0 ? '<div class="text-neutral-500">No entries yet.</div>' : state.entries.map(entryCard).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function allEntriesView() {
+  return `
+    <div class="px-8 py-8 fade-in">
+      <h1 class="text-2xl font-bold mb-6">All entries</h1>
+      <div id="entry-list" class="max-w-3xl">
+        ${state.entries.length === 0 ? '<div class="text-neutral-500">No entries yet.</div>' : state.entries.map(entryCard).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function escapeHTML(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s) { return escapeHTML(s); }
+function formatDate(d) { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+function formatRelativeDate(d) {
+  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days/7)}w ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function attachEntryClickHandlers() {
+  document.querySelectorAll('[data-entry-id]').forEach(el => {
+    el.onclick = () => {
+      const id = el.dataset.entryId;
+      const entry = state.entries.find(x => x.id === id);
+      if (!entry || entry.content.length <= 200) return;
+      if (state.expandedEntries.has(id)) state.expandedEntries.delete(id);
+      else state.expandedEntries.add(id);
+      const container = document.getElementById('entry-list');
+      if (container) {
+        container.innerHTML = state.entries.map(entryCard).join('');
+        attachEntryClickHandlers();
+      }
+    };
+  });
+}
+
+function attachProjectClickHandlers() {
+  document.querySelectorAll('[data-project]').forEach(el => {
+    el.onclick = () => {
+      const name = el.dataset.project;
+      if (state.manageMode) {
+        if (state.selectedProjects.has(name)) state.selectedProjects.delete(name);
+        else state.selectedProjects.add(name);
+        rerenderDashboard();
+      } else {
+        openProject(name);
+      }
+    };
+  });
+}
+
+function attachBriefHandlers() {
+  const toggle = document.getElementById('brief-toggle');
+  if (toggle) toggle.onclick = () => {
+    state.briefExpanded = !state.briefExpanded;
+    rerenderDashboard();
+  };
+}
+
+function attachManageBarHandlers() {
+  const clearBtn = document.getElementById('clear-selection');
+  if (clearBtn) clearBtn.onclick = () => { state.selectedProjects.clear(); rerenderDashboard(); };
+
+  const applyCatBtn = document.getElementById('apply-category-btn');
+  if (applyCatBtn) applyCatBtn.onclick = async () => {
+    const category = document.getElementById('category-select').value;
+    const names = Array.from(state.selectedProjects);
+    try {
+      for (const name of names) await callAPI('set_category', { name, category });
+      state.selectedProjects.clear();
+      state.stats = null;
+      await loadCurrentView();
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const renameBtn = document.getElementById('rename-btn');
+  if (renameBtn) renameBtn.onclick = async () => {
+    const oldName = Array.from(state.selectedProjects)[0];
+    const newName = prompt(`Rename "${oldName}" to:`, oldName);
+    if (!newName || newName === oldName) return;
+    try {
+      await callAPI('rename_project', { old_name: oldName, new_name: newName });
+      state.selectedProjects.clear();
+      state.stats = null;
+      await loadCurrentView();
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+
+  const mergeBtn = document.getElementById('merge-confirm');
+  if (mergeBtn) mergeBtn.onclick = async () => {
+    const target = document.getElementById('merge-target').value;
+    const sources = Array.from(state.selectedProjects);
+    if (!confirm(`Merge ${sources.length} projects into "${target}"?\n\n${sources.filter(s => s !== target).join('\n')}\n\nThis cannot be undone.`)) return;
+    mergeBtn.textContent = 'Merging...';
+    mergeBtn.disabled = true;
+    try {
+      const result = await callAPI('merge_projects', { source_names: sources, target_name: target });
+      state.selectedProjects.clear();
+      state.stats = null;
+      await loadCurrentView();
+      alert(`✓ Merged ${result.entries_updated} entries into "${target}"`);
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+      mergeBtn.disabled = false;
+    }
+  };
+
+  const deleteBtn = document.getElementById('delete-btn');
+  if (deleteBtn) deleteBtn.onclick = async () => {
+    const name = Array.from(state.selectedProjects)[0];
+    if (!confirm(`Delete "${name}"?\n\nThis removes the project and unlinks it from all entries. Cannot be undone.`)) return;
+    try {
+      const result = await callAPI('delete_project', { name });
+      state.selectedProjects.clear();
+      state.stats = null;
+      await loadCurrentView();
+      alert(`✓ Deleted "${name}" — unlinked from ${result.entries_updated} entries`);
+    } catch (err) { alert(`Error: ${err.message}`); }
+  };
+}
+
+function rerenderDashboard() {
+  const content = document.getElementById('content');
+  if (content) {
+    content.innerHTML = dashboardView();
+    attachProjectClickHandlers();
+    attachManageBarHandlers();
+    attachBriefHandlers();
+  }
+  document.querySelector('header').outerHTML = header();
+  attachHeaderHandlers();
+}
+
+function attachHeaderHandlers() {
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.onclick = () => {
+      state.view = b.dataset.view;
+      state.currentProject = null;
+      state.expandedEntries.clear();
+      state.manageMode = false;
+      state.selectedProjects.clear();
+      loadCurrentView();
+    };
+  });
+  const mgmtBtn = document.getElementById('manage-toggle');
+  if (mgmtBtn) mgmtBtn.onclick = () => {
+    state.manageMode = !state.manageMode;
+    state.selectedProjects.clear();
+    rerenderDashboard();
+  };
+  const refreshBtn = document.getElementById('refresh-assessments');
+  if (refreshBtn) refreshBtn.onclick = async () => {
+    if (state.refreshing) return;
+    state.refreshing = true;
+    rerenderDashboard();
+    try {
+      const res = await fetch(REFRESH_ASSESSMENTS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-brain-password': state.password },
+        body: JSON.stringify({}),
+      });
+      if (res.status === 401) {
+        localStorage.removeItem('nexus_brain_password');
+        state.password = null;
+        await render();
+        throw new Error('Unauthorized');
+      }
+      let payload = {};
+      try { payload = await res.json(); } catch (_) {}
+      if (!res.ok) throw new Error(payload.error || 'Refresh failed');
+      state.stats = null;
+      await loadCurrentView();
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      state.refreshing = false;
+      if (state.view === 'dashboard') rerenderDashboard();
+    }
+  };
+}
+
+async function render() {
+  const app = document.getElementById('app');
+  if (!state.password) {
+    app.innerHTML = loginView();
+    document.getElementById('login-btn').onclick = handleLogin;
+    document.getElementById('password-input').onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
+    return;
+  }
+  app.innerHTML = header() + '<div id="content"><div class="px-8 py-16 text-center text-neutral-500">Loading…</div></div>';
+  attachHeaderHandlers();
+  await loadCurrentView();
+}
+
+async function loadCurrentView() {
+  const content = document.getElementById('content');
+  try {
+    if (!state.stats) state.stats = await callAPI('stats');
+    if (state.view === 'dashboard') {
+      const [projects, brief] = await Promise.all([
+        callAPI('list_projects'),
+        callAPI('get_portfolio_brief').catch(() => null),
+      ]);
+      state.projects = projects;
+      state.brief = brief;
+      content.innerHTML = dashboardView();
+      attachProjectClickHandlers();
+      attachManageBarHandlers();
+      attachBriefHandlers();
+    } else if (state.view === 'project') {
+      state.entries = await callAPI('list_entries', { project: state.currentProject });
+      content.innerHTML = projectDetailView();
+      document.getElementById('back-btn').onclick = () => { state.view = 'dashboard'; state.currentProject = null; state.expandedEntries.clear(); loadCurrentView(); };
+      attachEntryClickHandlers();
+    } else if (state.view === 'all') {
+      state.entries = await callAPI('list_entries', { limit: 100 });
+      content.innerHTML = allEntriesView();
+      attachEntryClickHandlers();
+    }
+    document.querySelector('header').outerHTML = header();
+    attachHeaderHandlers();
+  } catch (err) {
+    content.innerHTML = `<div class="px-8 py-16 text-center text-red-400">Error: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+function openProject(name) {
+  state.view = 'project';
+  state.currentProject = name;
+  state.expandedEntries.clear();
+  loadCurrentView();
+}
+
+async function handleLogin() {
+  const input = document.getElementById('password-input');
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  const pw = input.value.trim();
+  if (!pw) return;
+  state.password = pw;
+  try {
+    state.stats = await callAPI('stats');
+    localStorage.setItem('nexus_brain_password', pw);
+    render();
+  } catch (err) {
+    state.password = null;
+    errEl.textContent = 'Wrong password';
+    errEl.classList.remove('hidden');
+  }
+}
+
+render();
+</script>
+</body>
+</html>
