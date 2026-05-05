@@ -55,6 +55,31 @@ ARCHIVED
 - Consistent
 - Shortcuts
 
+## Deployment notes
+
+CRITICAL: All edge functions must be deployed with `--no-verify-jwt`. The default
+deploy enforces JWT verification at the Supabase gateway, which blocks internal
+function-to-function calls (e.g., telegram → chat).
+
+Safe default for every deploy:
+```
+supabase functions deploy <function-name> --no-verify-jwt
+```
+
+Functions that are server-to-server (must use --no-verify-jwt):
+- chat
+- assess-project
+- synthesize-portfolio
+- refresh-assessments
+- telegram (calls chat internally)
+
+Functions that may need separate verification of auth approach before assuming:
+- brain-api (uses x-brain-password header — verify whether --no-verify-jwt is
+  also required before deploying with JWT enforcement)
+
+This was discovered in production: deploying `chat` without the flag caused
+Telegram to silently fail because the gateway blocked unauthenticated internal calls.
+
 ## Working style notes
 - Prefers full file rewrites over targeted edits
 - Pushes back on overengineering

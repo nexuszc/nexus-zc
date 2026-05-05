@@ -39,23 +39,23 @@ serve(async (req) => {
 
     // ----- 2. Fetch existing projects + people for classifier context -----
     const { data: projectsList } = await supabase
-      .from("projects").select("name, status").neq("status", "archived");
+      .from("projects").select("name, category").neq("category", "archived");
     const { data: peopleList } = await supabase
       .from("people").select("name");
 
-    const ventureNames = (projectsList || []).filter(p => p.status === "venture").map(p => p.name);
-    const ideaNames = (projectsList || []).filter(p => p.status === "idea").map(p => p.name);
-    const allProjectNames = [...ventureNames, ...ideaNames];
+    const establishedNames = (projectsList || []).filter(p => p.category !== "idea").map(p => p.name);
+    const ideaNames = (projectsList || []).filter(p => p.category === "idea").map(p => p.name);
+    const allProjectNames = [...establishedNames, ...ideaNames];
     const peopleNames = (peopleList || []).map(p => p.name);
 
     // ----- 3. Pre-classify the incoming message (for retrieval) -----
-    const classification = await classifyEntry(message, ventureNames, ideaNames, peopleNames);
+    const classification = await classifyEntry(message, establishedNames, ideaNames, peopleNames);
 
     // ----- 4. Auto-create new projects/people -----
     for (const name of classification.projects || []) {
       const exists = allProjectNames.some(p => p.toLowerCase() === name.toLowerCase());
       if (!exists) {
-        await supabase.from("projects").insert({ name, status: "idea" }).select();
+        await supabase.from("projects").insert({ name, category: "idea" }).select();
       }
     }
     for (const name of classification.people || []) {
@@ -95,7 +95,7 @@ serve(async (req) => {
     });
 
     // ----- 7. Generate response -----
-    const reply = await callClaude(message, contextBlock, ventureNames, ideaNames);
+    const reply = await callClaude(message, contextBlock, establishedNames, ideaNames);
 
     // ----- 8. Save user message + reply -----
     const { data: userEntry } = await supabase.from("entries").insert({
@@ -128,14 +128,14 @@ serve(async (req) => {
 // ========== HELPERS ==========
 
 async function classifyEntry(message: string, ventures: string[], ideas: string[], people: string[]) {
-  const venturesList = ventures.length ? ventures.join(", ") : "(none yet)";
+  const establishedList = ventures.length ? ventures.join(", ") : "(none yet)";
   const ideasList = ideas.length ? ideas.join(", ") : "(none yet)";
   const peopleList = people.length ? people.join(", ") : "(none yet)";
 
   const classifyPrompt = `You are a classifier for Zach's personal brain system. Analyze this entry and return ONLY valid JSON.
 
-EXISTING VENTURES (active businesses): ${venturesList}
-EXISTING IDEAS (loose threads, may become ventures): ${ideasList}
+ESTABLISHED PROJECTS (platform, vertical, personal, external): ${establishedList}
+LOOSE IDEAS (not yet committed): ${ideasList}
 KNOWN PEOPLE: ${peopleList}
 
 ENTRY: """${message}"""
