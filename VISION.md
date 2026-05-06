@@ -86,6 +86,27 @@ What's my real budget tolerance and how do I want to think about cost?
 - Cost discipline: use cheaper models (Haiku) for classification/retrieval, premium (Sonnet/Opus) only for high-leverage generation tasks
 - Autonomy model: semi-autonomous first, graduate proven workflows to fully autonomous; safe background ops (re-classifications, assessments, prompt self-improvement) run 24/7 without approval
 - Single-user now, multi-tenant is v2 — don't over-engineer for scale prematurely
+- Build Nexus to be undeniable. Sam's pitch confidence is the lead indicator for when Nexus becomes the primary product.
+
+---
+
+## Long-Term Product Vision
+
+The end-state product is: Nexus is the operating system clients buy. VAs are the human execution layer that runs on top of Nexus. We are not a managed VA service — we are an operations platform that includes labor as one execution mechanism (alongside future AI agents, automations, and integrations).
+
+Today (commodity-feeling): "We sell VAs with a system that helps."
+End state (platform-feeling): "We sell Nexus. VAs are the prompters running it."
+
+**Strategic implications:**
+- Nexus is the asset that compounds (code, workflows, accumulated client data)
+- VAs are the variable execution layer (swappable, retrainable, eventually augmented or replaced by AI for some tasks)
+- Pricing power lives in Nexus (software margins), not VAs (labor margins)
+- The moat is Nexus's accumulated workflow library and client-specific intelligence, not access to labor
+
+**Trigger for "Nexus becomes mandatory line item":**
+Sam can independently pitch the Nexus value prop in 60 seconds and feel good about defending the price. Until then, Nexus is included for anchor clients (Brian/Jesse/Kevin) as the proof-of-concept that builds Sam's belief.
+
+Every Nexus development priority should answer: "Does this make Sam more confident pitching it?"
 
 ---
 
