@@ -329,6 +329,51 @@ serve(async (req) => {
           .is("completed_at", null);
       }
 
+      // ── Auto-enrollment ───────────────────────────────────────────────────
+      if (outcome !== "qualified" && outcome !== "do_not_call") {
+        try {
+          const { data: template } = await supabase
+            .from("sequence_templates")
+            .select("id")
+            .eq("client_id", client_id)
+            .eq("outcome_type", outcome)
+            .eq("is_active", true)
+            .maybeSingle();
+
+          if (template) {
+            await supabase
+              .from("lead_enrollments")
+              .update({ completed_at: new Date().toISOString(), exited_reason: "outcome_changed" })
+              .eq("lead_id", lead_id)
+              .is("completed_at", null);
+
+            const { data: step1 } = await supabase
+              .from("sequence_steps")
+              .select("days_after_previous")
+              .eq("template_id", template.id)
+              .eq("step_number", 1)
+              .maybeSingle();
+
+            if (step1) {
+              const nextDue = new Date();
+              nextDue.setDate(nextDue.getDate() + (step1.days_after_previous as number));
+              const { error: enrollErr } = await supabase.from("lead_enrollments").insert({
+                lead_id,
+                template_id: template.id,
+                current_step_number: 1,
+                next_step_due_at: nextDue.toISOString(),
+                enrolled_at: new Date().toISOString(),
+              });
+              if (enrollErr) console.error("Enrollment insert error:", enrollErr.message);
+            } else {
+              console.warn(`sequence_template ${template.id} has no step 1 — skipping enrollment`);
+            }
+          }
+        } catch (enrollErr) {
+          console.error("Auto-enrollment error:", (enrollErr as Error).message);
+        }
+      }
+
       return ok({ success: true, call_log_id: callLog.id });
     }
 
