@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Nexus Ops — Queue</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a0a; color: #e5e5e5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  .card { background: #161616; border: 1px solid #262626; }
+  .accent { color: #a78bfa; }
+
+  /* Queue lead cards */
+  .lead-card { background: #161616; border: 1px solid #262626; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .lead-card:hover { border-color: #404040; background: #1a1a1a; }
+  .lead-card:active { background: #1c1432; border-color: #7c3aed; }
+
+  /* Tier badges */
+  .tier-1 { background: #3b1a6b; color: #c4b5fd; }
+  .tier-2 { background: #1c3a5e; color: #93c5fd; }
+  .tier-3 { background: #1a2e1a; color: #86efac; }
+
+  /* Outcome buttons */
+  .outcome-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #a3a3a3;
+    padding: 12px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+    line-height: 1.3;
+  }
+  .outcome-btn:hover { border-color: #555; color: #d4d4d4; }
+  .outcome-btn.selected-voicemail        { background: #292524; border-color: #78716c; color: #e7e5e4; }
+  .outcome-btn.selected-no_answer        { background: #292524; border-color: #78716c; color: #e7e5e4; }
+  .outcome-btn.selected-connected_not_interested { background: #431407; border-color: #c2410c; color: #fdba74; }
+  .outcome-btn.selected-connected_not_ready      { background: #1e3a8a; border-color: #3b82f6; color: #93c5fd; }
+  .outcome-btn.selected-callback_requested       { background: #3b1a6b; border-color: #a78bfa; color: #ddd6fe; }
+  .outcome-btn.selected-qualified                { background: #064e3b; border-color: #10b981; color: #6ee7b7; }
+  .outcome-btn.selected-do_not_call              { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+
+  /* Script hint */
+  .hint-box { background: #111827; border: 1px solid #1f2937; border-left: 3px solid #a78bfa; }
+
+  /* Input fields */
+  .field {
+    width: 100%;
+    background: #0f0f0f;
+    border: 1px solid #333;
+    color: #e5e5e5;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field:focus { border-color: #7c3aed; }
+  .field::placeholder { color: #525252; }
+
+  /* Buttons */
+  .btn-primary {
+    background: #7c3aed;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+    width: 100%;
+  }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-primary:disabled { background: #3b0764; color: #7c3aed; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: #1a1a1a;
+    color: #a3a3a3;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    border: 1px solid #333;
+    transition: all 0.15s;
+    width: 100%;
+  }
+  .btn-secondary:hover { background: #222; color: #d4d4d4; border-color: #555; }
+
+  .btn-back {
+    background: transparent;
+    border: none;
+    color: #737373;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-back:hover { color: #a3a3a3; }
+
+  /* Tier separator */
+  .tier-sep { border: none; border-top: 1px solid #1f1f1f; margin: 8px 0; }
+  .tier-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #525252; padding: 4px 0 8px; }
+
+  /* Outcome display labels */
+  .outcome-pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #262626;
+    color: #737373;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ──────────────────────────────────────────────────────── -->
+<div id="screen-login" class="min-h-screen flex flex-col items-center justify-center p-6">
+  <div class="card rounded-xl p-8 w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="text-2xl font-bold accent mb-1">Nexus Ops</div>
+      <div class="text-sm text-gray-500">VA Queue System</div>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Your Code</label>
+        <input id="input-va-code" type="text" class="field text-center text-lg tracking-widest uppercase"
+          placeholder="e.g. maria01" autocomplete="off" autocorrect="off" spellcheck="false"
+          onkeydown="if(event.key==='Enter') login()">
+      </div>
+      <button class="btn-primary mt-2" onclick="login()" id="btn-login">Start My Queue →</button>
+      <p id="login-error" class="text-red-400 text-sm text-center hidden"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ── QUEUE SCREEN ───────────────────────────────────────────────────────── -->
+<div id="screen-queue" style="display:none" class="min-h-screen flex flex-col">
+  <div class="sticky top-0 z-10" style="background:#0a0a0a; border-bottom:1px solid #1a1a1a; padding:14px 16px;">
+    <div class="flex items-center justify-between max-w-lg mx-auto">
+      <div>
+        <span class="font-semibold text-sm text-gray-200" id="queue-va-name"></span>
+        <span class="text-gray-500 text-sm"> — </span>
+        <span class="text-gray-400 text-sm" id="queue-lead-count"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="refreshQueue()" id="btn-refresh"
+          class="text-xs text-gray-500 border border-gray-700 rounded-md px-3 py-1.5 hover:text-gray-300 hover:border-gray-500 transition-colors">
+          ↻ Refresh
+        </button>
+        <button onclick="signOut()"
+          class="text-xs text-gray-600 hover:text-gray-400 transition-colors px-1">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-1 p-4 max-w-lg mx-auto w-full">
+    <div id="queue-empty" style="display:none" class="text-center py-16">
+      <div class="text-gray-500 text-4xl mb-4">✓</div>
+      <div class="text-gray-300 font-medium mb-2">Queue is clear</div>
+      <div class="text-gray-500 text-sm">No leads available right now.<br>TCPA calling hours: 8 AM – 9 PM.</div>
+      <button onclick="refreshQueue()" class="mt-6 text-sm text-purple-400 hover:text-purple-300">Check again →</button>
+    </div>
+    <div id="queue-list" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- ── DETAIL SCREEN ──────────────────────────────────────────────────────── -->
+<div id="screen-detail" style="display:none" class="min-h-screen flex flex-col">
+  <div class="sticky top-0 z-10" style="background:#0a0a0a; border-bottom:1px solid #1a1a1a; padding:12px 16px;">
+    <div class="flex items-center justify-between max-w-lg mx-auto">
+      <button class="btn-back" onclick="goBack()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        Queue
+      </button>
+      <div class="text-xs text-gray-600" id="detail-position"></div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full space-y-4">
+
+    <!-- Lead info card -->
+    <div class="card rounded-xl p-4">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <div class="font-semibold text-base" id="detail-name"></div>
+          <div class="text-purple-400 font-mono text-lg mt-1" id="detail-phone"></div>
+        </div>
+        <div class="text-right shrink-0">
+          <div id="detail-tier-badge" class="inline-block text-xs font-semibold px-2 py-1 rounded mb-1"></div>
+          <div class="text-xs text-gray-500" id="detail-touch-info"></div>
+        </div>
+      </div>
+      <div class="mt-2 text-sm text-gray-400 space-y-0.5" id="detail-address"></div>
+      <div class="mt-2 flex gap-3 flex-wrap" id="detail-financials"></div>
+      <div id="detail-callback-alert" style="display:none"
+        class="mt-3 text-xs font-medium text-purple-300 bg-purple-950 border border-purple-800 rounded-lg px-3 py-2">
+      </div>
+    </div>
+
+    <!-- Outcome buttons -->
+    <div>
+      <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Outcome</div>
+      <div class="grid grid-cols-2 gap-2" id="outcome-buttons"></div>
+    </div>
+
+    <!-- Script hint -->
+    <div id="script-hint-box" style="display:none" class="hint-box rounded-lg p-3">
+      <div class="text-xs font-semibold uppercase tracking-wide text-purple-400 mb-1">Script hint</div>
+      <div id="script-hint-text" class="text-sm text-gray-300 leading-relaxed"></div>
+    </div>
+
+    <!-- Callback datetime (only for callback_requested) -->
+    <div id="callback-fields" style="display:none">
+      <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Callback Date & Time</label>
+      <input id="callback-datetime" type="datetime-local" class="field" required>
+      <p class="text-xs text-gray-500 mt-1">Enter the time the lead asked for. They'll appear in your queue 2 hours early.</p>
+    </div>
+
+    <!-- Notes -->
+    <div>
+      <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Notes <span class="normal-case font-normal text-gray-600">(optional)</span></label>
+      <textarea id="notes" class="field" rows="2" placeholder="Key details, objections, anything useful…"></textarea>
+    </div>
+
+    <!-- Duration -->
+    <div>
+      <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Duration <span class="normal-case font-normal text-gray-600">(seconds, optional)</span></label>
+      <input id="duration" type="number" min="0" class="field" placeholder="e.g. 120">
+    </div>
+
+    <!-- Action buttons -->
+    <div class="grid grid-cols-2 gap-3 pb-6">
+      <button onclick="logOutcome(false)" id="btn-log-done" class="btn-secondary" disabled>Log & Done</button>
+      <button onclick="logOutcome(true)" id="btn-log-next" class="btn-primary" disabled>Log & Next →</button>
+    </div>
+    <p id="log-error" class="text-red-400 text-sm text-center hidden pb-4"></p>
+
+  </div>
+</div>
+
+<script>
+// ── Configuration ─────────────────────────────────────────────────────────────
+const FUNCTION_URL = "https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/log-call";
+// Sam: set this to the client's UUID from the clients table before deploying.
+// v1: Sam sets this per client deployment (one HTML file per client).
+// v2: Replace with URL parameter or subdomain routing when multi-client.
+const CLIENT_ID = "dc99955a-bd9b-4a74-9164-8b4492cb9abe";
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let vaId = null;
+let vaName = null;
+
+// Persist session so VAs don't re-enter their code on every browser open.
+const LS_KEY = `nexus_va_${CLIENT_ID}`;
+function saveSession() {
+  localStorage.setItem(LS_KEY, JSON.stringify({ vaId, vaName }));
+}
+function clearSession() {
+  localStorage.removeItem(LS_KEY);
+}
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s.vaId || !s.vaName) return false;
+    vaId = s.vaId;
+    vaName = s.vaName;
+    return true;
+  } catch { return false; }
+}
+
+// On page load: if a valid session exists, skip login and go straight to queue.
+(async () => {
+  if (restoreSession()) {
+    try {
+      await loadQueue();
+    } catch {
+      clearSession();
+    }
+  }
+})();
+let queue = [];          // flat array: tier1 + tier2 + tier3
+let scriptHints = {};
+let currentIndex = 0;
+let selectedOutcome = null;
+
+// ── Outcome definitions ───────────────────────────────────────────────────────
+const OUTCOMES = [
+  { key: "voicemail",                label: "Voicemail",       col: 1 },
+  { key: "no_answer",                label: "No Answer",       col: 1 },
+  { key: "connected_not_interested", label: "Not Interested",  col: 1 },
+  { key: "connected_not_ready",      label: "Not Ready",       col: 1 },
+  { key: "callback_requested",       label: "Callback →",      col: 2 },
+  { key: "qualified",                label: "Qualified ✓",     col: 2 },
+  { key: "do_not_call",              label: "Do Not Call",     col: 2 },
+];
+
+const OUTCOME_LABELS = {
+  voicemail: "Voicemail",
+  no_answer: "No Answer",
+  connected_not_interested: "Not Interested",
+  connected_not_ready: "Not Ready",
+  callback_requested: "Callback",
+  qualified: "Qualified",
+  do_not_call: "DNC",
+};
+
+// ── API helper ────────────────────────────────────────────────────────────────
+async function api(body) {
+  const r = await fetch(FUNCTION_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+async function login() {
+  const code = document.getElementById("input-va-code").value.trim().toLowerCase();
+  if (!code) return;
+
+  const btn = document.getElementById("btn-login");
+  const errEl = document.getElementById("login-error");
+  btn.disabled = true;
+  btn.textContent = "Checking…";
+  errEl.classList.add("hidden");
+
+  try {
+    const data = await api({ mode: "login", va_code: code, client_id: CLIENT_ID });
+    vaId = data.va_id;
+    vaName = data.va_name;
+    saveSession();
+    await loadQueue();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+    btn.disabled = false;
+    btn.textContent = "Start My Queue →";
+  }
+}
+
+// ── Load / refresh queue ──────────────────────────────────────────────────────
+async function loadQueue() {
+  const btn = document.getElementById("btn-refresh");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+
+  try {
+    const data = await api({ mode: "queue", va_id: vaId, client_id: CLIENT_ID });
+    scriptHints = data.script_hints ?? {};
+
+    // Flatten tiers into one ordered array.
+    queue = [
+      ...(data.tier1 ?? []),
+      ...(data.tier2 ?? []),
+      ...(data.tier3 ?? []),
+    ];
+
+    buildQueueUI(data.tier1 ?? [], data.tier2 ?? [], data.tier3 ?? []);
+    show("screen-queue");
+  } catch (e) {
+    alert("Error loading queue: " + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ Refresh"; }
+  }
+}
+
+async function refreshQueue() { await loadQueue(); }
+
+// ── Build queue list DOM ──────────────────────────────────────────────────────
+function buildQueueUI(tier1, tier2, tier3) {
+  document.getElementById("queue-va-name").textContent = vaName;
+
+  const total = tier1.length + tier2.length + tier3.length;
+  document.getElementById("queue-lead-count").textContent =
+    total === 0 ? "No leads" : total === 1 ? "1 lead" : `${total} leads`;
+
+  const list = document.getElementById("queue-list");
+  list.innerHTML = "";
+
+  const empty = document.getElementById("queue-empty");
+
+  if (total === 0) {
+    empty.style.display = "";
+    return;
+  }
+  empty.style.display = "none";
+
+  function addSection(leads, tierNum, label) {
+    if (leads.length === 0) return;
+    const sep = document.createElement("div");
+    sep.className = "tier-label";
+    sep.textContent = label;
+    list.appendChild(sep);
+    leads.forEach((lead, i) => {
+      const globalIdx = queue.indexOf(lead);
+      list.appendChild(makeLeadCard(lead, globalIdx));
+    });
+  }
+
+  addSection(tier1, 1, `⚡ Callbacks Due (${tier1.length})`);
+  addSection(tier2, 2, `↻ Follow-Up Due (${tier2.length})`);
+  addSection(tier3, 3, `✦ New Leads (${tier3.length})`);
+}
+
+function makeLeadCard(lead, idx) {
+  const div = document.createElement("div");
+  div.className = "lead-card rounded-xl p-3 mb-2";
+
+  const tierLabel = lead.tier === 1 ? "Callback" : lead.tier === 2 ? "Follow-Up" : "New";
+  const tierClass = `tier-${lead.tier}`;
+
+  const name = [lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Unknown";
+  const phone = formatPhone(lead.phone ?? "");
+  const touchLine = lead.days_since_touch !== null
+    ? `${lead.days_since_touch}d ago`
+    : (lead.touch_count === 0 ? "Never contacted" : "Contacted before");
+  const outcome = lead.current_outcome ? OUTCOME_LABELS[lead.current_outcome] : null;
+
+  let callbackLine = "";
+  if (lead.callback_scheduled_at) {
+    callbackLine = `<div class="text-xs text-purple-400 mt-1">Due ${formatTime(lead.callback_scheduled_at)}</div>`;
+  }
+
+  div.innerHTML = `
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <div class="font-medium text-sm text-gray-100 truncate">${esc(name)}</div>
+        <div class="text-purple-400 text-sm font-mono">${esc(phone)}</div>
+        ${callbackLine}
+      </div>
+      <div class="text-right shrink-0">
+        <span class="inline-block text-xs font-semibold px-2 py-0.5 rounded ${tierClass}">${tierLabel}</span>
+        <div class="text-xs text-gray-500 mt-1">${touchLine}</div>
+        ${outcome ? `<div class="text-xs text-gray-600 mt-0.5">${esc(outcome)}</div>` : ""}
+      </div>
+    </div>
+  `;
+  div.onclick = () => openLead(idx);
+  return div;
+}
+
+// ── Detail screen ─────────────────────────────────────────────────────────────
+function openLead(idx) {
+  currentIndex = idx;
+  selectedOutcome = null;
+  renderDetail();
+  show("screen-detail");
+  window.scrollTo(0, 0);
+}
+
+function renderDetail() {
+  const lead = queue[currentIndex];
+  if (!lead) { goBack(); return; }
+
+  // Position
+  document.getElementById("detail-position").textContent =
+    `${currentIndex + 1} of ${queue.length}`;
+
+  // Name + phone
+  const name = [lead.first_name, lead.last_name].filter(Boolean).join(" ") || "Unknown";
+  document.getElementById("detail-name").textContent = name;
+  document.getElementById("detail-phone").textContent = formatPhone(lead.phone ?? "");
+
+  // Tier badge
+  const tierEl = document.getElementById("detail-tier-badge");
+  const tierLabel = lead.tier === 1 ? "⚡ Callback" : lead.tier === 2 ? "↻ Follow-Up" : "✦ New";
+  const tierClass = `tier-${lead.tier}`;
+  tierEl.className = `inline-block text-xs font-semibold px-2 py-1 rounded ${tierClass}`;
+  tierEl.textContent = tierLabel;
+
+  // Touch info
+  const touchInfo = lead.days_since_touch !== null
+    ? `${lead.touch_count}x touched · ${lead.days_since_touch}d ago`
+    : lead.touch_count === 0 ? "Never contacted" : `${lead.touch_count}x touched`;
+  document.getElementById("detail-touch-info").textContent = touchInfo;
+
+  // Address
+  const parts = [lead.address, lead.city, lead.state].filter(Boolean);
+  const addrEl = document.getElementById("detail-address");
+  addrEl.textContent = parts.join(", ") || "";
+  addrEl.style.display = parts.length ? "" : "none";
+
+  // Financials
+  const finEl = document.getElementById("detail-financials");
+  finEl.innerHTML = "";
+  if (lead.loan_amount) {
+    finEl.innerHTML += `<span class="text-xs text-gray-500">Loan: <span class="text-gray-300">${formatCurrency(lead.loan_amount)}</span></span>`;
+  }
+  if (lead.property_value) {
+    finEl.innerHTML += `<span class="text-xs text-gray-500">Value: <span class="text-gray-300">${formatCurrency(lead.property_value)}</span></span>`;
+  }
+
+  // Callback alert
+  const cbAlert = document.getElementById("detail-callback-alert");
+  if (lead.callback_scheduled_at) {
+    cbAlert.style.display = "";
+    cbAlert.textContent = `⚡ Callback requested for ${formatTime(lead.callback_scheduled_at)}`;
+  } else {
+    cbAlert.style.display = "none";
+  }
+
+  // Outcome buttons
+  const btnContainer = document.getElementById("outcome-buttons");
+  btnContainer.innerHTML = "";
+  OUTCOMES.forEach(o => {
+    const btn = document.createElement("button");
+    btn.className = "outcome-btn";
+    btn.textContent = o.label;
+    btn.dataset.key = o.key;
+    btn.onclick = () => selectOutcome(o.key);
+    btnContainer.appendChild(btn);
+  });
+
+  // Reset form fields
+  document.getElementById("script-hint-box").style.display = "none";
+  document.getElementById("callback-fields").style.display = "none";
+  document.getElementById("callback-datetime").value = "";
+  document.getElementById("notes").value = "";
+  document.getElementById("duration").value = "";
+  document.getElementById("log-error").classList.add("hidden");
+  setLogButtonsDisabled(true);
+}
+
+function selectOutcome(key) {
+  selectedOutcome = key;
+
+  // Update button states.
+  document.querySelectorAll(".outcome-btn").forEach(btn => {
+    btn.className = "outcome-btn" + (btn.dataset.key === key ? ` selected-${key}` : "");
+  });
+
+  // Script hint.
+  const hint = scriptHints[key] || "";
+  const hintBox = document.getElementById("script-hint-box");
+  if (hint) {
+    document.getElementById("script-hint-text").textContent = hint;
+    hintBox.style.display = "";
+  } else {
+    hintBox.style.display = "none";
+  }
+
+  // Callback fields.
+  const cbFields = document.getElementById("callback-fields");
+  cbFields.style.display = key === "callback_requested" ? "" : "none";
+
+  setLogButtonsDisabled(false);
+  document.getElementById("log-error").classList.add("hidden");
+}
+
+function setLogButtonsDisabled(disabled) {
+  document.getElementById("btn-log-done").disabled = disabled;
+  document.getElementById("btn-log-next").disabled = disabled;
+}
+
+// ── Log outcome ───────────────────────────────────────────────────────────────
+async function logOutcome(andNext) {
+  if (!selectedOutcome) return;
+
+  const lead = queue[currentIndex];
+  const errEl = document.getElementById("log-error");
+  errEl.classList.add("hidden");
+
+  const callbackDatetime = document.getElementById("callback-datetime").value;
+  if (selectedOutcome === "callback_requested" && !callbackDatetime) {
+    errEl.textContent = "Please set a callback date and time.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  const notes = document.getElementById("notes").value.trim() || null;
+  const durationRaw = document.getElementById("duration").value;
+  const duration = durationRaw ? parseInt(durationRaw, 10) : null;
+
+  setLogButtonsDisabled(true);
+  const btnNext = document.getElementById("btn-log-next");
+  const btnDone = document.getElementById("btn-log-done");
+  btnNext.textContent = "Saving…";
+
+  try {
+    await api({
+      mode: "log",
+      va_id: vaId,
+      lead_id: lead.id,
+      client_id: CLIENT_ID,
+      outcome: selectedOutcome,
+      callback_scheduled_at: selectedOutcome === "callback_requested"
+        ? new Date(callbackDatetime).toISOString()
+        : undefined,
+      notes,
+      duration_seconds: duration,
+    });
+
+    // Remove this lead from the in-memory queue.
+    queue.splice(currentIndex, 1);
+
+    if (andNext && queue.length > 0) {
+      // Stay at same index (now pointing to the next lead), clamp to last.
+      currentIndex = Math.min(currentIndex, queue.length - 1);
+      selectedOutcome = null;
+      renderDetail();
+    } else {
+      await loadQueue();
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove("hidden");
+    setLogButtonsDisabled(false);
+    btnNext.textContent = "Log & Next →";
+    btnDone.textContent = "Log & Done";
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function goBack() { show("screen-queue"); }
+
+function signOut() {
+  clearSession();
+  vaId = null;
+  vaName = null;
+  queue = [];
+  document.getElementById("input-va-code").value = "";
+  show("screen-login");
+}
+
+function show(screenId) {
+  ["screen-login", "screen-queue", "screen-detail"].forEach(id => {
+    document.getElementById(id).style.display = id === screenId ? "" : "none";
+  });
+}
+
+// ── Formatting helpers ────────────────────────────────────────────────────────
+function formatPhone(digits) {
+  const d = digits.replace(/\D/g, "");
+  if (d.length === 11 && d[0] === "1") return formatPhone(d.slice(1));
+  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+  return digits;
+}
+
+function formatCurrency(n) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+}
+
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleString("en-US", {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true
+    });
+  } catch { return iso; }
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>
