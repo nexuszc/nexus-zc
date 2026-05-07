@@ -122,8 +122,13 @@
 </head>
 <body>
 
+<!-- ── LOADING SCREEN ─────────────────────────────────────────────────────── -->
+<div id="screen-loading" class="min-h-screen flex items-center justify-center">
+  <div class="text-gray-500 text-sm">Loading…</div>
+</div>
+
 <!-- ── LOGIN SCREEN ──────────────────────────────────────────────────────── -->
-<div id="screen-login" class="min-h-screen flex flex-col items-center justify-center p-6">
+<div id="screen-login" style="display:none" class="min-h-screen flex flex-col items-center justify-center p-6">
   <div class="card rounded-xl p-8 w-full max-w-sm">
     <div class="text-center mb-8">
       <div class="text-2xl font-bold accent mb-1">Nexus Ops</div>
@@ -281,15 +286,17 @@ function restoreSession() {
   } catch { return false; }
 }
 
-// On page load: if a valid session exists, skip login and go straight to queue.
+// On page load: show loading indicator, skip login if session is still valid.
 (async () => {
   if (restoreSession()) {
     try {
       await loadQueue();
+      return;
     } catch {
       clearSession();
     }
   }
+  show("screen-login");
 })();
 let queue = [];          // flat array: tier1 + tier2 + tier3
 let scriptHints = {};
@@ -586,10 +593,11 @@ async function logOutcome(andNext) {
   const durationRaw = document.getElementById("duration").value;
   const duration = durationRaw ? parseInt(durationRaw, 10) : null;
 
-  setLogButtonsDisabled(true);
   const btnNext = document.getElementById("btn-log-next");
   const btnDone = document.getElementById("btn-log-done");
+  setLogButtonsDisabled(true);
   btnNext.textContent = "Saving…";
+  btnDone.textContent = "Saving…";
 
   try {
     await api({
@@ -605,11 +613,15 @@ async function logOutcome(andNext) {
       duration_seconds: duration,
     });
 
+    // Flash confirmation before advancing.
+    btnNext.textContent = "✓ Logged";
+    btnDone.textContent = "✓ Logged";
+    await new Promise(r => setTimeout(r, 1000));
+
     // Remove this lead from the in-memory queue.
     queue.splice(currentIndex, 1);
 
     if (andNext && queue.length > 0) {
-      // Stay at same index (now pointing to the next lead), clamp to last.
       currentIndex = Math.min(currentIndex, queue.length - 1);
       selectedOutcome = null;
       renderDetail();
@@ -638,7 +650,7 @@ function signOut() {
 }
 
 function show(screenId) {
-  ["screen-login", "screen-queue", "screen-detail"].forEach(id => {
+  ["screen-loading", "screen-login", "screen-queue", "screen-detail"].forEach(id => {
     document.getElementById(id).style.display = id === screenId ? "" : "none";
   });
 }
