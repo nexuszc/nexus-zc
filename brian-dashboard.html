@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Ops — Brian</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #0a0a0a; color: #e5e5e5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  .card { background: #161616; border: 1px solid #262626; border-radius: 12px; }
+  .accent { color: #a78bfa; }
+
+  /* Stat cards */
+  .stat-card { background: #161616; border: 1px solid #262626; border-radius: 10px; padding: 16px; }
+  .stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .stat-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #737373; margin-top: 4px; }
+
+  /* Pipeline bars */
+  .bar-track { background: #1a1a1a; border-radius: 3px; height: 6px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+  /* Trend table */
+  .trend-table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #525252; padding-bottom: 8px; text-align: center; }
+  .trend-table td { text-align: center; padding: 2px 4px; }
+  .trend-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .trend-num  { font-size: 13px; font-weight: 500; color: #d4d4d4; }
+  .trend-bar-wrap { width: 100%; height: 32px; display: flex; align-items: flex-end; }
+  .trend-bar  { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; transition: height 0.4s ease; }
+
+  /* Callback list */
+  .callback-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
+  .callback-row:last-child { border-bottom: none; }
+  .callback-time { font-size: 13px; font-weight: 600; color: #a78bfa; min-width: 68px; }
+  .callback-name { font-size: 13px; color: #d4d4d4; }
+  .callback-va   { font-size: 12px; color: #525252; }
+
+  /* Section headers */
+  .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: #525252; margin-bottom: 12px; }
+
+  /* VA table */
+  .va-table { width: 100%; border-collapse: collapse; }
+  .va-table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #525252; text-align: left; padding: 0 8px 8px 0; }
+  .va-table td { font-size: 14px; padding: 8px 8px 8px 0; border-top: 1px solid #1a1a1a; color: #d4d4d4; }
+  .va-table td:not(:first-child) { text-align: right; }
+  .va-table th:not(:first-child) { text-align: right; }
+
+  /* Pill badges */
+  .badge-green  { background: #064e3b; color: #6ee7b7; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .badge-amber  { background: #451a03; color: #fcd34d; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .badge-purple { background: #3b1a6b; color: #c4b5fd; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+
+  /* Input/button */
+  .field { width: 100%; background: #0f0f0f; border: 1px solid #333; color: #e5e5e5; padding: 10px 12px; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.15s; }
+  .field:focus { border-color: #7c3aed; }
+  .field::placeholder { color: #525252; }
+  .btn-primary { background: #7c3aed; color: #fff; padding: 12px 24px; border-radius: 8px; font-weight: 600; font-size: 15px; cursor: pointer; border: none; transition: background 0.15s; width: 100%; }
+  .btn-primary:hover { background: #6d28d9; }
+  .btn-primary:disabled { background: #3b0764; color: #7c3aed; cursor: not-allowed; }
+
+  /* Refresh indicator */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinning { animation: spin 1s linear infinite; display: inline-block; }
+</style>
+</head>
+<body>
+
+<!-- ── PASSWORD SCREEN ───────────────────────────────────────────────────── -->
+<div id="screen-password" class="min-h-screen flex items-center justify-center p-6">
+  <div class="card p-8 w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="text-2xl font-bold accent mb-1">Nexus Ops</div>
+      <div class="text-sm text-gray-500">Brian — Operations Dashboard</div>
+    </div>
+    <div class="space-y-4">
+      <input id="password-input" type="password" class="field text-center"
+        placeholder="Enter password"
+        onkeydown="if(event.key==='Enter') submitPassword()">
+      <button class="btn-primary" onclick="submitPassword()">Enter →</button>
+      <p id="password-error" class="text-red-400 text-sm text-center hidden">Incorrect password.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── DASHBOARD SCREEN ──────────────────────────────────────────────────── -->
+<div id="screen-dashboard" style="display:none">
+
+  <!-- Header -->
+  <div class="sticky top-0 z-10" style="background:#0a0a0a; border-bottom:1px solid #1a1a1a; padding:14px 20px;">
+    <div class="flex items-center justify-between max-w-5xl mx-auto">
+      <div>
+        <span class="font-bold text-base accent">Nexus Ops</span>
+        <span class="text-gray-600 text-sm ml-2">Brian</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="last-updated" class="text-xs text-gray-600"></span>
+        <button id="btn-refresh" onclick="fetchStats()"
+          class="text-xs text-gray-500 border border-gray-700 rounded-md px-3 py-1.5 hover:text-gray-300 hover:border-gray-500 transition-colors">
+          ↻ Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-5xl mx-auto px-4 py-6 space-y-8">
+
+    <!-- ── OVERVIEW ───────────────────────────────────────────────────────── -->
+    <section>
+      <div class="section-title">Today</div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="overview-cards">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- ── PIPELINE ───────────────────────────────────────────────────────── -->
+    <section>
+      <div class="section-title">Pipeline</div>
+      <div class="card p-5 space-y-4" id="pipeline-section">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- ── VA PERFORMANCE ─────────────────────────────────────────────────── -->
+    <section>
+      <div class="section-title">VA Performance — Today</div>
+      <div class="card p-5">
+        <table class="va-table">
+          <thead>
+            <tr>
+              <th>VA</th>
+              <th>Calls</th>
+              <th>Connects</th>
+              <th>Hot Leads</th>
+            </tr>
+          </thead>
+          <tbody id="va-table-body">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+        <div id="va-empty" style="display:none" class="text-gray-500 text-sm py-2">No activity logged today.</div>
+      </div>
+    </section>
+
+    <!-- ── SYSTEM HEALTH ──────────────────────────────────────────────────── -->
+    <section>
+      <div class="section-title">System</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        <!-- System stats -->
+        <div class="card p-5 space-y-4">
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-400">Queue (due / overdue)</span>
+            <span id="sys-queue" class="text-sm font-semibold text-white">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-400">Next callback</span>
+            <span id="sys-next-callback" class="text-sm font-semibold text-white">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-400">Last import</span>
+            <span id="sys-last-import" class="text-sm text-gray-400">—</span>
+          </div>
+        </div>
+
+        <!-- Callbacks due today -->
+        <div class="card p-5">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Callbacks Due Today</div>
+          <div id="callbacks-today-list">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── WEEKLY TREND ───────────────────────────────────────────────────── -->
+    <section>
+      <div class="section-title">7-Day Trend</div>
+      <div class="card p-5 overflow-x-auto">
+        <table class="trend-table w-full min-w-[480px]">
+          <thead id="trend-head">
+            <!-- Rendered by JS -->
+          </thead>
+          <tbody id="trend-body">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// ── Configuration ─────────────────────────────────────────────────────────────
+const FUNCTION_URL = "https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/get-dashboard-stats";
+const CLIENT_ID    = "dc99955a-bd9b-4a74-9164-8b4492cb9abe";
+const PASSWORD     = "nexus-brian-2026";
+const LS_KEY       = "nexus_dashboard_brian";
+
+let refreshTimer = null;
+
+// ── Password ──────────────────────────────────────────────────────────────────
+function submitPassword() {
+  const val = document.getElementById("password-input").value;
+  if (val === PASSWORD) {
+    localStorage.setItem(LS_KEY, PASSWORD);
+    startDashboard();
+  } else {
+    document.getElementById("password-error").classList.remove("hidden");
+  }
+}
+
+function startDashboard() {
+  document.getElementById("screen-password").style.display = "none";
+  document.getElementById("screen-dashboard").style.display = "";
+  fetchStats();
+  refreshTimer = setInterval(fetchStats, 30000);
+}
+
+// Auto-login if stored password matches.
+if (localStorage.getItem(LS_KEY) === PASSWORD) {
+  startDashboard();
+}
+
+// ── Data fetch ────────────────────────────────────────────────────────────────
+async function fetchStats() {
+  const btn = document.getElementById("btn-refresh");
+  btn.innerHTML = '<span class="spinning">↻</span> Refreshing';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch(FUNCTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: CLIENT_ID }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Request failed");
+    renderAll(data);
+    document.getElementById("last-updated").textContent =
+      "Updated " + new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  } catch (e) {
+    document.getElementById("last-updated").textContent = "Error: " + e.message;
+  } finally {
+    btn.innerHTML = "↻ Refresh";
+    btn.disabled = false;
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAll(data) {
+  renderOverview(data.overview);
+  renderPipeline(data.lead_breakdown, data.overview.total_leads);
+  renderVaTable(data.va_performance);
+  renderSystem(data.system_health);
+  renderTrend(data.weekly_trend);
+}
+
+// ── Overview cards ────────────────────────────────────────────────────────────
+function renderOverview(o) {
+  const cards = [
+    { label: "Calls Today",       value: o.calls_today,       color: "#a78bfa" },
+    { label: "Connects Today",    value: o.connects_today,    color: "#34d399" },
+    { label: "Contact Rate",      value: o.contact_rate,      color: "#e5e5e5" },
+    { label: "Hot Leads",         value: o.hot_leads,         color: "#34d399", dim: o.hot_leads === 0 },
+    { label: "Callbacks Pending", value: o.callbacks_pending, color: o.callbacks_pending > 0 ? "#fbbf24" : "#737373" },
+    { label: "Total Leads",       value: fmt(o.total_leads),  color: "#737373" },
+  ];
+
+  document.getElementById("overview-cards").innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <div class="stat-value" style="color:${c.dim ? "#374151" : c.color}">${esc(String(c.value))}</div>
+      <div class="stat-label">${esc(c.label)}</div>
+    </div>
+  `).join("");
+}
+
+// ── Pipeline bars ─────────────────────────────────────────────────────────────
+function renderPipeline(bd, total) {
+  const rows = [
+    { label: "Untouched", count: bd.new,     color: "#525252" },
+    { label: "Working",   count: bd.working, color: "#60a5fa" },
+    { label: "Hot",       count: bd.hot,     color: "#34d399" },
+    { label: "DNC",       count: bd.dead,    color: "#374151" },
+  ];
+  const max = Math.max(...rows.map(r => r.count), 1);
+
+  document.getElementById("pipeline-section").innerHTML = rows.map(r => {
+    const pct = Math.round((r.count / max) * 100);
+    const totalPct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+    return `
+      <div>
+        <div class="flex justify-between items-baseline mb-1.5">
+          <span class="text-sm text-gray-300">${esc(r.label)}</span>
+          <span class="text-sm font-semibold text-gray-200">${fmt(r.count)}
+            <span class="text-xs text-gray-600 font-normal ml-1">${totalPct}%</span>
+          </span>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${pct}%; background:${r.color}"></div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── VA performance table ──────────────────────────────────────────────────────
+function renderVaTable(vas) {
+  const body = document.getElementById("va-table-body");
+  const empty = document.getElementById("va-empty");
+
+  if (!vas || vas.length === 0) {
+    body.innerHTML = "";
+    empty.style.display = "";
+    return;
+  }
+  empty.style.display = "none";
+
+  body.innerHTML = vas.map(va => `
+    <tr>
+      <td class="font-medium text-gray-200">${esc(va.va_name)}</td>
+      <td>${va.calls_today}</td>
+      <td>${va.connects_today}</td>
+      <td>${va.hot_leads > 0 ? `<span class="badge-green">${va.hot_leads}</span>` : `<span class="text-gray-600">0</span>`}</td>
+    </tr>
+  `).join("");
+}
+
+// ── System health ─────────────────────────────────────────────────────────────
+function renderSystem(sys) {
+  // Queue size
+  document.getElementById("sys-queue").textContent =
+    sys.queue_size > 0 ? `${sys.queue_size} leads` : "Clear";
+  document.getElementById("sys-queue").style.color =
+    sys.queue_size > 10 ? "#fbbf24" : sys.queue_size > 0 ? "#e5e5e5" : "#34d399";
+
+  // Next callback
+  const nextEl = document.getElementById("sys-next-callback");
+  if (sys.next_callback_at) {
+    nextEl.textContent = formatTime(sys.next_callback_at);
+    nextEl.style.color = "#c4b5fd";
+  } else {
+    nextEl.textContent = "None scheduled";
+    nextEl.style.color = "#525252";
+  }
+
+  // Last import
+  const importEl = document.getElementById("sys-last-import");
+  importEl.textContent = sys.last_import_at
+    ? formatDateTime(sys.last_import_at)
+    : "No imports yet";
+
+  // Callbacks today list
+  const list = document.getElementById("callbacks-today-list");
+  if (!sys.callbacks_today || sys.callbacks_today.length === 0) {
+    list.innerHTML = `<div class="text-sm text-gray-600">No callbacks scheduled today.</div>`;
+    return;
+  }
+
+  list.innerHTML = sys.callbacks_today.map(cb => `
+    <div class="callback-row">
+      <span class="callback-time">${formatTime(cb.scheduled_at)}</span>
+      <span class="callback-name">${esc(cb.lead_name)}</span>
+      <span class="callback-va">(${esc(cb.va_name)})</span>
+    </div>
+  `).join("");
+}
+
+// ── Weekly trend chart ────────────────────────────────────────────────────────
+function renderTrend(trend) {
+  if (!trend || trend.length === 0) return;
+
+  const maxCalls    = Math.max(...trend.map(d => d.calls),    1);
+  const maxConnects = Math.max(...trend.map(d => d.connects), 1);
+  const maxQual     = Math.max(...trend.map(d => d.qualifieds), 1);
+
+  // Header row: day labels
+  const today = new Date().toLocaleDateString("sv-SE");
+  document.getElementById("trend-head").innerHTML = `
+    <tr>
+      <th class="text-left pr-4" style="width:90px"></th>
+      ${trend.map(d => {
+        const isToday = d.date === today;
+        return `<th style="${isToday ? "color:#a78bfa" : ""}">${esc(d.day_label)}</th>`;
+      }).join("")}
+    </tr>
+  `;
+
+  // Data rows
+  const rows = [
+    { key: "calls",     label: "Calls",    color: "#7c3aed", max: maxCalls    },
+    { key: "connects",  label: "Connects", color: "#10b981", max: maxConnects },
+    { key: "qualifieds",label: "Qualified",color: "#f59e0b", max: maxQual     },
+  ];
+
+  document.getElementById("trend-body").innerHTML = rows.map(row => `
+    <tr>
+      <td class="text-xs text-gray-500 font-medium uppercase tracking-wide pr-4 py-1" style="white-space:nowrap">${esc(row.label)}</td>
+      ${trend.map(d => {
+        const val = d[row.key];
+        const barH = Math.round((val / row.max) * 32);
+        return `
+          <td>
+            <div class="trend-cell">
+              <div class="trend-bar-wrap">
+                <div class="trend-bar" style="height:${barH}px; background:${val > 0 ? row.color : "#1a1a1a"}; opacity:${val > 0 ? 0.85 : 1}"></div>
+              </div>
+              <span class="trend-num" style="color:${val > 0 ? "#d4d4d4" : "#374151"}">${val}</span>
+            </div>
+          </td>
+        `;
+      }).join("")}
+    </tr>
+  `).join("");
+}
+
+// ── Formatting helpers ────────────────────────────────────────────────────────
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString("en-US", {
+      hour: "numeric", minute: "2-digit", hour12: true,
+    });
+  } catch { return iso; }
+}
+
+function formatDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "short", day: "numeric",
+    }) + " @ " + new Date(iso).toLocaleTimeString("en-US", {
+      hour: "numeric", minute: "2-digit", hour12: true,
+    });
+  } catch { return iso; }
+}
+
+function fmt(n) {
+  return Number(n).toLocaleString("en-US");
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+</script>
+</body>
+</html>
