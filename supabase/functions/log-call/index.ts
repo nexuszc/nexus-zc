@@ -300,6 +300,8 @@ serve(async (req) => {
         next_touch_due_at: nextTouchDueAt,
       };
       if (newStatus) leadUpdate.status = newStatus;
+      // First touch: assign this VA so Tier 3 queue generation can find the lead.
+      if ((lead.touch_count as number) === 0) leadUpdate.assigned_va_id = va_id;
 
       const { error: updateErr } = await supabase.from("leads").update(leadUpdate).eq("id", lead_id);
       if (updateErr) console.error("Lead update error:", updateErr.message);
