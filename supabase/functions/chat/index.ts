@@ -705,24 +705,103 @@ Be direct, specific, and actionable. Reference actual data from above.`;
 async function mergeDevToMain(commitMessage: string): Promise<{ ok: boolean; error?: string }> {
   const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
   const GITHUB_REPO = Deno.env.get("GITHUB_REPO") || "nexuszc/nexus-zc";
+
   try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/merges`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GITHUB_TOKEN}`,
-        "Accept": "application/vnd.github.v3+json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        base: "main",
-        head: "dev",
-        commit_message: `Nexus self-improvement: ${commitMessage}`,
-      }),
-    });
-    if (res.status === 204) return { ok: true };
-    if (res.ok) return { ok: true };
-    const err = await res.json();
-    return { ok: false, error: err.message };
+    // Find the improvement being approved to get files_changed
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    );
+    const { data: improvement } = await supabase
+      .from("nexus_improvements")
+      .select("files_changed")
+      .eq("status", "in_dev")
+      .order("identified_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const filesToMerge: string[] = improvement?.files_changed || [];
+
+    if (filesToMerge.length === 0) {
+      // No tracked files — fall back to GitHub merge API
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/merges`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GITHUB_TOKEN}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          base: "main",
+          head: "dev",
+          commit_message: `Nexus self-improvement: ${commitMessage}`,
+        }),
+      });
+      if (res.status === 204 || res.ok) return { ok: true };
+      const err = await res.json();
+      return { ok: false, error: err.message };
+    }
+
+    // Content-based merge: read each changed file from dev, write to main
+    // This is conflict-proof — we apply file content directly, no git merge needed
+    for (const filePath of filesToMerge) {
+      // Read file from dev branch
+      const readRes = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=dev`,
+        {
+          headers: {
+            "Authorization": `Bearer ${GITHUB_TOKEN}`,
+            "Accept": "application/vnd.github.v3+json",
+          },
+        }
+      );
+      if (!readRes.ok) throw new Error(`Could not read ${filePath} from dev`);
+      const devFile = await readRes.json();
+      const content = devFile.content; // already base64
+
+      // Get current SHA of the file on main (required for update)
+      const mainRes = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=main`,
+        {
+          headers: {
+            "Authorization": `Bearer ${GITHUB_TOKEN}`,
+            "Accept": "application/vnd.github.v3+json",
+          },
+        }
+      );
+      let mainSha: string | undefined;
+      if (mainRes.ok) {
+        const mainFile = await mainRes.json();
+        mainSha = mainFile.sha;
+      }
+
+      const body: any = {
+        message: `Nexus self-improvement: ${commitMessage}`,
+        content,
+        branch: "main",
+      };
+      if (mainSha) body.sha = mainSha;
+
+      const writeRes = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`,
+        {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${GITHUB_TOKEN}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (!writeRes.ok) {
+        const err = await writeRes.json();
+        throw new Error(`Failed to write ${filePath} to main: ${JSON.stringify(err)}`);
+      }
+    }
+
+    return { ok: true };
   } catch (err: any) {
     return { ok: false, error: err.message };
   }

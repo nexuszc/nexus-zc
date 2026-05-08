@@ -40,6 +40,9 @@ Deno.serve(async (req) => {
     .eq("id", improvement_id);
 
   try {
+    // Sync dev to main before writing the fix — prevents divergence conflicts
+    await syncDevToMain();
+
     const filePath = FUNCTION_PATHS[improvement.affected_function] || FUNCTION_PATHS.chat;
     const currentCode = await readFileFromGitHub(filePath, "main");
     const { fixedCode, summary, filesChanged } = await generateFix(improvement, currentCode, filePath);
@@ -145,6 +148,28 @@ Return only the JSON. No explanation. No markdown code blocks around the JSON.`;
   }
 
   return result;
+}
+
+async function syncDevToMain(): Promise<void> {
+  const mainRes = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/git/refs/heads/main`,
+    { headers: { "Authorization": `Bearer ${GITHUB_TOKEN}`, "Accept": "application/vnd.github.v3+json" } }
+  );
+  const mainData = await mainRes.json();
+  const mainSha = mainData.object?.sha;
+  if (!mainSha) return;
+  await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/git/refs/heads/dev`,
+    {
+      method: "PATCH",
+      headers: {
+        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ sha: mainSha, force: true }),
+    }
+  );
 }
 
 async function readFileFromGitHub(path: string, branch = "main"): Promise<string> {
