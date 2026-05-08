@@ -136,7 +136,33 @@ Deno.serve(async (_req) => {
       };
     }));
 
-    // ----- 4. Build context blocks -----
+    // ----- 4. Pull Nexus health + improvements -----
+    const [healthData, pendingImprovements] = await Promise.all([
+      supabase.from("nexus_health")
+        .select("function_name, status, error_count, success_count")
+        .order("checked_at", { ascending: false })
+        .limit(4),
+
+      supabase.from("nexus_improvements")
+        .select("title, problem, recommended_fix, estimated_minutes, priority")
+        .eq("status", "pending")
+        .order("priority", { ascending: true })
+        .limit(3),
+    ]);
+
+    const healthSummary = (healthData.data || []).length
+      ? "NEXUS HEALTH:\n" + (healthData.data || []).map((h: any) =>
+          `- ${h.function_name}: ${h.status} (${h.success_count} ok, ${h.error_count} errors)`
+        ).join("\n")
+      : "";
+
+    const improvementsSummary = (pendingImprovements.data || []).length
+      ? "PENDING IMPROVEMENTS:\n" + (pendingImprovements.data || []).map((imp: any, i: number) =>
+          `${i + 1}. [${imp.estimated_minutes}min] ${imp.title}: ${imp.problem}`
+        ).join("\n")
+      : "";
+
+    // ----- 5. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
       timeZone: "America/Denver",
@@ -174,9 +200,11 @@ Deno.serve(async (_req) => {
         : "",
       fmt(recentPeople.data || [], "RECENT PEOPLE MENTIONS"),
       clientBriefContext,
+      healthSummary,
+      improvementsSummary,
     ].filter(Boolean).join("\n\n");
 
-    // ----- 5. Generate briefing via Claude -----
+    // ----- 6. Generate briefing via Claude -----
     const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing based on the memory context below.
 
 FORMAT:
@@ -197,10 +225,13 @@ FORMAT:
 🏢 CLIENT BRAINS
 [One line per active client: name, VA assigned, last activity, any flags. Flag any client silent >24 hours. Flag any client with no VA assigned. If no clients yet, write "No active clients."]
 
+🔧 NEXUS SELF-REPORT
+[Health status of each function from NEXUS HEALTH context. List top pending improvements in priority order with estimated fix time. If everything is healthy and no improvements pending, say so. Be direct.]
+
 ⚡ FIRST MOVE
 [One direct recommendation — what to do in the first 30 minutes of the day]
 
-Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 500 words.
+Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 600 words.
 
 MEMORY CONTEXT:
 ${contextBlock || "(no recent entries found)"}`;
@@ -214,7 +245,7 @@ ${contextBlock || "(no recent entries found)"}`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 900,
+        max_tokens: 1000,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -227,11 +258,15 @@ ${contextBlock || "(no recent entries found)"}`;
       return new Response("no briefing", { status: 200 });
     }
 
-    // ----- 6. Send to Telegram -----
-    await sendTelegramMessage(chatId, briefing);
+    // ----- 7. Truncate and send to Telegram -----
+    const LIMIT = 4000;
+    const tgMessage = briefing.length > LIMIT
+      ? briefing.slice(0, LIMIT) + "... (truncated)"
+      : briefing;
+    await sendTelegramMessage(chatId, tgMessage);
     console.log("Morning briefing sent to chat", chatId);
 
-    // ----- 7. Bubble platform insights -----
+    // ----- 8. Bubble platform insights -----
     await bubbleInsights(supabase, clientSummaries);
 
     return new Response(JSON.stringify({ ok: true }), {

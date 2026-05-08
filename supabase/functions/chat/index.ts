@@ -13,6 +13,14 @@ async function sendTelegram(token: string, chatId: number, text: string) {
   });
 }
 
+async function logUsage(supabase: any, ability: string, success: boolean, responseMs: number, channel: string) {
+  try {
+    await supabase.from("nexus_usage").insert({ ability, success, response_ms: responseMs, channel });
+  } catch (err) {
+    console.error("Usage log error:", err);
+  }
+}
+
 serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -30,7 +38,7 @@ serve(async (req) => {
     const earlyReturn = async (reply: string) => {
       const LIMIT = 4000;
       const tgMessage = reply.length > LIMIT
-        ? reply.slice(0, LIMIT) + '... (truncated — full version saved to Nexus memory)'
+        ? reply.slice(0, LIMIT) + "... (truncated — full version saved to Nexus memory)"
         : reply;
       if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, tgMessage);
       return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -100,6 +108,7 @@ serve(async (req) => {
     // PROVISION CLIENT COMMAND
     // ================================================================
     if (msgLower.startsWith("provision:")) {
+      const start = Date.now();
       const parts = message.slice(10).split("|").map((p: string) => p.trim());
       const clientName = parts[0];
       const dealType = parts.find((p: string) => p.toLowerCase().startsWith("type:"))?.slice(5).trim();
@@ -140,13 +149,94 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
         },
-        body: JSON.stringify({
-          client_id: client.id,
-          telegram_chat_id: external_id,
-        }),
+        body: JSON.stringify({ client_id: client.id, telegram_chat_id: external_id }),
       });
 
+      await logUsage(supabase, "provision", true, Date.now() - start, channel);
       return earlyReturn(`⚙️ Provisioning ${clientName}...\n\nI'll message you when the site is live. This takes about 60 seconds.`);
+    }
+
+    // ================================================================
+    // APPROVE COMMAND — merge dev → main
+    // ================================================================
+    if (msgLower.startsWith("approve:") || msgLower === "approve") {
+      const improvementTitle = msgLower.startsWith("approve:") ? message.slice(8).trim() : null;
+
+      const query = supabase.from("nexus_improvements").select("*").eq("status", "in_dev");
+      if (improvementTitle) query.ilike("title", `%${improvementTitle}%`);
+      const { data: improvements } = await query.order("identified_at", { ascending: false }).limit(1);
+
+      const improvement = improvements?.[0];
+      if (!improvement) return earlyReturn("❌ No pending dev improvements found to approve.");
+
+      const mergeResult = await mergeDevToMain(improvement.title);
+
+      if (mergeResult.ok) {
+        await supabase.from("nexus_improvements")
+          .update({ status: "live", approved_at: new Date().toISOString(), live_at: new Date().toISOString() })
+          .eq("id", improvement.id);
+        return earlyReturn(`✅ Approved and merged to production!\n\n"${improvement.title}" is now live.\nCloudflare will deploy in ~60 seconds.`);
+      } else {
+        return earlyReturn(`❌ Merge failed: ${mergeResult.error}\nCheck GitHub for conflicts.`);
+      }
+    }
+
+    // ================================================================
+    // REJECT COMMAND — discard dev changes
+    // ================================================================
+    if (msgLower.startsWith("reject:") || msgLower === "reject") {
+      const { data: improvements } = await supabase
+        .from("nexus_improvements")
+        .select("*")
+        .eq("status", "in_dev")
+        .order("identified_at", { ascending: false })
+        .limit(1);
+
+      const improvement = improvements?.[0];
+      if (!improvement) return earlyReturn("❌ No pending dev improvements to reject.");
+
+      await resetDevToMain();
+
+      await supabase.from("nexus_improvements")
+        .update({ status: "rejected" })
+        .eq("id", improvement.id);
+
+      return earlyReturn(`🗑️ Rejected "${improvement.title}". Dev branch reset to main.`);
+    }
+
+    // ================================================================
+    // STATUS COMMAND — see what's in dev
+    // ================================================================
+    if (msgLower === "nexus status" || msgLower === "status: nexus") {
+      const [{ data: inDev }, { data: pending }, { data: recent }] = await Promise.all([
+        supabase.from("nexus_improvements").select("title, problem, recommended_fix, estimated_minutes").eq("status", "in_dev"),
+        supabase.from("nexus_improvements").select("title, priority, estimated_minutes").eq("status", "pending").order("priority", { ascending: true }).limit(5),
+        supabase.from("nexus_health").select("function_name, status, error_count").order("checked_at", { ascending: false }).limit(4),
+      ]);
+
+      let statusMsg = "🔧 NEXUS STATUS\n\n";
+
+      if (inDev?.length) {
+        statusMsg += `IN DEV (waiting for approval):\n`;
+        statusMsg += inDev.map((i: any) => `• ${i.title} (~${i.estimated_minutes}min fix)\n  ${i.recommended_fix}`).join("\n") + "\n\n";
+        statusMsg += `Reply "approve" to push to production or "reject" to discard.\n\n`;
+      }
+
+      if (pending?.length) {
+        statusMsg += `IMPROVEMENT QUEUE:\n`;
+        statusMsg += pending.map((i: any, n: number) => `${n + 1}. ${i.title} (~${i.estimated_minutes}min)`).join("\n") + "\n\n";
+      }
+
+      if (recent?.length) {
+        statusMsg += `FUNCTION HEALTH:\n`;
+        statusMsg += recent.map((h: any) => `• ${h.function_name}: ${h.status}`).join("\n");
+      }
+
+      if (!inDev?.length && !pending?.length && !recent?.length) {
+        statusMsg += "No health data yet. Run health-monitor first.";
+      }
+
+      return earlyReturn(statusMsg);
     }
 
     // ================================================================
@@ -187,68 +277,97 @@ serve(async (req) => {
     // ABILITY 1: WEB SEARCH
     // ================================================================
     if (msgLower.startsWith("search:")) {
+      const start = Date.now();
       const query = message.slice(7).trim();
-      const results = await webSearch(query);
-      const summary = await summarizeSearchResults(query, results);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `SEARCH: ${query}\n\n${summary}`,
-        entry_type: "note", importance: 6, tags: ["search", "research"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`🔍 Search: ${query}\n\n${summary}`);
+      try {
+        const results = await webSearch(query);
+        const summary = await summarizeSearchResults(query, results);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `SEARCH: ${query}\n\n${summary}`,
+          entry_type: "note", importance: 6, tags: ["search", "research"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "search", true, Date.now() - start, channel);
+        return earlyReturn(`🔍 Search: ${query}\n\n${summary}`);
+      } catch (err: any) {
+        await logUsage(supabase, "search", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Search failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 2: URL SUMMARIZATION
     // ================================================================
     if (msgLower.startsWith("summarize:")) {
+      const start = Date.now();
       const url = message.slice(10).trim();
-      const summary = await summarizeUrl(url);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `URL SUMMARY: ${url}\n\n${summary}`,
-        entry_type: "note", importance: 6, tags: ["research", "url"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`🔗 Summary of ${url}\n\n${summary}`);
+      try {
+        const summary = await summarizeUrl(url);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `URL SUMMARY: ${url}\n\n${summary}`,
+          entry_type: "note", importance: 6, tags: ["research", "url"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "summarize", true, Date.now() - start, channel);
+        return earlyReturn(`🔗 Summary of ${url}\n\n${summary}`);
+      } catch (err: any) {
+        await logUsage(supabase, "summarize", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Summarize failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 3: EMAIL DRAFTING + SENDING
     // ================================================================
     if (msgLower.startsWith("draft email:")) {
+      const start = Date.now();
       const parts = message.slice(12).split("|").map((p: string) => p.trim());
       const to = parts[0];
       const subject = parts.find((p: string) => p.toLowerCase().startsWith("subject:"))?.slice(8).trim() || "Follow-up";
       const about = parts.find((p: string) => p.toLowerCase().startsWith("about:"))?.slice(6).trim() || parts.slice(1).join(" ");
-      const draft = await draftEmail(to, subject, about);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `EMAIL DRAFT to ${to}\nSubject: ${subject}\n\n${draft}`,
-        entry_type: "note", importance: 7, tags: ["email", "draft"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`📧 Email draft to ${to}\nSubject: ${subject}\n\n${draft}\n\n---\nTo send: "send email: ${to} | subject: ${subject} | body: [paste or edit above]"`);
+      try {
+        const draft = await draftEmail(to, subject, about);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `EMAIL DRAFT to ${to}\nSubject: ${subject}\n\n${draft}`,
+          entry_type: "note", importance: 7, tags: ["email", "draft"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "draft email", true, Date.now() - start, channel);
+        return earlyReturn(`📧 Email draft to ${to}\nSubject: ${subject}\n\n${draft}\n\n---\nTo send: "send email: ${to} | subject: ${subject} | body: [paste or edit above]"`);
+      } catch (err: any) {
+        await logUsage(supabase, "draft email", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Draft failed: ${err.message}`);
+      }
     }
 
     if (msgLower.startsWith("send email:")) {
+      const start = Date.now();
       const GMAIL_CLIENT_ID = Deno.env.get("GMAIL_CLIENT_ID");
       if (!GMAIL_CLIENT_ID) {
+        await logUsage(supabase, "send email", false, Date.now() - start, channel);
         return earlyReturn("⚠️ Gmail not configured yet. Email draft saved to memory. Set up Gmail API keys to enable sending.");
       }
       const parts = message.slice(11).split("|").map((p: string) => p.trim());
       const to = parts[0];
       const subject = parts.find((p: string) => p.toLowerCase().startsWith("subject:"))?.slice(8).trim() || "Follow-up";
       const emailBody = parts.find((p: string) => p.toLowerCase().startsWith("body:"))?.slice(5).trim() || "";
-      const result = await sendGmail(to, subject, emailBody);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `EMAIL SENT to ${to}\nSubject: ${subject}\n\n${emailBody}`,
-        entry_type: "note", importance: 8, tags: ["email", "sent"],
-        classification_status: "skip",
-      });
-      return earlyReturn(result ? `✅ Email sent to ${to}` : `❌ Failed to send email. Check logs.`);
+      try {
+        const result = await sendGmail(to, subject, emailBody);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `EMAIL SENT to ${to}\nSubject: ${subject}\n\n${emailBody}`,
+          entry_type: "note", importance: 8, tags: ["email", "sent"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "send email", result, Date.now() - start, channel);
+        return earlyReturn(result ? `✅ Email sent to ${to}` : `❌ Failed to send email. Check logs.`);
+      } catch (err: any) {
+        await logUsage(supabase, "send email", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Send failed: ${err.message}`);
+      }
     }
 
     // ================================================================
@@ -257,113 +376,148 @@ serve(async (req) => {
     const docTypes = ["generate proposal:", "generate script:", "generate report:", "generate onepager:"];
     const matchedDoc = docTypes.find(d => msgLower.startsWith(d));
     if (matchedDoc) {
+      const start = Date.now();
       const docType = matchedDoc.replace("generate ", "").replace(":", "").trim();
       const rest = message.slice(matchedDoc.length).trim();
       const parts = rest.split("|").map((p: string) => p.trim());
       const subject = parts[0];
       const details = parts.slice(1).join(" | ");
-      const { data: clientData } = await supabase
-        .from("clients").select("*, client_context(*)")
-        .ilike("name", `%${subject}%`)
-        .limit(1).maybeSingle();
-      const doc = await generateDocument(docType, subject, details, clientData);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `${docType.toUpperCase()}: ${subject}\n\n${doc}`,
-        entry_type: "note", importance: 8, tags: ["document", docType],
-        client_id: clientData?.id || null,
-        classification_status: "skip",
-      });
-      return earlyReturn(`📄 ${docType.charAt(0).toUpperCase() + docType.slice(1)}: ${subject}\n\n${doc}`);
+      try {
+        const { data: clientData } = await supabase
+          .from("clients").select("*, client_context(*)")
+          .ilike("name", `%${subject}%`)
+          .limit(1).maybeSingle();
+        const doc = await generateDocument(docType, subject, details, clientData);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `${docType.toUpperCase()}: ${subject}\n\n${doc}`,
+          entry_type: "note", importance: 8, tags: ["document", docType],
+          client_id: clientData?.id || null,
+          classification_status: "skip",
+        });
+        await logUsage(supabase, `generate ${docType}`, true, Date.now() - start, channel);
+        return earlyReturn(`📄 ${docType.charAt(0).toUpperCase() + docType.slice(1)}: ${subject}\n\n${doc}`);
+      } catch (err: any) {
+        await logUsage(supabase, `generate ${docType}`, false, Date.now() - start, channel);
+        return earlyReturn(`❌ Document generation failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 5: TELEGRAM REMINDERS
     // ================================================================
     if (msgLower.startsWith("remind me:")) {
+      const start = Date.now();
       const parts = message.slice(10).split("|").map((p: string) => p.trim());
       const reminderText = parts[0];
       const timePart = parts.find((p: string) => p.toLowerCase().startsWith("in:") || p.toLowerCase().startsWith("at:")) || "";
       const fireAt = parseReminderTime(timePart);
       if (!fireAt) return earlyReturn(`❌ Couldn't parse time. Try: "remind me: [what] | in: 2 hours" or "in: 3 days"`);
       const chatId = external_id || "";
-      await supabase.from("reminders").insert({
-        chat_id: chatId,
-        message: `⏰ Reminder: ${reminderText}`,
-        fire_at: fireAt.toISOString(),
-      });
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "user",
-        content: `REMINDER SET: ${reminderText} at ${fireAt.toISOString()}`,
-        entry_type: "task", importance: 7, tags: ["reminder"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`⏰ Reminder set: "${reminderText}"\nFires: ${fireAt.toLocaleString("en-US", { timeZone: "America/Denver" })} MT`);
+      try {
+        await supabase.from("reminders").insert({
+          chat_id: chatId,
+          message: `⏰ Reminder: ${reminderText}`,
+          fire_at: fireAt.toISOString(),
+        });
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "user",
+          content: `REMINDER SET: ${reminderText} at ${fireAt.toISOString()}`,
+          entry_type: "task", importance: 7, tags: ["reminder"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "remind me", true, Date.now() - start, channel);
+        return earlyReturn(`⏰ Reminder set: "${reminderText}"\nFires: ${fireAt.toLocaleString("en-US", { timeZone: "America/Denver" })} MT`);
+      } catch (err: any) {
+        await logUsage(supabase, "remind me", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Reminder failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 6: RESEARCH MODE
     // ================================================================
     if (msgLower.startsWith("research:")) {
+      const start = Date.now();
       const target = message.slice(9).trim();
-      const [generalResults, newsResults] = await Promise.all([
-        webSearch(target),
-        webSearch(`${target} news 2025 2026`),
-      ]);
-      const allResults = [...generalResults, ...newsResults];
-      const research = await synthesizeResearch(target, allResults);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `RESEARCH: ${target}\n\n${research}`,
-        entry_type: "note", importance: 8, tags: ["research", "intelligence"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`🧠 Research: ${target}\n\n${research}`);
+      try {
+        const [generalResults, newsResults] = await Promise.all([
+          webSearch(target),
+          webSearch(`${target} news 2025 2026`),
+        ]);
+        const allResults = [...generalResults, ...newsResults];
+        const research = await synthesizeResearch(target, allResults);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `RESEARCH: ${target}\n\n${research}`,
+          entry_type: "note", importance: 8, tags: ["research", "intelligence"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "research", true, Date.now() - start, channel);
+        return earlyReturn(`🧠 Research: ${target}\n\n${research}`);
+      } catch (err: any) {
+        await logUsage(supabase, "research", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Research failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 7: COMPETITIVE RESEARCH
     // ================================================================
     if (msgLower.startsWith("competitors:")) {
+      const start = Date.now();
       const market = message.slice(12).trim();
-      const results = await webSearch(`${market} competitors alternatives 2025`);
-      const analysis = await competitiveAnalysis(market, results);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `COMPETITIVE ANALYSIS: ${market}\n\n${analysis}`,
-        entry_type: "note", importance: 7, tags: ["research", "competitive"],
-        classification_status: "skip",
-      });
-      return earlyReturn(`⚔️ Competitive Analysis: ${market}\n\n${analysis}`);
+      try {
+        const results = await webSearch(`${market} competitors alternatives 2025`);
+        const analysis = await competitiveAnalysis(market, results);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `COMPETITIVE ANALYSIS: ${market}\n\n${analysis}`,
+          entry_type: "note", importance: 7, tags: ["research", "competitive"],
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "competitors", true, Date.now() - start, channel);
+        return earlyReturn(`⚔️ Competitive Analysis: ${market}\n\n${analysis}`);
+      } catch (err: any) {
+        await logUsage(supabase, "competitors", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Competitive analysis failed: ${err.message}`);
+      }
     }
 
     // ================================================================
     // ABILITY 8: CLIENT REPORT
     // ================================================================
     if (msgLower.startsWith("report:")) {
+      const start = Date.now();
       const clientName = message.slice(7).trim();
-      const { data: client } = await supabase
-        .from("clients")
-        .select("*, client_context(*), va_assignments(*)")
-        .ilike("name", `%${clientName}%`)
-        .order("created_at", { ascending: false })
-        .limit(1).maybeSingle();
-      if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
-      const [{ data: recentEntries }, { data: openTasks }] = await Promise.all([
-        supabase.from("entries").select("content, entry_type, created_at, role")
-          .eq("client_id", client.id).order("created_at", { ascending: false }).limit(30),
-        supabase.from("entries").select("content, created_at")
-          .eq("client_id", client.id).eq("task_status", "open"),
-      ]);
-      const report = await generateClientReport(client, recentEntries || [], openTasks || []);
-      await supabase.from("entries").insert({
-        conversation_id: conversationId, source: channel, role: "assistant",
-        content: `CLIENT REPORT: ${client.name}\n\n${report}`,
-        entry_type: "note", importance: 8, tags: ["report", "client"],
-        client_id: client.id,
-        classification_status: "skip",
-      });
-      return earlyReturn(`📊 Client Report: ${client.name}\n\n${report}`);
+      try {
+        const { data: client } = await supabase
+          .from("clients")
+          .select("*, client_context(*), va_assignments(*)")
+          .ilike("name", `%${clientName}%`)
+          .order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
+        if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+        const [{ data: recentEntries }, { data: openTasks }] = await Promise.all([
+          supabase.from("entries").select("content, entry_type, created_at, role")
+            .eq("client_id", client.id).order("created_at", { ascending: false }).limit(30),
+          supabase.from("entries").select("content, created_at")
+            .eq("client_id", client.id).eq("task_status", "open"),
+        ]);
+        const report = await generateClientReport(client, recentEntries || [], openTasks || []);
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: `CLIENT REPORT: ${client.name}\n\n${report}`,
+          entry_type: "note", importance: 8, tags: ["report", "client"],
+          client_id: client.id,
+          classification_status: "skip",
+        });
+        await logUsage(supabase, "report", true, Date.now() - start, channel);
+        return earlyReturn(`📊 Client Report: ${client.name}\n\n${report}`);
+      } catch (err: any) {
+        await logUsage(supabase, "report", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Report failed: ${err.message}`);
+      }
     }
 
     // ================================================================
@@ -443,13 +597,66 @@ serve(async (req) => {
     return new Response(JSON.stringify({ reply, classification }), {
       status: 200, headers: { "Content-Type": "application/json" },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Chat error:", err);
     return new Response(JSON.stringify({ error: err.message || String(err) }), {
       status: 500, headers: { "Content-Type": "application/json" },
     });
   }
 });
+
+// ================================================================
+// GITHUB HELPERS
+// ================================================================
+
+async function mergeDevToMain(commitMessage: string): Promise<{ ok: boolean; error?: string }> {
+  const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
+  const GITHUB_REPO = Deno.env.get("GITHUB_REPO") || "nexuszc/nexus-zc";
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/merges`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GITHUB_TOKEN}`,
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        base: "main",
+        head: "dev",
+        commit_message: `Nexus self-improvement: ${commitMessage}`,
+      }),
+    });
+    if (res.status === 204) return { ok: true };
+    if (res.ok) return { ok: true };
+    const err = await res.json();
+    return { ok: false, error: err.message };
+  } catch (err: any) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function resetDevToMain(): Promise<void> {
+  const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
+  const GITHUB_REPO = Deno.env.get("GITHUB_REPO") || "nexuszc/nexus-zc";
+  const mainRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/git/refs/heads/main`, {
+    headers: {
+      "Authorization": `Bearer ${GITHUB_TOKEN}`,
+      "Accept": "application/vnd.github.v3+json",
+    },
+  });
+  const mainData = await mainRes.json();
+  const mainSha = mainData.object?.sha;
+  if (!mainSha) return;
+  await fetch(`https://api.github.com/repos/${GITHUB_REPO}/git/refs/heads/dev`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${GITHUB_TOKEN}`,
+      "Accept": "application/vnd.github.v3+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ sha: mainSha, force: true }),
+  });
+}
 
 // ================================================================
 // ABILITY HELPERS
@@ -731,6 +938,8 @@ ABILITIES YOU HAVE (suggest these when relevant):
 - remind me: [what] | in: [2 hours / 3 days]
 - task: [what] — track a task
 - report: [client] — full client status report
+- nexus status — see system health and improvement queue
+- approve / reject — approve or reject pending dev improvements
 
 Behavioral rules:
 - If memory contains the answer, ANSWER IT directly.
@@ -797,11 +1006,11 @@ function buildContext(sources: any) {
   }
   if (sources.projects.length > 0) {
     parts.push("PROJECT MEMORY:\n" + sources.projects.slice(0, 8)
-      .map((e: any) => `[${e.entry_type || 'note'}, ${(e.project_names || []).join(',')}] ${e.content.slice(0, 250)}`).join("\n"));
+      .map((e: any) => `[${e.entry_type || "note"}, ${(e.project_names || []).join(",")}] ${e.content.slice(0, 250)}`).join("\n"));
   }
   if (sources.people.length > 0) {
     parts.push("PEOPLE MEMORY:\n" + sources.people.slice(0, 5)
-      .map((e: any) => `[${(e.people_names || []).join(',')}] ${e.content.slice(0, 200)}`).join("\n"));
+      .map((e: any) => `[${(e.people_names || []).join(",")}] ${e.content.slice(0, 200)}`).join("\n"));
   }
   if (sources.semantic.length > 0) {
     parts.push("SEMANTIC MATCHES:\n" + sources.semantic.slice(0, 5)
