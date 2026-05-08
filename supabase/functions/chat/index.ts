@@ -28,7 +28,11 @@ serve(async (req) => {
     const tgChatId = channel === "telegram" && external_id ? Number(external_id) : null;
 
     const earlyReturn = async (reply: string) => {
-      if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, reply);
+      const LIMIT = 4000;
+      const tgMessage = reply.length > LIMIT
+        ? reply.slice(0, LIMIT) + '... (truncated — full version saved to Nexus memory)'
+        : reply;
+      if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, tgMessage);
       return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type": "application/json" } });
     };
 
