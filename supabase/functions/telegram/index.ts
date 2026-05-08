@@ -1,5 +1,5 @@
 // =========================================
-// NEXUS telegram — v1.1 — forwards to /chat with persistent chat mapping
+// NEXUS telegram — v1.2 — immediate 200, background processing via waitUntil
 // =========================================
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
@@ -31,22 +31,32 @@ async function sendTyping(chatId: number) {
   );
 }
 
-async function callChatFunction(message: string, telegramChatId: number) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({
-      message,
-      channel: "telegram",
-      external_id: String(telegramChatId), // persistent mapping key
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "chat function failed");
-  return data;
+// Fire-and-forget: chat function sends the Telegram reply directly.
+// sendTelegramMessage here is only a fallback on hard failure.
+async function processMessage(text: string, chatId: number) {
+  try {
+    await sendTyping(chatId);
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        message: text,
+        channel: "telegram",
+        external_id: String(chatId),
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("chat function error:", err);
+      await sendTelegramMessage(chatId, "Something went wrong. Try again.");
+    }
+  } catch (err) {
+    console.error("processMessage error:", err);
+    await sendTelegramMessage(chatId, "Something went wrong. Try again.");
+  }
 }
 
 Deno.serve(async (req) => {
@@ -59,17 +69,15 @@ Deno.serve(async (req) => {
     const text = message.text.trim();
 
     if (text === "/start") {
-      await sendTelegramMessage(
-        chatId,
-        "Nexus online. Throw ideas, thoughts, anything at me — I'll remember.",
+      EdgeRuntime.waitUntil(
+        sendTelegramMessage(chatId, "Nexus online. Throw ideas, thoughts, anything at me — I'll remember."),
       );
       return new Response("ok");
     }
 
-    await sendTyping(chatId);
-    const result = await callChatFunction(text, chatId);
-    await sendTelegramMessage(chatId, result.reply);
-
+    // Return 200 immediately so Telegram never retries.
+    // All processing (typing → chat → reply) happens in the background.
+    EdgeRuntime.waitUntil(processMessage(text, chatId));
     return new Response("ok");
   } catch (err) {
     console.error("Telegram handler error:", err);

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
 
 serve(async (req) => {
   const supabase = createClient(
@@ -113,6 +114,15 @@ serve(async (req) => {
     }).select().single();
 
     if (assistantEntry) await embedEntry(supabase, assistantEntry.id, reply);
+
+    // ----- 9. Send Telegram reply directly when called from Telegram -----
+    if (channel === "telegram" && external_id && TELEGRAM_BOT_TOKEN) {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: Number(external_id), text: reply }),
+      });
+    }
 
     return new Response(JSON.stringify({ reply, classification }), {
       status: 200, headers: { "Content-Type": "application/json" },
