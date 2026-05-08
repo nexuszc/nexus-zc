@@ -16,6 +16,8 @@ serve(async (req) => {
     const { message, channel = "web", external_id = null } = body;
     if (!message) return new Response(JSON.stringify({ error: "message required" }), { status: 400 });
 
+    const msgLower = message.toLowerCase().trim();
+
     // ----- 1. Resolve conversation -----
     let conversationId: string | null = null;
     if (channel && external_id) {
@@ -38,7 +40,18 @@ serve(async (req) => {
       conversationId = newConv!.id;
     }
 
-    // ----- 2. Fetch existing projects + people for classifier context -----
+    // ----- 2. Handle task completion before classification -----
+    if (msgLower === "done all") {
+      await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open");
+    } else if (msgLower.startsWith("done:")) {
+      const taskDesc = message.slice(5).trim();
+      await supabase.from("entries")
+        .update({ task_status: "done" })
+        .eq("task_status", "open")
+        .ilike("content", `%${taskDesc}%`);
+    }
+
+    // ----- 3. Fetch existing projects + people for classifier context -----
     const { data: projectsList } = await supabase
       .from("projects").select("name, category").neq("category", "archived");
     const { data: peopleList } = await supabase
@@ -49,10 +62,10 @@ serve(async (req) => {
     const allProjectNames = [...establishedNames, ...ideaNames];
     const peopleNames = (peopleList || []).map(p => p.name);
 
-    // ----- 3. Pre-classify the incoming message (for retrieval) -----
+    // ----- 4. Classify -----
     const classification = await classifyEntry(message, establishedNames, ideaNames, peopleNames);
 
-    // ----- 4. Auto-create new projects/people -----
+    // ----- 5. Auto-create new projects/people -----
     for (const name of classification.projects || []) {
       const exists = allProjectNames.some(p => p.toLowerCase() === name.toLowerCase());
       if (!exists) {
@@ -66,28 +79,24 @@ serve(async (req) => {
       }
     }
 
-    // ----- 5. Layered retrieval -----
+    // ----- 6. Layered retrieval -----
     const [recentEntries, projectEntries, peopleEntries, semanticEntries] = await Promise.all([
-      // Recent: last 20 in this conversation
       supabase.from("entries").select("role, content, created_at")
         .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(20),
-      // Project memory
       classification.projects?.length
         ? supabase.from("entries").select("role, content, created_at, entry_type, importance, project_names")
             .overlaps("project_names", classification.projects)
             .order("created_at", { ascending: false }).limit(15)
         : Promise.resolve({ data: [] }),
-      // People memory
       classification.people?.length
         ? supabase.from("entries").select("role, content, created_at, entry_type, people_names")
             .overlaps("people_names", classification.people)
             .order("created_at", { ascending: false }).limit(10)
         : Promise.resolve({ data: [] }),
-      // Semantic memory
       semanticSearch(supabase, message, 8),
     ]);
 
-    // ----- 6. Build context -----
+    // ----- 7. Build context -----
     const contextBlock = buildContext({
       recent: recentEntries.data || [],
       projects: projectEntries.data || [],
@@ -95,15 +104,18 @@ serve(async (req) => {
       semantic: semanticEntries || [],
     });
 
-    // ----- 7. Generate response -----
+    // ----- 8. Generate response -----
     const reply = await callClaude(message, contextBlock, establishedNames, ideaNames);
 
-    // ----- 8. Save user message + reply -----
+    // ----- 9. Save user message + reply -----
+    const taskStatus = classification.type === "task" ? "open" : null;
+
     const { data: userEntry } = await supabase.from("entries").insert({
       conversation_id: conversationId, source: channel, role: "user", content: message,
       entry_type: classification.type, importance: classification.importance,
       tags: classification.tags || [], project_names: classification.projects || [],
       people_names: classification.people || [], classification_status: "complete",
+      task_status: taskStatus,
     }).select().single();
 
     if (userEntry) await embedEntry(supabase, userEntry.id, message);
@@ -115,7 +127,7 @@ serve(async (req) => {
 
     if (assistantEntry) await embedEntry(supabase, assistantEntry.id, reply);
 
-    // ----- 9. Send Telegram reply directly when called from Telegram -----
+    // ----- 10. Send Telegram reply directly when called from Telegram -----
     if (channel === "telegram" && external_id && TELEGRAM_BOT_TOKEN) {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: "POST",
@@ -165,6 +177,8 @@ CRITICAL RULES:
 
 5. **Don't create projects from generic nouns.** "I should call my mom" is not a project. "I'm thinking about real estate" is too vague. A project needs a name or a clear venture/initiative.
 
+6. **Task prefix detection.** If the message starts with "task:" or "TODO:" — always classify type as "task" regardless of content.
+
 Return JSON:
 {
   "type": "idea" | "task" | "note" | "decision" | "question" | "observation" | "meta" | "other",
@@ -189,7 +203,6 @@ Return JSON:
   });
   const data = await res.json();
   const text = data?.content?.[0]?.text || "{}";
-  // Extract JSON (Claude sometimes wraps in markdown)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   try {
     return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
@@ -211,7 +224,12 @@ Behavioral rules:
 - Be concise. Zach dumps thoughts fast and wants fast, useful responses — not essays.
 - When relevant, reference specific past entries: "You mentioned last week that..."
 - When Zach is brainstorming, push back constructively. Don't just agree.
-- Match Zach's energy. If he's casual, be casual. If he's grinding, get sharp.`;
+- Match Zach's energy. If he's casual, be casual. If he's grinding, get sharp.
+
+Task rules:
+- If the message starts with "task:" or "TODO:", respond ONLY with: "✅ Task logged: [extracted task description]. I'll track this until you mark it done."
+- If the message starts with "done:" respond ONLY with: "✅ Done: [what was marked complete]."
+- If the message is exactly "done all", respond ONLY with: "✅ All tasks cleared."`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

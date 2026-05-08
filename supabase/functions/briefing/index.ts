@@ -14,7 +14,7 @@ async function sendTelegramMessage(chatId: string, text: string) {
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chatId, text }),
     },
   );
   if (!res.ok) {
@@ -42,7 +42,6 @@ Deno.serve(async (_req) => {
     const chatId = channelRow.external_id;
 
     // ----- 2. Pull memory context -----
-    const now = new Date().toISOString();
     const minus48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const minus7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -63,14 +62,12 @@ Deno.serve(async (_req) => {
         .order("importance", { ascending: false })
         .limit(10),
 
-      // Open tasks from last 7 days
+      // All open tasks (no time limit — tasks persist until done)
       supabase.from("entries")
         .select("content, project_names, people_names, created_at")
-        .eq("entry_type", "task")
-        .gt("created_at", minus7d)
+        .eq("task_status", "open")
         .eq("role", "user")
-        .order("created_at", { ascending: false })
-        .limit(10),
+        .order("created_at", { ascending: true }), // oldest first
 
       // Active projects
       supabase.from("projects")
@@ -93,6 +90,8 @@ Deno.serve(async (_req) => {
       timeZone: "America/Denver",
     });
 
+    const now = Date.now();
+
     const fmt = (entries: any[], label: string) => {
       if (!entries?.length) return "";
       return `${label}:\n` + entries.map(e =>
@@ -100,10 +99,20 @@ Deno.serve(async (_req) => {
       ).join("\n");
     };
 
+    const openTasksFormatted = (openTasks.data || []).length
+      ? "OPEN TASKS (oldest first):\n" + (openTasks.data || []).map(t => {
+          const ageMs = now - new Date(t.created_at).getTime();
+          const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+          const ageLabel = ageDays === 0 ? "today" : ageDays === 1 ? "1 day old" : `${ageDays} days old`;
+          const overdue = ageMs > 48 * 60 * 60 * 1000 ? " ⚠️ overdue" : "";
+          return `- ${t.content?.slice(0, 200)} (${ageLabel}${overdue})`;
+        }).join("\n")
+      : "";
+
     const contextBlock = [
       fmt(recent48.data || [], "LAST 48 HOURS"),
       fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
-      fmt(openTasks.data || [], "OPEN TASKS"),
+      openTasksFormatted,
       (projects.data || []).length
         ? "ACTIVE PROJECTS:\n" + (projects.data || []).map(p => `- ${p.name} (${p.category})`).join("\n")
         : "",
@@ -121,6 +130,9 @@ FORMAT:
 
 🔄 OPEN LOOPS
 [Bullet list of things mentioned but unresolved — max 4 items]
+
+✅ OPEN TASKS
+[List every open task from OPEN TASKS context with its age. Flag anything older than 48 hours as overdue. If no open tasks, write "No open tasks."]
 
 👥 DEAL STATUS
 [Brief status on active people/deals — flag anything gone silent 48+ hrs]
