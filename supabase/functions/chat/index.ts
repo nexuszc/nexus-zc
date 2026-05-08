@@ -5,6 +5,14 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
 
+async function sendTelegram(token: string, chatId: number, text: string) {
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
 serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -17,8 +25,98 @@ serve(async (req) => {
     if (!message) return new Response(JSON.stringify({ error: "message required" }), { status: 400 });
 
     const msgLower = message.toLowerCase().trim();
+    const tgChatId = channel === "telegram" && external_id ? Number(external_id) : null;
 
-    // ----- 1. Resolve conversation -----
+    // Helper: send reply and return early
+    const earlyReturn = async (reply: string) => {
+      if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, reply);
+      return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+
+    // ================================================================
+    // CLIENT COMMAND SHORTCUTS (before classification)
+    // ================================================================
+
+    // "new client: [name]" or "add client: [name]"
+    if (msgLower.startsWith("new client:") || msgLower.startsWith("add client:")) {
+      const clientName = message.split(":").slice(1).join(":").trim();
+      const { data: newClient, error } = await supabase
+        .from("clients").insert({ name: clientName, status: "active" }).select().single();
+      if (error) return earlyReturn(`❌ Failed to create client: ${error.message}`);
+      const reply = `✅ Client brain created for ${clientName} (ID: ${newClient.id})\n\nSet up their context:\n• "client context: ${clientName} | deal: rev_share | offer: [their offer] | goals: [their goals]"\n• "assign va: ${clientName} | va: [VA name]"`;
+      return earlyReturn(reply);
+    }
+
+    // "client context: [name] | deal: x | offer: x | goals: x | ..."
+    if (msgLower.startsWith("client context:")) {
+      const parts = message.slice(15).split("|").map((p: string) => p.trim());
+      const clientName = parts[0];
+      const contextFields: any = {};
+      const clientFields: any = {};
+      for (const part of parts.slice(1)) {
+        const colonIdx = part.indexOf(":");
+        if (colonIdx === -1) continue;
+        const k = part.slice(0, colonIdx).trim().toLowerCase();
+        const v = part.slice(colonIdx + 1).trim();
+        if (k === "deal") clientFields.deal_type = v;
+        if (k === "fee") clientFields.monthly_fee = parseFloat(v);
+        if (k === "revshare") clientFields.rev_share_pct = parseFloat(v);
+        if (k === "offer") contextFields.core_offer = v;
+        if (k === "goals") contextFields.goals = v;
+        if (k === "audience") contextFields.target_audience = v;
+        if (k === "voice") contextFields.brand_voice = v;
+        if (k === "script") contextFields.script = v;
+        if (k === "pain") contextFields.pain_points = v;
+        if (k === "notes") contextFields.additional_context = v;
+      }
+      const { data: client } = await supabase
+        .from("clients").select("id").ilike("name", `%${clientName}%`)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!client) return earlyReturn(`❌ Client "${clientName}" not found. Create them first with "new client: ${clientName}"`);
+      if (Object.keys(clientFields).length) {
+        await supabase.from("clients").update(clientFields).eq("id", client.id);
+      }
+      if (Object.keys(contextFields).length) {
+        await supabase.from("client_context").upsert({
+          client_id: client.id, ...contextFields, updated_at: new Date().toISOString(),
+        });
+      }
+      return earlyReturn(`✅ Context updated for ${clientName}.`);
+    }
+
+    // "assign va: [client name] | va: [VA name] | contact: [optional]"
+    if (msgLower.startsWith("assign va:")) {
+      const parts = message.slice(10).split("|").map((p: string) => p.trim());
+      const clientName = parts[0];
+      const vaName = parts.find((p: string) => p.toLowerCase().startsWith("va:"))?.split(":").slice(1).join(":").trim();
+      const vaContact = parts.find((p: string) => p.toLowerCase().startsWith("contact:"))?.split(":").slice(1).join(":").trim();
+      const { data: client } = await supabase
+        .from("clients").select("id").ilike("name", `%${clientName}%`)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+      if (!vaName) return earlyReturn(`❌ VA name required. Format: "assign va: ${clientName} | va: [name]"`);
+      await supabase.from("va_assignments").insert({
+        client_id: client.id, va_name: vaName, va_contact: vaContact || null,
+      });
+      return earlyReturn(`✅ ${vaName} assigned to ${clientName}.`);
+    }
+
+    // ================================================================
+    // TASK COMPLETION (before classification)
+    // ================================================================
+    if (msgLower === "done all") {
+      await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open");
+    } else if (msgLower.startsWith("done:")) {
+      const taskDesc = message.slice(5).trim();
+      await supabase.from("entries")
+        .update({ task_status: "done" })
+        .eq("task_status", "open")
+        .ilike("content", `%${taskDesc}%`);
+    }
+
+    // ================================================================
+    // RESOLVE CONVERSATION
+    // ================================================================
     let conversationId: string | null = null;
     if (channel && external_id) {
       const { data: existing } = await supabase
@@ -40,46 +138,33 @@ serve(async (req) => {
       conversationId = newConv!.id;
     }
 
-    // ----- 2. Handle task completion before classification -----
-    if (msgLower === "done all") {
-      await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open");
-    } else if (msgLower.startsWith("done:")) {
-      const taskDesc = message.slice(5).trim();
-      await supabase.from("entries")
-        .update({ task_status: "done" })
-        .eq("task_status", "open")
-        .ilike("content", `%${taskDesc}%`);
-    }
-
-    // ----- 3. Fetch existing projects + people for classifier context -----
+    // ================================================================
+    // FETCH CONTEXT + CLASSIFY
+    // ================================================================
     const { data: projectsList } = await supabase
       .from("projects").select("name, category").neq("category", "archived");
-    const { data: peopleList } = await supabase
-      .from("people").select("name");
+    const { data: peopleList } = await supabase.from("people").select("name");
 
     const establishedNames = (projectsList || []).filter(p => p.category !== "idea").map(p => p.name);
     const ideaNames = (projectsList || []).filter(p => p.category === "idea").map(p => p.name);
     const allProjectNames = [...establishedNames, ...ideaNames];
     const peopleNames = (peopleList || []).map(p => p.name);
 
-    // ----- 4. Classify -----
     const classification = await classifyEntry(message, establishedNames, ideaNames, peopleNames);
 
-    // ----- 5. Auto-create new projects/people -----
+    // Auto-create new projects/people
     for (const name of classification.projects || []) {
       const exists = allProjectNames.some(p => p.toLowerCase() === name.toLowerCase());
-      if (!exists) {
-        await supabase.from("projects").insert({ name, category: "idea" }).select();
-      }
+      if (!exists) await supabase.from("projects").insert({ name, category: "idea" }).select();
     }
     for (const name of classification.people || []) {
       const exists = peopleNames.some(p => p.toLowerCase() === name.toLowerCase());
-      if (!exists) {
-        await supabase.from("people").insert({ name }).select();
-      }
+      if (!exists) await supabase.from("people").insert({ name }).select();
     }
 
-    // ----- 6. Layered retrieval -----
+    // ================================================================
+    // LAYERED RETRIEVAL
+    // ================================================================
     const [recentEntries, projectEntries, peopleEntries, semanticEntries] = await Promise.all([
       supabase.from("entries").select("role, content, created_at")
         .eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(20),
@@ -96,7 +181,6 @@ serve(async (req) => {
       semanticSearch(supabase, message, 8),
     ]);
 
-    // ----- 7. Build context -----
     const contextBlock = buildContext({
       recent: recentEntries.data || [],
       projects: projectEntries.data || [],
@@ -104,10 +188,10 @@ serve(async (req) => {
       semantic: semanticEntries || [],
     });
 
-    // ----- 8. Generate response -----
+    // ================================================================
+    // GENERATE RESPONSE + SAVE
+    // ================================================================
     const reply = await callClaude(message, contextBlock, establishedNames, ideaNames);
-
-    // ----- 9. Save user message + reply -----
     const taskStatus = classification.type === "task" ? "open" : null;
 
     const { data: userEntry } = await supabase.from("entries").insert({
@@ -116,6 +200,7 @@ serve(async (req) => {
       tags: classification.tags || [], project_names: classification.projects || [],
       people_names: classification.people || [], classification_status: "complete",
       task_status: taskStatus,
+      // client_id is null here — personal brain entries (NULL = Zach's brain)
     }).select().single();
 
     if (userEntry) await embedEntry(supabase, userEntry.id, message);
@@ -127,14 +212,8 @@ serve(async (req) => {
 
     if (assistantEntry) await embedEntry(supabase, assistantEntry.id, reply);
 
-    // ----- 10. Send Telegram reply directly when called from Telegram -----
-    if (channel === "telegram" && external_id && TELEGRAM_BOT_TOKEN) {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: Number(external_id), text: reply }),
-      });
-    }
+    // Send Telegram reply
+    if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, reply);
 
     return new Response(JSON.stringify({ reply, classification }), {
       status: 200, headers: { "Content-Type": "application/json" },
@@ -171,11 +250,11 @@ CRITICAL RULES:
 
 2. **Catch naming events.** If the entry contains phrases like "let's call this X", "new idea X", "I want to start X", "the folder for X", "create a project called X" — extract that as a NEW project name, even if the rest of the entry is about something else.
 
-3. **Multi-tag when multiple ventures/ideas appear.** One entry can reference multiple projects. Tag ALL of them. Example: "Coming back to Bora — also new idea, let's call the folder Cash Out Refinances" → projects: ["Bora", "Cash Out Refinances"]
+3. **Multi-tag when multiple ventures/ideas appear.** One entry can reference multiple projects. Tag ALL of them.
 
 4. **People are first-class.** Extract every named person, even if just mentioned in passing.
 
-5. **Don't create projects from generic nouns.** "I should call my mom" is not a project. "I'm thinking about real estate" is too vague. A project needs a name or a clear venture/initiative.
+5. **Don't create projects from generic nouns.** A project needs a name or a clear venture/initiative.
 
 6. **Task prefix detection.** If the message starts with "task:" or "TODO:" — always classify type as "task" regardless of content.
 
@@ -253,16 +332,12 @@ async function semanticSearch(supabase: any, query: string, limit = 8) {
   try {
     const embedRes = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "text-embedding-3-small", input: query }),
     });
     const embedData = await embedRes.json();
     const queryEmbedding = embedData?.data?.[0]?.embedding;
     if (!queryEmbedding) return [];
-
     const { data } = await supabase.rpc("match_entries", {
       query_embedding: queryEmbedding, match_threshold: 0.3, match_count: limit,
     });
@@ -277,17 +352,12 @@ async function embedEntry(supabase: any, entryId: string, content: string) {
   try {
     const embedRes = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "text-embedding-3-small", input: content }),
     });
     const embedData = await embedRes.json();
     const embedding = embedData?.data?.[0]?.embedding;
-    if (embedding) {
-      await supabase.from("embeddings").insert({ entry_id: entryId, embedding });
-    }
+    if (embedding) await supabase.from("embeddings").insert({ entry_id: entryId, embedding });
   } catch (err) {
     console.error("Embed error:", err);
   }

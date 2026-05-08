@@ -17,8 +17,26 @@ async function sendTelegramMessage(chatId: string, text: string) {
       body: JSON.stringify({ chat_id: chatId, text }),
     },
   );
-  if (!res.ok) {
-    console.error("Telegram send failed:", await res.text());
+  if (!res.ok) console.error("Telegram send failed:", await res.text());
+}
+
+async function bubbleInsights(supabase: any, clientSummaries: any[]) {
+  const silentClients = clientSummaries.filter(c => c.hoursSilent !== null && c.hoursSilent > 48);
+  if (silentClients.length > 0) {
+    await supabase.from("platform_insights").insert({
+      insight: `${silentClients.length} client(s) have gone silent >48h: ${silentClients.map((c: any) => c.name).join(", ")}`,
+      source_client_ids: silentClients.map((c: any) => c.id).filter(Boolean),
+      insight_type: "risk",
+    });
+  }
+
+  const noVA = clientSummaries.filter(c => c.va === "no VA assigned");
+  if (noVA.length > 0) {
+    await supabase.from("platform_insights").insert({
+      insight: `${noVA.length} client(s) have no VA assigned: ${noVA.map((c: any) => c.name).join(", ")}`,
+      source_client_ids: [],
+      insight_type: "risk",
+    });
   }
 }
 
@@ -41,40 +59,38 @@ Deno.serve(async (_req) => {
     }
     const chatId = channelRow.external_id;
 
-    // ----- 2. Pull memory context -----
+    // ----- 2. Pull personal brain context -----
     const minus48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const minus7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const now = Date.now();
 
     const [recent48, top7d, openTasks, projects, recentPeople] = await Promise.all([
-      // Last 48 hours of entries
       supabase.from("entries")
         .select("role, content, entry_type, importance, project_names, people_names, created_at")
         .gt("created_at", minus48h)
         .eq("role", "user")
+        .is("client_id", null)
         .order("created_at", { ascending: false })
         .limit(30),
 
-      // Top 10 by importance from last 7 days
       supabase.from("entries")
         .select("content, entry_type, importance, project_names, people_names, created_at")
         .gt("created_at", minus7d)
         .eq("role", "user")
+        .is("client_id", null)
         .order("importance", { ascending: false })
         .limit(10),
 
-      // All open tasks (no time limit — tasks persist until done)
       supabase.from("entries")
         .select("content, project_names, people_names, created_at")
         .eq("task_status", "open")
         .eq("role", "user")
-        .order("created_at", { ascending: true }), // oldest first
+        .order("created_at", { ascending: true }),
 
-      // Active projects
       supabase.from("projects")
         .select("name, category")
         .neq("category", "archived"),
 
-      // Entries mentioning people from last 7 days
       supabase.from("entries")
         .select("content, people_names, project_names, created_at")
         .gt("created_at", minus7d)
@@ -84,13 +100,47 @@ Deno.serve(async (_req) => {
         .limit(15),
     ]);
 
-    // ----- 3. Build context block -----
+    // ----- 3. Pull client brains status -----
+    const { data: activeClients } = await supabase
+      .from("clients")
+      .select(`
+        id, name, deal_type, status, rev_share_pct, monthly_fee,
+        client_context(core_offer, goals),
+        va_assignments(va_name, status)
+      `)
+      .eq("status", "active");
+
+    const clientSummaries = await Promise.all((activeClients || []).map(async (client: any) => {
+      const { data: recentActivity } = await supabase
+        .from("entries")
+        .select("content, entry_type, created_at, role")
+        .eq("client_id", client.id)
+        .gt("created_at", minus48h)
+        .order("created_at", { ascending: false })
+        .limit(5);
+
+      const activeVA = (client.va_assignments || []).find((v: any) => v.status === "active");
+      const lastActivity = recentActivity?.[0]?.created_at;
+      const hoursSilent = lastActivity
+        ? Math.floor((now - new Date(lastActivity).getTime()) / (1000 * 60 * 60))
+        : null;
+
+      return {
+        id: client.id,
+        name: client.name,
+        deal: client.deal_type || "unknown",
+        va: activeVA?.va_name || "no VA assigned",
+        recentActivity: recentActivity || [],
+        hoursSilent,
+        goals: client.client_context?.[0]?.goals || "not set",
+      };
+    }));
+
+    // ----- 4. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
       timeZone: "America/Denver",
     });
-
-    const now = Date.now();
 
     const fmt = (entries: any[], label: string) => {
       if (!entries?.length) return "";
@@ -100,26 +150,33 @@ Deno.serve(async (_req) => {
     };
 
     const openTasksFormatted = (openTasks.data || []).length
-      ? "OPEN TASKS (oldest first):\n" + (openTasks.data || []).map(t => {
+      ? "OPEN TASKS (oldest first):\n" + (openTasks.data || []).map((t: any) => {
           const ageMs = now - new Date(t.created_at).getTime();
           const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
           const ageLabel = ageDays === 0 ? "today" : ageDays === 1 ? "1 day old" : `${ageDays} days old`;
           const overdue = ageMs > 48 * 60 * 60 * 1000 ? " ⚠️ overdue" : "";
           return `- ${t.content?.slice(0, 200)} (${ageLabel}${overdue})`;
         }).join("\n")
+      : "OPEN TASKS: none";
+
+    const clientBriefContext = clientSummaries.length
+      ? "CLIENT BRAINS STATUS:\n" + clientSummaries.map(c =>
+          `- ${c.name} (${c.deal}) | VA: ${c.va} | ${c.hoursSilent !== null ? `silent ${c.hoursSilent}h` : "no activity yet"} | goals: ${c.goals}`
+        ).join("\n")
       : "";
 
     const contextBlock = [
-      fmt(recent48.data || [], "LAST 48 HOURS"),
+      fmt(recent48.data || [], "LAST 48 HOURS (personal brain)"),
       fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
       openTasksFormatted,
       (projects.data || []).length
-        ? "ACTIVE PROJECTS:\n" + (projects.data || []).map(p => `- ${p.name} (${p.category})`).join("\n")
+        ? "ACTIVE PROJECTS:\n" + (projects.data || []).map((p: any) => `- ${p.name} (${p.category})`).join("\n")
         : "",
       fmt(recentPeople.data || [], "RECENT PEOPLE MENTIONS"),
+      clientBriefContext,
     ].filter(Boolean).join("\n\n");
 
-    // ----- 4. Generate briefing via Claude -----
+    // ----- 5. Generate briefing via Claude -----
     const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing based on the memory context below.
 
 FORMAT:
@@ -137,10 +194,13 @@ FORMAT:
 👥 DEAL STATUS
 [Brief status on active people/deals — flag anything gone silent 48+ hrs]
 
+🏢 CLIENT BRAINS
+[One line per active client: name, VA assigned, last activity, any flags. Flag any client silent >24 hours. Flag any client with no VA assigned. If no clients yet, write "No active clients."]
+
 ⚡ FIRST MOVE
 [One direct recommendation — what to do in the first 30 minutes of the day]
 
-Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 400 words.
+Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 500 words.
 
 MEMORY CONTEXT:
 ${contextBlock || "(no recent entries found)"}`;
@@ -154,7 +214,7 @@ ${contextBlock || "(no recent entries found)"}`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 800,
+        max_tokens: 900,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -167,9 +227,12 @@ ${contextBlock || "(no recent entries found)"}`;
       return new Response("no briefing", { status: 200 });
     }
 
-    // ----- 5. Send to Telegram -----
+    // ----- 6. Send to Telegram -----
     await sendTelegramMessage(chatId, briefing);
     console.log("Morning briefing sent to chat", chatId);
+
+    // ----- 7. Bubble platform insights -----
+    await bubbleInsights(supabase, clientSummaries);
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200, headers: { "Content-Type": "application/json" },
