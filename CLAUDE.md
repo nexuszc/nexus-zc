@@ -1,6 +1,6 @@
 # NEXUS ZC — CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 8, 2026
+# Last updated: May 8, 2026 — v2
 
 ---
 
