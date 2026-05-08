@@ -81,6 +81,48 @@ Deno.serve(async () => {
     }
   }
 
+  // Deal intelligence — alert on clients silent 48+ hours
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: activeClients } = await supabase
+    .from("clients")
+    .select("id, name")
+    .eq("status", "active");
+
+  for (const client of (activeClients || [])) {
+    const { data: recentActivity } = await supabase
+      .from("entries")
+      .select("id")
+      .eq("client_id", client.id)
+      .gt("created_at", twoDaysAgo)
+      .limit(1);
+
+    if (!recentActivity?.length) {
+      const { data: existingAlert } = await supabase
+        .from("nexus_alerts")
+        .select("id")
+        .eq("alert_type", `deal_cold_${client.id}`)
+        .eq("resolved", false)
+        .gt("sent_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .maybeSingle();
+
+      if (!existingAlert && telegramChatId) {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: `🌡️ DEAL GOING COLD\n\n${client.name} has had no activity in 48+ hours.\n\nSend "report: ${client.name}" to see full status.`,
+          }),
+        });
+
+        await supabase.from("nexus_alerts").insert({
+          alert_type: `deal_cold_${client.id}`,
+          message: `${client.name} has gone cold — no activity in 48h`,
+        });
+      }
+    }
+  }
+
   // Trigger auto-fix for top priority improvement (max 1 per hour)
   const { data: pendingFixes } = await supabase
     .from("nexus_improvements")

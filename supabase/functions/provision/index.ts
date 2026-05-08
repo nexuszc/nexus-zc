@@ -59,10 +59,24 @@ Deno.serve(async (req) => {
       provisioned_at: new Date().toISOString(),
     }).eq("id", client_id);
 
+    await supabase.from("client_portal_access").insert({ client_id });
+
+    const { data: portalAccess } = await supabase
+      .from("client_portal_access")
+      .select("access_token")
+      .eq("client_id", client_id)
+      .single();
+
+    const portalUrl = portalAccess?.access_token
+      ? `https://app.nexuszc.com/portal/${portalAccess.access_token}`
+      : null;
+
     if (telegram_chat_id) {
-      await sendTelegram(telegram_chat_id,
-        `✅ ${client.name} is live!\n\n🌐 ${subdomain}\n\nSite is deploying via Cloudflare Pages — live in ~60 seconds.`
-      );
+      const msg = `✅ ${client.name} is live!\n\n` +
+        `🌐 Site: https://${subdomain}\n` +
+        (portalUrl ? `🔐 Client portal: ${portalUrl}\n\n` : "\n") +
+        `Site is deploying via Cloudflare Pages — live in ~60 seconds.`;
+      await sendTelegram(telegram_chat_id, msg);
     }
 
     return new Response(JSON.stringify({ ok: true, url: `https://${subdomain}` }), { status: 200 });
