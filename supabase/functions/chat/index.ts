@@ -97,6 +97,59 @@ serve(async (req) => {
     }
 
     // ================================================================
+    // PROVISION CLIENT COMMAND
+    // ================================================================
+    if (msgLower.startsWith("provision:")) {
+      const parts = message.slice(10).split("|").map((p: string) => p.trim());
+      const clientName = parts[0];
+      const dealType = parts.find((p: string) => p.toLowerCase().startsWith("type:"))?.slice(5).trim();
+      const about = parts.find((p: string) => p.toLowerCase().startsWith("about:"))?.slice(6).trim();
+
+      let { data: client } = await supabase
+        .from("clients")
+        .select("id, name, provision_status, slug")
+        .ilike("name", `%${clientName}%`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!client) {
+        const { data: newClient } = await supabase
+          .from("clients")
+          .insert({ name: clientName, status: "active", deal_type: dealType || null })
+          .select().single();
+        client = newClient;
+      }
+
+      if (client.provision_status === "live") {
+        return earlyReturn(`✅ ${clientName} is already provisioned at https://${client.slug}.nexuszc.com`);
+      }
+
+      if (about && client) {
+        await supabase.from("client_context").upsert({
+          client_id: client.id,
+          core_offer: about,
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      // Fire and forget — provision function sends its own Telegram updates
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/provision`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({
+          client_id: client.id,
+          telegram_chat_id: external_id,
+        }),
+      });
+
+      return earlyReturn(`⚙️ Provisioning ${clientName}...\n\nI'll message you when the site is live. This takes about 60 seconds.`);
+    }
+
+    // ================================================================
     // TASK COMPLETION
     // ================================================================
     if (msgLower === "done all") {
