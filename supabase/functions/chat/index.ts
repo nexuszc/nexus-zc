@@ -5,12 +5,52 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
 
-async function sendTelegram(token: string, chatId: number, text: string) {
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
+async function sendTelegramWithRetry(token: string, chatId: number, text: string, maxRetries = 3): Promise<boolean> {
+  const truncated = text.length > 4000 ? text.slice(0, 3900) + "..." : text;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: truncated }),
+      });
+      if (res.ok) return true;
+      const err = await res.json();
+      if (res.status < 500) { console.error("Telegram client error (not retrying):", err); return false; }
+      throw new Error(`Telegram API ${res.status}`);
+    } catch (err: any) {
+      console.error(`Telegram attempt ${attempt}/${maxRetries} failed:`, err.message);
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+    }
+  }
+  return false;
+}
+
+async function callAnthropicWithRetry(body: any, maxRetries = 3): Promise<any> {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Anthropic API error ${res.status}: ${errText}`);
+      }
+      return await res.json();
+    } catch (err: any) {
+      lastError = err;
+      console.error(`Claude API attempt ${attempt}/${maxRetries} failed:`, err.message);
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+    }
+  }
+  throw lastError || new Error("Claude API failed after all retries");
 }
 
 async function logUsage(supabase: any, ability: string, success: boolean, responseMs: number, channel: string) {
@@ -40,7 +80,7 @@ serve(async (req) => {
       const tgMessage = reply.length > LIMIT
         ? reply.slice(0, LIMIT) + "... (truncated — full version saved to Nexus memory)"
         : reply;
-      if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, tgMessage);
+      if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegramWithRetry(TELEGRAM_BOT_TOKEN, tgChatId, tgMessage);
       return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type": "application/json" } });
     };
 
@@ -202,6 +242,59 @@ serve(async (req) => {
         .eq("id", improvement.id);
 
       return earlyReturn(`🗑️ Rejected "${improvement.title}". Dev branch reset to main.`);
+    }
+
+    // ================================================================
+    // AUDIT COMMAND — comprehensive self-assessment on demand
+    // ================================================================
+    if (msgLower === "nexus audit" || msgLower === "audit nexus") {
+      const [health, improvements, usage, alerts] = await Promise.all([
+        supabase.from("nexus_health").select("*").order("checked_at", { ascending: false }).limit(5),
+        supabase.from("nexus_improvements").select("*").order("priority").limit(10),
+        supabase.from("nexus_usage").select("ability, success").gt("logged_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
+        supabase.from("nexus_alerts").select("*").eq("resolved", false).limit(5),
+      ]);
+
+      const auditPrompt = `You are auditing the Nexus AI system. Provide a comprehensive self-assessment.
+
+HEALTH DATA (last 5 checks):
+${JSON.stringify(health.data, null, 2)}
+
+IMPROVEMENT QUEUE (${improvements.data?.length} items):
+${JSON.stringify(improvements.data, null, 2)}
+
+USAGE (last 7 days):
+${JSON.stringify(usage.data, null, 2)}
+
+ACTIVE ALERTS:
+${JSON.stringify(alerts.data, null, 2)}
+
+Provide a brutally honest audit covering:
+1. What's working well
+2. What's broken or at risk
+3. What's being underutilized
+4. Top 3 highest-impact improvements (with specific technical recommendations)
+5. Overall system health score (0-100) with justification
+
+Be direct, specific, and actionable. Reference actual data from above.`;
+
+      const auditData = await callAnthropicWithRetry({
+        model: "claude-sonnet-4-5",
+        max_tokens: 1500,
+        messages: [{ role: "user", content: auditPrompt }],
+      });
+      const audit = auditData?.content?.[0]?.text || "Audit failed.";
+
+      await supabase.from("entries").insert({
+        conversation_id: null,
+        source: channel, role: "assistant",
+        content: `NEXUS AUDIT\n\n${audit}`,
+        entry_type: "meta", importance: 9, tags: ["audit", "health"],
+        classification_status: "skip",
+      });
+
+      await logUsage(supabase, "nexus audit", true, 0, channel);
+      return earlyReturn(`🔍 NEXUS AUDIT\n\n${audit}`);
     }
 
     // ================================================================
@@ -592,7 +685,7 @@ serve(async (req) => {
 
     if (assistantEntry) await embedEntry(supabase, assistantEntry.id, reply);
 
-    if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegram(TELEGRAM_BOT_TOKEN, tgChatId, reply);
+    if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegramWithRetry(TELEGRAM_BOT_TOKEN, tgChatId, reply);
 
     return new Response(JSON.stringify({ reply, classification }), {
       status: 200, headers: { "Content-Type": "application/json" },
@@ -917,7 +1010,7 @@ Return JSON:
 }
 
 async function callClaude(message: string, context: string, ventures: string[], ideas: string[]) {
-  const systemPrompt = `You are Nexus, Zach's personal Chief of Staff and AI operator.
+  const systemPrompt = `You are Nexus, Zach's personal Chief of Staff and AI operator. // AUTO-FIX: uses retry wrapper
 
 CURRENT VENTURES: ${ventures.join(", ") || "(none)"}
 CURRENT IDEAS: ${ideas.join(", ") || "(none)"}
@@ -952,16 +1045,11 @@ Task rules:
 - task: or TODO: prefix → respond ONLY with: "✅ Task logged: [task]. I'll track this until you mark it done."
 - done: prefix → respond ONLY with: "✅ Done: [what was marked complete]."
 - done all → respond ONLY with: "✅ All tasks cleared."`;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5", max_tokens: 1500,
-      system: systemPrompt,
-      messages: [{ role: "user", content: message }],
-    }),
+  const data = await callAnthropicWithRetry({
+    model: "claude-sonnet-4-5", max_tokens: 1500,
+    system: systemPrompt,
+    messages: [{ role: "user", content: message }],
   });
-  const data = await res.json();
   return data?.content?.[0]?.text || "(no reply)";
 }
 

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 
 Deno.serve(async () => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -36,6 +37,91 @@ Deno.serve(async () => {
 
     if (!existing) {
       await supabase.from("nexus_improvements").insert(improvement);
+    }
+  }
+
+  // Get Zach's Telegram chat ID
+  const { data: channelRow } = await supabase
+    .from("channel_conversations")
+    .select("external_id")
+    .eq("channel", "telegram")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const telegramChatId = channelRow?.external_id;
+
+  // Check for degraded functions and send instant alerts
+  for (const h of healthResults) {
+    if (h.errors > 3) {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { data: existingAlert } = await supabase
+        .from("nexus_alerts")
+        .select("id")
+        .eq("alert_type", `function_degraded_${h.name}`)
+        .eq("resolved", false)
+        .gt("sent_at", oneHourAgo)
+        .maybeSingle();
+
+      if (!existingAlert && telegramChatId) {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: telegramChatId,
+            text: `🚨 NEXUS ALERT\n\nFunction "${h.name}" is degraded.\nErrors in last hour: ${h.errors}\nSuccesses: ${h.successes}\n\nInvestigating and attempting auto-fix...`,
+          }),
+        });
+
+        await supabase.from("nexus_alerts").insert({
+          alert_type: `function_degraded_${h.name}`,
+          message: `Function ${h.name} has ${h.errors} errors in last hour`,
+        });
+      }
+    }
+  }
+
+  // Trigger auto-fix for top priority improvement (max 1 per hour)
+  const { data: pendingFixes } = await supabase
+    .from("nexus_improvements")
+    .select("*")
+    .eq("status", "pending")
+    .eq("auto_fix_attempted", false)
+    .order("priority", { ascending: true })
+    .limit(1);
+
+  const topFix = pendingFixes?.[0];
+
+  if (topFix && telegramChatId) {
+    const { data: recentFix } = await supabase
+      .from("nexus_improvements")
+      .select("id")
+      .eq("auto_fix_attempted", true)
+      .gt("auto_fix_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+      .maybeSingle();
+
+    if (!recentFix) {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: telegramChatId,
+          text: `🔧 Nexus is working on a self-improvement...\n\nIssue: ${topFix.title}\n\nI'll send you the fix when it's ready for review.`,
+        }),
+      });
+
+      // Fire and forget
+      fetch(`${SUPABASE_URL}/functions/v1/auto-fix`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+        body: JSON.stringify({
+          improvement_id: topFix.id,
+          telegram_chat_id: telegramChatId,
+        }),
+      });
     }
   }
 

@@ -204,7 +204,9 @@ Deno.serve(async (_req) => {
       improvementsSummary,
     ].filter(Boolean).join("\n\n");
 
-    // ----- 6. Generate briefing via Claude -----
+    // ----- 6. Generate briefing via Claude (with fallback) -----
+    let briefing: string;
+    try {
     const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing based on the memory context below.
 
 FORMAT:
@@ -251,11 +253,24 @@ ${contextBlock || "(no recent entries found)"}`;
     });
 
     const data = await res.json();
-    const briefing = data?.content?.[0]?.text;
+    briefing = data?.content?.[0]?.text;
 
     if (!briefing) {
       console.error("No briefing generated:", JSON.stringify(data));
       return new Response("no briefing", { status: 200 });
+    }
+    } catch (err: any) {
+      console.error("Briefing generation failed:", err);
+      briefing =
+        `🧠 NEXUS BRIEF — ${today}\n\n` +
+        `⚠️ Full brief generation encountered an error: ${err.message}\n\n` +
+        `Open tasks: ${(openTasks.data || []).length} pending\n` +
+        `Active clients: check app.nexuszc.com\n\n` +
+        `Send "nexus status" for system health.`;
+      await supabase.from("nexus_alerts").insert({
+        alert_type: "briefing_failed",
+        message: err.message,
+      }).catch(() => {});
     }
 
     // ----- 7. Truncate and send to Telegram -----
