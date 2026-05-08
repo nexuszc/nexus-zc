@@ -1,3 +1,5 @@
+// AUTO-FIX: Added NEXUS self-heal test comment at the top of the file
+// NEXUS self-heal test comment
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -34,7 +36,7 @@ serve(async () => {
     }
 
     for (const reminder of dueReminders) {
-      await sendTelegram(`⏰ Reminder: ${reminder.message}`)
+      await sendTelegram(`â° Reminder: ${reminder.message}`)
       await supabase
         .from('reminders')
         .update({ fired: true })
