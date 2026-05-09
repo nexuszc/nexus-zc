@@ -18,6 +18,7 @@ export default function Layout({ session }) {
             { to: '/leads', label: '📋 Leads' },
             { to: '/documents', label: '📄 Documents' },
             { to: '/va', label: '🎯 VA Interface' },
+            { to: '/roofing', label: '🏠 Roofing OS' },
           ].map(({ to, label }) => (
             <NavLink
               key={to}

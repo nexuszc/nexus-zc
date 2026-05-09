@@ -9,6 +9,10 @@ import VAInterface from './pages/VAInterface'
 import Leads from './pages/Leads'
 import ClientPortal from './pages/ClientPortal'
 import Documents from './pages/Documents'
+import RoofingDashboard from './pages/roofing/RoofingDashboard'
+import RoofingJobDetail from './pages/roofing/RoofingJobDetail'
+import RoofingNewJob from './pages/roofing/RoofingNewJob'
+import RoofingPortal from './pages/roofing/RoofingPortal'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -39,6 +43,7 @@ export default function App() {
         <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
         {/* Public — token-based, no auth required */}
         <Route path="/portal/:token" element={<ClientPortal />} />
+        <Route path="/roofing/portal/:token" element={<RoofingPortal />} />
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>
             <Route path="/" element={<Dashboard />} />
@@ -47,6 +52,9 @@ export default function App() {
             <Route path="/leads" element={<Leads />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
+            <Route path="/roofing" element={<RoofingDashboard />} />
+            <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
+            <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
           </Route>
         </Route>
       </Routes>
