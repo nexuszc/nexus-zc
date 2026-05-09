@@ -1,6 +1,6 @@
 # NEXUS ZC — CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 8, 2026 — v3
+# Last updated: May 8, 2026 — v4
 
 ---
 
@@ -134,6 +134,14 @@ Then productized and sold to other multi-business operators.
 - `sequences` — email/call sequences
 - `sequence_enrollments` — lead → sequence enrollment state
 
+### V2 additions:
+- `generated_docs` — documents from generate-* abilities (type, client_id, title, content, created_at)
+- `knowledge_base` — persistent knowledge store (topic, content, source_url, created_at)
+- `va_profiles` — VA accounts linked to Supabase auth user_id
+- `va_task_queues` — daily VA task lists (va_assignment_id, date, tasks JSON, completed_count)
+- `call_logs` — structured VA call records (lead_id, outcome, notes, va_profile_id)
+- `client_portal_access` — token-based portal access (client_id, access_token, last_accessed)
+
 ### Project categories:
 - `platform` — core businesses (Nexus, VA Company)
 - `vertical` — GTM channels (Roofing OS, Cash Out Refinances)
@@ -152,7 +160,7 @@ Then productized and sold to other multi-business operators.
 - `done: [partial match]` — marks matching task done
 - `done all` — clears all open tasks
 
-### Abilities:
+### Abilities — Original:
 - `search: [query]` — web search via Serper
 - `research: [name/topic]` — deep intelligence brief (2x searches + synthesis)
 - `summarize: [url]` — fetch and summarize any webpage
@@ -165,6 +173,33 @@ Then productized and sold to other multi-business operators.
 - `generate onepager: [topic]`
 - `remind me: [what] | in: [2 hours / 3 days]`
 - `report: [client]` — full client status report
+
+### Abilities — V2 (Tier 1: Client Intelligence):
+- `client snapshot: [name]` — full client status: context, leads, calls, entries, open tasks
+- `prioritize tasks` — Claude sorts all open tasks by urgency × impact
+- `task estimate: [task description]` — time/effort estimate + breakdown
+- `sprint plan: [timeframe]` — sprint plan from open tasks + client obligations
+
+### Abilities — V2 (Tier 2: Document Generation, saved to generated_docs):
+- `generate invoice: [client] | for: [services] | amount: [x]`
+- `generate contract: [client] | for: [scope] | amount: [x]`
+- `follow up: [name/topic]` — draft follow-up based on conversation history
+- `weekly digest: [optional focus]` — 7-day summary saved to generated_docs
+- `status update: [project/client]` — status report from entries + open tasks
+- `generate sop: [process name]` — full SOP document
+
+### Abilities — V2 (Tier 3: Sales & Marketing, saved to generated_docs):
+- `generate pitch: [client/prospect] | for: [context]`
+- `generate case study: [client]` — pulls call/lead data for social proof
+- `generate ad copy: [product/service] | audience: [x] | goal: [x]`
+- `calculate roi: [project] | revenue: [x] | cost: [x]`
+- `pricing calculator: [service] | hours: [x] | overhead: [x] | margin: [x]`
+
+### Abilities — V2 (Tier 4: Knowledge Base):
+- `save knowledge: [topic] | [content]` — save to knowledge_base table
+- `recall knowledge: [topic]` — search knowledge_base
+- `learn from: [url]` — fetch URL, extract key insights, save to knowledge_base
+- `nexus brain dump` — dump knowledge_base + recent entries + clients + open tasks
 
 ### Client management:
 - `new client: [name]` — create client brain
@@ -272,13 +307,18 @@ You reply "reject":
 - ✅ Self-healing system (auto-fix, instant alerts, retry logic, audit command)
 - ✅ dev/prod branch structure with conflict-proof merge
 - ✅ React app at app.nexuszc.com (Dashboard, Clients, VA Interface)
+- ✅ Nexus V2 — VA layer (va_profiles, va_task_queues, generate-va-tasks), lead pipeline, white-label portal, deal intelligence, Dashboard V2
+- ✅ Nexus Abilities V2 — 19 new commands (client intelligence, document generation, sales/marketing, knowledge base)
+- ✅ generated_docs + knowledge_base tables live
+- ✅ Auto-fix deployed self-improvement to provision.ts (usage analytics)
 
 **NEXT:**
-1. Schedule dedicated scoping call with Kevin Cantwell
-2. Brian's lead system — generate-queue + call cadence working, needs tuning
-3. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-4. Add Gmail secrets to enable email sending
-5. Dump session summary to Nexus via Telegram
+1. Test V2 abilities via Telegram (see test suite in spec)
+2. Schedule dedicated scoping call with Kevin Cantwell
+3. Brian's lead system — generate-queue + call cadence working, needs tuning
+4. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
+5. Add Gmail secrets to enable email sending
+6. Dump session summary to Nexus via Telegram
 
 ---
 
