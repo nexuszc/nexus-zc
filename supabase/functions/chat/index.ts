@@ -89,14 +89,25 @@ serve(async (req) => {
     // ================================================================
 
     if (msgLower.startsWith("new client:") || msgLower.startsWith("add client:")) {
+      const start = Date.now();
       const clientName = message.split(":").slice(1).join(":").trim();
-      const { data: newClient, error } = await supabase
-        .from("clients").insert({ name: clientName, status: "active" }).select().single();
-      if (error) return earlyReturn(`❌ Failed to create client: ${error.message}`);
-      return earlyReturn(`✅ Client brain created for ${clientName} (ID: ${newClient.id})\n\nSet up their context:\n• "client context: ${clientName} | deal: rev_share | offer: [their offer] | goals: [their goals]"\n• "assign va: ${clientName} | va: [VA name]"`);
+      try {
+        const { data: newClient, error } = await supabase
+          .from("clients").insert({ name: clientName, status: "active" }).select().single();
+        if (error) {
+          await logUsage(supabase, "new client", false, Date.now() - start, channel);
+          return earlyReturn(`❌ Failed to create client: ${error.message}`);
+        }
+        await logUsage(supabase, "new client", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Client brain created for ${clientName} (ID: ${newClient.id})\n\nSet up their context:\n• "client context: ${clientName} | deal: rev_share | offer: [their offer] | goals: [their goals]"\n• "assign va: ${clientName} | va: [VA name]"`);
+      } catch (err: any) {
+        await logUsage(supabase, "new client", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed to create client: ${err.message}`);
+      }
     }
 
     if (msgLower.startsWith("client context:")) {
+      const start = Date.now();
       const parts = message.slice(15).split("|").map((p: string) => p.trim());
       const clientName = parts[0];
       const contextFields: any = {};
@@ -117,31 +128,53 @@ serve(async (req) => {
         if (k === "pain") contextFields.pain_points = v;
         if (k === "notes") contextFields.additional_context = v;
       }
-      const { data: client } = await supabase
-        .from("clients").select("id").ilike("name", `%${clientName}%`)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (!client) return earlyReturn(`❌ Client "${clientName}" not found. Create them first with "new client: ${clientName}"`);
-      if (Object.keys(clientFields).length) await supabase.from("clients").update(clientFields).eq("id", client.id);
-      if (Object.keys(contextFields).length) {
-        await supabase.from("client_context").upsert({
-          client_id: client.id, ...contextFields, updated_at: new Date().toISOString(),
-        });
+      try {
+        const { data: client } = await supabase
+          .from("clients").select("id").ilike("name", `%${clientName}%`)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (!client) {
+          await logUsage(supabase, "client context", false, Date.now() - start, channel);
+          return earlyReturn(`❌ Client "${clientName}" not found. Create them first with "new client: ${clientName}"`);
+        }
+        if (Object.keys(clientFields).length) await supabase.from("clients").update(clientFields).eq("id", client.id);
+        if (Object.keys(contextFields).length) {
+          await supabase.from("client_context").upsert({
+            client_id: client.id, ...contextFields, updated_at: new Date().toISOString(),
+          });
+        }
+        await logUsage(supabase, "client context", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Context updated for ${clientName}.`);
+      } catch (err: any) {
+        await logUsage(supabase, "client context", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Context update failed: ${err.message}`);
       }
-      return earlyReturn(`✅ Context updated for ${clientName}.`);
     }
 
     if (msgLower.startsWith("assign va:")) {
+      const start = Date.now();
       const parts = message.slice(10).split("|").map((p: string) => p.trim());
       const clientName = parts[0];
       const vaName = parts.find((p: string) => p.toLowerCase().startsWith("va:"))?.split(":").slice(1).join(":").trim();
       const vaContact = parts.find((p: string) => p.toLowerCase().startsWith("contact:"))?.split(":").slice(1).join(":").trim();
-      const { data: client } = await supabase
-        .from("clients").select("id").ilike("name", `%${clientName}%`)
-        .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
-      if (!vaName) return earlyReturn(`❌ VA name required. Format: "assign va: ${clientName} | va: [name]"`);
-      await supabase.from("va_assignments").insert({ client_id: client.id, va_name: vaName, va_contact: vaContact || null });
-      return earlyReturn(`✅ ${vaName} assigned to ${clientName}.`);
+      try {
+        const { data: client } = await supabase
+          .from("clients").select("id").ilike("name", `%${clientName}%`)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (!client) {
+          await logUsage(supabase, "assign va", false, Date.now() - start, channel);
+          return earlyReturn(`❌ Client "${clientName}" not found.`);
+        }
+        if (!vaName) {
+          await logUsage(supabase, "assign va", false, Date.now() - start, channel);
+          return earlyReturn(`❌ VA name required. Format: "assign va: ${clientName} | va: [name]"`);
+        }
+        await supabase.from("va_assignments").insert({ client_id: client.id, va_name: vaName, va_contact: vaContact || null });
+        await logUsage(supabase, "assign va", true, Date.now() - start, channel);
+        return earlyReturn(`✅ ${vaName} assigned to ${clientName}.`);
+      } catch (err: any) {
+        await logUsage(supabase, "assign va", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Assign VA failed: ${err.message}`);
+      }
     }
 
     // ================================================================
@@ -228,8 +261,10 @@ serve(async (req) => {
           });
         }
 
+        await logUsage(supabase, "approve", true, 0, channel);
         return earlyReturn(`✅ Approved and merged!\n\n"${improvement.title}" is live.\nCloudflare deploys in ~60 seconds.\n\nI'll check back in 1 hour to verify it's working.`);
       } else {
+        await logUsage(supabase, "approve", false, 0, channel);
         return earlyReturn(`❌ Merge failed: ${mergeResult.error}\nCheck GitHub for conflicts.`);
       }
     }
@@ -254,6 +289,7 @@ serve(async (req) => {
         .update({ status: "rejected" })
         .eq("id", improvement.id);
 
+      await logUsage(supabase, "reject", true, 0, channel);
       return earlyReturn(`🗑️ Rejected "${improvement.title}". Dev branch reset to main.`);
     }
 
@@ -291,23 +327,28 @@ Provide a brutally honest audit covering:
 
 Be direct, specific, and actionable. Reference actual data from above.`;
 
-      const auditData = await callAnthropicWithRetry({
-        model: "claude-sonnet-4-5",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: auditPrompt }],
-      });
-      const audit = auditData?.content?.[0]?.text || "Audit failed.";
+      try {
+        const auditData = await callAnthropicWithRetry({
+          model: "claude-sonnet-4-5",
+          max_tokens: 1500,
+          messages: [{ role: "user", content: auditPrompt }],
+        });
+        const audit = auditData?.content?.[0]?.text || "Audit failed.";
 
-      await supabase.from("entries").insert({
-        conversation_id: null,
-        source: channel, role: "assistant",
-        content: `NEXUS AUDIT\n\n${audit}`,
-        entry_type: "meta", importance: 9, tags: ["audit", "health"],
-        classification_status: "skip",
-      });
+        await supabase.from("entries").insert({
+          conversation_id: null,
+          source: channel, role: "assistant",
+          content: `NEXUS AUDIT\n\n${audit}`,
+          entry_type: "meta", importance: 9, tags: ["audit", "health"],
+          classification_status: "skip",
+        });
 
-      await logUsage(supabase, "nexus audit", true, 0, channel);
-      return earlyReturn(`🔍 NEXUS AUDIT\n\n${audit}`);
+        await logUsage(supabase, "nexus audit", true, 0, channel);
+        return earlyReturn(`🔍 NEXUS AUDIT\n\n${audit}`);
+      } catch (err: any) {
+        await logUsage(supabase, "nexus audit", false, 0, channel);
+        return earlyReturn(`❌ Audit failed: ${err.message}`);
+      }
     }
 
     // ================================================================
@@ -322,6 +363,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
         },
         body: JSON.stringify({}),
       });
+      await logUsage(supabase, "nexus heal", true, 0, channel);
       return earlyReturn(
         `🔧 NEXUS HEAL TRIGGERED\n\nRunning full health check and improvement cycle now.\nYou'll receive updates via Telegram as issues are identified and fixes are prepared.\n\nSend "nexus status" in 2 minutes to see results.`
       );
@@ -359,6 +401,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
         statusMsg += "No health data yet. Run health-monitor first.";
       }
 
+      await logUsage(supabase, "nexus status", true, 0, channel);
       return earlyReturn(statusMsg);
     }
 
@@ -367,9 +410,13 @@ Be direct, specific, and actionable. Reference actual data from above.`;
     // ================================================================
     if (msgLower === "done all") {
       await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open");
+      await logUsage(supabase, "done all", true, 0, channel);
+      return earlyReturn(`✅ All tasks marked done.`);
     } else if (msgLower.startsWith("done:")) {
       const taskDesc = message.slice(5).trim();
       await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open").ilike("content", `%${taskDesc}%`);
+      await logUsage(supabase, "done", true, 0, channel);
+      return earlyReturn(`✅ Task marked done: "${taskDesc}"`);
     }
 
     // ================================================================
