@@ -12,11 +12,49 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// AUTO-FIX: Added analytics logging function to capture usage data
+async function logAnalyticsEvent(
+  eventType: string,
+  functionName: string,
+  params: any,
+  status: 'success' | 'failure',
+  errorMessage?: string,
+  metadata?: any
+): Promise<void> {
+  try {
+    await supabase.from('function_analytics').insert({
+      event_type: eventType,
+      function_name: functionName,
+      parameters: params,
+      status,
+      error_message: errorMessage,
+      metadata,
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    // Don't fail the main function if analytics logging fails
+    console.error('Analytics logging failed:', err);
+  }
+}
+
 Deno.serve(async (req) => {
-  const body = await req.json();
-  const { client_id, telegram_chat_id } = body;
+  // AUTO-FIX: Capture request start time and initial parameters for analytics
+  const startTime = Date.now();
+  let requestBody: any;
+  
+  try {
+    requestBody = await req.json();
+  } catch (err) {
+    // AUTO-FIX: Log analytics for invalid request
+    await logAnalyticsEvent('provision', 'provision', {}, 'failure', 'Invalid JSON body');
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
+  }
+
+  const { client_id, telegram_chat_id } = requestBody;
 
   if (!client_id) {
+    // AUTO-FIX: Log analytics for missing client_id
+    await logAnalyticsEvent('provision', 'provision', { client_id, telegram_chat_id }, 'failure', 'client_id required');
     return new Response(JSON.stringify({ error: "client_id required" }), { status: 400 });
   }
 
@@ -27,6 +65,8 @@ Deno.serve(async (req) => {
     .single();
 
   if (!client) {
+    // AUTO-FIX: Log analytics for client not found
+    await logAnalyticsEvent('provision', 'provision', { client_id, telegram_chat_id }, 'failure', 'Client not found');
     return new Response(JSON.stringify({ error: "Client not found" }), { status: 404 });
   }
 
@@ -40,7 +80,7 @@ Deno.serve(async (req) => {
   }).eq("id", client_id);
 
   if (telegram_chat_id) {
-    await sendTelegram(telegram_chat_id, `⚙️ Provisioning ${client.name}...\nCreating site at ${subdomain}`);
+    await sendTelegram(telegram_chat_id, `âï¸ Provisioning ${client.name}...\nCreating site at ${subdomain}`);
   }
 
   try {
@@ -72,12 +112,23 @@ Deno.serve(async (req) => {
       : null;
 
     if (telegram_chat_id) {
-      const msg = `✅ ${client.name} is live!\n\n` +
-        `🌐 Site: https://${subdomain}\n` +
-        (portalUrl ? `🔐 Client portal: ${portalUrl}\n\n` : "\n") +
-        `Site is deploying via Cloudflare Pages — live in ~60 seconds.`;
+      const msg = `â ${client.name} is live!\n\n` +
+        `ð Site: https://${subdomain}\n` +
+        (portalUrl ? `ð Client portal: ${portalUrl}\n\n` : "\n") +
+        `Site is deploying via Cloudflare Pages â live in ~60 seconds.`;
       await sendTelegram(telegram_chat_id, msg);
     }
+
+    // AUTO-FIX: Log successful provision with execution time and metadata
+    const executionTime = Date.now() - startTime;
+    await logAnalyticsEvent(
+      'provision',
+      'provision',
+      { client_id, telegram_chat_id, client_name: client.name },
+      'success',
+      undefined,
+      { slug, subdomain, execution_time_ms: executionTime, has_telegram: !!telegram_chat_id }
+    );
 
     return new Response(JSON.stringify({ ok: true, url: `https://${subdomain}` }), { status: 200 });
 
@@ -85,8 +136,20 @@ Deno.serve(async (req) => {
     console.error("Provision error:", err);
     await supabase.from("clients").update({ provision_status: "error" }).eq("id", client_id);
     if (telegram_chat_id) {
-      await sendTelegram(telegram_chat_id, `❌ Provisioning failed for ${client.name}: ${err.message}`);
+      await sendTelegram(telegram_chat_id, `â Provisioning failed for ${client.name}: ${err.message}`);
     }
+
+    // AUTO-FIX: Log failed provision with error details and execution time
+    const executionTime = Date.now() - startTime;
+    await logAnalyticsEvent(
+      'provision',
+      'provision',
+      { client_id, telegram_chat_id, client_name: client.name },
+      'failure',
+      err.message,
+      { slug, execution_time_ms: executionTime, error_stack: err.stack }
+    );
+
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 });
