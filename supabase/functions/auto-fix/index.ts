@@ -47,6 +47,19 @@ Deno.serve(async (req) => {
     const currentCode = await readFileFromGitHub(filePath, "main");
     const { fixedCode, summary, filesChanged, fix_confidence } = await generateFix(improvement, currentCode, filePath, known_patterns);
 
+    // Guard: abort if fixed file is less than 80% of the original size (handler truncation protection)
+    const originalSize = currentCode.length;
+    const fixedSize = fixedCode.length;
+    if (fixedSize < originalSize * 0.8) {
+      const msg = `⚠️ Auto-fix ABORTED: Fixed file (${fixedSize} chars) is less than 80% of original (${originalSize} chars). Possible handler truncation. Improvement marked for manual review.`;
+      await sendTelegram(telegram_chat_id, msg);
+      await supabase.from("nexus_improvements").update({
+        status: "needs_manual_review",
+        auto_fix_error: `File size dropped from ${originalSize} to ${fixedSize} chars (${Math.round(fixedSize / originalSize * 100)}% of original)`,
+      }).eq("id", improvement_id);
+      return new Response(JSON.stringify({ ok: false, reason: "size_guard_triggered" }), { status: 200 });
+    }
+
     await writeFileToBranch(filePath, fixedCode, `Auto-fix: ${improvement.title}`, "dev");
 
     const devSha = await getLatestCommitSha("dev");
@@ -136,6 +149,27 @@ CURRENT CODE:
 \`\`\`typescript
 ${currentCode}
 \`\`\`
+
+CRITICAL PRESERVATION RULES — YOU MUST FOLLOW THESE:
+1. NEVER remove, modify, or truncate any existing command handlers
+2. The chat function contains 30+ ability handlers — preserve ALL of them exactly
+3. Only make the minimal surgical change needed to fix the stated problem
+4. If the file is longer than what you see, DO NOT truncate it in your output
+5. Return the COMPLETE file with ALL handlers intact
+6. Specifically preserve these handler blocks (do not remove any):
+   - search:, research:, summarize:, competitors:
+   - draft email:, send email:, generate proposal:, generate script:
+   - generate report:, generate onepager:, remind me:, report:
+   - client snapshot:, prioritize tasks, task estimate:, sprint plan:
+   - generate invoice:, generate contract:, follow up:, weekly digest:
+   - status update:, generate sop:, generate pitch:, generate case study:
+   - generate ad copy:, calculate roi:, pricing calculator:
+   - save knowledge:, recall knowledge:, learn from:, nexus brain dump
+   - new client:, client context:, assign va:, provision:
+   - nexus status, nexus audit, nexus heal, approve, reject
+   - task:, done:, done all
+   - roofing jobs, roofing job:, roofing new:, roofing status:, roofing summary
+   - focus, stale check, momentum, health scores, project update:, contradictions
 
 REQUIREMENTS:
 1. Write the COMPLETE updated file — not just the changed section

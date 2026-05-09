@@ -77,7 +77,15 @@ Deno.serve(async () => {
     }
   }
 
-  // 5. Deal intelligence — alert on clients silent 48+ hours
+  // 5. COO daily checks — stale clients, project momentum, health scores
+  // These have internal deduplication — safe to fire every health-monitor run
+  const cooBase = `${SUPABASE_URL}/functions/v1/nexus-coo`;
+  const cooHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` };
+  fetch(cooBase, { method: "POST", headers: cooHeaders, body: JSON.stringify({ action: "stale_check" }) }).catch(() => {});
+  fetch(cooBase, { method: "POST", headers: cooHeaders, body: JSON.stringify({ action: "momentum_check" }) }).catch(() => {});
+  fetch(cooBase, { method: "POST", headers: cooHeaders, body: JSON.stringify({ action: "health_score" }) }).catch(() => {});
+
+  // 6. Deal intelligence — alert on clients silent 48+ hours
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
   const { data: activeClients } = await supabase.from("clients").select("id, name").eq("status", "active");
 
@@ -105,10 +113,10 @@ Deno.serve(async () => {
     }
   }
 
-  // 6. Verify recent fixes actually worked
+  // 7. Verify recent fixes actually worked
   await verifyRecentFixes(supabase, healthResults, telegramChatId);
 
-  // 7. Identify new improvements via Claude
+  // 8. Identify new improvements via Claude
   const usagePatterns = await analyzeUsage(supabase);
   const improvements = await identifyImprovements(healthResults, usagePatterns, detectedPatterns, patterns || []);
 
@@ -125,7 +133,7 @@ Deno.serve(async () => {
     }
   }
 
-  // 8. Trigger auto-fix for top pending improvement (max 1/hour, skip if one is in_dev)
+  // 9. Trigger auto-fix for top pending improvement (max 1/hour, skip if one is in_dev)
   const { data: inDev } = await supabase
     .from("nexus_improvements").select("id").eq("status", "in_dev").maybeSingle();
 
@@ -161,7 +169,7 @@ Deno.serve(async () => {
     }
   }
 
-  // 9. Generate weekly report on Sundays at 13:00 UTC
+  // 10. Generate weekly report on Sundays at 13:00 UTC
   const now = new Date();
   if (now.getDay() === 0 && now.getHours() === 13) {
     await generateWeeklyReport(supabase, telegramChatId);

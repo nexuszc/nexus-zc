@@ -64,7 +64,7 @@ Deno.serve(async (_req) => {
     const minus7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const now = Date.now();
 
-    const [recent48, top7d, openTasks, projects, recentPeople] = await Promise.all([
+    const [recent48, top7d, openTasks, projects, recentPeople, overdueTasks, staleClients, activeProjects] = await Promise.all([
       supabase.from("entries")
         .select("role, content, entry_type, importance, project_names, people_names, created_at")
         .gt("created_at", minus48h)
@@ -98,6 +98,28 @@ Deno.serve(async (_req) => {
         .not("people_names", "eq", "{}")
         .order("created_at", { ascending: false })
         .limit(15),
+
+      // overdueTasks: open tasks older than 3 days
+      supabase.from("entries")
+        .select("content, created_at, project_names")
+        .eq("task_status", "open")
+        .lt("created_at", new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: true })
+        .limit(10),
+
+      // staleClients: active clients with no activity in 5+ days
+      supabase.from("clients")
+        .select("name, status, last_activity_at")
+        .eq("status", "active")
+        .or(`last_activity_at.lt.${new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString()},last_activity_at.is.null`)
+        .limit(10),
+
+      // activeProjects: projects with active momentum
+      supabase.from("projects")
+        .select("name, category, momentum_status, next_milestone, last_update_at")
+        .not("category", "eq", "archived")
+        .order("last_update_at", { ascending: true })
+        .limit(10),
     ]);
 
     // ----- 3. Pull client brains status -----
@@ -142,6 +164,8 @@ Deno.serve(async (_req) => {
       .select("topic, content")
       .order("created_at", { ascending: false })
       .limit(5);
+
+    const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Denver" });
 
     const [healthData, pendingImprovements] = await Promise.all([
       supabase.from("nexus_health")
@@ -236,39 +260,41 @@ Deno.serve(async (_req) => {
     // ----- 6. Generate briefing via Claude (with fallback) -----
     let briefing: string;
     try {
-    const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing based on the memory context below.
+    const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing for ${today}.
 
-FORMAT:
-🧠 NEXUS BRIEF — ${today}
+DATA:
+Open tasks (${(openTasks.data || []).length}): ${JSON.stringify((openTasks.data || []).slice(0, 20))}
+Overdue tasks: ${JSON.stringify(overdueTasks.data || [])}
+Clients: ${JSON.stringify(clientSummaries)}
+Recent entries (last 48hrs): ${JSON.stringify((recent48.data || []).slice(0, 15))}
+Pending improvements: ${JSON.stringify((pendingImprovements.data || []).slice(0, 5))}
+Active projects: ${JSON.stringify(activeProjects.data || [])}
+Stale clients (no activity 5+ days): ${JSON.stringify(staleClients.data || [])}
+${weeklySummary ? `Last week: ${weeklySummary}` : ""}
 
-🎯 FOCUS TODAY
-[1-2 sentences on what deserves the most attention today based on recent entries and open deals]
+Generate a briefing in this EXACT format:
 
-🔄 OPEN LOOPS
-[Bullet list of things mentioned but unresolved — max 4 items]
+🌅 *Good morning, Zach. Here's your ${dayOfWeek} briefing.*
 
-✅ OPEN TASKS
-[List every open task from OPEN TASKS context with its age. Flag anything older than 48 hours as overdue. If no open tasks, write "No open tasks."]
+*🎯 Focus today:*
+[3 specific things he should accomplish today, ranked by importance. Be direct. No fluff.]
 
-👥 DEAL STATUS
-[Brief status on active people/deals — flag anything gone silent 48+ hrs]
+*⚠️ Needs attention:*
+[List only real problems: overdue tasks, stale clients, blocked projects, pending approvals. Skip if nothing urgent.]
 
-🏢 CLIENT BRAINS
-[One line per active client: name, VA assigned, last activity, any flags. Flag any client silent >24 hours. Flag any client with no VA assigned. If no clients yet, write "No active clients."]
+*📋 Open tasks (${(openTasks.data || []).length}):*
+[Top 5 most important open tasks with context]
 
-🔧 NEXUS SELF-REPORT
-[Health status of each function from NEXUS HEALTH context. List top pending improvements in priority order with estimated fix time. If everything is healthy and no improvements pending, say so. Be direct.]
+*🏢 Client pulse:*
+[One line per active client: name, status, last activity, what's needed]
 
-💡 KNOWLEDGE FLASH (optional — only include if knowledge base has something directly relevant to today's priorities)
-[One insight from knowledge base that's relevant to what's happening today]
+*🔧 System:*
+[Pending auto-fix approvals, function health issues, improvements queued]
 
-⚡ FIRST MOVE
-[One direct recommendation — what to do in the first 30 minutes of the day]
+*💡 Zach, one thing:*
+[One strategic observation or nudge based on patterns you see. This is where you act like a real COO — notice what he's avoiding, what's slipping, what opportunity he should grab.]
 
-Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 650 words.
-
-MEMORY CONTEXT:
-${contextBlock || "(no recent entries found)"}`;
+Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an assistant. Keep under 700 words.`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

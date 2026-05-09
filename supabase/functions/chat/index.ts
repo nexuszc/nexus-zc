@@ -69,7 +69,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { message, channel = "web", external_id = null } = body;
+    const { message, channel = "web", external_id = null, source = null, voice_file_id = null, duration_seconds = null } = body;
     if (!message) return new Response(JSON.stringify({ error: "message required" }), { status: 400 });
 
     const msgLower = message.toLowerCase().trim();
@@ -1461,6 +1461,158 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+    // ── FOCUS ─────────────────────────────────────────────────────────
+    if (msgLower === "focus" || msgLower === "what should i focus on" || msgLower === "focus now") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-coo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "focus" }),
+        });
+        const data = await res.json();
+        await logUsage(supabase, "focus", true, Date.now() - start, channel);
+        return earlyReturn(data.response || "Could not generate focus list.");
+      } catch (err: any) {
+        await logUsage(supabase, "focus", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Focus failed: ${err.message}`);
+      }
+    }
+
+    // ── STALE CHECK ───────────────────────────────────────────────────
+    if (msgLower === "stale check" || msgLower === "who needs attention") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-coo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "stale_check" }),
+        });
+        const data = await res.json();
+        await logUsage(supabase, "stale_check", true, Date.now() - start, channel);
+        return earlyReturn(data.stale_count === 0 ? "✅ All clients are active. No stale relationships." : `⚠️ Found ${data.stale_count} stale client(s). Alert sent.`);
+      } catch (err: any) {
+        await logUsage(supabase, "stale_check", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Stale check failed: ${err.message}`);
+      }
+    }
+
+    // ── MOMENTUM ──────────────────────────────────────────────────────
+    if (msgLower === "momentum" || msgLower === "project momentum") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-coo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "momentum_check" }),
+        });
+        const data = await res.json();
+        await logUsage(supabase, "momentum_check", true, Date.now() - start, channel);
+        return earlyReturn(data.stale_projects === 0 ? "✅ All projects have recent activity." : `📉 ${data.stale_projects} project(s) going stale. Alert sent.`);
+      } catch (err: any) {
+        await logUsage(supabase, "momentum_check", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Momentum check failed: ${err.message}`);
+      }
+    }
+
+    // ── HEALTH SCORES ─────────────────────────────────────────────────
+    if (msgLower === "health scores" || msgLower === "client health") {
+      const start = Date.now();
+      try {
+        const { data: clients } = await supabase
+          .from("clients")
+          .select("name, health_score, last_activity_at")
+          .eq("status", "active")
+          .order("health_score", { ascending: true });
+
+        if (!clients || clients.length === 0) {
+          await logUsage(supabase, "health_scores", true, Date.now() - start, channel);
+          return earlyReturn("No active clients found.");
+        }
+
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-coo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "health_score" }),
+        });
+
+        const scoreEmoji = (score: number) => score >= 70 ? "🟢" : score >= 40 ? "🟡" : "🔴";
+        const reply =
+          `*Client Health Scores*\n\n` +
+          clients.map((c: any) => `${scoreEmoji(c.health_score || 50)} *${c.name}* — ${c.health_score || 50}/100`).join("\n") +
+          `\n\n_Scores updating in background..._`;
+
+        await logUsage(supabase, "health_scores", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "health_scores", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Health scores failed: ${err.message}`);
+      }
+    }
+
+    // ── PROJECT UPDATE ────────────────────────────────────────────────
+    if (msgLower.startsWith("project update:") || msgLower.startsWith("update project:")) {
+      const start = Date.now();
+      try {
+        const parts = message.split("|").map((p: string) => p.trim());
+        const projectName = parts[0].replace(/^(project update:|update project:)/i, "").trim();
+        const milestone = parts[1] || null;
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("id, name")
+          .ilike("name", `%${projectName}%`)
+          .single();
+
+        if (!project) {
+          await logUsage(supabase, "project_update", false, Date.now() - start, channel);
+          return earlyReturn(`Project "${projectName}" not found.`);
+        }
+
+        await supabase.from("projects").update({
+          last_update_at: new Date().toISOString(),
+          momentum_status: "active",
+          ...(milestone ? { next_milestone: milestone } : {}),
+        }).eq("id", project.id);
+
+        await logUsage(supabase, "project_update", true, Date.now() - start, channel);
+        return earlyReturn(`✅ *${project.name}* momentum updated.${milestone ? `\nNext milestone: ${milestone}` : ""}`);
+      } catch (err: any) {
+        await logUsage(supabase, "project_update", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Project update failed: ${err.message}`);
+      }
+    }
+
+    // ── CONTRADICTIONS ────────────────────────────────────────────────
+    if (msgLower === "contradictions" || msgLower === "show contradictions") {
+      const start = Date.now();
+      try {
+        const { data: contradictions } = await supabase
+          .from("contradiction_log")
+          .select("*")
+          .eq("resolved", false)
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (!contradictions || contradictions.length === 0) {
+          await logUsage(supabase, "contradictions", true, Date.now() - start, channel);
+          return earlyReturn("✅ No unresolved contradictions in your memory.");
+        }
+
+        const reply =
+          `*Unresolved contradictions (${contradictions.length}):*\n\n` +
+          contradictions.map((c: any, i: number) =>
+            `${i + 1}. *${c.topic}*\nBefore: "${c.existing_claim}"\nNow: "${c.new_claim}"`
+          ).join("\n\n");
+
+        await logUsage(supabase, "contradictions", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "contradictions", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Contradictions failed: ${err.message}`);
+      }
+    }
+
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
@@ -1525,6 +1677,26 @@ Be specific. Reference actual numbers.` }],
     }).select().single();
 
     if (userEntry) await embedEntry(supabase, userEntry.id, message);
+
+    if (userEntry?.id) {
+      const SUPABASE_URL_VAL = Deno.env.get("SUPABASE_URL")!;
+      const SERVICE_ROLE_KEY_VAL = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      fetch(`${SUPABASE_URL_VAL}/functions/v1/nexus-coo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_ROLE_KEY_VAL}` },
+        body: JSON.stringify({ action: "contradiction_check", entry_id: userEntry.id, content: message }),
+      }).catch(() => {});
+
+      if (source === "voice_memo" && voice_file_id) {
+        supabase.from("voice_memos").insert({
+          telegram_file_id: voice_file_id,
+          transcript: message,
+          classified_as: classification?.type || "note",
+          entry_id: userEntry.id,
+          duration_seconds: duration_seconds || null,
+        }).then(() => {}).catch(() => {});
+      }
+    }
 
     const { data: assistantEntry } = await supabase.from("entries").insert({
       conversation_id: conversationId, source: channel, role: "assistant", content: reply,

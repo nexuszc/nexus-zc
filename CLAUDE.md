@@ -107,6 +107,7 @@ Then productized and sold to other multi-business operators.
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
+| `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score, contradiction_check | Called by chat + health-monitor |
 
 ---
 
@@ -149,6 +150,14 @@ Then productized and sold to other multi-business operators.
 - `known_failure_patterns` — 6 seeded error patterns with auto-fix strategies for health-monitor
 - `weekly_reports` — weekly self-improvement reports (Sunday 13:00 UTC, also surfaced in Monday brief)
 - `nexus_improvements` (new columns: fix_confidence, fix_verified, fix_verified_at, post_fix_error_count, rollback_triggered)
+
+### V3 COO additions:
+- `voice_memos` — Telegram voice messages (telegram_file_id, transcript, classified_as, entry_id, duration_seconds)
+- `contradiction_log` — detected contradictions (entry_id_new, entry_id_existing, topic, new_claim, existing_claim, resolved)
+- `focus_sessions` — focus command results (top_priorities, context_snapshot, created_at)
+- `stale_alerts` — stale client alerts deduplication (client_id, days_inactive, alerted_at, dismissed)
+- `projects` (new columns: last_update_at, momentum_status, next_milestone, owner)
+- `clients` (new columns: health_score, health_updated_at, last_activity_at)
 
 ### Project categories:
 - `platform` — core businesses (Nexus, VA Company)
@@ -214,6 +223,15 @@ Then productized and sold to other multi-business operators.
 - `client context: [name] | deal: [type] | offer: [x] | goals: [x]` — set context
 - `assign va: [client] | va: [name]`
 - `provision: [name] | type: [business type] | about: [description]` — spin up client site
+
+### COO Commands (new in v3):
+- `focus` / `what should i focus on` / `focus now` — top 3 priorities right now (fetches tasks, clients, projects, recent entries)
+- `stale check` / `who needs attention` — clients with no activity 5+ days
+- `momentum` / `project momentum` — projects with no update 7+ days
+- `health scores` / `client health` — all client health scores (50 baseline + activity + calls - open tasks)
+- `project update: [name] | [milestone]` — log progress on a project
+- `contradictions` / `show contradictions` — unresolved contradictions in your brain
+- Voice memos — send voice messages via Telegram, auto-transcribed via Whisper → classified + saved
 
 ### System:
 - `nexus status` — what's in dev, improvement queue, function health
@@ -325,15 +343,16 @@ You reply "reject":
 - ✅ nexus_usage logUsage() audit — all 9 missing handlers fixed across chat/index.ts
 - ✅ Roofing OS Phase 2 — contractor logins (contractor_auth + ContractorContext + magic link), photo uploads (job-photos bucket + grid UI), insurance claim workflow (supplement_request AI letter), crew management (crew_members table + RoofingCrew page), Telegram notifications on homeowner message, self-healing integration (roofing-ai + contractor-auth in health-monitor), 5 roofing Telegram commands, provision integration for type=roofing
 - ✅ Roofing OS Phase 3 — roofing-notify (Twilio SMS + Resend email dispatcher, 5 events: homeowner_message, payment_received, job_created, portal_link, document_ready), roofing-payments (Stripe PaymentIntents, PayButton with Stripe Elements in portal), 4-step contractor onboarding wizard, portal branding with primary_color/logo/tagline
+- ✅ Nexus COO Upgrade (v3) — nexus-coo function (focus, stale_check, momentum_check, health_score, contradiction_check), voice memos via Whisper, 6 new chat commands, briefing upgraded to COO-style with direct data, auto-fix 80% size guard + handler preservation rules, Dashboard upgraded (focus button, health score badges, stale indicators), 4 new DB tables (voice_memos, contradiction_log, focus_sessions, stale_alerts)
 
 **NEXT:**
 1. Schedule dedicated scoping call with Kevin Cantwell
 2. Brian's lead system — generate-queue + call cadence working, needs tuning
 3. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-4. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY
+4. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 5. Add VITE_STRIPE_PUBLISHABLE_KEY to Cloudflare Pages env vars (app/.env has blank placeholder)
 6. Dump session summary to Nexus via Telegram
-7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully.
+7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. The 80% size guard is now live — auto-fix will abort and notify if it tries to truncate chat/index.ts.
 
 ---
 
