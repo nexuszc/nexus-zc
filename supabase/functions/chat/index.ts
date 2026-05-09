@@ -1614,6 +1614,84 @@ Be specific. Reference actual numbers.` }],
     }
 
     // Ã¢ÂÂÃ¢ÂÂ APPROVE QUEUED ACTION Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+    // ── APPROVE ALL ──────────────────────────────────────────────────────────────
+    if (msgLower === "approve all") {
+      const start = Date.now();
+      try {
+        const now = new Date().toISOString();
+
+        const [{ data: actions }, { data: abilities }] = await Promise.all([
+          supabase.from("nexus_action_queue").select("id, action_summary").eq("status", "pending"),
+          supabase.from("nexus_ability_proposals").select("id, ability_name").eq("status", "proposed"),
+        ]);
+
+        const actionIds = (actions || []).map((a: { id: string }) => a.id);
+        const abilityRows = abilities || [];
+
+        if (actionIds.length > 0) {
+          await supabase.from("nexus_action_queue")
+            .update({ status: "approved", approved_at: now })
+            .in("id", actionIds);
+        }
+
+        for (const ability of abilityRows) {
+          await supabase.from("nexus_ability_proposals")
+            .update({ status: "approved", approved_at: now })
+            .eq("id", ability.id);
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ proposal_id: ability.id, action: "build" }),
+          });
+        }
+
+        await logUsage(supabase, "approve_all", true, Date.now() - start, channel);
+        const lines = [];
+        if (actionIds.length > 0) lines.push(`✅ Approved ${actionIds.length} action${actionIds.length > 1 ? "s" : ""}`);
+        if (abilityRows.length > 0) lines.push(`🔨 Building ${abilityRows.length} abilit${abilityRows.length > 1 ? "ies" : "y"}: ${abilityRows.map((a: { ability_name: string }) => a.ability_name).join(", ")}`);
+        if (lines.length === 0) lines.push("Nothing pending to approve.");
+        return earlyReturn(lines.join("\n"));
+      } catch (err: any) {
+        await logUsage(supabase, "approve_all", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── APPROVE ALL ABILITIES ─────────────────────────────────────────────────────
+    if (msgLower === "approve abilities") {
+      const start = Date.now();
+      try {
+        const now = new Date().toISOString();
+        const { data: abilities } = await supabase
+          .from("nexus_ability_proposals")
+          .select("id, ability_name")
+          .eq("status", "proposed");
+
+        const abilityRows = abilities || [];
+        if (abilityRows.length === 0) {
+          await logUsage(supabase, "approve_abilities", true, Date.now() - start, channel);
+          return earlyReturn("No proposed abilities to approve.");
+        }
+
+        for (const ability of abilityRows) {
+          await supabase.from("nexus_ability_proposals")
+            .update({ status: "approved", approved_at: now })
+            .eq("id", ability.id);
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ proposal_id: ability.id, action: "build" }),
+          });
+        }
+
+        await logUsage(supabase, "approve_abilities", true, Date.now() - start, channel);
+        return earlyReturn(`🔨 Building ${abilityRows.length} abilit${abilityRows.length > 1 ? "ies" : "y"}:\n${abilityRows.map((a: { ability_name: string }) => `• ${a.ability_name}`).join("\n")}\n\nYou'll get a Telegram notification for each one when it's ready to test.`);
+      } catch (err: any) {
+        await logUsage(supabase, "approve_abilities", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
     if (msgLower.startsWith("approve action ") || msgLower.startsWith("exec ")) {
       const start = Date.now();
       try {
@@ -1872,73 +1950,6 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
-```javascript
-// ââ AUTOMATIC_ACTIVITY_CAPTURE ââ
-if (msgLower.startsWith('/enable-activity-tracking')) {
-  const startTime = Date.now();
-  try {
-    // Create a trigger function in the database
-    const triggerSQL = `
-      CREATE OR REPLACE FUNCTION update_last_active_timestamps()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        -- Update client last_active if client_id is present
-        IF TG_TABLE_NAME IN ('tasks', 'notes', 'communications', 'files') AND NEW.client_id IS NOT NULL THEN
-          UPDATE clients SET last_active = NOW() WHERE id = NEW.client_id;
-        END IF;
-        
-        -- Update project last_active if project_id is present
-        IF TG_TABLE_NAME IN ('tasks', 'notes', 'communications', 'files') AND NEW.project_id IS NOT NULL THEN
-          UPDATE projects SET last_active = NOW() WHERE id = NEW.project_id;
-        END IF;
-        
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      -- Drop existing triggers if they exist
-      DROP TRIGGER IF EXISTS tasks_activity_trigger ON tasks;
-      DROP TRIGGER IF EXISTS notes_activity_trigger ON notes;
-      DROP TRIGGER IF EXISTS communications_activity_trigger ON communications;
-      DROP TRIGGER IF EXISTS files_activity_trigger ON files;
-
-      -- Create triggers for each table
-      CREATE TRIGGER tasks_activity_trigger
-        AFTER INSERT OR UPDATE ON tasks
-        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
-
-      CREATE TRIGGER notes_activity_trigger
-        AFTER INSERT OR UPDATE ON notes
-        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
-
-      CREATE TRIGGER communications_activity_trigger
-        AFTER INSERT OR UPDATE ON communications
-        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
-
-      CREATE TRIGGER files_activity_trigger
-        AFTER INSERT OR UPDATE ON files
-        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
-    `;
-
-    const { error } = await supabase.rpc('exec_sql', { sql: triggerSQL });
-    
-    const responseMs = Date.now() - startTime;
-    
-    if (error) {
-      await logUsage('automatic_activity_capture', false, responseMs, channel);
-      return earlyReturn(`â Failed to enable activity tracking: ${error.message}`);
-    }
-
-    await logUsage('automatic_activity_capture', true, responseMs, channel);
-    return earlyReturn('â **Activity tracking enabled**\n\nClients and projects will now automatically update `last_active` timestamps when:\nâ¢ Tasks are created/updated\nâ¢ Notes are added/modified\nâ¢ Communications are logged\nâ¢ Files are uploaded/changed\n\nNo more manual tracking needed.');
-    
-  } catch (err: any) {
-    const responseMs = Date.now() - startTime;
-    await logUsage('automatic_activity_capture', false, responseMs, channel);
-    return earlyReturn(`â Error: ${err.message}`);
-  }
-}
-```
 
 
     // ================================================================
