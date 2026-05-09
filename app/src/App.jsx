@@ -15,6 +15,7 @@ import RoofingNewJob from './pages/roofing/RoofingNewJob'
 import RoofingPortal from './pages/roofing/RoofingPortal'
 import RoofingLogin from './pages/roofing/RoofingLogin'
 import RoofingCrew from './pages/roofing/RoofingCrew'
+import RoofingOnboarding from './pages/roofing/RoofingOnboarding'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
               <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
               <Route path="/roofing/crew" element={<RoofingCrew />} />
+              <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
             </Route>
           </Route>
         </Route>

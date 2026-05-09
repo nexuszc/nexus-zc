@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { useContractor } from '../../context/ContractorContext'
 
 export default function RoofingNewJob() {
   const navigate = useNavigate()
+  const { contractorClientId } = useContractor()
   const [form, setForm] = useState({
     homeowner_name: '', homeowner_email: '', homeowner_phone: '',
     property_address: '', job_type: 'full_replacement',
@@ -18,8 +20,7 @@ export default function RoofingNewJob() {
     e.preventDefault()
     setSaving(true)
 
-    const { data: clients } = await supabase.from('clients').select('id').eq('status', 'active').limit(1)
-    const clientId = clients?.[0]?.id
+    const clientId = contractorClientId || null
 
     const { data: job, error } = await supabase.from('roofing_jobs').insert({
       ...form,
@@ -32,6 +33,12 @@ export default function RoofingNewJob() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ action: 'generate_timeline', job_id: job.id }),
+      })
+      // Notify contractor (email confirmation of new job)
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ event: 'job_created', job_id: job.id }),
       })
       navigate(`/roofing/jobs/${job.id}`)
     }

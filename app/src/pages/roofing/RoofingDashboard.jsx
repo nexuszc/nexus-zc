@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useContractor } from '../../context/ContractorContext'
 
 const STATUS_COLORS = {
@@ -17,7 +17,11 @@ const STATUS_COLORS = {
 }
 
 export default function RoofingDashboard() {
-  const { contractorClientId } = useContractor()
+  const { contractorClientId, contractor } = useContractor()
+
+  if (contractor && contractor.clients && contractor.clients.onboarding_complete === false) {
+    return <Navigate to="/roofing/onboarding" replace />
+  }
   const [jobs, setJobs] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)

@@ -1,8 +1,90 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 const STAGE_ORDER = ['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection','complete','paid']
+
+function PayButton({ label, amountCents, jobId, paymentType, onSuccess }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [stripeInstance, setStripeInstance] = useState(null)
+  const [stripeElements, setStripeElements] = useState(null)
+  const cardRef = useRef(null)
+
+  const startPayment = async () => {
+    setLoading(true)
+    setError('')
+    const pk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+    if (!pk) { setError('Payment not configured yet.'); setLoading(false); return }
+
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ action: 'create_payment_intent', job_id: jobId, amount_cents: amountCents, payment_type: paymentType }),
+    })
+    const data = await res.json()
+    if (data.error) { setError(data.error); setLoading(false); return }
+
+    const loadStripe = () => new Promise(resolve => {
+      if (window.Stripe) return resolve()
+      const s = document.createElement('script')
+      s.src = 'https://js.stripe.com/v3/'
+      s.onload = resolve
+      document.head.appendChild(s)
+    })
+    await loadStripe()
+
+    const stripe = window.Stripe(pk)
+    const els = stripe.elements({ clientSecret: data.client_secret, appearance: { theme: 'night' } })
+    const cardEl = els.create('payment')
+    setStripeInstance(stripe)
+    setStripeElements(els)
+    setShowForm(true)
+    setLoading(false)
+    setTimeout(() => { if (cardRef.current) cardEl.mount(cardRef.current) }, 50)
+  }
+
+  const confirmPayment = async () => {
+    setLoading(true)
+    const { error: stripeError } = await stripeInstance.confirmPayment({
+      elements: stripeElements,
+      confirmParams: { return_url: window.location.href },
+      redirect: 'if_required',
+    })
+    if (stripeError) { setError(stripeError.message); setLoading(false) }
+    else onSuccess()
+  }
+
+  if (!showForm) {
+    return (
+      <div>
+        {error && <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{error}</p>}
+        <button onClick={startPayment} disabled={loading}
+          style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', padding: '12px 24px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: '600', width: '100%', fontSize: '15px' }}>
+          {loading ? 'Loading...' : label}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div ref={cardRef} style={{ marginBottom: '12px' }} />
+      {error && <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px' }}>{error}</p>}
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={() => setShowForm(false)}
+          style={{ background: '#374151', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer' }}>
+          Cancel
+        </button>
+        <button onClick={confirmPayment} disabled={loading}
+          style={{ background: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 20px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: '600', flex: 1 }}>
+          {loading ? 'Processing...' : 'Pay Now'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function RoofingPortal() {
   const { token } = useParams()
@@ -16,10 +98,9 @@ export default function RoofingPortal() {
   const [activeTab, setActiveTab] = useState('status')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [lightboxPhoto, setLightboxPhoto] = useState(null)
 
-  useEffect(() => {
-    loadPortal()
-  }, [token])
+  useEffect(() => { loadPortal() }, [token])
 
   const loadPortal = async () => {
     const { data: jobData } = await supabase
@@ -56,11 +137,11 @@ export default function RoofingPortal() {
     const msg = newMessage
     await supabase.from('job_messages').insert({ job_id: job.id, sender: 'homeowner', message: msg })
     setNewMessage('')
-    // Fire-and-forget Telegram notification to contractor
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-ai`, {
+    // Notify contractor via SMS/email
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ action: 'notify_contractor', job_id: job.id, data: { message: msg } }),
+      body: JSON.stringify({ event: 'homeowner_message', job_id: job.id, data: { message: msg } }),
     })
     loadPortal()
   }
@@ -77,8 +158,7 @@ export default function RoofingPortal() {
     </div>
   )
 
-  const brandColor = contractor?.brand_color || '#3b82f6'
-  const brandName = contractor?.brand_name || contractor?.name || 'Your Roofing Company'
+  const brandColor = contractor?.primary_color || '#3b82f6'
   const currentStageIndex = STAGE_ORDER.indexOf(job?.status || 'lead')
   const progressPct = Math.round(((currentStageIndex + 1) / STAGE_ORDER.length) * 100)
 
@@ -87,16 +167,31 @@ export default function RoofingPortal() {
     { id: 'photos', label: '📷 Photos' },
     { id: 'documents', label: '📄 Documents' },
     { id: 'messages', label: `💬 Messages${messages.filter(m => !m.read && m.sender === 'contractor').length > 0 ? ' 🔴' : ''}` },
+    { id: 'payments', label: '💳 Payments' },
   ]
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0a', color: 'white', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Header */}
-      <div style={{ background: '#111', borderBottom: '1px solid #1f2937', padding: '16px 20px' }}>
+      {/* Lightbox */}
+      {lightboxPhoto && (
+        <div onClick={() => setLightboxPhoto(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, cursor: 'pointer' }}>
+          <img src={lightboxPhoto} alt="photo" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px' }} />
+          <span style={{ position: 'absolute', top: '16px', right: '20px', color: '#fff', fontSize: '24px', lineHeight: 1 }}>✕</span>
+        </div>
+      )}
+
+      {/* Branded header */}
+      <div style={{ background: brandColor, padding: '24px 20px' }}>
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Powered by</p>
-          <h1 style={{ fontSize: '20px', fontWeight: '700', color: brandColor }}>{brandName}</h1>
-          {contractor?.phone && <p style={{ fontSize: '13px', color: '#9ca3af', marginTop: '2px' }}>{contractor.phone}</p>}
+          {contractor?.logo_url && (
+            <img src={contractor.logo_url} alt="logo" style={{ height: '40px', marginBottom: '8px', objectFit: 'contain' }} />
+          )}
+          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', margin: 0 }}>{contractor?.name}</h1>
+          {contractor?.company_tagline && (
+            <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '13px', marginTop: '4px' }}>{contractor.company_tagline}</p>
+          )}
+          {contractor?.phone && <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>{contractor.phone}</p>}
         </div>
       </div>
 
@@ -106,7 +201,6 @@ export default function RoofingPortal() {
           <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>{job.homeowner_name}</h2>
           <p style={{ color: '#9ca3af', fontSize: '14px' }}>{job.property_address}</p>
 
-          {/* Progress bar */}
           <div style={{ marginTop: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '13px', color: '#9ca3af' }}>Job Progress</span>
@@ -122,11 +216,11 @@ export default function RoofingPortal() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: '4px', background: '#111', borderRadius: '12px', padding: '4px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '4px', background: '#111', borderRadius: '12px', padding: '4px', marginBottom: '16px', overflowX: 'auto' }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{
-                flex: 1, padding: '8px 4px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                flexShrink: 0, padding: '8px 10px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                 fontSize: '12px', fontWeight: '500', transition: 'all 0.2s',
                 background: activeTab === t.id ? '#1f2937' : 'transparent',
                 color: activeTab === t.id ? 'white' : '#6b7280',
@@ -164,18 +258,20 @@ export default function RoofingPortal() {
           </div>
         )}
 
-        {/* PHOTOS TAB */}
+        {/* PHOTOS TAB — Your Project Photos */}
         {activeTab === 'photos' && (
           <div>
+            <p style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>Your Project Photos</p>
             {['before', 'during', 'after'].map(phase => {
               const phasePhotos = photos.filter(p => p.phase === phase)
               if (!phasePhotos.length) return null
               return (
                 <div key={phase} style={{ marginBottom: '20px' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase' }}>{phase}</p>
+                  <p style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase' }}>{phase}</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                     {phasePhotos.map(p => (
-                      <div key={p.id} style={{ borderRadius: '8px', overflow: 'hidden', background: '#1f2937', aspectRatio: '4/3' }}>
+                      <div key={p.id} onClick={() => setLightboxPhoto(p.photo_url)}
+                        style={{ borderRadius: '8px', overflow: 'hidden', background: '#1f2937', aspectRatio: '4/3', cursor: 'pointer' }}>
                         <img src={p.photo_url} alt={p.caption || phase} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                     ))}
@@ -214,7 +310,7 @@ export default function RoofingPortal() {
                   marginLeft: m.sender === 'contractor' ? '0' : '32px',
                   marginRight: m.sender === 'homeowner' ? '0' : '32px',
                 }}>
-                  <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>{m.sender === 'contractor' ? brandName : 'You'}</p>
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px' }}>{m.sender === 'contractor' ? contractor?.name : 'You'}</p>
                   <p>{m.message}</p>
                 </div>
               ))}
@@ -233,7 +329,52 @@ export default function RoofingPortal() {
           </div>
         )}
 
-        {/* Footer */}
+        {/* PAYMENTS TAB */}
+        {activeTab === 'payments' && (
+          <div style={{ background: '#111', border: '1px solid #1f2937', borderRadius: '16px', padding: '20px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px' }}>Payments</h3>
+            {job.contract_amount ? (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#9ca3af', marginBottom: '8px' }}>
+                  <span>Contract total</span>
+                  <span style={{ color: 'white' }}>${job.contract_amount?.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#9ca3af', marginBottom: '20px' }}>
+                  <span>Amount paid</span>
+                  <span style={{ color: '#10b981' }}>${(job.amount_paid || 0)?.toLocaleString()}</span>
+                </div>
+
+                {job.final_payment_paid ? (
+                  <p style={{ color: '#10b981', textAlign: 'center', fontWeight: '600', padding: '12px' }}>✓ Paid in full</p>
+                ) : (
+                  <div>
+                    {!job.deposit_paid && job.deposit_amount && (
+                      <PayButton
+                        label={`Pay Deposit — $${job.deposit_amount?.toLocaleString()}`}
+                        amountCents={Math.round(job.deposit_amount * 100)}
+                        jobId={job.id}
+                        paymentType="deposit"
+                        onSuccess={loadPortal}
+                      />
+                    )}
+                    {job.deposit_paid && job.contract_amount > (job.amount_paid || 0) && (
+                      <PayButton
+                        label={`Pay Remaining Balance — $${(job.contract_amount - (job.amount_paid || 0))?.toLocaleString()}`}
+                        amountCents={Math.round((job.contract_amount - (job.amount_paid || 0)) * 100)}
+                        jobId={job.id}
+                        paymentType="final"
+                        onSuccess={loadPortal}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p style={{ color: '#6b7280', textAlign: 'center', padding: '16px 0' }}>Payment details will appear here once your contract is finalized.</p>
+            )}
+          </div>
+        )}
+
         <p style={{ textAlign: 'center', color: '#374151', fontSize: '11px', marginTop: '32px' }}>
           Powered by Roofing OS
         </p>

@@ -21,11 +21,12 @@ export default function RoofingJobDetail() {
   const [generating, setGenerating] = useState('')
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sentPortal, setSentPortal] = useState(false)
   const [claimForm, setClaimForm] = useState({})
 
   const load = async () => {
     const [{ data: j }, { data: t }, { data: m }, { data: d }, { data: p }, { data: ca }] = await Promise.all([
-      supabase.from('roofing_jobs').select('*, clients(name, brand_name, brand_color, phone)').eq('id', id).single(),
+      supabase.from('roofing_jobs').select('*, clients(name, primary_color, phone)').eq('id', id).single(),
       supabase.from('job_timeline').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_messages').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_documents').select('*').eq('job_id', id).order('created_at'),
@@ -71,8 +72,25 @@ export default function RoofingJobDetail() {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
       body: JSON.stringify({ action, job_id: id }),
     })
+    // Notify homeowner the document is ready
+    const docTypeMap = { generate_estimate: 'Estimate', generate_contract: 'Contract', generate_invoice: 'Invoice' }
+    if (docTypeMap[action]) {
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ event: 'document_ready', job_id: id, data: { doc_type: docTypeMap[action] } }),
+      })
+    }
     setGenerating('')
     load()
+  }
+
+  const sendPortalLink = async () => {
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ event: 'portal_link', job_id: id }),
+    })
+    setSentPortal(true)
+    setTimeout(() => setSentPortal(false), 3000)
   }
 
   const sendMessage = async () => {
@@ -142,12 +160,18 @@ export default function RoofingJobDetail() {
         <div>
           <h2 className="text-2xl font-bold text-white">{job.homeowner_name}</h2>
           <p className="text-gray-400 mt-1">{job.property_address}</p>
-          <p className="text-gray-500 text-sm mt-0.5">{job.job_type?.replace(/_/g, ' ')} · {job.clients?.brand_name || job.clients?.name}</p>
+          <p className="text-gray-500 text-sm mt-0.5">{job.job_type?.replace(/_/g, ' ')} · {job.clients?.name}</p>
         </div>
-        <button onClick={copyPortalLink}
-          className="bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 py-2 text-sm transition-colors shrink-0">
-          📋 Copy Portal Link
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={copyPortalLink}
+            className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-3 py-2 text-sm transition-colors">
+            📋 Copy
+          </button>
+          <button onClick={sendPortalLink}
+            className={`text-white rounded-lg px-3 py-2 text-sm transition-colors ${sentPortal ? 'bg-green-600' : 'bg-blue-600 hover:bg-blue-500'}`}>
+            {sentPortal ? '✓ Sent!' : '📨 Send Portal Link'}
+          </button>
+        </div>
       </div>
 
       {/* Status updater */}
