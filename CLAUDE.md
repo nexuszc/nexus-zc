@@ -103,6 +103,8 @@ Then productized and sold to other multi-business operators.
 | `process-email-queue` | Batch process email queue | Cron |
 | `generate-queue` | Generate lead call queue | On demand |
 | `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
+| `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request, notify_contractor | Internal |
+| `contractor-auth` | Contractor magic link invite + session lookup | Internal |
 
 ---
 
@@ -302,7 +304,7 @@ You reply "reject":
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 8, 2026)
+## CURRENT BUILD PRIORITIES (as of May 9, 2026)
 
 **DONE this session:**
 - ✅ Telegram EarlyDrop bug fixed
@@ -318,6 +320,8 @@ You reply "reject":
 - ✅ Auto-fix deployed self-improvement to provision.ts (usage analytics)
 - ✅ Abilities V2 fixes — brain dump summary, invoice sequence, status update, documents page
 - ✅ Self-healing final push — pattern detection, confidence scoring, fix verification, weekly reports, nexus heal, rollback alerts
+- ✅ nexus_usage logUsage() audit — all 9 missing handlers fixed across chat/index.ts
+- ✅ Roofing OS Phase 2 — contractor logins (contractor_auth + ContractorContext + magic link), photo uploads (job-photos bucket + grid UI), insurance claim workflow (supplement_request AI letter), crew management (crew_members table + RoofingCrew page), Telegram notifications on homeowner message, self-healing integration (roofing-ai + contractor-auth in health-monitor), 5 roofing Telegram commands, provision integration for type=roofing
 
 **NEXT:**
 1. Schedule dedicated scoping call with Kevin Cantwell
