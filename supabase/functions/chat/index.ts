@@ -1613,6 +1613,265 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+    // ── APPROVE QUEUED ACTION ────────────────────────────────────────────────────
+    if (msgLower.startsWith("approve action ") || msgLower.startsWith("exec ")) {
+      const start = Date.now();
+      try {
+        const actionId = message.split(" ").pop()?.trim();
+        if (!actionId) return earlyReturn("Specify action ID. Reply `pending` to see pending actions.");
+
+        const { data: queuedAction } = await supabase
+          .from("nexus_action_queue")
+          .select("*")
+          .or(`id.eq.${actionId},id.ilike.${actionId}%`)
+          .eq("status", "pending")
+          .maybeSingle();
+
+        if (!queuedAction) return earlyReturn(`No pending action found matching: ${actionId}`);
+
+        await supabase.from("nexus_action_queue")
+          .update({ status: "approved", approved_at: new Date().toISOString() })
+          .eq("id", queuedAction.id);
+
+        await supabase.from("nexus_audit_log").insert({
+          engine: "chat",
+          action_type: "action_approved",
+          action_detail: `Approved: ${queuedAction.action_summary}`,
+          approval_required: true,
+          approved_at: new Date().toISOString(),
+          outcome: "success",
+        });
+
+        await logUsage(supabase, "approve_action", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Approved: *${queuedAction.action_summary}*\nExecuting...`);
+      } catch (err: any) {
+        await logUsage(supabase, "approve_action", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── REJECT QUEUED ACTION ─────────────────────────────────────────────────────
+    if (msgLower.startsWith("reject action ")) {
+      const start = Date.now();
+      try {
+        const actionId = message.split(" ").pop()?.trim();
+        const { data: queuedAction } = await supabase
+          .from("nexus_action_queue")
+          .select("*")
+          .or(`id.eq.${actionId},id.ilike.${actionId}%`)
+          .eq("status", "pending")
+          .maybeSingle();
+
+        if (!queuedAction) return earlyReturn(`No pending action found: ${actionId}`);
+
+        await supabase.from("nexus_action_queue").update({ status: "rejected" }).eq("id", queuedAction.id);
+        await logUsage(supabase, "reject_action", true, Date.now() - start, channel);
+        return earlyReturn(`❌ Rejected: *${queuedAction.action_summary}*`);
+      } catch (err: any) {
+        await logUsage(supabase, "reject_action", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── APPROVE ABILITY BUILD ────────────────────────────────────────────────────
+    if (msgLower.startsWith("approve ability")) {
+      const start = Date.now();
+      try {
+        const parts = message.split(" ");
+        const abilityId = parts[parts.length - 1]?.trim();
+
+        const { data: proposals } = await supabase
+          .from("nexus_ability_proposals")
+          .select("*")
+          .or(`id.eq.${abilityId},id.ilike.${abilityId}%`)
+          .in("status", ["proposed", "testing"])
+          .limit(1);
+
+        const proposal = proposals?.[0];
+        if (!proposal) return earlyReturn(`No pending ability proposal found matching: ${abilityId}`);
+
+        if (proposal.status === "testing") {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ proposal_id: proposal.id, action: "deploy" }),
+          });
+          await logUsage(supabase, "approve_ability_deploy", true, Date.now() - start, channel);
+          return earlyReturn(`🚀 Deploying *${proposal.ability_name}* to production...`);
+        } else {
+          await supabase.from("nexus_ability_proposals")
+            .update({ status: "approved", approved_at: new Date().toISOString() })
+            .eq("id", proposal.id);
+
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ proposal_id: proposal.id, action: "build" }),
+          });
+
+          await logUsage(supabase, "approve_ability_build", true, Date.now() - start, channel);
+          return earlyReturn(`🔨 Building *${proposal.ability_name}*...\nI'll notify you when it's ready to test.`);
+        }
+      } catch (err: any) {
+        await logUsage(supabase, "approve_ability", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── REJECT ABILITY ───────────────────────────────────────────────────────────
+    if (msgLower.startsWith("reject ability")) {
+      const start = Date.now();
+      try {
+        const parts = message.split(" ");
+        const abilityId = parts[parts.length - 1]?.trim();
+
+        await supabase.from("nexus_ability_proposals")
+          .update({ status: "rejected" })
+          .or(`id.eq.${abilityId},id.ilike.${abilityId}%`);
+
+        await logUsage(supabase, "reject_ability", true, Date.now() - start, channel);
+        return earlyReturn(`❌ Ability rejected and removed from queue.`);
+      } catch (err: any) {
+        await logUsage(supabase, "reject_ability", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── PENDING ACTIONS ──────────────────────────────────────────────────────────
+    if (msgLower === "pending" || msgLower === "pending actions" || msgLower === "queue") {
+      const start = Date.now();
+      try {
+        const [{ data: actions }, { data: abilities }] = await Promise.all([
+          supabase.from("nexus_action_queue").select("*").eq("status", "pending")
+            .order("priority", { ascending: false }).limit(10),
+          supabase.from("nexus_ability_proposals").select("*").eq("status", "proposed")
+            .order("created_at", { ascending: false }).limit(5),
+        ]);
+
+        let reply = "*Pending approvals:*\n\n";
+
+        if (actions && actions.length > 0) {
+          reply += `*Actions (${actions.length}):*\n`;
+          reply += actions.map((a: any) =>
+            `• [${a.id.slice(0, 8)}] P${a.priority} — ${a.action_summary}\n  Approve: \`approve action ${a.id.slice(0, 8)}\``
+          ).join("\n") + "\n\n";
+        }
+
+        if (abilities && abilities.length > 0) {
+          reply += `*New abilities to build (${abilities.length}):*\n`;
+          reply += abilities.map((a: any) =>
+            `• [${a.id.slice(0, 8)}] *${a.ability_name}* — ${a.description?.slice(0, 80)}\n  Build: \`approve ability ${a.id.slice(0, 8)}\``
+          ).join("\n");
+        }
+
+        if ((!actions || actions.length === 0) && (!abilities || abilities.length === 0)) {
+          reply = "✅ No pending approvals. Nexus is fully caught up.";
+        }
+
+        await logUsage(supabase, "pending_actions", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "pending_actions", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── AUDIT LOG ────────────────────────────────────────────────────────────────
+    if (msgLower === "audit" || msgLower === "audit log" || msgLower.startsWith("audit last")) {
+      const start = Date.now();
+      try {
+        const limit = msgLower.includes("last")
+          ? Math.min(parseInt(msgLower.split(" ").pop() || "10"), 20)
+          : 10;
+
+        const { data: logs } = await supabase
+          .from("nexus_audit_log")
+          .select("engine, action_type, action_detail, outcome, created_at")
+          .order("created_at", { ascending: false })
+          .limit(limit);
+
+        if (!logs || logs.length === 0) return earlyReturn("No audit log entries yet.");
+
+        const reply = `*Nexus Audit Log (last ${logs.length}):*\n\n` +
+          logs.map((l: any) => {
+            const time = new Date(l.created_at).toLocaleTimeString("en-US", {
+              timeZone: "America/Denver", hour: "2-digit", minute: "2-digit",
+            });
+            const emoji = l.outcome === "success" ? "✅" : l.outcome === "failure" ? "❌" : "⏳";
+            return `${emoji} [${time}] *${l.engine}* — ${l.action_detail.slice(0, 80)}`;
+          }).join("\n");
+
+        await logUsage(supabase, "audit_log", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "audit_log", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── RESEARCH NOW ─────────────────────────────────────────────────────────────
+    if (msgLower === "research now" || msgLower === "nexus research") {
+      const start = Date.now();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-research`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({}),
+      });
+      await logUsage(supabase, "research_now", true, Date.now() - start, channel);
+      return earlyReturn("🔬 Research cycle started. I'll report back with findings in a few minutes.");
+    }
+
+    // ── AGENT NOW ────────────────────────────────────────────────────────────────
+    if (msgLower === "agent now" || msgLower === "nexus agent" || msgLower === "run agent") {
+      const start = Date.now();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({}),
+      });
+      await logUsage(supabase, "agent_now", true, Date.now() - start, channel);
+      return earlyReturn("🤖 Agent cycle triggered. Observing, thinking, acting...");
+    }
+
+    // ── ABILITIES ────────────────────────────────────────────────────────────────
+    if (msgLower === "abilities" || msgLower === "my abilities" || msgLower === "show abilities") {
+      const start = Date.now();
+      try {
+        const [{ data: liveAbilities }, { data: proposedAbilities }] = await Promise.all([
+          supabase.from("nexus_ability_proposals").select("ability_name, trigger_command, usage_count, deployed_at")
+            .eq("status", "live").order("usage_count", { ascending: false }),
+          supabase.from("nexus_ability_proposals").select("ability_name, status")
+            .in("status", ["proposed", "approved", "building", "testing"]),
+        ]);
+
+        let reply = "*Nexus Self-Built Abilities:*\n\n";
+
+        if (liveAbilities && liveAbilities.length > 0) {
+          reply += `*Live (${liveAbilities.length}):*\n`;
+          reply += liveAbilities.map((a: any) =>
+            `✅ *${a.ability_name}* — \`${a.trigger_command}\` (used ${a.usage_count}x)`
+          ).join("\n") + "\n\n";
+        }
+
+        if (proposedAbilities && proposedAbilities.length > 0) {
+          reply += `*In progress (${proposedAbilities.length}):*\n`;
+          reply += proposedAbilities.map((a: any) =>
+            `${a.status === "proposed" ? "💡" : a.status === "building" ? "🔨" : "🧪"} *${a.ability_name}* (${a.status})`
+          ).join("\n");
+        }
+
+        if ((!liveAbilities || liveAbilities.length === 0) && (!proposedAbilities || proposedAbilities.length === 0)) {
+          reply = "💡 No self-built abilities yet. Nexus is still identifying gaps. Check back after the first research cycle.";
+        }
+
+        await logUsage(supabase, "show_abilities", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "show_abilities", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================

@@ -108,6 +108,9 @@ Then productized and sold to other multi-business operators.
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score, contradiction_check | Called by chat + health-monitor |
+| `nexus-agent` | Autonomous 15-min operator loop: observe, think, act, report | Every 15 min cron |
+| `nexus-research` | Self-directed research: web scan, gap detection, knowledge building | Every 6 hour cron |
+| `nexus-builder` | Self-skill creator: builds new abilities on approval, deploys to dev | Triggered on approval |
 
 ---
 
@@ -150,6 +153,15 @@ Then productized and sold to other multi-business operators.
 - `known_failure_patterns` — 6 seeded error patterns with auto-fix strategies for health-monitor
 - `weekly_reports` — weekly self-improvement reports (Sunday 13:00 UTC, also surfaced in Monday brief)
 - `nexus_improvements` (new columns: fix_confidence, fix_verified, fix_verified_at, post_fix_error_count, rollback_triggered)
+
+### V4 Autonomous Engine additions:
+- `nexus_audit_log` — permanent log of every autonomous action ever taken
+- `nexus_decisions` — decision log with outcome tracking for learning
+- `nexus_ability_proposals` — self-generated ability proposals lifecycle
+- `nexus_research_findings` — all web research findings saved permanently
+- `nexus_action_queue` — actions pending 1-tap approval
+- `nexus_agent_cycles` — record of every agent run
+- `nexus_preferences` — learned preference model (6 seeds: approval thresholds, comms style, focus areas)
 
 ### V3 COO additions:
 - `voice_memos` — Telegram voice messages (telegram_file_id, transcript, classified_as, entry_id, duration_seconds)
@@ -223,6 +235,17 @@ Then productized and sold to other multi-business operators.
 - `client context: [name] | deal: [type] | offer: [x] | goals: [x]` — set context
 - `assign va: [client] | va: [name]`
 - `provision: [name] | type: [business type] | about: [description]` — spin up client site
+
+### Autonomous Engine Commands (new in v4):
+- `pending` / `pending actions` / `queue` — show all actions and abilities awaiting approval
+- `approve action [id]` — approve a queued autonomous action
+- `reject action [id]` — reject a queued action
+- `approve ability [id]` — approve building a new ability (or deploy if testing)
+- `reject ability [id]` — reject an ability proposal
+- `audit` / `audit log` / `audit last [n]` — view autonomous action audit log
+- `research now` / `nexus research` — trigger immediate research cycle
+- `agent now` / `nexus agent` / `run agent` — trigger immediate agent cycle
+- `abilities` / `show abilities` — list all self-built abilities and their status
 
 ### COO Commands (new in v3):
 - `focus` / `what should i focus on` / `focus now` — top 3 priorities right now (fetches tasks, clients, projects, recent entries)
@@ -344,6 +367,7 @@ You reply "reject":
 - ✅ Roofing OS Phase 2 — contractor logins (contractor_auth + ContractorContext + magic link), photo uploads (job-photos bucket + grid UI), insurance claim workflow (supplement_request AI letter), crew management (crew_members table + RoofingCrew page), Telegram notifications on homeowner message, self-healing integration (roofing-ai + contractor-auth in health-monitor), 5 roofing Telegram commands, provision integration for type=roofing
 - ✅ Roofing OS Phase 3 — roofing-notify (Twilio SMS + Resend email dispatcher, 5 events: homeowner_message, payment_received, job_created, portal_link, document_ready), roofing-payments (Stripe PaymentIntents, PayButton with Stripe Elements in portal), 4-step contractor onboarding wizard, portal branding with primary_color/logo/tagline
 - ✅ Nexus COO Upgrade (v3) — nexus-coo function (focus, stale_check, momentum_check, health_score, contradiction_check), voice memos via Whisper, 6 new chat commands, briefing upgraded to COO-style with direct data, auto-fix 80% size guard + handler preservation rules, Dashboard upgraded (focus button, health score badges, stale indicators), 4 new DB tables (voice_memos, contradiction_log, focus_sessions, stale_alerts)
+- ✅ Nexus Autonomous Engine (v4) — nexus-agent (15-min loop: observe/think/act/report), nexus-research (6-hour loop: web scan + gap detection + knowledge building), nexus-builder (self-skill creator: writes handlers, deploys to dev, notifies for prod approval), 7 new DB tables, 9 new Telegram commands, full audit trail in nexus_audit_log, preference model with 6 seeds, 2 new cron jobs (jobs 4+5)
 
 **NEXT:**
 1. Schedule dedicated scoping call with Kevin Cantwell
