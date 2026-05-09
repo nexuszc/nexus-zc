@@ -1,6 +1,6 @@
 # NEXUS ZC — CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 8, 2026 — v4
+# Last updated: May 9, 2026 — v5
 
 ---
 
@@ -141,6 +141,10 @@ Then productized and sold to other multi-business operators.
 - `va_task_queues` — daily VA task lists (va_assignment_id, date, tasks JSON, completed_count)
 - `call_logs` — structured VA call records (lead_id, outcome, notes, va_profile_id)
 - `client_portal_access` — token-based portal access (client_id, access_token, last_accessed)
+- `invoice_sequence` — auto-incrementing invoice counter (last_number, produces INV-YYYY-XXXX)
+- `known_failure_patterns` — 6 seeded error patterns with auto-fix strategies for health-monitor
+- `weekly_reports` — weekly self-improvement reports (Sunday 13:00 UTC, also surfaced in Monday brief)
+- `nexus_improvements` (new columns: fix_confidence, fix_verified, fix_verified_at, post_fix_error_count, rollback_triggered)
 
 ### Project categories:
 - `platform` — core businesses (Nexus, VA Company)
@@ -210,7 +214,8 @@ Then productized and sold to other multi-business operators.
 ### System:
 - `nexus status` — what's in dev, improvement queue, function health
 - `nexus audit` — comprehensive self-assessment with health score (0-100)
-- `approve` — merge current dev improvement to main (content-based, conflict-proof)
+- `nexus heal` — trigger health-monitor immediately (on-demand self-heal cycle)
+- `approve` — merge current dev improvement to main (content-based, conflict-proof) + schedules 1hr verification reminder
 - `reject` — discard dev improvement, reset dev to main
 
 ---
@@ -311,14 +316,16 @@ You reply "reject":
 - ✅ Nexus Abilities V2 — 19 new commands (client intelligence, document generation, sales/marketing, knowledge base)
 - ✅ generated_docs + knowledge_base tables live
 - ✅ Auto-fix deployed self-improvement to provision.ts (usage analytics)
+- ✅ Abilities V2 fixes — brain dump summary, invoice sequence, status update, documents page
+- ✅ Self-healing final push — pattern detection, confidence scoring, fix verification, weekly reports, nexus heal, rollback alerts
 
 **NEXT:**
-1. Test V2 abilities via Telegram (see test suite in spec)
-2. Schedule dedicated scoping call with Kevin Cantwell
-3. Brian's lead system — generate-queue + call cadence working, needs tuning
-4. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-5. Add Gmail secrets to enable email sending
-6. Dump session summary to Nexus via Telegram
+1. Schedule dedicated scoping call with Kevin Cantwell
+2. Brian's lead system — generate-queue + call cadence working, needs tuning
+3. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
+4. Add Gmail secrets to enable email sending
+5. Dump session summary to Nexus via Telegram
+6. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. Auto-fix needs to be trained to NOT strip V2 abilities when fixing the chat function. Consider adding a note in the auto-fix prompt about preserving existing handlers.
 
 ---
 
