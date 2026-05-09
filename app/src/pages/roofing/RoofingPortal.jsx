@@ -53,8 +53,15 @@ export default function RoofingPortal() {
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return
-    await supabase.from('job_messages').insert({ job_id: job.id, sender: 'homeowner', message: newMessage })
+    const msg = newMessage
+    await supabase.from('job_messages').insert({ job_id: job.id, sender: 'homeowner', message: msg })
     setNewMessage('')
+    // Fire-and-forget Telegram notification to contractor
+    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ action: 'notify_contractor', job_id: job.id, data: { message: msg } }),
+    })
     loadPortal()
   }
 

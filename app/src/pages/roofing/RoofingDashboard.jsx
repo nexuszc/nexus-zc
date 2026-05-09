@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Link } from 'react-router-dom'
+import { useContractor } from '../../context/ContractorContext'
 
 const STATUS_COLORS = {
   lead: 'bg-gray-700 text-gray-300',
@@ -16,26 +17,28 @@ const STATUS_COLORS = {
 }
 
 export default function RoofingDashboard() {
+  const { contractorClientId } = useContractor()
   const [jobs, setJobs] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('roofing_jobs')
-      .select('*, clients(name, brand_name)')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setJobs(data || [])
-        const s = {
-          total: data?.length || 0,
-          active: data?.filter(j => !['paid', 'cancelled'].includes(j.status)).length || 0,
-          revenue: data?.reduce((acc, j) => acc + (j.contract_amount || 0), 0) || 0,
-          collected: data?.reduce((acc, j) => acc + (j.amount_paid || 0), 0) || 0,
-        }
-        setStats(s)
-        setLoading(false)
-      })
-  }, [])
+    if (contractorClientId === undefined) return
+    let query = supabase.from('roofing_jobs').select('*, clients(name, brand_name)').order('created_at', { ascending: false })
+    if (contractorClientId) query = query.eq('client_id', contractorClientId)
+
+    query.then(({ data }) => {
+      setJobs(data || [])
+      const s = {
+        total: data?.length || 0,
+        active: data?.filter(j => !['paid', 'cancelled'].includes(j.status)).length || 0,
+        revenue: data?.reduce((acc, j) => acc + (j.contract_amount || 0), 0) || 0,
+        collected: data?.reduce((acc, j) => acc + (j.amount_paid || 0), 0) || 0,
+      }
+      setStats(s)
+      setLoading(false)
+    })
+  }, [contractorClientId])
 
   if (loading) return <p className="text-gray-400">Loading...</p>
 

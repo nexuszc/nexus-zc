@@ -184,6 +184,66 @@ Friendly but professional. No jargon.`;
       return new Response(JSON.stringify({ ok: true, summary: res?.content?.[0]?.text || "" }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
 
+    case "supplement_request": {
+      const { data: job } = await supabase.from("roofing_jobs").select("*, clients(name, brand_name)").eq("id", job_id).single();
+      if (!job) return new Response(JSON.stringify({ error: "Job not found" }), { status: 404 });
+
+      const prompt = `You are a roofing contractor writing a supplement request to an insurance adjuster.
+
+Job details:
+- Homeowner: ${job.homeowner_name}
+- Property: ${job.property_address}
+- Claim number: ${job.claim_number || "TBD"}
+- Adjuster: ${job.adjuster_name || "To Whom It May Concern"}
+- Roof size: ${job.roof_size_squares || "TBD"} squares
+- Material: ${job.material_type}
+- Original estimate: $${job.estimate_amount || "TBD"}
+- Contractor: ${job.clients?.brand_name || job.clients?.name}
+
+Write a professional supplement request letter asking for additional coverage for:
+1. Code upgrades (ice & water shield, drip edge, permits)
+2. Tear-off and disposal
+3. Decking replacement if needed
+4. Overhead and profit (O&P at industry standard 20%)
+
+Format as a formal business letter. Be specific with line items and costs.`;
+
+      const res = await callClaude(prompt, 1500);
+      const content = res?.content?.[0]?.text || "";
+
+      await supabase.from("job_documents").insert({
+        job_id,
+        doc_type: "supplement_request",
+        title: `Supplement Request — ${job.claim_number || job.homeowner_name}`,
+        content,
+      });
+
+      return new Response(JSON.stringify({ ok: true, content }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    case "notify_contractor": {
+      const { data: job } = await supabase.from("roofing_jobs").select("*, clients(name, brand_name, telegram_chat_id)").eq("id", job_id).single();
+      if (!job) return new Response(JSON.stringify({ error: "Job not found" }), { status: 404 });
+
+      if (!job.clients?.telegram_chat_id) {
+        return new Response(JSON.stringify({ ok: true, skipped: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+
+      const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+      const msg = `🏠 New message from homeowner\n\n` +
+        `Job: ${job.homeowner_name} — ${job.property_address}\n` +
+        `Message: ${data?.message || "(no message)"}\n\n` +
+        `Reply at: https://app.nexuszc.com/roofing/jobs/${job_id}`;
+
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: job.clients.telegram_chat_id, text: msg }),
+      });
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
     default:
       return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }

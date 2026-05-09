@@ -1,32 +1,60 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useContractor } from '../../context/ContractorContext'
 
 const STATUSES = ['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection','complete','invoiced','paid']
+const CLAIM_STATUSES = ['filed','adjuster_scheduled','approved','supplements_pending','paid']
 
 export default function RoofingJobDetail() {
   const { id } = useParams()
+  const { contractorClientId } = useContractor()
   const [job, setJob] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [messages, setMessages] = useState([])
   const [docs, setDocs] = useState([])
+  const [photos, setPhotos] = useState([])
+  const [crew, setCrew] = useState([])
+  const [crewMembers, setCrewMembers] = useState([])
   const [newMessage, setNewMessage] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [generating, setGenerating] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [claimForm, setClaimForm] = useState({})
 
   const load = async () => {
-    const [{ data: j }, { data: t }, { data: m }, { data: d }] = await Promise.all([
+    const [{ data: j }, { data: t }, { data: m }, { data: d }, { data: p }, { data: ca }] = await Promise.all([
       supabase.from('roofing_jobs').select('*, clients(name, brand_name, brand_color, phone)').eq('id', id).single(),
       supabase.from('job_timeline').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_messages').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_documents').select('*').eq('job_id', id).order('created_at'),
+      supabase.from('job_photos').select('*').eq('job_id', id).order('created_at'),
+      supabase.from('crew_assignments').select('*').eq('job_id', id).order('created_at'),
     ])
-    setJob(j); setTimeline(t || []); setMessages(m || []); setDocs(d || [])
+    setJob(j)
+    setTimeline(t || [])
+    setMessages(m || [])
+    setDocs(d || [])
+    setPhotos(p || [])
+    setCrew(ca || [])
+    if (j) setClaimForm({
+      claim_number: j.claim_number || '',
+      adjuster_name: j.adjuster_name || '',
+      adjuster_phone: j.adjuster_phone || '',
+      claim_status: j.claim_status || 'filed',
+    })
     setLoading(false)
   }
 
+  const loadCrewMembers = async () => {
+    if (!contractorClientId) return
+    const { data } = await supabase.from('crew_members').select('*').eq('client_id', contractorClientId).eq('active', true)
+    setCrewMembers(data || [])
+  }
+
   useEffect(() => { load() }, [id])
+  useEffect(() => { loadCrewMembers() }, [contractorClientId])
 
   const updateStatus = async (status) => {
     await supabase.from('roofing_jobs').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
@@ -54,6 +82,41 @@ export default function RoofingJobDetail() {
     load()
   }
 
+  const uploadPhotos = async (e) => {
+    const files = Array.from(e.target.files)
+    if (!files.length) return
+    setUploading(true)
+    for (const file of files) {
+      const path = `${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { data: uploadData, error } = await supabase.storage.from('job-photos').upload(path, file)
+      if (!error && uploadData) {
+        const { data: { publicUrl } } = supabase.storage.from('job-photos').getPublicUrl(path)
+        await supabase.from('job_photos').insert({ job_id: id, photo_url: publicUrl, phase: 'before', uploaded_by: 'contractor' })
+      }
+    }
+    setUploading(false)
+    load()
+  }
+
+  const saveClaimInfo = async () => {
+    await supabase.from('roofing_jobs').update({
+      ...claimForm,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+    load()
+  }
+
+  const assignCrew = async (memberId) => {
+    const member = crewMembers.find(m => m.id === memberId)
+    if (!member) return
+    await supabase.from('crew_assignments').insert({
+      job_id: id,
+      crew_lead: member.name,
+      scheduled_date: job.estimated_start_date || null,
+    })
+    load()
+  }
+
   const copyPortalLink = () => {
     const url = `${window.location.origin}/roofing/portal/${job.portal_token}`
     navigator.clipboard.writeText(url)
@@ -63,7 +126,14 @@ export default function RoofingJobDetail() {
   if (loading) return <p className="text-gray-400">Loading...</p>
   if (!job) return <p className="text-gray-400">Job not found</p>
 
-  const tabs = ['overview', 'timeline', 'documents', 'messages']
+  const tabs = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'timeline', label: 'Timeline' },
+    { id: 'photos', label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
+    { id: 'documents', label: `Docs${docs.length ? ` (${docs.length})` : ''}` },
+    { id: 'messages', label: `Messages${messages.filter(m => !m.read && m.sender === 'homeowner').length > 0 ? ' 🔴' : ''}` },
+    { id: 'crew', label: 'Crew' },
+  ]
 
   return (
     <div className="max-w-3xl">
@@ -97,11 +167,11 @@ export default function RoofingJobDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-900 rounded-lg p-1">
+      <div className="flex gap-1 mb-4 bg-gray-900 rounded-lg p-1 overflow-x-auto">
         {tabs.map(t => (
-          <button key={t} onClick={() => setActiveTab(t)}
-            className={`flex-1 py-1.5 rounded text-sm transition-colors ${activeTab === t ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded text-xs transition-colors ${activeTab === t.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}>
+            {t.label}
           </button>
         ))}
       </div>
@@ -125,7 +195,7 @@ export default function RoofingJobDetail() {
             ))}
           </div>
 
-          {/* AI Actions */}
+          {/* AI document generation */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-400 font-semibold uppercase mb-3">Generate Documents</p>
             <div className="flex gap-2 flex-wrap">
@@ -142,6 +212,50 @@ export default function RoofingJobDetail() {
               ))}
             </div>
           </div>
+
+          {/* Insurance claim section */}
+          {job.insurance_claim && (
+            <div className="bg-gray-900 border border-orange-900/30 rounded-xl p-4">
+              <p className="text-xs text-orange-400 font-semibold uppercase mb-3">🏛️ Insurance Claim</p>
+
+              {/* Claim status stepper */}
+              <div className="flex gap-1 mb-4 overflow-x-auto">
+                {CLAIM_STATUSES.map(s => (
+                  <button key={s}
+                    onClick={() => setClaimForm(p => ({ ...p, claim_status: s }))}
+                    className={`flex-shrink-0 px-2 py-1 rounded text-xs transition-colors ${claimForm.claim_status === s ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                    {s.replace(/_/g, ' ')}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                {[
+                  { key: 'claim_number', label: 'Claim Number' },
+                  { key: 'adjuster_name', label: 'Adjuster Name' },
+                  { key: 'adjuster_phone', label: 'Adjuster Phone' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="block text-xs text-gray-400 mb-1">{f.label}</label>
+                    <input value={claimForm[f.key] || ''} onChange={e => setClaimForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm outline-none focus:border-orange-500" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={saveClaimInfo}
+                  className="bg-orange-600 hover:bg-orange-500 text-white rounded px-3 py-2 text-sm transition-colors">
+                  Save Claim Info
+                </button>
+                <button onClick={() => generateDoc('supplement_request')}
+                  disabled={generating === 'supplement_request'}
+                  className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white rounded px-3 py-2 text-sm transition-colors">
+                  {generating === 'supplement_request' ? 'Generating...' : '📝 Generate Supplement Request'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -161,6 +275,41 @@ export default function RoofingJobDetail() {
             </div>
           ))}
           {!timeline.length && <p className="text-gray-500 text-center py-8">No timeline yet.</p>}
+        </div>
+      )}
+
+      {/* PHOTOS */}
+      {activeTab === 'photos' && (
+        <div className="space-y-4">
+          {/* Upload */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <p className="text-xs text-gray-400 font-semibold uppercase mb-3">Upload Photos</p>
+            <label className={`flex items-center justify-center gap-2 border-2 border-dashed border-gray-700 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <input type="file" accept="image/*" multiple onChange={uploadPhotos} disabled={uploading} className="hidden" />
+              <span className="text-gray-400 text-sm">{uploading ? '⏳ Uploading...' : '📷 Click to upload photos'}</span>
+            </label>
+          </div>
+
+          {/* Photo grid */}
+          {['before', 'during', 'after', 'damage', 'material'].map(phase => {
+            const phasePhotos = photos.filter(p => p.phase === phase)
+            if (!phasePhotos.length) return null
+            return (
+              <div key={phase}>
+                <p className="text-xs text-gray-400 font-semibold uppercase mb-2">{phase}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {phasePhotos.map(p => (
+                    <div key={p.id} className="aspect-square rounded-lg overflow-hidden bg-gray-800">
+                      <img src={p.photo_url} alt={p.caption || phase} className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {!photos.length && !uploading && (
+            <p className="text-gray-500 text-center py-8">No photos yet. Upload some above.</p>
+          )}
         </div>
       )}
 
@@ -203,6 +352,55 @@ export default function RoofingJobDetail() {
               className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500" />
             <button onClick={sendMessage} className="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2 text-sm">Send</button>
           </div>
+        </div>
+      )}
+
+      {/* CREW */}
+      {activeTab === 'crew' && (
+        <div className="space-y-4">
+          {/* Assigned crew */}
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase mb-2">Assigned to this job</p>
+            {crew.length ? (
+              <div className="space-y-2">
+                {crew.map(a => (
+                  <div key={a.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-white text-sm font-medium">{a.crew_lead}</p>
+                      {a.scheduled_date && <p className="text-gray-500 text-xs mt-0.5">Scheduled: {a.scheduled_date}</p>}
+                      {a.crew_size > 1 && <p className="text-gray-500 text-xs">Crew size: {a.crew_size}</p>}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${a.completed ? 'bg-green-900/40 text-green-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                      {a.completed ? 'Complete' : 'Scheduled'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">No crew assigned yet.</p>
+            )}
+          </div>
+
+          {/* Assign from roster */}
+          {crewMembers.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-400 font-semibold uppercase mb-2">Assign crew member</p>
+              <div className="flex gap-2 flex-wrap">
+                {crewMembers.map(m => (
+                  <button key={m.id} onClick={() => assignCrew(m.id)}
+                    className="bg-gray-800 hover:bg-gray-700 text-white rounded px-3 py-2 text-sm transition-colors">
+                    + {m.name} ({m.role})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!crewMembers.length && (
+            <p className="text-gray-500 text-sm">
+              No crew members in roster. <a href="/roofing/crew" className="text-blue-400">Add crew →</a>
+            </p>
+          )}
         </div>
       )}
     </div>

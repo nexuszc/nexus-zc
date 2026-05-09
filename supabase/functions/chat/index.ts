@@ -1361,6 +1361,107 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING COMMANDS
+    // ================================================================
+    if (msgLower === "roofing jobs" || msgLower === "roofing summary") {
+      const start = Date.now();
+      try {
+        const { data: jobs } = await supabase
+          .from("roofing_jobs")
+          .select("id, homeowner_name, property_address, status, contract_amount, job_type, clients(name, brand_name)")
+          .order("created_at", { ascending: false });
+
+        if (msgLower === "roofing summary") {
+          const total = jobs?.length || 0;
+          const active = jobs?.filter((j: any) => !["paid", "cancelled"].includes(j.status)).length || 0;
+          const value = jobs?.reduce((acc: number, j: any) => acc + (j.contract_amount || 0), 0) || 0;
+          const byStatus = (jobs || []).reduce((acc: any, j: any) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc; }, {});
+          const statusLines = Object.entries(byStatus).map(([s, c]) => `• ${s.replace(/_/g, " ")}: ${c}`).join("\n");
+          await logUsage(supabase, "roofing_summary", true, Date.now() - start, channel);
+          return earlyReturn(`🏠 ROOFING OS SUMMARY\n\nTotal jobs: ${total}\nActive: ${active}\nContract value: $${value.toLocaleString()}\n\nPIPELINE:\n${statusLines || "No jobs yet"}`);
+        }
+
+        const active = (jobs || []).filter((j: any) => !["paid", "cancelled"].includes(j.status));
+        const lines = active.map((j: any) =>
+          `• ${j.homeowner_name} — ${j.property_address}\n  ${j.status.replace(/_/g, " ")}${j.contract_amount ? ` · $${j.contract_amount.toLocaleString()}` : ""}\n  ID: ${j.id.slice(0, 8)}`
+        ).join("\n\n");
+        await logUsage(supabase, "roofing_jobs", true, Date.now() - start, channel);
+        return earlyReturn(`🏠 ACTIVE ROOFING JOBS (${active.length})\n\n${lines || "No active jobs"}`);
+      } catch (err: any) {
+        await logUsage(supabase, "roofing_jobs", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Roofing jobs failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("roofing job:")) {
+      const start = Date.now();
+      const jobId = message.slice(12).trim();
+      try {
+        const { data: job } = await supabase
+          .from("roofing_jobs")
+          .select("*, clients(name, brand_name)")
+          .or(`id.eq.${jobId},id.ilike.${jobId}%`)
+          .single();
+        if (!job) return earlyReturn(`❌ Job not found: ${jobId}`);
+        const msg =
+          `🏠 JOB: ${job.homeowner_name}\n` +
+          `Address: ${job.property_address}\n` +
+          `Status: ${job.status.replace(/_/g, " ")}\n` +
+          `Type: ${job.job_type?.replace(/_/g, " ")}\n` +
+          `Contract: ${job.contract_amount ? `$${job.contract_amount.toLocaleString()}` : "not set"}\n` +
+          `Start: ${job.estimated_start_date || "TBD"}\n` +
+          `Insurance: ${job.insurance_claim ? `Claim ${job.claim_number || "filed"}` : "No"}\n` +
+          `Portal: app.nexuszc.com/roofing/portal/${job.portal_token}`;
+        await logUsage(supabase, "roofing_job", true, Date.now() - start, channel);
+        return earlyReturn(msg);
+      } catch (err: any) {
+        await logUsage(supabase, "roofing_job", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Job lookup failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("roofing new:")) {
+      const start = Date.now();
+      const parts = message.slice(12).split("|").map((p: string) => p.trim());
+      const homeownerName = parts[0];
+      const address = parts.find((p: string) => p.toLowerCase().startsWith("address:"))?.slice(8).trim() || "";
+      const contractorName = parts.find((p: string) => p.toLowerCase().startsWith("contractor:"))?.slice(11).trim() || "";
+      try {
+        const { data: client } = await supabase
+          .from("clients").select("id, name").ilike("name", `%${contractorName}%`).limit(1).maybeSingle();
+        const { data: job } = await supabase.from("roofing_jobs").insert({
+          homeowner_name: homeownerName,
+          property_address: address || "Address TBD",
+          client_id: client?.id || null,
+        }).select().single();
+        await logUsage(supabase, "roofing_new", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Roofing job created\n\nHomeowner: ${homeownerName}\nAddress: ${address || "TBD"}\nContractor: ${client?.name || "unassigned"}\nID: ${job.id}\nPortal: app.nexuszc.com/roofing/portal/${job.portal_token}`);
+      } catch (err: any) {
+        await logUsage(supabase, "roofing_new", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Job creation failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("roofing status:")) {
+      const start = Date.now();
+      const rest = message.slice(15);
+      const jobIdPart = rest.split("|")[0].trim();
+      const newStatus = rest.split("|").find((p: string) => p.toLowerCase().includes("status:"))?.split(":").slice(1).join(":").trim() || "";
+      try {
+        const { data: job } = await supabase
+          .from("roofing_jobs").select("id, homeowner_name").or(`id.eq.${jobIdPart},id.ilike.${jobIdPart}%`).single();
+        if (!job) return earlyReturn(`❌ Job not found: ${jobIdPart}`);
+        if (!newStatus) return earlyReturn(`❌ Format: roofing status: [job_id] | status: [new_status]`);
+        await supabase.from("roofing_jobs").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", job.id);
+        await logUsage(supabase, "roofing_status", true, Date.now() - start, channel);
+        return earlyReturn(`✅ ${job.homeowner_name} → ${newStatus.replace(/_/g, " ")}`);
+      } catch (err: any) {
+        await logUsage(supabase, "roofing_status", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Status update failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase

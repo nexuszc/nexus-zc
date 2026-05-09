@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400 });
   }
 
-  const { client_id, telegram_chat_id } = requestBody;
+  const { client_id, telegram_chat_id, contractor_email } = requestBody;
 
   if (!client_id) {
     // AUTO-FIX: Log analytics for missing client_id
@@ -164,10 +164,19 @@ Deno.serve(async (req) => {
     provision_status: "provisioning",
   }).eq("id", client_id);
 
+  // If roofing contractor with email, invite via contractor-auth
+  if (client.deal_type === "roofing" && contractor_email) {
+    await fetch(`${SUPABASE_URL}/functions/v1/contractor-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ action: "invite", email: contractor_email, client_id, role: "owner" }),
+    }).catch(err => console.error("Contractor invite failed:", err));
+  }
+
   if (telegram_chat_id) {
     await sendTelegram(telegram_chat_id, `⚙️ Provisioning ${client.name}...\nCreating site at ${subdomain}`);
   }
-  
+
   // AUTO-FIX: Notify user if system is degraded
   if (healthStatus.degraded && telegram_chat_id) {
     await sendTelegram(telegram_chat_id, `⚠️ System is experiencing elevated error rates. Provisioning may take longer than usual.`);
