@@ -78,7 +78,7 @@ serve(async (req) => {
     const earlyReturn = async (reply: string) => {
       const LIMIT = 4000;
       const tgMessage = reply.length > LIMIT
-        ? reply.slice(0, LIMIT) + "... (truncated — full version saved to Nexus memory)"
+        ? reply.slice(0, LIMIT) + "... (truncated Ã¢ÂÂ full version saved to Nexus memory)"
         : reply;
       if (tgChatId && TELEGRAM_BOT_TOKEN) await sendTelegramWithRetry(TELEGRAM_BOT_TOKEN, tgChatId, tgMessage);
       return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -96,13 +96,13 @@ serve(async (req) => {
           .from("clients").insert({ name: clientName, status: "active" }).select().single();
         if (error) {
           await logUsage(supabase, "new client", false, Date.now() - start, channel);
-          return earlyReturn(`❌ Failed to create client: ${error.message}`);
+          return earlyReturn(`Ã¢ÂÂ Failed to create client: ${error.message}`);
         }
         await logUsage(supabase, "new client", true, Date.now() - start, channel);
-        return earlyReturn(`✅ Client brain created for ${clientName} (ID: ${newClient.id})\n\nSet up their context:\n• "client context: ${clientName} | deal: rev_share | offer: [their offer] | goals: [their goals]"\n• "assign va: ${clientName} | va: [VA name]"`);
+        return earlyReturn(`Ã¢ÂÂ Client brain created for ${clientName} (ID: ${newClient.id})\n\nSet up their context:\nÃ¢ÂÂ¢ "client context: ${clientName} | deal: rev_share | offer: [their offer] | goals: [their goals]"\nÃ¢ÂÂ¢ "assign va: ${clientName} | va: [VA name]"`);
       } catch (err: any) {
         await logUsage(supabase, "new client", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed to create client: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed to create client: ${err.message}`);
       }
     }
 
@@ -134,7 +134,7 @@ serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (!client) {
           await logUsage(supabase, "client context", false, Date.now() - start, channel);
-          return earlyReturn(`❌ Client "${clientName}" not found. Create them first with "new client: ${clientName}"`);
+          return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found. Create them first with "new client: ${clientName}"`);
         }
         if (Object.keys(clientFields).length) await supabase.from("clients").update(clientFields).eq("id", client.id);
         if (Object.keys(contextFields).length) {
@@ -143,10 +143,10 @@ serve(async (req) => {
           });
         }
         await logUsage(supabase, "client context", true, Date.now() - start, channel);
-        return earlyReturn(`✅ Context updated for ${clientName}.`);
+        return earlyReturn(`Ã¢ÂÂ Context updated for ${clientName}.`);
       } catch (err: any) {
         await logUsage(supabase, "client context", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Context update failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Context update failed: ${err.message}`);
       }
     }
 
@@ -162,18 +162,18 @@ serve(async (req) => {
           .order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (!client) {
           await logUsage(supabase, "assign va", false, Date.now() - start, channel);
-          return earlyReturn(`❌ Client "${clientName}" not found.`);
+          return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found.`);
         }
         if (!vaName) {
           await logUsage(supabase, "assign va", false, Date.now() - start, channel);
-          return earlyReturn(`❌ VA name required. Format: "assign va: ${clientName} | va: [name]"`);
+          return earlyReturn(`Ã¢ÂÂ VA name required. Format: "assign va: ${clientName} | va: [name]"`);
         }
         await supabase.from("va_assignments").insert({ client_id: client.id, va_name: vaName, va_contact: vaContact || null });
         await logUsage(supabase, "assign va", true, Date.now() - start, channel);
-        return earlyReturn(`✅ ${vaName} assigned to ${clientName}.`);
+        return earlyReturn(`Ã¢ÂÂ ${vaName} assigned to ${clientName}.`);
       } catch (err: any) {
         await logUsage(supabase, "assign va", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Assign VA failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Assign VA failed: ${err.message}`);
       }
     }
 
@@ -204,7 +204,7 @@ serve(async (req) => {
       }
 
       if (client.provision_status === "live") {
-        return earlyReturn(`✅ ${clientName} is already provisioned at https://${client.slug}.nexuszc.com`);
+        return earlyReturn(`Ã¢ÂÂ ${clientName} is already provisioned at https://${client.slug}.nexuszc.com`);
       }
 
       if (about && client) {
@@ -225,11 +225,11 @@ serve(async (req) => {
       });
 
       await logUsage(supabase, "provision", true, Date.now() - start, channel);
-      return earlyReturn(`⚙️ Provisioning ${clientName}...\n\nI'll message you when the site is live. This takes about 60 seconds.`);
+      return earlyReturn(`Ã¢ÂÂÃ¯Â¸Â Provisioning ${clientName}...\n\nI'll message you when the site is live. This takes about 60 seconds.`);
     }
 
     // ================================================================
-    // APPROVE COMMAND — merge dev → main
+    // APPROVE COMMAND Ã¢ÂÂ merge dev Ã¢ÂÂ main
     // ================================================================
     if (msgLower.startsWith("approve:") || msgLower === "approve") {
       const improvementTitle = msgLower.startsWith("approve:") ? message.slice(8).trim() : null;
@@ -239,7 +239,7 @@ serve(async (req) => {
       const { data: improvements } = await query.order("identified_at", { ascending: false }).limit(1);
 
       const improvement = improvements?.[0];
-      if (!improvement) return earlyReturn("❌ No pending dev improvements found to approve.");
+      if (!improvement) return earlyReturn("Ã¢ÂÂ No pending dev improvements found to approve.");
 
       const mergeResult = await mergeDevToMain(improvement.title);
 
@@ -256,21 +256,21 @@ serve(async (req) => {
         if (tgChatId) {
           await supabase.from("reminders").insert({
             chat_id: String(tgChatId),
-            message: `🔍 VERIFICATION CHECK\n\nFix "${improvement.title}" was approved 1 hour ago.\nSend "nexus status" to check if it's working correctly.\nIf things are broken, send "reject" to rollback.`,
+            message: `Ã°ÂÂÂ VERIFICATION CHECK\n\nFix "${improvement.title}" was approved 1 hour ago.\nSend "nexus status" to check if it's working correctly.\nIf things are broken, send "reject" to rollback.`,
             fire_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
           });
         }
 
         await logUsage(supabase, "approve", true, 0, channel);
-        return earlyReturn(`✅ Approved and merged!\n\n"${improvement.title}" is live.\nCloudflare deploys in ~60 seconds.\n\nI'll check back in 1 hour to verify it's working.`);
+        return earlyReturn(`Ã¢ÂÂ Approved and merged!\n\n"${improvement.title}" is live.\nCloudflare deploys in ~60 seconds.\n\nI'll check back in 1 hour to verify it's working.`);
       } else {
         await logUsage(supabase, "approve", false, 0, channel);
-        return earlyReturn(`❌ Merge failed: ${mergeResult.error}\nCheck GitHub for conflicts.`);
+        return earlyReturn(`Ã¢ÂÂ Merge failed: ${mergeResult.error}\nCheck GitHub for conflicts.`);
       }
     }
 
     // ================================================================
-    // REJECT COMMAND — discard dev changes
+    // REJECT COMMAND Ã¢ÂÂ discard dev changes
     // ================================================================
     if (msgLower.startsWith("reject:") || msgLower === "reject") {
       const { data: improvements } = await supabase
@@ -281,7 +281,7 @@ serve(async (req) => {
         .limit(1);
 
       const improvement = improvements?.[0];
-      if (!improvement) return earlyReturn("❌ No pending dev improvements to reject.");
+      if (!improvement) return earlyReturn("Ã¢ÂÂ No pending dev improvements to reject.");
 
       await resetDevToMain();
 
@@ -290,7 +290,7 @@ serve(async (req) => {
         .eq("id", improvement.id);
 
       await logUsage(supabase, "reject", true, 0, channel);
-      return earlyReturn(`🗑️ Rejected "${improvement.title}". Dev branch reset to main.`);
+      return earlyReturn(`Ã°ÂÂÂÃ¯Â¸Â Rejected "${improvement.title}". Dev branch reset to main.`);
     }
 
     // ================================================================
@@ -344,15 +344,15 @@ Be direct, specific, and actionable. Reference actual data from above.`;
         });
 
         await logUsage(supabase, "nexus audit", true, 0, channel);
-        return earlyReturn(`🔍 NEXUS AUDIT\n\n${audit}`);
+        return earlyReturn(`Ã°ÂÂÂ NEXUS AUDIT\n\n${audit}`);
       } catch (err: any) {
         await logUsage(supabase, "nexus audit", false, 0, channel);
-        return earlyReturn(`❌ Audit failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Audit failed: ${err.message}`);
       }
     }
 
     // ================================================================
-    // HEAL COMMAND — trigger health-monitor immediately
+    // HEAL COMMAND Ã¢ÂÂ trigger health-monitor immediately
     // ================================================================
     if (msgLower === "nexus heal" || msgLower === "heal nexus") {
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/health-monitor`, {
@@ -365,7 +365,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
       });
       await logUsage(supabase, "nexus heal", true, 0, channel);
       return earlyReturn(
-        `🔧 NEXUS HEAL TRIGGERED\n\nRunning full health check and improvement cycle now.\nYou'll receive updates via Telegram as issues are identified and fixes are prepared.\n\nSend "nexus status" in 2 minutes to see results.`
+        `Ã°ÂÂÂ§ NEXUS HEAL TRIGGERED\n\nRunning full health check and improvement cycle now.\nYou'll receive updates via Telegram as issues are identified and fixes are prepared.\n\nSend "nexus status" in 2 minutes to see results.`
       );
     }
 
@@ -379,11 +379,11 @@ Be direct, specific, and actionable. Reference actual data from above.`;
         supabase.from("nexus_health").select("function_name, status, error_count").order("checked_at", { ascending: false }).limit(4),
       ]);
 
-      let statusMsg = "🔧 NEXUS STATUS\n\n";
+      let statusMsg = "Ã°ÂÂÂ§ NEXUS STATUS\n\n";
 
       if (inDev?.length) {
         statusMsg += `IN DEV (waiting for approval):\n`;
-        statusMsg += inDev.map((i: any) => `• ${i.title} (~${i.estimated_minutes}min fix)\n  ${i.recommended_fix}`).join("\n") + "\n\n";
+        statusMsg += inDev.map((i: any) => `Ã¢ÂÂ¢ ${i.title} (~${i.estimated_minutes}min fix)\n  ${i.recommended_fix}`).join("\n") + "\n\n";
         statusMsg += `Reply "approve" to push to production or "reject" to discard.\n\n`;
       }
 
@@ -394,7 +394,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
 
       if (recent?.length) {
         statusMsg += `FUNCTION HEALTH:\n`;
-        statusMsg += recent.map((h: any) => `• ${h.function_name}: ${h.status}`).join("\n");
+        statusMsg += recent.map((h: any) => `Ã¢ÂÂ¢ ${h.function_name}: ${h.status}`).join("\n");
       }
 
       if (!inDev?.length && !pending?.length && !recent?.length) {
@@ -411,12 +411,12 @@ Be direct, specific, and actionable. Reference actual data from above.`;
     if (msgLower === "done all") {
       await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open");
       await logUsage(supabase, "done all", true, 0, channel);
-      return earlyReturn(`✅ All tasks marked done.`);
+      return earlyReturn(`Ã¢ÂÂ All tasks marked done.`);
     } else if (msgLower.startsWith("done:")) {
       const taskDesc = message.slice(5).trim();
       await supabase.from("entries").update({ task_status: "done" }).eq("task_status", "open").ilike("content", `%${taskDesc}%`);
       await logUsage(supabase, "done", true, 0, channel);
-      return earlyReturn(`✅ Task marked done: "${taskDesc}"`);
+      return earlyReturn(`Ã¢ÂÂ Task marked done: "${taskDesc}"`);
     }
 
     // ================================================================
@@ -459,10 +459,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "search", true, Date.now() - start, channel);
-        return earlyReturn(`🔍 Search: ${query}\n\n${summary}`);
+        return earlyReturn(`Ã°ÂÂÂ Search: ${query}\n\n${summary}`);
       } catch (err: any) {
         await logUsage(supabase, "search", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Search failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Search failed: ${err.message}`);
       }
     }
 
@@ -481,10 +481,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "summarize", true, Date.now() - start, channel);
-        return earlyReturn(`🔗 Summary of ${url}\n\n${summary}`);
+        return earlyReturn(`Ã°ÂÂÂ Summary of ${url}\n\n${summary}`);
       } catch (err: any) {
         await logUsage(supabase, "summarize", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Summarize failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Summarize failed: ${err.message}`);
       }
     }
 
@@ -506,10 +506,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "draft email", true, Date.now() - start, channel);
-        return earlyReturn(`📧 Email draft to ${to}\nSubject: ${subject}\n\n${draft}\n\n---\nTo send: "send email: ${to} | subject: ${subject} | body: [paste or edit above]"`);
+        return earlyReturn(`Ã°ÂÂÂ§ Email draft to ${to}\nSubject: ${subject}\n\n${draft}\n\n---\nTo send: "send email: ${to} | subject: ${subject} | body: [paste or edit above]"`);
       } catch (err: any) {
         await logUsage(supabase, "draft email", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Draft failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Draft failed: ${err.message}`);
       }
     }
 
@@ -518,7 +518,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
       const GMAIL_CLIENT_ID = Deno.env.get("GMAIL_CLIENT_ID");
       if (!GMAIL_CLIENT_ID) {
         await logUsage(supabase, "send email", false, Date.now() - start, channel);
-        return earlyReturn("⚠️ Gmail not configured yet. Email draft saved to memory. Set up Gmail API keys to enable sending.");
+        return earlyReturn("Ã¢ÂÂ Ã¯Â¸Â Gmail not configured yet. Email draft saved to memory. Set up Gmail API keys to enable sending.");
       }
       const parts = message.slice(11).split("|").map((p: string) => p.trim());
       const to = parts[0];
@@ -533,10 +533,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "send email", result, Date.now() - start, channel);
-        return earlyReturn(result ? `✅ Email sent to ${to}` : `❌ Failed to send email. Check logs.`);
+        return earlyReturn(result ? `Ã¢ÂÂ Email sent to ${to}` : `Ã¢ÂÂ Failed to send email. Check logs.`);
       } catch (err: any) {
         await logUsage(supabase, "send email", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Send failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Send failed: ${err.message}`);
       }
     }
 
@@ -566,10 +566,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, `generate ${docType}`, true, Date.now() - start, channel);
-        return earlyReturn(`📄 ${docType.charAt(0).toUpperCase() + docType.slice(1)}: ${subject}\n\n${doc}`);
+        return earlyReturn(`Ã°ÂÂÂ ${docType.charAt(0).toUpperCase() + docType.slice(1)}: ${subject}\n\n${doc}`);
       } catch (err: any) {
         await logUsage(supabase, `generate ${docType}`, false, Date.now() - start, channel);
-        return earlyReturn(`❌ Document generation failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Document generation failed: ${err.message}`);
       }
     }
 
@@ -582,12 +582,12 @@ Be direct, specific, and actionable. Reference actual data from above.`;
       const reminderText = parts[0];
       const timePart = parts.find((p: string) => p.toLowerCase().startsWith("in:") || p.toLowerCase().startsWith("at:")) || "";
       const fireAt = parseReminderTime(timePart);
-      if (!fireAt) return earlyReturn(`❌ Couldn't parse time. Try: "remind me: [what] | in: 2 hours" or "in: 3 days"`);
+      if (!fireAt) return earlyReturn(`Ã¢ÂÂ Couldn't parse time. Try: "remind me: [what] | in: 2 hours" or "in: 3 days"`);
       const chatId = external_id || "";
       try {
         await supabase.from("reminders").insert({
           chat_id: chatId,
-          message: `⏰ Reminder: ${reminderText}`,
+          message: `Ã¢ÂÂ° Reminder: ${reminderText}`,
           fire_at: fireAt.toISOString(),
         });
         await supabase.from("entries").insert({
@@ -597,10 +597,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "remind me", true, Date.now() - start, channel);
-        return earlyReturn(`⏰ Reminder set: "${reminderText}"\nFires: ${fireAt.toLocaleString("en-US", { timeZone: "America/Denver" })} MT`);
+        return earlyReturn(`Ã¢ÂÂ° Reminder set: "${reminderText}"\nFires: ${fireAt.toLocaleString("en-US", { timeZone: "America/Denver" })} MT`);
       } catch (err: any) {
         await logUsage(supabase, "remind me", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Reminder failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Reminder failed: ${err.message}`);
       }
     }
 
@@ -624,10 +624,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "research", true, Date.now() - start, channel);
-        return earlyReturn(`🧠 Research: ${target}\n\n${research}`);
+        return earlyReturn(`Ã°ÂÂ§Â  Research: ${target}\n\n${research}`);
       } catch (err: any) {
         await logUsage(supabase, "research", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Research failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Research failed: ${err.message}`);
       }
     }
 
@@ -647,10 +647,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "competitors", true, Date.now() - start, channel);
-        return earlyReturn(`⚔️ Competitive Analysis: ${market}\n\n${analysis}`);
+        return earlyReturn(`Ã¢ÂÂÃ¯Â¸Â Competitive Analysis: ${market}\n\n${analysis}`);
       } catch (err: any) {
         await logUsage(supabase, "competitors", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Competitive analysis failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Competitive analysis failed: ${err.message}`);
       }
     }
 
@@ -667,7 +667,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           .ilike("name", `%${clientName}%`)
           .order("created_at", { ascending: false })
           .limit(1).maybeSingle();
-        if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+        if (!client) return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found.`);
         const [{ data: recentEntries }, { data: openTasks }] = await Promise.all([
           supabase.from("entries").select("content, entry_type, created_at, role")
             .eq("client_id", client.id).order("created_at", { ascending: false }).limit(30),
@@ -683,10 +683,10 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           classification_status: "skip",
         });
         await logUsage(supabase, "report", true, Date.now() - start, channel);
-        return earlyReturn(`📊 Client Report: ${client.name}\n\n${report}`);
+        return earlyReturn(`Ã°ÂÂÂ Client Report: ${client.name}\n\n${report}`);
       } catch (err: any) {
         await logUsage(supabase, "report", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Report failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Report failed: ${err.message}`);
       }
     }
 
@@ -704,7 +704,7 @@ Be direct, specific, and actionable. Reference actual data from above.`;
           .order("created_at", { ascending: false })
           .limit(1).maybeSingle();
 
-        if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+        if (!client) return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found.`);
 
         const [{ data: leads }, { data: openTasks }, { data: recentCalls }, { data: recentEntries }] = await Promise.all([
           supabase.from("leads").select("status").eq("client_id", client.id),
@@ -738,7 +738,7 @@ OPEN TASKS: ${(openTasks || []).map((t: any) => t.content.slice(0, 80)).join("; 
 RECENT ACTIVITY: ${(recentEntries || []).map((e: any) => `[${e.role}] ${e.content.slice(0, 100)}`).join("\n") || "none"}
 
 Format as:
-📊 SNAPSHOT: ${client.name}
+Ã°ÂÂÂ SNAPSHOT: ${client.name}
 Status: [one line overall status]
 Pipeline: [lead stats]
 VA Activity: [call summary]
@@ -756,7 +756,7 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(snapshot);
       } catch (err: any) {
         await logUsage(supabase, "client snapshot", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Snapshot failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Snapshot failed: ${err.message}`);
       }
     }
 
@@ -772,7 +772,7 @@ Be specific. Reference actual numbers.` }],
           .eq("task_status", "open")
           .order("created_at", { ascending: true });
 
-        if (!openTasks?.length) return earlyReturn("✅ No open tasks — you're clear.");
+        if (!openTasks?.length) return earlyReturn("Ã¢ÂÂ No open tasks Ã¢ÂÂ you're clear.");
 
         const { data: clients } = await supabase.from("clients").select("id, name, deal_type");
 
@@ -786,7 +786,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 800,
-            messages: [{ role: "user", content: `You are Zach's Chief of Staff. Prioritize these open tasks by urgency and business impact.\n\nTASKS:\n${taskList}\n\nReturn a prioritized list with this format:\n🔴 URGENT (do today):\n1. [task] — [why urgent]\n\n🟡 IMPORTANT (this week):\n2. [task] — [why important]\n\n🟢 QUEUE (when time allows):\n3. [task] — [reasoning]\n\nBe direct. Explain your reasoning briefly.` }],
+            messages: [{ role: "user", content: `You are Zach's Chief of Staff. Prioritize these open tasks by urgency and business impact.\n\nTASKS:\n${taskList}\n\nReturn a prioritized list with this format:\nÃ°ÂÂÂ´ URGENT (do today):\n1. [task] Ã¢ÂÂ [why urgent]\n\nÃ°ÂÂÂ¡ IMPORTANT (this week):\n2. [task] Ã¢ÂÂ [why important]\n\nÃ°ÂÂÂ¢ QUEUE (when time allows):\n3. [task] Ã¢ÂÂ [reasoning]\n\nBe direct. Explain your reasoning briefly.` }],
           }),
         });
         const data = await res.json();
@@ -794,10 +794,10 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `PRIORITIZED TASKS\n\n${prioritized}`, entry_type: "meta", importance: 8, tags: ["tasks", "priority"], classification_status: "skip" });
         await logUsage(supabase, "prioritize tasks", true, Date.now() - start, channel);
-        return earlyReturn(`📋 TASK PRIORITY\n\n${prioritized}`);
+        return earlyReturn(`Ã°ÂÂÂ TASK PRIORITY\n\n${prioritized}`);
       } catch (err: any) {
         await logUsage(supabase, "prioritize tasks", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Prioritization failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Prioritization failed: ${err.message}`);
       }
     }
 
@@ -813,16 +813,16 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 400,
-            messages: [{ role: "user", content: `Give a realistic time and effort estimate for this task from the perspective of Zach Curtis, a multi-venture entrepreneur with AI tools and VAs available.\n\nTASK: ${task}\n\nFormat:\n⏱️ Time estimate: [X hours/days]\n🔧 Effort: [low/medium/high]\n📋 Steps: [3-5 concrete steps]\n⚠️ Risks: [what could slow this down]\n💡 Shortcut: [how to do this faster with AI or VA delegation]` }],
+            messages: [{ role: "user", content: `Give a realistic time and effort estimate for this task from the perspective of Zach Curtis, a multi-venture entrepreneur with AI tools and VAs available.\n\nTASK: ${task}\n\nFormat:\nÃ¢ÂÂ±Ã¯Â¸Â Time estimate: [X hours/days]\nÃ°ÂÂÂ§ Effort: [low/medium/high]\nÃ°ÂÂÂ Steps: [3-5 concrete steps]\nÃ¢ÂÂ Ã¯Â¸Â Risks: [what could slow this down]\nÃ°ÂÂÂ¡ Shortcut: [how to do this faster with AI or VA delegation]` }],
           }),
         });
         const data = await res.json();
         const estimate = data?.content?.[0]?.text || "Could not estimate.";
         await logUsage(supabase, "task estimate", true, Date.now() - start, channel);
-        return earlyReturn(`⏱️ ESTIMATE: ${task}\n\n${estimate}`);
+        return earlyReturn(`Ã¢ÂÂ±Ã¯Â¸Â ESTIMATE: ${task}\n\n${estimate}`);
       } catch (err: any) {
         await logUsage(supabase, "task estimate", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Estimate failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Estimate failed: ${err.message}`);
       }
     }
 
@@ -848,7 +848,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 1000,
-            messages: [{ role: "user", content: `Create a focused sprint plan for: ${timeframe}\n\nACTIVE CLIENTS: ${clientList}\nOPEN TASKS:\n${taskList}\nNEXUS IMPROVEMENTS QUEUED:\n${improvementList}\n\nGenerate a realistic sprint plan. Format:\n🎯 SPRINT: ${timeframe}\nGoal: [one sentence — what winning looks like]\n\nDAY BY DAY:\n[Day 1]: [3-4 specific actions]\n[Day 2]: [3-4 specific actions]\n...\n\nDELEGATE TO VA:\n[tasks VAs should handle]\n\nDELEGATE TO NEXUS:\n[tasks Nexus auto-handles]\n\nNOT THIS SPRINT:\n[what's intentionally deferred]\n\nBe specific and realistic. Zach works in focused bursts.` }],
+            messages: [{ role: "user", content: `Create a focused sprint plan for: ${timeframe}\n\nACTIVE CLIENTS: ${clientList}\nOPEN TASKS:\n${taskList}\nNEXUS IMPROVEMENTS QUEUED:\n${improvementList}\n\nGenerate a realistic sprint plan. Format:\nÃ°ÂÂÂ¯ SPRINT: ${timeframe}\nGoal: [one sentence Ã¢ÂÂ what winning looks like]\n\nDAY BY DAY:\n[Day 1]: [3-4 specific actions]\n[Day 2]: [3-4 specific actions]\n...\n\nDELEGATE TO VA:\n[tasks VAs should handle]\n\nDELEGATE TO NEXUS:\n[tasks Nexus auto-handles]\n\nNOT THIS SPRINT:\n[what's intentionally deferred]\n\nBe specific and realistic. Zach works in focused bursts.` }],
           }),
         });
         const data = await res.json();
@@ -856,10 +856,10 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `SPRINT PLAN: ${timeframe}\n\n${plan}`, entry_type: "decision", importance: 9, tags: ["sprint", "planning"], classification_status: "skip" });
         await logUsage(supabase, "sprint plan", true, Date.now() - start, channel);
-        return earlyReturn(`🎯 SPRINT PLAN\n\n${plan}`);
+        return earlyReturn(`Ã°ÂÂÂ¯ SPRINT PLAN\n\n${plan}`);
       } catch (err: any) {
         await logUsage(supabase, "sprint plan", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Sprint plan failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Sprint plan failed: ${err.message}`);
       }
     }
 
@@ -894,13 +894,13 @@ Be specific. Reference actual numbers.` }],
         const data = await res.json();
         const invoice = data?.content?.[0]?.text || "Could not generate invoice.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "invoice", client_id: client?.id || null, title: `Invoice — ${clientName} — ${amount}`, content: invoice });
+        await supabase.from("generated_docs").insert({ doc_type: "invoice", client_id: client?.id || null, title: `Invoice Ã¢ÂÂ ${clientName} Ã¢ÂÂ ${amount}`, content: invoice });
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `INVOICE: ${clientName}\n\n${invoice}`, entry_type: "note", importance: 9, tags: ["invoice", "billing"], client_id: client?.id || null, classification_status: "skip" });
         await logUsage(supabase, "generate invoice", true, Date.now() - start, channel);
-        return earlyReturn(`🧾 INVOICE GENERATED\n\n${invoice}`);
+        return earlyReturn(`Ã°ÂÂ§Â¾ INVOICE GENERATED\n\n${invoice}`);
       } catch (err: any) {
         await logUsage(supabase, "generate invoice", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Invoice failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Invoice failed: ${err.message}`);
       }
     }
 
@@ -927,13 +927,13 @@ Be specific. Reference actual numbers.` }],
         const data = await res.json();
         const contract = data?.content?.[0]?.text || "Could not generate contract.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "contract", client_id: client?.id || null, title: `Contract — ${clientName} — ${forServices}`, content: contract });
+        await supabase.from("generated_docs").insert({ doc_type: "contract", client_id: client?.id || null, title: `Contract Ã¢ÂÂ ${clientName} Ã¢ÂÂ ${forServices}`, content: contract });
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `CONTRACT: ${clientName}\n\n${contract}`, entry_type: "decision", importance: 9, tags: ["contract", "legal"], client_id: client?.id || null, classification_status: "skip" });
         await logUsage(supabase, "generate contract", true, Date.now() - start, channel);
-        return earlyReturn(`📄 CONTRACT GENERATED\n\n${contract}`);
+        return earlyReturn(`Ã°ÂÂÂ CONTRACT GENERATED\n\n${contract}`);
       } catch (err: any) {
         await logUsage(supabase, "generate contract", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Contract failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Contract failed: ${err.message}`);
       }
     }
 
@@ -957,7 +957,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 600,
-            messages: [{ role: "user", content: `Generate a smart follow-up message for ${target}.\n\nCONTEXT FROM NEXUS MEMORY:\n${history || "No history found"}\n\nCLIENT CONTEXT: ${ctx ? `${ctx.core_offer || ""} | Goals: ${ctx.goals || ""}` : "N/A"}\n\nWrite a natural, specific follow-up message. Reference actual context from memory. Not generic. Format:\n\nSUBJECT: [if email]\nMESSAGE:\n[the follow-up]\n\nSEND VIA: [recommended channel — text/email/call]\nBEST TIME: [recommended time]\nKEY POINT: [what you most need from this follow-up]` }],
+            messages: [{ role: "user", content: `Generate a smart follow-up message for ${target}.\n\nCONTEXT FROM NEXUS MEMORY:\n${history || "No history found"}\n\nCLIENT CONTEXT: ${ctx ? `${ctx.core_offer || ""} | Goals: ${ctx.goals || ""}` : "N/A"}\n\nWrite a natural, specific follow-up message. Reference actual context from memory. Not generic. Format:\n\nSUBJECT: [if email]\nMESSAGE:\n[the follow-up]\n\nSEND VIA: [recommended channel Ã¢ÂÂ text/email/call]\nBEST TIME: [recommended time]\nKEY POINT: [what you most need from this follow-up]` }],
           }),
         });
         const data = await res.json();
@@ -965,10 +965,10 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `FOLLOW UP: ${target}\n\n${followUp}`, entry_type: "note", importance: 8, tags: ["follow-up", "communication"], client_id: client?.id || null, classification_status: "skip" });
         await logUsage(supabase, "follow up", true, Date.now() - start, channel);
-        return earlyReturn(`📬 FOLLOW UP: ${target}\n\n${followUp}`);
+        return earlyReturn(`Ã°ÂÂÂ¬ FOLLOW UP: ${target}\n\n${followUp}`);
       } catch (err: any) {
         await logUsage(supabase, "follow up", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Follow-up failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Follow-up failed: ${err.message}`);
       }
     }
 
@@ -980,7 +980,7 @@ Be specific. Reference actual numbers.` }],
       const clientName = message.slice(14).trim();
       try {
         const { data: client } = await supabase.from("clients").select("*, client_context(*), va_assignments(*)").ilike("name", `%${clientName}%`).limit(1).maybeSingle();
-        if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+        if (!client) return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found.`);
 
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const [{ data: entries }, { data: calls }, { data: leads }] = await Promise.all([
@@ -997,18 +997,18 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 800,
-            messages: [{ role: "user", content: `Generate a weekly progress digest for ${client.name} to send to the client.\n\nThis week's activity:\n- Calls: ${JSON.stringify(callSummary)}\n- Lead pipeline: ${JSON.stringify(leadSummary)}\n- VA: ${client.va_assignments?.find((v: any) => v.status === "active")?.va_name || "none"}\n- Key entries: ${(entries || []).slice(0, 5).map((e: any) => e.content.slice(0, 100)).join("; ")}\n\nWrite a professional weekly update FROM Zach/Nexus ZC TO the client. Highlight wins, show activity, preview next week. Keep it positive and professional. They should feel well-served.\n\nFormat:\nSubject: Weekly Update — ${client.name} — Week of ${new Date().toLocaleDateString()}\n\n[email body]` }],
+            messages: [{ role: "user", content: `Generate a weekly progress digest for ${client.name} to send to the client.\n\nThis week's activity:\n- Calls: ${JSON.stringify(callSummary)}\n- Lead pipeline: ${JSON.stringify(leadSummary)}\n- VA: ${client.va_assignments?.find((v: any) => v.status === "active")?.va_name || "none"}\n- Key entries: ${(entries || []).slice(0, 5).map((e: any) => e.content.slice(0, 100)).join("; ")}\n\nWrite a professional weekly update FROM Zach/Nexus ZC TO the client. Highlight wins, show activity, preview next week. Keep it positive and professional. They should feel well-served.\n\nFormat:\nSubject: Weekly Update Ã¢ÂÂ ${client.name} Ã¢ÂÂ Week of ${new Date().toLocaleDateString()}\n\n[email body]` }],
           }),
         });
         const data = await res.json();
         const digest = data?.content?.[0]?.text || "Could not generate digest.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "weekly_digest", client_id: client.id, title: `Weekly Digest — ${client.name}`, content: digest });
+        await supabase.from("generated_docs").insert({ doc_type: "weekly_digest", client_id: client.id, title: `Weekly Digest Ã¢ÂÂ ${client.name}`, content: digest });
         await logUsage(supabase, "weekly digest", true, Date.now() - start, channel);
-        return earlyReturn(`📊 WEEKLY DIGEST: ${client.name}\n\n${digest}`);
+        return earlyReturn(`Ã°ÂÂÂ WEEKLY DIGEST: ${client.name}\n\n${digest}`);
       } catch (err: any) {
         await logUsage(supabase, "weekly digest", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Digest failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Digest failed: ${err.message}`);
       }
     }
 
@@ -1032,7 +1032,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 600,
-            messages: [{ role: "user", content: `Generate a concise project status update for: ${subject}\n\nCONTEXT:\n${(recentEntries || []).map((e: any) => e.content.slice(0, 100)).join("\n")}\nCLIENT: ${client ? `${client.name} — ${client.deal_type}` : "N/A"}\n\nFormat:\n📊 STATUS: ${subject}\nAs of: ${new Date().toLocaleDateString()}\n\nWHAT'S DONE: [completed items]\nIN PROGRESS: [active work]\nBLOCKERS: [what's stuck]\nNEXT: [immediate next steps]\nOVERALL: [one sentence health assessment]` }],
+            messages: [{ role: "user", content: `Generate a concise project status update for: ${subject}\n\nCONTEXT:\n${(recentEntries || []).map((e: any) => e.content.slice(0, 100)).join("\n")}\nCLIENT: ${client ? `${client.name} Ã¢ÂÂ ${client.deal_type}` : "N/A"}\n\nFormat:\nÃ°ÂÂÂ STATUS: ${subject}\nAs of: ${new Date().toLocaleDateString()}\n\nWHAT'S DONE: [completed items]\nIN PROGRESS: [active work]\nBLOCKERS: [what's stuck]\nNEXT: [immediate next steps]\nOVERALL: [one sentence health assessment]` }],
           }),
         });
         const data = await res.json();
@@ -1040,15 +1040,15 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("generated_docs").insert({
           doc_type: "status_update", client_id: client?.id || null,
-          title: `Status Update — ${subject} — ${new Date().toLocaleDateString()}`,
+          title: `Status Update Ã¢ÂÂ ${subject} Ã¢ÂÂ ${new Date().toLocaleDateString()}`,
           content: update,
         });
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `STATUS: ${subject}\n\n${update}`, entry_type: "note", importance: 7, tags: ["status", "project"], classification_status: "skip" });
         await logUsage(supabase, "status update", true, Date.now() - start, channel);
-        return earlyReturn(`📊 STATUS UPDATE\n\n${update}`);
+        return earlyReturn(`Ã°ÂÂÂ STATUS UPDATE\n\n${update}`);
       } catch (err: any) {
         await logUsage(supabase, "status update", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Status update failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Status update failed: ${err.message}`);
       }
     }
 
@@ -1070,13 +1070,13 @@ Be specific. Reference actual numbers.` }],
         const data = await res.json();
         const sop = data?.content?.[0]?.text || "Could not generate SOP.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "sop", client_id: null, title: `SOP — ${process}`, content: sop });
+        await supabase.from("generated_docs").insert({ doc_type: "sop", client_id: null, title: `SOP Ã¢ÂÂ ${process}`, content: sop });
         await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `SOP: ${process}\n\n${sop}`, entry_type: "note", importance: 7, tags: ["sop", "process"], classification_status: "skip" });
         await logUsage(supabase, "generate sop", true, Date.now() - start, channel);
-        return earlyReturn(`📋 SOP: ${process}\n\n${sop}`);
+        return earlyReturn(`Ã°ÂÂÂ SOP: ${process}\n\n${sop}`);
       } catch (err: any) {
         await logUsage(supabase, "generate sop", false, Date.now() - start, channel);
-        return earlyReturn(`❌ SOP failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ SOP failed: ${err.message}`);
       }
     }
 
@@ -1097,18 +1097,18 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 1000,
-            messages: [{ role: "user", content: `Write a compelling sales pitch for ${target}.\n\nSERVICE: ${forService}\nCLIENT CONTEXT: ${ctx ? `Business: ${ctx.core_offer || "unknown"} | Pain points: ${ctx.pain_points || "unknown"} | Goals: ${ctx.goals || "unknown"}` : "Research required"}\n\nWrite a punchy, specific pitch. Not generic.\n\nFormat:\n🎯 PITCH: ${target}\n\nOPENER (hook — 2 sentences max):\n[Start with their pain or opportunity]\n\nWHAT WE DO:\n[Specific to their situation]\n\nWHY IT WORKS:\n[Proof points — results, process, differentiation]\n\nWHAT YOU GET:\n[Concrete deliverables]\n\nINVESTMENT:\n[Pricing range or structure]\n\nNEXT STEP:\n[Single clear CTA]\n\nBe confident. Be specific. Avoid fluff.` }],
+            messages: [{ role: "user", content: `Write a compelling sales pitch for ${target}.\n\nSERVICE: ${forService}\nCLIENT CONTEXT: ${ctx ? `Business: ${ctx.core_offer || "unknown"} | Pain points: ${ctx.pain_points || "unknown"} | Goals: ${ctx.goals || "unknown"}` : "Research required"}\n\nWrite a punchy, specific pitch. Not generic.\n\nFormat:\nÃ°ÂÂÂ¯ PITCH: ${target}\n\nOPENER (hook Ã¢ÂÂ 2 sentences max):\n[Start with their pain or opportunity]\n\nWHAT WE DO:\n[Specific to their situation]\n\nWHY IT WORKS:\n[Proof points Ã¢ÂÂ results, process, differentiation]\n\nWHAT YOU GET:\n[Concrete deliverables]\n\nINVESTMENT:\n[Pricing range or structure]\n\nNEXT STEP:\n[Single clear CTA]\n\nBe confident. Be specific. Avoid fluff.` }],
           }),
         });
         const data = await res.json();
         const pitch = data?.content?.[0]?.text || "Could not generate pitch.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "pitch", client_id: client?.id || null, title: `Pitch — ${target} — ${forService}`, content: pitch });
+        await supabase.from("generated_docs").insert({ doc_type: "pitch", client_id: client?.id || null, title: `Pitch Ã¢ÂÂ ${target} Ã¢ÂÂ ${forService}`, content: pitch });
         await logUsage(supabase, "generate pitch", true, Date.now() - start, channel);
         return earlyReturn(pitch);
       } catch (err: any) {
         await logUsage(supabase, "generate pitch", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Pitch failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Pitch failed: ${err.message}`);
       }
     }
 
@@ -1120,7 +1120,7 @@ Be specific. Reference actual numbers.` }],
       const clientName = message.slice(20).trim();
       try {
         const { data: client } = await supabase.from("clients").select("*, client_context(*), va_assignments(*)").ilike("name", `%${clientName}%`).limit(1).maybeSingle();
-        if (!client) return earlyReturn(`❌ Client "${clientName}" not found.`);
+        if (!client) return earlyReturn(`Ã¢ÂÂ Client "${clientName}" not found.`);
 
         const [{ data: calls }, { data: leads }] = await Promise.all([
           supabase.from("call_logs").select("outcome, notes").eq("client_id", client.id),
@@ -1136,18 +1136,18 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 1000,
-            messages: [{ role: "user", content: `Write a results-focused case study for ${client.name}.\n\nCLIENT: ${client.name} | Deal: ${client.deal_type} | Offer: ${ctx?.core_offer || "unknown"}\nCALL RESULTS: ${JSON.stringify(callStats)}\nLEAD PIPELINE: ${JSON.stringify(leadStats)}\nVA ASSIGNED: ${client.va_assignments?.find((v: any) => v.status === "active")?.va_name || "none"}\n\nWrite a compelling case study. Use placeholder metrics if real ones aren't available yet (mark with [TBD]).\n\nFormat:\n📈 CASE STUDY: ${client.name}\n\nTHE CHALLENGE:\n[What they were struggling with before]\n\nTHE SOLUTION:\n[What Nexus ZC implemented]\n\nTHE RESULTS:\n[Specific outcomes — calls made, leads generated, etc]\n\nWHAT THEY SAY:\n["[Testimonial placeholder — update with real quote]"]\n\nKEY TAKEAWAYS:\n[3 bullet points]\n\nReady to achieve similar results? Contact zach@nexuszc.com` }],
+            messages: [{ role: "user", content: `Write a results-focused case study for ${client.name}.\n\nCLIENT: ${client.name} | Deal: ${client.deal_type} | Offer: ${ctx?.core_offer || "unknown"}\nCALL RESULTS: ${JSON.stringify(callStats)}\nLEAD PIPELINE: ${JSON.stringify(leadStats)}\nVA ASSIGNED: ${client.va_assignments?.find((v: any) => v.status === "active")?.va_name || "none"}\n\nWrite a compelling case study. Use placeholder metrics if real ones aren't available yet (mark with [TBD]).\n\nFormat:\nÃ°ÂÂÂ CASE STUDY: ${client.name}\n\nTHE CHALLENGE:\n[What they were struggling with before]\n\nTHE SOLUTION:\n[What Nexus ZC implemented]\n\nTHE RESULTS:\n[Specific outcomes Ã¢ÂÂ calls made, leads generated, etc]\n\nWHAT THEY SAY:\n["[Testimonial placeholder Ã¢ÂÂ update with real quote]"]\n\nKEY TAKEAWAYS:\n[3 bullet points]\n\nReady to achieve similar results? Contact zach@nexuszc.com` }],
           }),
         });
         const data = await res.json();
         const caseStudy = data?.content?.[0]?.text || "Could not generate case study.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "case_study", client_id: client.id, title: `Case Study — ${client.name}`, content: caseStudy });
+        await supabase.from("generated_docs").insert({ doc_type: "case_study", client_id: client.id, title: `Case Study Ã¢ÂÂ ${client.name}`, content: caseStudy });
         await logUsage(supabase, "generate case study", true, Date.now() - start, channel);
         return earlyReturn(caseStudy);
       } catch (err: any) {
         await logUsage(supabase, "generate case study", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Case study failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Case study failed: ${err.message}`);
       }
     }
 
@@ -1165,18 +1165,18 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 800,
-            messages: [{ role: "user", content: `Write high-converting ad copy for: ${service}\nPLATFORM: ${platform}\n\nWrite 3 ad variations:\n\nAD 1 — Pain-focused:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nAD 2 — Results-focused:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nAD 3 — Curiosity/hook:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nKeep it punchy. No fluff. Speak to the target audience's real pain.` }],
+            messages: [{ role: "user", content: `Write high-converting ad copy for: ${service}\nPLATFORM: ${platform}\n\nWrite 3 ad variations:\n\nAD 1 Ã¢ÂÂ Pain-focused:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nAD 2 Ã¢ÂÂ Results-focused:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nAD 3 Ã¢ÂÂ Curiosity/hook:\nHEADLINE: [max 40 chars]\nBODY: [max 125 chars]\nCTA: [action button text]\n\nKeep it punchy. No fluff. Speak to the target audience's real pain.` }],
           }),
         });
         const data = await res.json();
         const adCopy = data?.content?.[0]?.text || "Could not generate ad copy.";
 
-        await supabase.from("generated_docs").insert({ doc_type: "ad_copy", client_id: null, title: `Ad Copy — ${service} — ${platform}`, content: adCopy });
+        await supabase.from("generated_docs").insert({ doc_type: "ad_copy", client_id: null, title: `Ad Copy Ã¢ÂÂ ${service} Ã¢ÂÂ ${platform}`, content: adCopy });
         await logUsage(supabase, "generate ad copy", true, Date.now() - start, channel);
-        return earlyReturn(`📣 AD COPY: ${service} (${platform})\n\n${adCopy}`);
+        return earlyReturn(`Ã°ÂÂÂ£ AD COPY: ${service} (${platform})\n\n${adCopy}`);
       } catch (err: any) {
         await logUsage(supabase, "generate ad copy", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Ad copy failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Ad copy failed: ${err.message}`);
       }
     }
 
@@ -1201,7 +1201,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 400,
-            messages: [{ role: "user", content: `Analyze the ROI for: ${project}\nRevenue: $${revenueNum} | Cost: $${costNum} | ROI: ${roi}% | Profit: $${profit} | Margin: ${margin}%\n\nProvide a brief business analysis:\n💰 ROI ANALYSIS: ${project}\n- Revenue: $${revenueNum.toLocaleString()}\n- Cost: $${costNum.toLocaleString()}\n- Profit: $${parseFloat(profit).toLocaleString()}\n- ROI: ${roi}%\n- Margin: ${margin}%\n\nVERDICT: [Good/Marginal/Poor investment and why in 2 sentences]\nOPTIMIZE: [One specific way to improve these numbers]\nSCALE: [What this looks like at 5x revenue]` }],
+            messages: [{ role: "user", content: `Analyze the ROI for: ${project}\nRevenue: $${revenueNum} | Cost: $${costNum} | ROI: ${roi}% | Profit: $${profit} | Margin: ${margin}%\n\nProvide a brief business analysis:\nÃ°ÂÂÂ° ROI ANALYSIS: ${project}\n- Revenue: $${revenueNum.toLocaleString()}\n- Cost: $${costNum.toLocaleString()}\n- Profit: $${parseFloat(profit).toLocaleString()}\n- ROI: ${roi}%\n- Margin: ${margin}%\n\nVERDICT: [Good/Marginal/Poor investment and why in 2 sentences]\nOPTIMIZE: [One specific way to improve these numbers]\nSCALE: [What this looks like at 5x revenue]` }],
           }),
         });
         const data = await res.json();
@@ -1211,7 +1211,7 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(analysis);
       } catch (err: any) {
         await logUsage(supabase, "calculate roi", false, Date.now() - start, channel);
-        return earlyReturn(`❌ ROI calc failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ ROI calc failed: ${err.message}`);
       }
     }
 
@@ -1229,7 +1229,7 @@ Be specific. Reference actual numbers.` }],
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 600,
-            messages: [{ role: "user", content: `Generate a pricing analysis for: ${service}\nMARKET: ${market}\n\nProvide a pricing strategy with 3 tiers:\n\n💰 PRICING: ${service}\n\nMARKET RATE: [what competitors charge]\n\nTIER 1 — Entry: $[price]\n[What's included, who it's for]\n\nTIER 2 — Standard: $[price]\n[What's included, who it's for]\n\nTIER 3 — Premium: $[price]\n[What's included, who it's for]\n\nRECOMMENDATION:\n[Which tier to lead with and why]\n\nANCHORING TIP:\n[How to present pricing to maximize closes]` }],
+            messages: [{ role: "user", content: `Generate a pricing analysis for: ${service}\nMARKET: ${market}\n\nProvide a pricing strategy with 3 tiers:\n\nÃ°ÂÂÂ° PRICING: ${service}\n\nMARKET RATE: [what competitors charge]\n\nTIER 1 Ã¢ÂÂ Entry: $[price]\n[What's included, who it's for]\n\nTIER 2 Ã¢ÂÂ Standard: $[price]\n[What's included, who it's for]\n\nTIER 3 Ã¢ÂÂ Premium: $[price]\n[What's included, who it's for]\n\nRECOMMENDATION:\n[Which tier to lead with and why]\n\nANCHORING TIP:\n[How to present pricing to maximize closes]` }],
           }),
         });
         const data = await res.json();
@@ -1239,7 +1239,7 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(pricing);
       } catch (err: any) {
         await logUsage(supabase, "pricing calculator", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Pricing calc failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Pricing calc failed: ${err.message}`);
       }
     }
 
@@ -1255,10 +1255,10 @@ Be specific. Reference actual numbers.` }],
       try {
         await supabase.from("knowledge_base").insert({ topic, content, source: "manual", tags: [] });
         await logUsage(supabase, "save knowledge", true, Date.now() - start, channel);
-        return earlyReturn(`🧠 Knowledge saved: "${topic}"`);
+        return earlyReturn(`Ã°ÂÂ§Â  Knowledge saved: "${topic}"`);
       } catch (err: any) {
         await logUsage(supabase, "save knowledge", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Save failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Save failed: ${err.message}`);
       }
     }
 
@@ -1273,14 +1273,14 @@ Be specific. Reference actual numbers.` }],
           .order("created_at", { ascending: false })
           .limit(5);
 
-        if (!results?.length) return earlyReturn(`❌ No knowledge found for "${topic}"`);
+        if (!results?.length) return earlyReturn(`Ã¢ÂÂ No knowledge found for "${topic}"`);
 
         const knowledge = results.map((r: any, i: number) => `${i+1}. ${r.topic}\n${r.content.slice(0, 300)}`).join("\n\n");
         await logUsage(supabase, "recall knowledge", true, Date.now() - start, channel);
-        return earlyReturn(`🧠 KNOWLEDGE: ${topic}\n\n${knowledge}`);
+        return earlyReturn(`Ã°ÂÂ§Â  KNOWLEDGE: ${topic}\n\n${knowledge}`);
       } catch (err: any) {
         await logUsage(supabase, "recall knowledge", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Recall failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Recall failed: ${err.message}`);
       }
     }
 
@@ -1308,10 +1308,10 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("knowledge_base").insert({ topic, content: learned, source: "url", tags: [url] });
         await logUsage(supabase, "learn from", true, Date.now() - start, channel);
-        return earlyReturn(`🧠 LEARNED: ${topic}\n\n${learned}`);
+        return earlyReturn(`Ã°ÂÂ§Â  LEARNED: ${topic}\n\n${learned}`);
       } catch (err: any) {
         await logUsage(supabase, "learn from", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Learn failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Learn failed: ${err.message}`);
       }
     }
 
@@ -1327,12 +1327,12 @@ Be specific. Reference actual numbers.` }],
         ]);
 
         // Build full dump and save to memory
-        const fullDump = `NEXUS BRAIN DUMP — ${new Date().toLocaleString()}\n\n` +
-          `KNOWLEDGE BASE (${knowledge?.length || 0} items):\n${(knowledge || []).map((k: any) => `• ${k.topic}`).join("\n") || "Empty"}\n\n` +
-          `ACTIVE CLIENTS (${clients?.length || 0}):\n${(clients || []).map((c: any) => `• ${c.name} — ${c.deal_type || "no deal"} — ${c.status} — site: ${c.provision_status}`).join("\n") || "None"}\n\n` +
-          `OPEN TASKS (${openTasks?.length || 0}):\n${(openTasks || []).map((t: any) => `• ${t.content.slice(0, 100)}`).join("\n") || "None"}\n\n` +
-          `GENERATED DOCS (${docs?.length || 0} recent):\n${(docs || []).map((d: any) => `• [${d.doc_type}] ${d.title}`).join("\n") || "None"}\n\n` +
-          `NEXUS IMPROVEMENT QUEUE:\n${(improvements || []).map((i: any) => `• ${i.title}`).join("\n") || "None"}`;
+        const fullDump = `NEXUS BRAIN DUMP Ã¢ÂÂ ${new Date().toLocaleString()}\n\n` +
+          `KNOWLEDGE BASE (${knowledge?.length || 0} items):\n${(knowledge || []).map((k: any) => `Ã¢ÂÂ¢ ${k.topic}`).join("\n") || "Empty"}\n\n` +
+          `ACTIVE CLIENTS (${clients?.length || 0}):\n${(clients || []).map((c: any) => `Ã¢ÂÂ¢ ${c.name} Ã¢ÂÂ ${c.deal_type || "no deal"} Ã¢ÂÂ ${c.status} Ã¢ÂÂ site: ${c.provision_status}`).join("\n") || "None"}\n\n` +
+          `OPEN TASKS (${openTasks?.length || 0}):\n${(openTasks || []).map((t: any) => `Ã¢ÂÂ¢ ${t.content.slice(0, 100)}`).join("\n") || "None"}\n\n` +
+          `GENERATED DOCS (${docs?.length || 0} recent):\n${(docs || []).map((d: any) => `Ã¢ÂÂ¢ [${d.doc_type}] ${d.title}`).join("\n") || "None"}\n\n` +
+          `NEXUS IMPROVEMENT QUEUE:\n${(improvements || []).map((i: any) => `Ã¢ÂÂ¢ ${i.title}`).join("\n") || "None"}`;
 
         // Save full dump to memory
         await supabase.from("entries").insert({
@@ -1342,21 +1342,21 @@ Be specific. Reference actual numbers.` }],
         });
 
         // Send Telegram-friendly summary (under 4000 chars)
-        const summary = `🧠 NEXUS BRAIN DUMP\n\n` +
-          `📚 Knowledge: ${knowledge?.length || 0} topics\n` +
-          `👥 Clients: ${clients?.length || 0} active\n` +
-          `✅ Open tasks: ${openTasks?.length || 0}\n` +
-          `📄 Recent docs: ${docs?.length || 0}\n` +
-          `🔧 Improvements queued: ${improvements?.length || 0}\n\n` +
-          `TOP KNOWLEDGE:\n${(knowledge || []).slice(0, 5).map((k: any) => `• ${k.topic}`).join("\n") || "None"}\n\n` +
-          `OPEN TASKS:\n${(openTasks || []).slice(0, 5).map((t: any) => `• ${t.content.slice(0, 80)}`).join("\n") || "None"}\n\n` +
+        const summary = `Ã°ÂÂ§Â  NEXUS BRAIN DUMP\n\n` +
+          `Ã°ÂÂÂ Knowledge: ${knowledge?.length || 0} topics\n` +
+          `Ã°ÂÂÂ¥ Clients: ${clients?.length || 0} active\n` +
+          `Ã¢ÂÂ Open tasks: ${openTasks?.length || 0}\n` +
+          `Ã°ÂÂÂ Recent docs: ${docs?.length || 0}\n` +
+          `Ã°ÂÂÂ§ Improvements queued: ${improvements?.length || 0}\n\n` +
+          `TOP KNOWLEDGE:\n${(knowledge || []).slice(0, 5).map((k: any) => `Ã¢ÂÂ¢ ${k.topic}`).join("\n") || "None"}\n\n` +
+          `OPEN TASKS:\n${(openTasks || []).slice(0, 5).map((t: any) => `Ã¢ÂÂ¢ ${t.content.slice(0, 80)}`).join("\n") || "None"}\n\n` +
           `Full dump saved to Nexus memory. Send "recall knowledge: [topic]" to pull specifics.`;
 
         await logUsage(supabase, "brain dump", true, Date.now() - start, channel);
         return earlyReturn(summary);
       } catch (err: any) {
         await logUsage(supabase, "brain dump", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Brain dump failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Brain dump failed: ${err.message}`);
       }
     }
 
@@ -1376,20 +1376,20 @@ Be specific. Reference actual numbers.` }],
           const active = jobs?.filter((j: any) => !["paid", "cancelled"].includes(j.status)).length || 0;
           const value = jobs?.reduce((acc: number, j: any) => acc + (j.contract_amount || 0), 0) || 0;
           const byStatus = (jobs || []).reduce((acc: any, j: any) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc; }, {});
-          const statusLines = Object.entries(byStatus).map(([s, c]) => `• ${s.replace(/_/g, " ")}: ${c}`).join("\n");
+          const statusLines = Object.entries(byStatus).map(([s, c]) => `Ã¢ÂÂ¢ ${s.replace(/_/g, " ")}: ${c}`).join("\n");
           await logUsage(supabase, "roofing_summary", true, Date.now() - start, channel);
-          return earlyReturn(`🏠 ROOFING OS SUMMARY\n\nTotal jobs: ${total}\nActive: ${active}\nContract value: $${value.toLocaleString()}\n\nPIPELINE:\n${statusLines || "No jobs yet"}`);
+          return earlyReturn(`Ã°ÂÂÂ  ROOFING OS SUMMARY\n\nTotal jobs: ${total}\nActive: ${active}\nContract value: $${value.toLocaleString()}\n\nPIPELINE:\n${statusLines || "No jobs yet"}`);
         }
 
         const active = (jobs || []).filter((j: any) => !["paid", "cancelled"].includes(j.status));
         const lines = active.map((j: any) =>
-          `• ${j.homeowner_name} — ${j.property_address}\n  ${j.status.replace(/_/g, " ")}${j.contract_amount ? ` · $${j.contract_amount.toLocaleString()}` : ""}\n  ID: ${j.id.slice(0, 8)}`
+          `Ã¢ÂÂ¢ ${j.homeowner_name} Ã¢ÂÂ ${j.property_address}\n  ${j.status.replace(/_/g, " ")}${j.contract_amount ? ` ÃÂ· $${j.contract_amount.toLocaleString()}` : ""}\n  ID: ${j.id.slice(0, 8)}`
         ).join("\n\n");
         await logUsage(supabase, "roofing_jobs", true, Date.now() - start, channel);
-        return earlyReturn(`🏠 ACTIVE ROOFING JOBS (${active.length})\n\n${lines || "No active jobs"}`);
+        return earlyReturn(`Ã°ÂÂÂ  ACTIVE ROOFING JOBS (${active.length})\n\n${lines || "No active jobs"}`);
       } catch (err: any) {
         await logUsage(supabase, "roofing_jobs", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Roofing jobs failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Roofing jobs failed: ${err.message}`);
       }
     }
 
@@ -1402,9 +1402,9 @@ Be specific. Reference actual numbers.` }],
           .select("*, clients(name, brand_name)")
           .or(`id.eq.${jobId},id.ilike.${jobId}%`)
           .single();
-        if (!job) return earlyReturn(`❌ Job not found: ${jobId}`);
+        if (!job) return earlyReturn(`Ã¢ÂÂ Job not found: ${jobId}`);
         const msg =
-          `🏠 JOB: ${job.homeowner_name}\n` +
+          `Ã°ÂÂÂ  JOB: ${job.homeowner_name}\n` +
           `Address: ${job.property_address}\n` +
           `Status: ${job.status.replace(/_/g, " ")}\n` +
           `Type: ${job.job_type?.replace(/_/g, " ")}\n` +
@@ -1416,7 +1416,7 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(msg);
       } catch (err: any) {
         await logUsage(supabase, "roofing_job", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Job lookup failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Job lookup failed: ${err.message}`);
       }
     }
 
@@ -1435,10 +1435,10 @@ Be specific. Reference actual numbers.` }],
           client_id: client?.id || null,
         }).select().single();
         await logUsage(supabase, "roofing_new", true, Date.now() - start, channel);
-        return earlyReturn(`✅ Roofing job created\n\nHomeowner: ${homeownerName}\nAddress: ${address || "TBD"}\nContractor: ${client?.name || "unassigned"}\nID: ${job.id}\nPortal: app.nexuszc.com/roofing/portal/${job.portal_token}`);
+        return earlyReturn(`Ã¢ÂÂ Roofing job created\n\nHomeowner: ${homeownerName}\nAddress: ${address || "TBD"}\nContractor: ${client?.name || "unassigned"}\nID: ${job.id}\nPortal: app.nexuszc.com/roofing/portal/${job.portal_token}`);
       } catch (err: any) {
         await logUsage(supabase, "roofing_new", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Job creation failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Job creation failed: ${err.message}`);
       }
     }
 
@@ -1450,18 +1450,18 @@ Be specific. Reference actual numbers.` }],
       try {
         const { data: job } = await supabase
           .from("roofing_jobs").select("id, homeowner_name").or(`id.eq.${jobIdPart},id.ilike.${jobIdPart}%`).single();
-        if (!job) return earlyReturn(`❌ Job not found: ${jobIdPart}`);
-        if (!newStatus) return earlyReturn(`❌ Format: roofing status: [job_id] | status: [new_status]`);
+        if (!job) return earlyReturn(`Ã¢ÂÂ Job not found: ${jobIdPart}`);
+        if (!newStatus) return earlyReturn(`Ã¢ÂÂ Format: roofing status: [job_id] | status: [new_status]`);
         await supabase.from("roofing_jobs").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", job.id);
         await logUsage(supabase, "roofing_status", true, Date.now() - start, channel);
-        return earlyReturn(`✅ ${job.homeowner_name} → ${newStatus.replace(/_/g, " ")}`);
+        return earlyReturn(`Ã¢ÂÂ ${job.homeowner_name} Ã¢ÂÂ ${newStatus.replace(/_/g, " ")}`);
       } catch (err: any) {
         await logUsage(supabase, "roofing_status", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Status update failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Status update failed: ${err.message}`);
       }
     }
 
-    // ── FOCUS ─────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ FOCUS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "focus" || msgLower === "what should i focus on" || msgLower === "focus now") {
       const start = Date.now();
       try {
@@ -1475,11 +1475,11 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(data.response || "Could not generate focus list.");
       } catch (err: any) {
         await logUsage(supabase, "focus", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Focus failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Focus failed: ${err.message}`);
       }
     }
 
-    // ── STALE CHECK ───────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ STALE CHECK Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "stale check" || msgLower === "who needs attention") {
       const start = Date.now();
       try {
@@ -1490,14 +1490,14 @@ Be specific. Reference actual numbers.` }],
         });
         const data = await res.json();
         await logUsage(supabase, "stale_check", true, Date.now() - start, channel);
-        return earlyReturn(data.stale_count === 0 ? "✅ All clients are active. No stale relationships." : `⚠️ Found ${data.stale_count} stale client(s). Alert sent.`);
+        return earlyReturn(data.stale_count === 0 ? "Ã¢ÂÂ All clients are active. No stale relationships." : `Ã¢ÂÂ Ã¯Â¸Â Found ${data.stale_count} stale client(s). Alert sent.`);
       } catch (err: any) {
         await logUsage(supabase, "stale_check", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Stale check failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Stale check failed: ${err.message}`);
       }
     }
 
-    // ── MOMENTUM ──────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ MOMENTUM Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "momentum" || msgLower === "project momentum") {
       const start = Date.now();
       try {
@@ -1508,14 +1508,14 @@ Be specific. Reference actual numbers.` }],
         });
         const data = await res.json();
         await logUsage(supabase, "momentum_check", true, Date.now() - start, channel);
-        return earlyReturn(data.stale_projects === 0 ? "✅ All projects have recent activity." : `📉 ${data.stale_projects} project(s) going stale. Alert sent.`);
+        return earlyReturn(data.stale_projects === 0 ? "Ã¢ÂÂ All projects have recent activity." : `Ã°ÂÂÂ ${data.stale_projects} project(s) going stale. Alert sent.`);
       } catch (err: any) {
         await logUsage(supabase, "momentum_check", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Momentum check failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Momentum check failed: ${err.message}`);
       }
     }
 
-    // ── HEALTH SCORES ─────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ HEALTH SCORES Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "health scores" || msgLower === "client health") {
       const start = Date.now();
       try {
@@ -1536,21 +1536,21 @@ Be specific. Reference actual numbers.` }],
           body: JSON.stringify({ action: "health_score" }),
         });
 
-        const scoreEmoji = (score: number) => score >= 70 ? "🟢" : score >= 40 ? "🟡" : "🔴";
+        const scoreEmoji = (score: number) => score >= 70 ? "Ã°ÂÂÂ¢" : score >= 40 ? "Ã°ÂÂÂ¡" : "Ã°ÂÂÂ´";
         const reply =
           `*Client Health Scores*\n\n` +
-          clients.map((c: any) => `${scoreEmoji(c.health_score || 50)} *${c.name}* — ${c.health_score || 50}/100`).join("\n") +
+          clients.map((c: any) => `${scoreEmoji(c.health_score || 50)} *${c.name}* Ã¢ÂÂ ${c.health_score || 50}/100`).join("\n") +
           `\n\n_Scores updating in background..._`;
 
         await logUsage(supabase, "health_scores", true, Date.now() - start, channel);
         return earlyReturn(reply);
       } catch (err: any) {
         await logUsage(supabase, "health_scores", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Health scores failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Health scores failed: ${err.message}`);
       }
     }
 
-    // ── PROJECT UPDATE ────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ PROJECT UPDATE Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower.startsWith("project update:") || msgLower.startsWith("update project:")) {
       const start = Date.now();
       try {
@@ -1576,14 +1576,14 @@ Be specific. Reference actual numbers.` }],
         }).eq("id", project.id);
 
         await logUsage(supabase, "project_update", true, Date.now() - start, channel);
-        return earlyReturn(`✅ *${project.name}* momentum updated.${milestone ? `\nNext milestone: ${milestone}` : ""}`);
+        return earlyReturn(`Ã¢ÂÂ *${project.name}* momentum updated.${milestone ? `\nNext milestone: ${milestone}` : ""}`);
       } catch (err: any) {
         await logUsage(supabase, "project_update", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Project update failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Project update failed: ${err.message}`);
       }
     }
 
-    // ── CONTRADICTIONS ────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ CONTRADICTIONS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "contradictions" || msgLower === "show contradictions") {
       const start = Date.now();
       try {
@@ -1596,7 +1596,7 @@ Be specific. Reference actual numbers.` }],
 
         if (!contradictions || contradictions.length === 0) {
           await logUsage(supabase, "contradictions", true, Date.now() - start, channel);
-          return earlyReturn("✅ No unresolved contradictions in your memory.");
+          return earlyReturn("Ã¢ÂÂ No unresolved contradictions in your memory.");
         }
 
         const reply =
@@ -1609,11 +1609,11 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(reply);
       } catch (err: any) {
         await logUsage(supabase, "contradictions", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Contradictions failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Contradictions failed: ${err.message}`);
       }
     }
 
-    // ── APPROVE QUEUED ACTION ────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ APPROVE QUEUED ACTION Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower.startsWith("approve action ") || msgLower.startsWith("exec ")) {
       const start = Date.now();
       try {
@@ -1643,14 +1643,14 @@ Be specific. Reference actual numbers.` }],
         });
 
         await logUsage(supabase, "approve_action", true, Date.now() - start, channel);
-        return earlyReturn(`✅ Approved: *${queuedAction.action_summary}*\nExecuting...`);
+        return earlyReturn(`Ã¢ÂÂ Approved: *${queuedAction.action_summary}*\nExecuting...`);
       } catch (err: any) {
         await logUsage(supabase, "approve_action", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── REJECT QUEUED ACTION ─────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ REJECT QUEUED ACTION Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower.startsWith("reject action ")) {
       const start = Date.now();
       try {
@@ -1666,14 +1666,14 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("nexus_action_queue").update({ status: "rejected" }).eq("id", queuedAction.id);
         await logUsage(supabase, "reject_action", true, Date.now() - start, channel);
-        return earlyReturn(`❌ Rejected: *${queuedAction.action_summary}*`);
+        return earlyReturn(`Ã¢ÂÂ Rejected: *${queuedAction.action_summary}*`);
       } catch (err: any) {
         await logUsage(supabase, "reject_action", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── APPROVE ABILITY BUILD ────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ APPROVE ABILITY BUILD Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower.startsWith("approve ability")) {
       const start = Date.now();
       try {
@@ -1697,7 +1697,7 @@ Be specific. Reference actual numbers.` }],
             body: JSON.stringify({ proposal_id: proposal.id, action: "deploy" }),
           });
           await logUsage(supabase, "approve_ability_deploy", true, Date.now() - start, channel);
-          return earlyReturn(`🚀 Deploying *${proposal.ability_name}* to production...`);
+          return earlyReturn(`Ã°ÂÂÂ Deploying *${proposal.ability_name}* to production...`);
         } else {
           await supabase.from("nexus_ability_proposals")
             .update({ status: "approved", approved_at: new Date().toISOString() })
@@ -1710,15 +1710,15 @@ Be specific. Reference actual numbers.` }],
           });
 
           await logUsage(supabase, "approve_ability_build", true, Date.now() - start, channel);
-          return earlyReturn(`🔨 Building *${proposal.ability_name}*...\nI'll notify you when it's ready to test.`);
+          return earlyReturn(`Ã°ÂÂÂ¨ Building *${proposal.ability_name}*...\nI'll notify you when it's ready to test.`);
         }
       } catch (err: any) {
         await logUsage(supabase, "approve_ability", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── REJECT ABILITY ───────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ REJECT ABILITY Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower.startsWith("reject ability")) {
       const start = Date.now();
       try {
@@ -1730,14 +1730,14 @@ Be specific. Reference actual numbers.` }],
           .or(`id.eq.${abilityId},id.ilike.${abilityId}%`);
 
         await logUsage(supabase, "reject_ability", true, Date.now() - start, channel);
-        return earlyReturn(`❌ Ability rejected and removed from queue.`);
+        return earlyReturn(`Ã¢ÂÂ Ability rejected and removed from queue.`);
       } catch (err: any) {
         await logUsage(supabase, "reject_ability", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── PENDING ACTIONS ──────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ PENDING ACTIONS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "pending" || msgLower === "pending actions" || msgLower === "queue") {
       const start = Date.now();
       try {
@@ -1753,30 +1753,30 @@ Be specific. Reference actual numbers.` }],
         if (actions && actions.length > 0) {
           reply += `*Actions (${actions.length}):*\n`;
           reply += actions.map((a: any) =>
-            `• [${a.id.slice(0, 8)}] P${a.priority} — ${a.action_summary}\n  Approve: \`approve action ${a.id.slice(0, 8)}\``
+            `Ã¢ÂÂ¢ [${a.id.slice(0, 8)}] P${a.priority} Ã¢ÂÂ ${a.action_summary}\n  Approve: \`approve action ${a.id.slice(0, 8)}\``
           ).join("\n") + "\n\n";
         }
 
         if (abilities && abilities.length > 0) {
           reply += `*New abilities to build (${abilities.length}):*\n`;
           reply += abilities.map((a: any) =>
-            `• [${a.id.slice(0, 8)}] *${a.ability_name}* — ${a.description?.slice(0, 80)}\n  Build: \`approve ability ${a.id.slice(0, 8)}\``
+            `Ã¢ÂÂ¢ [${a.id.slice(0, 8)}] *${a.ability_name}* Ã¢ÂÂ ${a.description?.slice(0, 80)}\n  Build: \`approve ability ${a.id.slice(0, 8)}\``
           ).join("\n");
         }
 
         if ((!actions || actions.length === 0) && (!abilities || abilities.length === 0)) {
-          reply = "✅ No pending approvals. Nexus is fully caught up.";
+          reply = "Ã¢ÂÂ No pending approvals. Nexus is fully caught up.";
         }
 
         await logUsage(supabase, "pending_actions", true, Date.now() - start, channel);
         return earlyReturn(reply);
       } catch (err: any) {
         await logUsage(supabase, "pending_actions", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── AUDIT LOG ────────────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ AUDIT LOG Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "audit" || msgLower === "audit log" || msgLower.startsWith("audit last")) {
       const start = Date.now();
       try {
@@ -1797,19 +1797,19 @@ Be specific. Reference actual numbers.` }],
             const time = new Date(l.created_at).toLocaleTimeString("en-US", {
               timeZone: "America/Denver", hour: "2-digit", minute: "2-digit",
             });
-            const emoji = l.outcome === "success" ? "✅" : l.outcome === "failure" ? "❌" : "⏳";
-            return `${emoji} [${time}] *${l.engine}* — ${l.action_detail.slice(0, 80)}`;
+            const emoji = l.outcome === "success" ? "Ã¢ÂÂ" : l.outcome === "failure" ? "Ã¢ÂÂ" : "Ã¢ÂÂ³";
+            return `${emoji} [${time}] *${l.engine}* Ã¢ÂÂ ${l.action_detail.slice(0, 80)}`;
           }).join("\n");
 
         await logUsage(supabase, "audit_log", true, Date.now() - start, channel);
         return earlyReturn(reply);
       } catch (err: any) {
         await logUsage(supabase, "audit_log", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
 
-    // ── RESEARCH NOW ─────────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ RESEARCH NOW Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "research now" || msgLower === "nexus research") {
       const start = Date.now();
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-research`, {
@@ -1818,10 +1818,10 @@ Be specific. Reference actual numbers.` }],
         body: JSON.stringify({}),
       });
       await logUsage(supabase, "research_now", true, Date.now() - start, channel);
-      return earlyReturn("🔬 Research cycle started. I'll report back with findings in a few minutes.");
+      return earlyReturn("Ã°ÂÂÂ¬ Research cycle started. I'll report back with findings in a few minutes.");
     }
 
-    // ── AGENT NOW ────────────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ AGENT NOW Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "agent now" || msgLower === "nexus agent" || msgLower === "run agent") {
       const start = Date.now();
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-agent`, {
@@ -1830,10 +1830,10 @@ Be specific. Reference actual numbers.` }],
         body: JSON.stringify({}),
       });
       await logUsage(supabase, "agent_now", true, Date.now() - start, channel);
-      return earlyReturn("🤖 Agent cycle triggered. Observing, thinking, acting...");
+      return earlyReturn("Ã°ÂÂ¤Â Agent cycle triggered. Observing, thinking, acting...");
     }
 
-    // ── ABILITIES ────────────────────────────────────────────────────────────────
+    // Ã¢ÂÂÃ¢ÂÂ ABILITIES Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if (msgLower === "abilities" || msgLower === "my abilities" || msgLower === "show abilities") {
       const start = Date.now();
       try {
@@ -1849,28 +1849,97 @@ Be specific. Reference actual numbers.` }],
         if (liveAbilities && liveAbilities.length > 0) {
           reply += `*Live (${liveAbilities.length}):*\n`;
           reply += liveAbilities.map((a: any) =>
-            `✅ *${a.ability_name}* — \`${a.trigger_command}\` (used ${a.usage_count}x)`
+            `Ã¢ÂÂ *${a.ability_name}* Ã¢ÂÂ \`${a.trigger_command}\` (used ${a.usage_count}x)`
           ).join("\n") + "\n\n";
         }
 
         if (proposedAbilities && proposedAbilities.length > 0) {
           reply += `*In progress (${proposedAbilities.length}):*\n`;
           reply += proposedAbilities.map((a: any) =>
-            `${a.status === "proposed" ? "💡" : a.status === "building" ? "🔨" : "🧪"} *${a.ability_name}* (${a.status})`
+            `${a.status === "proposed" ? "Ã°ÂÂÂ¡" : a.status === "building" ? "Ã°ÂÂÂ¨" : "Ã°ÂÂ§Âª"} *${a.ability_name}* (${a.status})`
           ).join("\n");
         }
 
         if ((!liveAbilities || liveAbilities.length === 0) && (!proposedAbilities || proposedAbilities.length === 0)) {
-          reply = "💡 No self-built abilities yet. Nexus is still identifying gaps. Check back after the first research cycle.";
+          reply = "Ã°ÂÂÂ¡ No self-built abilities yet. Nexus is still identifying gaps. Check back after the first research cycle.";
         }
 
         await logUsage(supabase, "show_abilities", true, Date.now() - start, channel);
         return earlyReturn(reply);
       } catch (err: any) {
         await logUsage(supabase, "show_abilities", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
+        return earlyReturn(`Ã¢ÂÂ Failed: ${err.message}`);
       }
     }
+
+```javascript
+// ââ AUTOMATIC_ACTIVITY_CAPTURE ââ
+if (msgLower.startsWith('/enable-activity-tracking')) {
+  const startTime = Date.now();
+  try {
+    // Create a trigger function in the database
+    const triggerSQL = `
+      CREATE OR REPLACE FUNCTION update_last_active_timestamps()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        -- Update client last_active if client_id is present
+        IF TG_TABLE_NAME IN ('tasks', 'notes', 'communications', 'files') AND NEW.client_id IS NOT NULL THEN
+          UPDATE clients SET last_active = NOW() WHERE id = NEW.client_id;
+        END IF;
+        
+        -- Update project last_active if project_id is present
+        IF TG_TABLE_NAME IN ('tasks', 'notes', 'communications', 'files') AND NEW.project_id IS NOT NULL THEN
+          UPDATE projects SET last_active = NOW() WHERE id = NEW.project_id;
+        END IF;
+        
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      -- Drop existing triggers if they exist
+      DROP TRIGGER IF EXISTS tasks_activity_trigger ON tasks;
+      DROP TRIGGER IF EXISTS notes_activity_trigger ON notes;
+      DROP TRIGGER IF EXISTS communications_activity_trigger ON communications;
+      DROP TRIGGER IF EXISTS files_activity_trigger ON files;
+
+      -- Create triggers for each table
+      CREATE TRIGGER tasks_activity_trigger
+        AFTER INSERT OR UPDATE ON tasks
+        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
+
+      CREATE TRIGGER notes_activity_trigger
+        AFTER INSERT OR UPDATE ON notes
+        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
+
+      CREATE TRIGGER communications_activity_trigger
+        AFTER INSERT OR UPDATE ON communications
+        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
+
+      CREATE TRIGGER files_activity_trigger
+        AFTER INSERT OR UPDATE ON files
+        FOR EACH ROW EXECUTE FUNCTION update_last_active_timestamps();
+    `;
+
+    const { error } = await supabase.rpc('exec_sql', { sql: triggerSQL });
+    
+    const responseMs = Date.now() - startTime;
+    
+    if (error) {
+      await logUsage('automatic_activity_capture', false, responseMs, channel);
+      return earlyReturn(`â Failed to enable activity tracking: ${error.message}`);
+    }
+
+    await logUsage('automatic_activity_capture', true, responseMs, channel);
+    return earlyReturn('â **Activity tracking enabled**\n\nClients and projects will now automatically update `last_active` timestamps when:\nâ¢ Tasks are created/updated\nâ¢ Notes are added/modified\nâ¢ Communications are logged\nâ¢ Files are uploaded/changed\n\nNo more manual tracking needed.');
+    
+  } catch (err: any) {
+    const responseMs = Date.now() - startTime;
+    await logUsage('automatic_activity_capture', false, responseMs, channel);
+    return earlyReturn(`â Error: ${err.message}`);
+  }
+}
+```
+
 
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
@@ -2108,7 +2177,7 @@ async function webSearch(query: string): Promise<any[]> {
 }
 
 async function summarizeSearchResults(query: string, results: any[]): Promise<string> {
-  if (!results.length) return "No results found. (SERPER_API_KEY not configured — add it to Supabase secrets to enable web search)";
+  if (!results.length) return "No results found. (SERPER_API_KEY not configured Ã¢ÂÂ add it to Supabase secrets to enable web search)";
   const context = results.map((r: any, i: number) =>
     `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`
   ).join("\n\n");
@@ -2239,7 +2308,7 @@ function parseReminderTime(timePart: string): Date | null {
 }
 
 async function synthesizeResearch(target: string, results: any[]): Promise<string> {
-  if (!results.length) return "No results found. (SERPER_API_KEY not configured — add it to Supabase secrets to enable web search)";
+  if (!results.length) return "No results found. (SERPER_API_KEY not configured Ã¢ÂÂ add it to Supabase secrets to enable web search)";
   const context = results.slice(0, 8).map((r: any, i: number) =>
     `${i + 1}. ${r.title}\n${r.snippet}\n${r.link}`
   ).join("\n\n");
@@ -2262,7 +2331,7 @@ async function competitiveAnalysis(market: string, results: any[]): Promise<stri
     headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-5", max_tokens: 800,
-      messages: [{ role: "user", content: `Analyze the competitive landscape for "${market}".\n\nSearch data:\n${context || "(no search data — SERPER_API_KEY not configured)"}\n\nProvide:\n- Top 5 competitors with one-line description\n- Market positioning gaps (opportunities)\n- What differentiates the best players\n- Where a new entrant could win\n\nBe specific and actionable.` }],
+      messages: [{ role: "user", content: `Analyze the competitive landscape for "${market}".\n\nSearch data:\n${context || "(no search data Ã¢ÂÂ SERPER_API_KEY not configured)"}\n\nProvide:\n- Top 5 competitors with one-line description\n- Market positioning gaps (opportunities)\n- What differentiates the best players\n- Where a new entrant could win\n\nBe specific and actionable.` }],
     }),
   });
   const data = await res.json();
@@ -2318,11 +2387,11 @@ ENTRY: """${message}"""
 
 CRITICAL RULES:
 1. **Use exact existing names.** Match any reference to an existing project/person to the exact name in the lists above.
-2. **Catch naming events.** "let's call this X", "new idea X", "create a project called X" → extract as NEW project name.
+2. **Catch naming events.** "let's call this X", "new idea X", "create a project called X" Ã¢ÂÂ extract as NEW project name.
 3. **Multi-tag when multiple ventures/ideas appear.** Tag ALL of them.
 4. **People are first-class.** Extract every named person, even if just mentioned in passing.
 5. **Don't create projects from generic nouns.** A project needs a name or a clear venture/initiative.
-6. **Task prefix detection.** If the message starts with "task:" or "TODO:" — always classify type as "task".
+6. **Task prefix detection.** If the message starts with "task:" or "TODO:" Ã¢ÂÂ always classify type as "task".
 
 Return JSON:
 {
@@ -2353,40 +2422,40 @@ CURRENT IDEAS: ${ideas.join(", ") || "(none)"}
 ${context}
 
 ABILITIES YOU HAVE (suggest these when relevant):
-- search: [query] — search the web
-- summarize: [url] — summarize any webpage
-- research: [name] — deep research on a person or company
-- competitors: [market] — competitive analysis
-- draft email: [to] | subject: [x] | about: [x] — draft an email
-- send email: [to] | subject: [x] | body: [x] — send an email
+- search: [query] Ã¢ÂÂ search the web
+- summarize: [url] Ã¢ÂÂ summarize any webpage
+- research: [name] Ã¢ÂÂ deep research on a person or company
+- competitors: [market] Ã¢ÂÂ competitive analysis
+- draft email: [to] | subject: [x] | about: [x] Ã¢ÂÂ draft an email
+- send email: [to] | subject: [x] | body: [x] Ã¢ÂÂ send an email
 - generate proposal: [client] | for: [details]
 - generate script: [client] | objective: [x]
 - generate report: [client] | for: [details]
 - generate onepager: [topic]
 - remind me: [what] | in: [2 hours / 3 days]
-- task: [what] — track a task
-- report: [client] — full client status report
-- client snapshot: [name] — instant status: pipeline, calls, tasks, next move
-- prioritize tasks — AI-sorted task list by urgency/impact
-- task estimate: [task] — time/effort estimate with shortcuts
-- sprint plan: [timeframe] — achievable sprint plan
+- task: [what] Ã¢ÂÂ track a task
+- report: [client] Ã¢ÂÂ full client status report
+- client snapshot: [name] Ã¢ÂÂ instant status: pipeline, calls, tasks, next move
+- prioritize tasks Ã¢ÂÂ AI-sorted task list by urgency/impact
+- task estimate: [task] Ã¢ÂÂ time/effort estimate with shortcuts
+- sprint plan: [timeframe] Ã¢ÂÂ achievable sprint plan
 - generate invoice: [client] | for: [work] | amount: [x]
 - generate contract: [client] | for: [services] | amount: [x]
-- follow up: [name] — smart follow-up based on Nexus memory
-- weekly digest: [client] — weekly update to send to client
-- status update: [project] — project status report
-- generate sop: [process] — standard operating procedure
-- generate pitch: [client] | for: [service] — custom sales pitch
-- generate case study: [client] — results-focused case study
-- generate ad copy: [service] | platform: [x] — ad copy in 3 variants
+- follow up: [name] Ã¢ÂÂ smart follow-up based on Nexus memory
+- weekly digest: [client] Ã¢ÂÂ weekly update to send to client
+- status update: [project] Ã¢ÂÂ project status report
+- generate sop: [process] Ã¢ÂÂ standard operating procedure
+- generate pitch: [client] | for: [service] Ã¢ÂÂ custom sales pitch
+- generate case study: [client] Ã¢ÂÂ results-focused case study
+- generate ad copy: [service] | platform: [x] Ã¢ÂÂ ad copy in 3 variants
 - calculate roi: [project] | revenue: [x] | cost: [x]
 - pricing calculator: [service] | market: [x]
-- save knowledge: [topic] | [details] — build knowledge library
-- recall knowledge: [topic] — pull from knowledge base
-- learn from: [url] — ingest and remember webpage
-- nexus brain dump — export full knowledge snapshot
-- nexus status — see system health and improvement queue
-- approve / reject — approve or reject pending dev improvements
+- save knowledge: [topic] | [details] Ã¢ÂÂ build knowledge library
+- recall knowledge: [topic] Ã¢ÂÂ pull from knowledge base
+- learn from: [url] Ã¢ÂÂ ingest and remember webpage
+- nexus brain dump Ã¢ÂÂ export full knowledge snapshot
+- nexus status Ã¢ÂÂ see system health and improvement queue
+- approve / reject Ã¢ÂÂ approve or reject pending dev improvements
 
 Behavioral rules:
 - If memory contains the answer, ANSWER IT directly.
@@ -2396,9 +2465,9 @@ Behavioral rules:
 - Match Zach's energy. If he's grinding, get sharp.
 
 Task rules:
-- task: or TODO: prefix → respond ONLY with: "✅ Task logged: [task]. I'll track this until you mark it done."
-- done: prefix → respond ONLY with: "✅ Done: [what was marked complete]."
-- done all → respond ONLY with: "✅ All tasks cleared."`;
+- task: or TODO: prefix Ã¢ÂÂ respond ONLY with: "Ã¢ÂÂ Task logged: [task]. I'll track this until you mark it done."
+- done: prefix Ã¢ÂÂ respond ONLY with: "Ã¢ÂÂ Done: [what was marked complete]."
+- done all Ã¢ÂÂ respond ONLY with: "Ã¢ÂÂ All tasks cleared."`;
   const data = await callAnthropicWithRetry({
     model: "claude-sonnet-4-5", max_tokens: 1500,
     system: systemPrompt,
