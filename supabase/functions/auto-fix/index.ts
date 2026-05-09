@@ -97,12 +97,28 @@ Deno.serve(async (req) => {
   }
 });
 
+// Files too large for safe auto-rewrite — auto-fix will skip these
+const OVERSIZED_FILE_LIMIT = 20000;
+
+// Count "if (msgLower" blocks as a proxy for command handler count
+function countHandlers(code: string): number {
+  return (code.match(/if \(msgLower/g) || []).length;
+}
+
 async function generateFix(improvement: any, currentCode: string, filePath: string, knownPatterns: string[] = []): Promise<{
   fixedCode: string;
   summary: string;
   filesChanged: string[];
   fix_confidence: number;
 }> {
+  // Guard: if file is too large for Claude to safely rewrite, skip it
+  if (currentCode.length > OVERSIZED_FILE_LIMIT) {
+    throw new Error(
+      `File ${filePath} is ${currentCode.length} chars — too large for safe auto-fix (limit: ${OVERSIZED_FILE_LIMIT}). ` +
+      `Manual fix required. Problem: ${improvement.problem}`
+    );
+  }
+
   const knownPatternContext = knownPatterns.length
     ? `\nKNOWN PATTERNS DETECTED:\n${knownPatterns.join("\n")}\nUse these known fix strategies if applicable.\n`
     : "";
@@ -118,16 +134,17 @@ File: ${filePath}
 ${knownPatternContext}
 CURRENT CODE:
 \`\`\`typescript
-${currentCode.slice(0, 12000)}
+${currentCode}
 \`\`\`
 
 REQUIREMENTS:
 1. Write the COMPLETE updated file — not just the changed section
 2. The fix must be minimal and surgical — only change what's needed
-3. Do not introduce new dependencies
-4. Maintain all existing functionality
-5. Add comments where you made changes: // AUTO-FIX: [what you changed]
-6. The code must be production-ready TypeScript for Deno/Supabase Edge Functions
+3. Do not remove or modify any existing command handlers or abilities
+4. Do not introduce new dependencies
+5. Maintain ALL existing functionality — every "if (msgLower" block must be preserved
+6. Add comments where you made changes: // AUTO-FIX: [what you changed]
+7. The code must be production-ready TypeScript for Deno/Supabase Edge Functions
 
 Return ONLY a JSON object with this exact structure:
 {
@@ -162,6 +179,16 @@ Return only the JSON. No explanation. No markdown code blocks around the JSON.`;
   const result = JSON.parse(jsonMatch[0]);
   if (!result.fixedCode || result.fixedCode.length < 100) {
     throw new Error("Claude returned empty or invalid code");
+  }
+
+  // Validate that the fix didn't strip existing command handlers
+  const originalHandlers = countHandlers(currentCode);
+  const fixedHandlers = countHandlers(result.fixedCode);
+  if (originalHandlers > 0 && fixedHandlers < originalHandlers * 0.9) {
+    throw new Error(
+      `Fix validation failed: original had ${originalHandlers} handlers, fix has ${fixedHandlers}. ` +
+      `Refusing to commit — fix would remove ${originalHandlers - fixedHandlers} command handlers.`
+    );
   }
 
   return {
