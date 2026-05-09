@@ -19,7 +19,7 @@ const FUNCTION_PATHS: Record<string, string> = {
 Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const body = await req.json();
-  const { improvement_id, telegram_chat_id } = body;
+  const { improvement_id, telegram_chat_id, known_patterns = [] } = body;
 
   if (!improvement_id || !telegram_chat_id) {
     return new Response(JSON.stringify({ error: "improvement_id and telegram_chat_id required" }), { status: 400 });
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
     const filePath = FUNCTION_PATHS[improvement.affected_function] || FUNCTION_PATHS.chat;
     const currentCode = await readFileFromGitHub(filePath, "main");
-    const { fixedCode, summary, filesChanged } = await generateFix(improvement, currentCode, filePath);
+    const { fixedCode, summary, filesChanged, fix_confidence } = await generateFix(improvement, currentCode, filePath, known_patterns);
 
     await writeFileToBranch(filePath, fixedCode, `Auto-fix: ${improvement.title}`, "dev");
 
@@ -56,15 +56,25 @@ Deno.serve(async (req) => {
       fix_summary: summary,
       files_changed: filesChanged,
       dev_commit_sha: devSha,
+      fix_confidence: fix_confidence || 70,
     }).eq("id", improvement_id);
+
+    const confidenceEmoji = (fix_confidence || 70) >= 80 ? "🟢" : (fix_confidence || 70) >= 60 ? "🟡" : "🔴";
+    const confidenceNote = (fix_confidence || 70) >= 80
+      ? "High confidence — safe to approve."
+      : (fix_confidence || 70) >= 60
+      ? "Medium confidence — review before approving."
+      : "Low confidence — manual review recommended.";
 
     const msg =
       `🔧 AUTO-FIX READY\n\n` +
       `Problem: ${improvement.title}\n` +
       `Root cause: ${improvement.problem}\n\n` +
       `Fix: ${summary}\n` +
-      `Files changed: ${filesChanged.join(", ")}\n` +
-      `Estimated impact: ${improvement.estimated_minutes} min of manual work saved\n\n` +
+      `Confidence: ${confidenceEmoji} ${fix_confidence || 70}%\n` +
+      `Files: ${filesChanged.join(", ")}\n` +
+      `Est. time saved: ${improvement.estimated_minutes} min\n\n` +
+      `${confidenceNote}\n\n` +
       `Reply:\n✅ "approve" → push to production\n❌ "reject" → discard this fix`;
 
     await sendTelegram(telegram_chat_id, msg);
@@ -87,11 +97,16 @@ Deno.serve(async (req) => {
   }
 });
 
-async function generateFix(improvement: any, currentCode: string, filePath: string): Promise<{
+async function generateFix(improvement: any, currentCode: string, filePath: string, knownPatterns: string[] = []): Promise<{
   fixedCode: string;
   summary: string;
   filesChanged: string[];
+  fix_confidence: number;
 }> {
+  const knownPatternContext = knownPatterns.length
+    ? `\nKNOWN PATTERNS DETECTED:\n${knownPatterns.join("\n")}\nUse these known fix strategies if applicable.\n`
+    : "";
+
   const prompt = `You are improving the Nexus AI system. You must write a complete, working fix for the following issue.
 
 IMPROVEMENT TO IMPLEMENT:
@@ -100,7 +115,7 @@ Problem: ${improvement.problem}
 Recommended fix: ${improvement.recommended_fix}
 Affected function: ${improvement.affected_function}
 File: ${filePath}
-
+${knownPatternContext}
 CURRENT CODE:
 \`\`\`typescript
 ${currentCode.slice(0, 12000)}
@@ -118,7 +133,9 @@ Return ONLY a JSON object with this exact structure:
 {
   "fixedCode": "the complete updated file contents",
   "summary": "one sentence describing what was changed and why",
-  "filesChanged": ["${filePath}"]
+  "filesChanged": ["${filePath}"],
+  "fix_confidence": 85,
+  "validation_check": "what to look for to confirm this fix worked"
 }
 
 Return only the JSON. No explanation. No markdown code blocks around the JSON.`;
@@ -147,7 +164,12 @@ Return only the JSON. No explanation. No markdown code blocks around the JSON.`;
     throw new Error("Claude returned empty or invalid code");
   }
 
-  return result;
+  return {
+    fixedCode: result.fixedCode,
+    summary: result.summary,
+    filesChanged: result.filesChanged || [filePath],
+    fix_confidence: result.fix_confidence || 70,
+  };
 }
 
 async function syncDevToMain(): Promise<void> {

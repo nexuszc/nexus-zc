@@ -203,6 +203,21 @@ Deno.serve(async (_req) => {
         ).join("\n")
       : "";
 
+    // Monday only: pull last week's self-improvement summary
+    const isMonday = new Date().getDay() === 1;
+    let weeklySummary = "";
+    if (isMonday) {
+      const { data: lastReport } = await supabase
+        .from("weekly_reports")
+        .select("fixes_attempted, fixes_successful, report_content")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (lastReport) {
+        weeklySummary = `LAST WEEK SELF-IMPROVEMENT:\n• Fixes attempted: ${lastReport.fixes_attempted}\n• Fixes verified working: ${lastReport.fixes_successful}`;
+      }
+    }
+
     const contextBlock = [
       fmt(recent48.data || [], "LAST 48 HOURS (personal brain)"),
       fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
@@ -215,6 +230,7 @@ Deno.serve(async (_req) => {
       healthSummary,
       improvementsSummary,
       knowledgeContext,
+      weeklySummary,
     ].filter(Boolean).join("\n\n");
 
     // ----- 6. Generate briefing via Claude (with fallback) -----

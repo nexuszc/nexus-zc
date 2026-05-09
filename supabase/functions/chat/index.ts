@@ -214,7 +214,21 @@ serve(async (req) => {
         await supabase.from("nexus_improvements")
           .update({ status: "live", approved_at: new Date().toISOString(), live_at: new Date().toISOString() })
           .eq("id", improvement.id);
-        return earlyReturn(`✅ Approved and merged to production!\n\n"${improvement.title}" is now live.\nCloudflare will deploy in ~60 seconds.`);
+
+        // Schedule 1-hour verification reminder
+        const { data: convRow } = await supabase
+          .from("channel_conversations").select("external_id")
+          .eq("channel", "telegram").order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const tgChatId = convRow?.external_id;
+        if (tgChatId) {
+          await supabase.from("reminders").insert({
+            chat_id: String(tgChatId),
+            message: `🔍 VERIFICATION CHECK\n\nFix "${improvement.title}" was approved 1 hour ago.\nSend "nexus status" to check if it's working correctly.\nIf things are broken, send "reject" to rollback.`,
+            fire_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          });
+        }
+
+        return earlyReturn(`✅ Approved and merged!\n\n"${improvement.title}" is live.\nCloudflare deploys in ~60 seconds.\n\nI'll check back in 1 hour to verify it's working.`);
       } else {
         return earlyReturn(`❌ Merge failed: ${mergeResult.error}\nCheck GitHub for conflicts.`);
       }
@@ -294,6 +308,23 @@ Be direct, specific, and actionable. Reference actual data from above.`;
 
       await logUsage(supabase, "nexus audit", true, 0, channel);
       return earlyReturn(`🔍 NEXUS AUDIT\n\n${audit}`);
+    }
+
+    // ================================================================
+    // HEAL COMMAND — trigger health-monitor immediately
+    // ================================================================
+    if (msgLower === "nexus heal" || msgLower === "heal nexus") {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/health-monitor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({}),
+      });
+      return earlyReturn(
+        `🔧 NEXUS HEAL TRIGGERED\n\nRunning full health check and improvement cycle now.\nYou'll receive updates via Telegram as issues are identified and fixes are prepared.\n\nSend "nexus status" in 2 minutes to see results.`
+      );
     }
 
     // ================================================================
