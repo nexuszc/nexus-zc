@@ -1620,13 +1620,15 @@ Be specific. Reference actual numbers.` }],
       try {
         const now = new Date().toISOString();
 
-        const [{ data: actions }, { data: abilities }] = await Promise.all([
+        const [{ data: actions }, { data: proposed }, { data: testing }] = await Promise.all([
           supabase.from("nexus_action_queue").select("id, action_summary").eq("status", "pending"),
           supabase.from("nexus_ability_proposals").select("id, ability_name").eq("status", "proposed"),
+          supabase.from("nexus_ability_proposals").select("id, ability_name").eq("status", "testing"),
         ]);
 
         const actionIds = (actions || []).map((a: { id: string }) => a.id);
-        const abilityRows = abilities || [];
+        const toBuild = proposed || [];
+        const toDeploy = testing || [];
 
         if (actionIds.length > 0) {
           await supabase.from("nexus_action_queue")
@@ -1634,7 +1636,7 @@ Be specific. Reference actual numbers.` }],
             .in("id", actionIds);
         }
 
-        for (const ability of abilityRows) {
+        for (const ability of toBuild) {
           await supabase.from("nexus_ability_proposals")
             .update({ status: "approved", approved_at: now })
             .eq("id", ability.id);
@@ -1645,10 +1647,19 @@ Be specific. Reference actual numbers.` }],
           });
         }
 
+        for (const ability of toDeploy) {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({ proposal_id: ability.id, action: "deploy" }),
+          });
+        }
+
         await logUsage(supabase, "approve_all", true, Date.now() - start, channel);
         const lines = [];
         if (actionIds.length > 0) lines.push(`✅ Approved ${actionIds.length} action${actionIds.length > 1 ? "s" : ""}`);
-        if (abilityRows.length > 0) lines.push(`🔨 Building ${abilityRows.length} abilit${abilityRows.length > 1 ? "ies" : "y"}: ${abilityRows.map((a: { ability_name: string }) => a.ability_name).join(", ")}`);
+        if (toBuild.length > 0) lines.push(`🔨 Building ${toBuild.length} abilit${toBuild.length > 1 ? "ies" : "y"}: ${toBuild.map((a: { ability_name: string }) => a.ability_name).join(", ")}`);
+        if (toDeploy.length > 0) lines.push(`🚀 Deploying ${toDeploy.length} abilit${toDeploy.length > 1 ? "ies" : "y"} to production: ${toDeploy.map((a: { ability_name: string }) => a.ability_name).join(", ")}`);
         if (lines.length === 0) lines.push("Nothing pending to approve.");
         return earlyReturn(lines.join("\n"));
       } catch (err: any) {
