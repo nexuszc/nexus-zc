@@ -12,6 +12,84 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// AUTO-FIX: Added health monitoring constants and state tracking
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+const HEALTH_CHECK_WINDOW_MS = 300000; // 5 minutes
+const FAILURE_THRESHOLD = 3;
+
+// AUTO-FIX: Track recent failures for health monitoring
+const recentFailures: { timestamp: number; error: string; function: string }[] = [];
+
+// AUTO-FIX: Health monitoring function to detect degradation
+function checkSystemHealth(): { healthy: boolean; degraded: boolean; recentErrors: number } {
+  const now = Date.now();
+  const recentWindow = now - HEALTH_CHECK_WINDOW_MS;
+  
+  // Clean old failures
+  const activeFailures = recentFailures.filter(f => f.timestamp > recentWindow);
+  recentFailures.length = 0;
+  recentFailures.push(...activeFailures);
+  
+  return {
+    healthy: activeFailures.length < FAILURE_THRESHOLD,
+    degraded: activeFailures.length >= FAILURE_THRESHOLD && activeFailures.length < FAILURE_THRESHOLD * 2,
+    recentErrors: activeFailures.length
+  };
+}
+
+// AUTO-FIX: Log health events and failures with context
+async function logHealthEvent(
+  eventType: 'failure' | 'recovery' | 'degradation_warning',
+  functionName: string,
+  errorMessage: string,
+  context?: any
+): Promise<void> {
+  try {
+    await supabase.from('system_health_logs').insert({
+      event_type: eventType,
+      function_name: functionName,
+      error_message: errorMessage,
+      context: context || {},
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Health logging failed:', err);
+  }
+}
+
+// AUTO-FIX: Retry wrapper with exponential backoff for auto-recovery
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  functionName: string,
+  maxRetries: number = MAX_RETRIES
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      recentFailures.push({
+        timestamp: Date.now(),
+        error: err.message,
+        function: functionName
+      });
+      
+      if (attempt < maxRetries) {
+        const delay = RETRY_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`${functionName} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay}ms...`, err.message);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        await logHealthEvent('failure', functionName, err.message, { attempts: attempt + 1, stack: err.stack });
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 // AUTO-FIX: Added analytics logging function to capture usage data
 async function logAnalyticsEvent(
   eventType: string,
@@ -38,6 +116,13 @@ async function logAnalyticsEvent(
 }
 
 Deno.serve(async (req) => {
+  // AUTO-FIX: Check system health at request start
+  const healthStatus = checkSystemHealth();
+  if (healthStatus.degraded) {
+    console.warn(`⚠️ System degraded: ${healthStatus.recentErrors} recent failures`);
+    await logHealthEvent('degradation_warning', 'provision', `System degraded with ${healthStatus.recentErrors} recent failures`, { healthStatus });
+  }
+  
   // AUTO-FIX: Capture request start time and initial parameters for analytics
   const startTime = Date.now();
   let requestBody: any;
@@ -80,16 +165,37 @@ Deno.serve(async (req) => {
   }).eq("id", client_id);
 
   if (telegram_chat_id) {
-    await sendTelegram(telegram_chat_id, `âï¸ Provisioning ${client.name}...\nCreating site at ${subdomain}`);
+    await sendTelegram(telegram_chat_id, `⚙️ Provisioning ${client.name}...\nCreating site at ${subdomain}`);
+  }
+  
+  // AUTO-FIX: Notify user if system is degraded
+  if (healthStatus.degraded && telegram_chat_id) {
+    await sendTelegram(telegram_chat_id, `⚠️ System is experiencing elevated error rates. Provisioning may take longer than usual.`);
   }
 
   try {
     const ctx = Array.isArray(client.client_context) ? client.client_context[0] : client.client_context;
 
-    const html = await generateClientSite(client, ctx);
-    await pushToGitHub(slug, html);
-    await createCloudflareDNS(slug);
-    await registerPagesSubdomain(slug);
+    // AUTO-FIX: Wrap critical operations with retry logic for auto-recovery
+    const html = await withRetry(
+      () => generateClientSite(client, ctx),
+      'generateClientSite'
+    );
+    
+    await withRetry(
+      () => pushToGitHub(slug, html),
+      'pushToGitHub'
+    );
+    
+    await withRetry(
+      () => createCloudflareDNS(slug),
+      'createCloudflareDNS'
+    );
+    
+    await withRetry(
+      () => registerPagesSubdomain(slug),
+      'registerPagesSubdomain'
+    );
 
     await supabase.from("clients").update({
       slug,
@@ -112,11 +218,16 @@ Deno.serve(async (req) => {
       : null;
 
     if (telegram_chat_id) {
-      const msg = `â ${client.name} is live!\n\n` +
-        `ð Site: https://${subdomain}\n` +
-        (portalUrl ? `ð Client portal: ${portalUrl}\n\n` : "\n") +
-        `Site is deploying via Cloudflare Pages â live in ~60 seconds.`;
+      const msg = `✅ ${client.name} is live!\n\n` +
+        `🌐 Site: https://${subdomain}\n` +
+        (portalUrl ? `🔐 Client portal: ${portalUrl}\n\n` : "\n") +
+        `Site is deploying via Cloudflare Pages ⚡ live in ~60 seconds.`;
       await sendTelegram(telegram_chat_id, msg);
+    }
+    
+    // AUTO-FIX: Log recovery if system was degraded but succeeded
+    if (healthStatus.degraded) {
+      await logHealthEvent('recovery', 'provision', 'Successful provision despite degraded state', { client_id, slug });
     }
 
     // AUTO-FIX: Log successful provision with execution time and metadata
@@ -127,7 +238,7 @@ Deno.serve(async (req) => {
       { client_id, telegram_chat_id, client_name: client.name },
       'success',
       undefined,
-      { slug, subdomain, execution_time_ms: executionTime, has_telegram: !!telegram_chat_id }
+      { slug, subdomain, execution_time_ms: executionTime, has_telegram: !!telegram_chat_id, system_health: healthStatus }
     );
 
     return new Response(JSON.stringify({ ok: true, url: `https://${subdomain}` }), { status: 200 });
@@ -136,7 +247,7 @@ Deno.serve(async (req) => {
     console.error("Provision error:", err);
     await supabase.from("clients").update({ provision_status: "error" }).eq("id", client_id);
     if (telegram_chat_id) {
-      await sendTelegram(telegram_chat_id, `â Provisioning failed for ${client.name}: ${err.message}`);
+      await sendTelegram(telegram_chat_id, `❌ Provisioning failed for ${client.name}: ${err.message}`);
     }
 
     // AUTO-FIX: Log failed provision with error details and execution time
@@ -147,7 +258,7 @@ Deno.serve(async (req) => {
       { client_id, telegram_chat_id, client_name: client.name },
       'failure',
       err.message,
-      { slug, execution_time_ms: executionTime, error_stack: err.stack }
+      { slug, execution_time_ms: executionTime, error_stack: err.stack, system_health: healthStatus }
     );
 
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
@@ -190,6 +301,13 @@ IMPORTANT: Return ONLY the complete HTML. No explanation. No markdown. Just the 
       messages: [{ role: "user", content: prompt }],
     }),
   });
+  
+  // AUTO-FIX: Better error handling for API responses
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Anthropic API error (${res.status}): ${errorText}`);
+  }
+  
   const data = await res.json();
   const html = data?.content?.[0]?.text || "";
   if (!html.includes("<!DOCTYPE")) throw new Error("Claude did not return valid HTML");
@@ -270,7 +388,8 @@ async function createCloudflareDNS(slug: string): Promise<void> {
 
   if (!res.ok) {
     const err = await res.json();
-    console.error("Cloudflare DNS error:", JSON.stringify(err));
+    // AUTO-FIX: Throw error instead of just logging to trigger retry
+    throw new Error(`Cloudflare DNS error: ${JSON.stringify(err)}`);
   }
 }
 
@@ -288,7 +407,8 @@ async function registerPagesSubdomain(slug: string): Promise<void> {
   );
   if (!res.ok) {
     const err = await res.json();
-    console.error("Pages domain registration error:", JSON.stringify(err));
+    // AUTO-FIX: Throw error instead of just logging to trigger retry
+    throw new Error(`Pages domain registration error: ${JSON.stringify(err)}`);
   }
 }
 
