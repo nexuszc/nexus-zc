@@ -1623,7 +1623,7 @@ Be specific. Reference actual numbers.` }],
         const { data: queuedAction } = await supabase
           .from("nexus_action_queue")
           .select("*")
-          .or(`id.eq.${actionId},id.ilike.${actionId}%`)
+          .filter("id::text", "ilike", `${actionId}%`)
           .eq("status", "pending")
           .maybeSingle();
 
@@ -1658,7 +1658,7 @@ Be specific. Reference actual numbers.` }],
         const { data: queuedAction } = await supabase
           .from("nexus_action_queue")
           .select("*")
-          .or(`id.eq.${actionId},id.ilike.${actionId}%`)
+          .filter("id::text", "ilike", `${actionId}%`)
           .eq("status", "pending")
           .maybeSingle();
 
@@ -1683,7 +1683,7 @@ Be specific. Reference actual numbers.` }],
         const { data: proposals } = await supabase
           .from("nexus_ability_proposals")
           .select("*")
-          .or(`id.eq.${abilityId},id.ilike.${abilityId}%`)
+          .filter("id::text", "ilike", `${abilityId}%`)
           .in("status", ["proposed", "testing"])
           .limit(1);
 
@@ -1727,7 +1727,7 @@ Be specific. Reference actual numbers.` }],
 
         await supabase.from("nexus_ability_proposals")
           .update({ status: "rejected" })
-          .or(`id.eq.${abilityId},id.ilike.${abilityId}%`);
+          .filter("id::text", "ilike", `${abilityId}%`);
 
         await logUsage(supabase, "reject_ability", true, Date.now() - start, channel);
         return earlyReturn(`Ã¢ÂÂ Ability rejected and removed from queue.`);
