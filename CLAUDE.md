@@ -103,8 +103,10 @@ Then productized and sold to other multi-business operators.
 | `process-email-queue` | Batch process email queue | Cron |
 | `generate-queue` | Generate lead call queue | On demand |
 | `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
-| `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request, notify_contractor | Internal |
+| `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
+| `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
+| `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 
 ---
 
@@ -322,14 +324,16 @@ You reply "reject":
 - ✅ Self-healing final push — pattern detection, confidence scoring, fix verification, weekly reports, nexus heal, rollback alerts
 - ✅ nexus_usage logUsage() audit — all 9 missing handlers fixed across chat/index.ts
 - ✅ Roofing OS Phase 2 — contractor logins (contractor_auth + ContractorContext + magic link), photo uploads (job-photos bucket + grid UI), insurance claim workflow (supplement_request AI letter), crew management (crew_members table + RoofingCrew page), Telegram notifications on homeowner message, self-healing integration (roofing-ai + contractor-auth in health-monitor), 5 roofing Telegram commands, provision integration for type=roofing
+- ✅ Roofing OS Phase 3 — roofing-notify (Twilio SMS + Resend email dispatcher, 5 events: homeowner_message, payment_received, job_created, portal_link, document_ready), roofing-payments (Stripe PaymentIntents, PayButton with Stripe Elements in portal), 4-step contractor onboarding wizard, portal branding with primary_color/logo/tagline
 
 **NEXT:**
 1. Schedule dedicated scoping call with Kevin Cantwell
 2. Brian's lead system — generate-queue + call cadence working, needs tuning
 3. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-4. Add Gmail secrets to enable email sending
-5. Dump session summary to Nexus via Telegram
-6. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. Auto-fix needs to be trained to NOT strip V2 abilities when fixing the chat function. Consider adding a note in the auto-fix prompt about preserving existing handlers.
+4. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY
+5. Add VITE_STRIPE_PUBLISHABLE_KEY to Cloudflare Pages env vars (app/.env has blank placeholder)
+6. Dump session summary to Nexus via Telegram
+7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully.
 
 ---
 
