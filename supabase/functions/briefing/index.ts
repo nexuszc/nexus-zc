@@ -136,7 +136,13 @@ Deno.serve(async (_req) => {
       };
     }));
 
-    // ----- 4. Pull Nexus health + improvements -----
+    // ----- 4. Pull Nexus health + improvements + knowledge base -----
+    const { data: recentKnowledge } = await supabase
+      .from("knowledge_base")
+      .select("topic, content")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
     const [healthData, pendingImprovements] = await Promise.all([
       supabase.from("nexus_health")
         .select("function_name, status, error_count, success_count")
@@ -191,6 +197,12 @@ Deno.serve(async (_req) => {
         ).join("\n")
       : "";
 
+    const knowledgeContext = (recentKnowledge || []).length
+      ? "KNOWLEDGE BASE (recent):\n" + (recentKnowledge || []).map((k: any) =>
+          `• ${k.topic}: ${k.content.slice(0, 150)}`
+        ).join("\n")
+      : "";
+
     const contextBlock = [
       fmt(recent48.data || [], "LAST 48 HOURS (personal brain)"),
       fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
@@ -202,6 +214,7 @@ Deno.serve(async (_req) => {
       clientBriefContext,
       healthSummary,
       improvementsSummary,
+      knowledgeContext,
     ].filter(Boolean).join("\n\n");
 
     // ----- 6. Generate briefing via Claude (with fallback) -----
@@ -230,10 +243,13 @@ FORMAT:
 🔧 NEXUS SELF-REPORT
 [Health status of each function from NEXUS HEALTH context. List top pending improvements in priority order with estimated fix time. If everything is healthy and no improvements pending, say so. Be direct.]
 
+💡 KNOWLEDGE FLASH (optional — only include if knowledge base has something directly relevant to today's priorities)
+[One insight from knowledge base that's relevant to what's happening today]
+
 ⚡ FIRST MOVE
 [One direct recommendation — what to do in the first 30 minutes of the day]
 
-Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 600 words.
+Be direct. Be specific. Reference actual entries by name. No generic advice. Keep total response under 650 words.
 
 MEMORY CONTEXT:
 ${contextBlock || "(no recent entries found)"}`;

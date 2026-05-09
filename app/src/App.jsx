@@ -8,6 +8,7 @@ import ClientDetail from './pages/ClientDetail'
 import VAInterface from './pages/VAInterface'
 import Leads from './pages/Leads'
 import ClientPortal from './pages/ClientPortal'
+import Documents from './pages/Documents'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/clients" element={<Clients />} />
             <Route path="/clients/:id" element={<ClientDetail />} />
             <Route path="/leads" element={<Leads />} />
+            <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
           </Route>
         </Route>

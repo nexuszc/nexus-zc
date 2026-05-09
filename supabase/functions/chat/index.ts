@@ -795,14 +795,22 @@ Be specific. Reference actual numbers.` }],
       const forWork = parts.find((p: string) => p.toLowerCase().startsWith("for:"))?.slice(4).trim() || "Services rendered";
       const amount = parts.find((p: string) => p.toLowerCase().startsWith("amount:"))?.slice(7).trim() || "TBD";
       try {
-        const { data: client } = await supabase.from("clients").select("*, client_context(*)").ilike("name", `%${clientName}%`).limit(1).maybeSingle();
+        const [{ data: client }, { data: seqData }] = await Promise.all([
+          supabase.from("clients").select("*, client_context(*)").ilike("name", `%${clientName}%`).limit(1).maybeSingle(),
+          supabase.from("invoice_sequence").select("last_number").eq("id", 1).single(),
+        ]);
+
+        const nextNum = (seqData?.last_number || 1000) + 1;
+        await supabase.from("invoice_sequence").update({ last_number: nextNum }).eq("id", 1);
+        const year = new Date().getFullYear();
+        const invoiceNum = `INV-${year}-${nextNum}`;
 
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 800,
-            messages: [{ role: "user", content: `Generate a professional invoice.\n\nFROM: Zach Curtis / Nexus ZC\nTO: ${clientName}\nFOR: ${forWork}\nAMOUNT: ${amount}\nDATE: ${new Date().toLocaleDateString()}\nINVOICE #: INV-${Date.now().toString().slice(-6)}\nDUE: Net 15\n\nWrite a clean, professional invoice in plain text format. Include: invoice header, line items, subtotal, total, payment instructions (Zach@nexuszc.com via Zelle/wire). Keep it professional and complete.` }],
+            messages: [{ role: "user", content: `Generate a professional invoice.\n\nFROM: Zach Curtis / Nexus ZC\nTO: ${clientName}\nFOR: ${forWork}\nAMOUNT: ${amount}\nDATE: ${new Date().toLocaleDateString()}\nINVOICE #: ${invoiceNum}\nDUE: Net 15\n\nWrite a clean, professional invoice in plain text format. Include: invoice header, line items, subtotal, total, payment instructions (Zach@nexuszc.com via Zelle/wire). Keep it professional and complete.` }],
           }),
         });
         const data = await res.json();
@@ -931,31 +939,35 @@ Be specific. Reference actual numbers.` }],
     // ================================================================
     if (msgLower.startsWith("status update:")) {
       const start = Date.now();
-      const projectName = message.slice(14).trim();
+      const subject = message.slice(14).trim();
       try {
-        const [{ data: projectEntries }, { data: openTasks }, { data: project }] = await Promise.all([
-          supabase.from("entries").select("content, role, created_at, entry_type").overlaps("project_names", [projectName]).order("created_at", { ascending: false }).limit(20),
-          supabase.from("entries").select("content, created_at").eq("task_status", "open").overlaps("project_names", [projectName]),
-          supabase.from("projects").select("*").ilike("name", `%${projectName}%`).limit(1).maybeSingle(),
+        const [{ data: client }, { data: recentEntries }] = await Promise.all([
+          supabase.from("clients").select("*, client_context(*), va_assignments(*)")
+            .ilike("name", `%${subject}%`).limit(1).maybeSingle(),
+          supabase.from("entries").select("content, entry_type, created_at")
+            .or(`content.ilike.%${subject}%,project_names.cs.{"${subject}"}`)
+            .order("created_at", { ascending: false }).limit(10),
         ]);
-
-        const entrySummary = (projectEntries || []).map((e: any) => `[${e.role}, ${new Date(e.created_at).toLocaleDateString()}] ${e.content.slice(0, 150)}`).join("\n");
-        const taskList = (openTasks || []).map((t: any) => `- ${t.content.slice(0, 100)}`).join("\n") || "None";
 
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
           body: JSON.stringify({
             model: "claude-sonnet-4-5", max_tokens: 600,
-            messages: [{ role: "user", content: `Generate a concise status update for: ${projectName}\n\nCATEGORY: ${project?.category || "unknown"}\n\nRECENT ACTIVITY:\n${entrySummary || "No activity found"}\n\nOPEN TASKS:\n${taskList}\n\nFormat:\n📍 STATUS: ${projectName}\n\nWHERE WE ARE:\n[Current state in 2-3 sentences]\n\nDONE RECENTLY:\n[What's been accomplished]\n\nOPEN ITEMS:\n[Active tasks and blockers]\n\nNEXT STEP:\n[Single most important action]` }],
+            messages: [{ role: "user", content: `Generate a concise project status update for: ${subject}\n\nCONTEXT:\n${(recentEntries || []).map((e: any) => e.content.slice(0, 100)).join("\n")}\nCLIENT: ${client ? `${client.name} — ${client.deal_type}` : "N/A"}\n\nFormat:\n📊 STATUS: ${subject}\nAs of: ${new Date().toLocaleDateString()}\n\nWHAT'S DONE: [completed items]\nIN PROGRESS: [active work]\nBLOCKERS: [what's stuck]\nNEXT: [immediate next steps]\nOVERALL: [one sentence health assessment]` }],
           }),
         });
         const data = await res.json();
         const update = data?.content?.[0]?.text || "Could not generate status update.";
 
-        await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `STATUS: ${projectName}\n\n${update}`, entry_type: "note", importance: 7, tags: ["status", "project"], classification_status: "skip" });
+        await supabase.from("generated_docs").insert({
+          doc_type: "status_update", client_id: client?.id || null,
+          title: `Status Update — ${subject} — ${new Date().toLocaleDateString()}`,
+          content: update,
+        });
+        await supabase.from("entries").insert({ conversation_id: conversationId, source: channel, role: "assistant", content: `STATUS: ${subject}\n\n${update}`, entry_type: "note", importance: 7, tags: ["status", "project"], classification_status: "skip" });
         await logUsage(supabase, "status update", true, Date.now() - start, channel);
-        return earlyReturn(update);
+        return earlyReturn(`📊 STATUS UPDATE\n\n${update}`);
       } catch (err: any) {
         await logUsage(supabase, "status update", false, Date.now() - start, channel);
         return earlyReturn(`❌ Status update failed: ${err.message}`);
@@ -1228,21 +1240,42 @@ Be specific. Reference actual numbers.` }],
     if (msgLower === "nexus brain dump" || msgLower === "brain dump") {
       const start = Date.now();
       try {
-        const [{ data: knowledge }, { data: recentEntries }, { data: clients }, { data: openTasks }] = await Promise.all([
+        const [{ data: knowledge }, { data: clients }, { data: openTasks }, { data: docs }, { data: improvements }] = await Promise.all([
           supabase.from("knowledge_base").select("topic, created_at").order("created_at", { ascending: false }).limit(20),
-          supabase.from("entries").select("content, entry_type, created_at").eq("role", "user").is("client_id", null).order("created_at", { ascending: false }).limit(20),
           supabase.from("clients").select("name, deal_type, status, provision_status"),
           supabase.from("entries").select("content").eq("task_status", "open"),
+          supabase.from("generated_docs").select("doc_type, title, created_at").order("created_at", { ascending: false }).limit(10),
+          supabase.from("nexus_improvements").select("title, status").eq("status", "pending").order("priority").limit(5),
         ]);
 
-        const dump = `🧠 NEXUS BRAIN DUMP\n\n` +
+        // Build full dump and save to memory
+        const fullDump = `NEXUS BRAIN DUMP — ${new Date().toLocaleString()}\n\n` +
           `KNOWLEDGE BASE (${knowledge?.length || 0} items):\n${(knowledge || []).map((k: any) => `• ${k.topic}`).join("\n") || "Empty"}\n\n` +
-          `ACTIVE CLIENTS (${clients?.length || 0}):\n${(clients || []).map((c: any) => `• ${c.name} — ${c.deal_type || "no deal type"} — ${c.status}`).join("\n") || "None"}\n\n` +
-          `OPEN TASKS (${openTasks?.length || 0}):\n${(openTasks || []).map((t: any) => `• ${t.content.slice(0, 80)}`).join("\n") || "None"}\n\n` +
-          `RECENT MEMORY (last 20 entries):\n${(recentEntries || []).map((e: any) => `• [${e.entry_type}] ${e.content.slice(0, 80)}`).join("\n") || "None"}`;
+          `ACTIVE CLIENTS (${clients?.length || 0}):\n${(clients || []).map((c: any) => `• ${c.name} — ${c.deal_type || "no deal"} — ${c.status} — site: ${c.provision_status}`).join("\n") || "None"}\n\n` +
+          `OPEN TASKS (${openTasks?.length || 0}):\n${(openTasks || []).map((t: any) => `• ${t.content.slice(0, 100)}`).join("\n") || "None"}\n\n` +
+          `GENERATED DOCS (${docs?.length || 0} recent):\n${(docs || []).map((d: any) => `• [${d.doc_type}] ${d.title}`).join("\n") || "None"}\n\n` +
+          `NEXUS IMPROVEMENT QUEUE:\n${(improvements || []).map((i: any) => `• ${i.title}`).join("\n") || "None"}`;
+
+        // Save full dump to memory
+        await supabase.from("entries").insert({
+          conversation_id: conversationId, source: channel, role: "assistant",
+          content: fullDump, entry_type: "meta", importance: 9,
+          tags: ["brain-dump"], classification_status: "skip",
+        });
+
+        // Send Telegram-friendly summary (under 4000 chars)
+        const summary = `🧠 NEXUS BRAIN DUMP\n\n` +
+          `📚 Knowledge: ${knowledge?.length || 0} topics\n` +
+          `👥 Clients: ${clients?.length || 0} active\n` +
+          `✅ Open tasks: ${openTasks?.length || 0}\n` +
+          `📄 Recent docs: ${docs?.length || 0}\n` +
+          `🔧 Improvements queued: ${improvements?.length || 0}\n\n` +
+          `TOP KNOWLEDGE:\n${(knowledge || []).slice(0, 5).map((k: any) => `• ${k.topic}`).join("\n") || "None"}\n\n` +
+          `OPEN TASKS:\n${(openTasks || []).slice(0, 5).map((t: any) => `• ${t.content.slice(0, 80)}`).join("\n") || "None"}\n\n` +
+          `Full dump saved to Nexus memory. Send "recall knowledge: [topic]" to pull specifics.`;
 
         await logUsage(supabase, "brain dump", true, Date.now() - start, channel);
-        return earlyReturn(dump);
+        return earlyReturn(summary);
       } catch (err: any) {
         await logUsage(supabase, "brain dump", false, Date.now() - start, channel);
         return earlyReturn(`❌ Brain dump failed: ${err.message}`);
