@@ -1911,6 +1911,22 @@ Be specific. Reference actual numbers.` }],
     }
 
     // Ã¢ÂÂÃ¢ÂÂ AGENT NOW Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
+    // ── NEXUS EXECUTE (natural language build) ──────────────────────────────────
+    if (msgLower.startsWith("build:") || msgLower.startsWith("nexus build:")) {
+      const start = Date.now();
+      const instruction = message.replace(/^nexus build:/i, "").replace(/^build:/i, "").trim();
+      if (!instruction) {
+        return earlyReturn("What should I build? Example: `build: a command that summarizes my week in plain English`");
+      }
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ instruction }),
+      });
+      await logUsage(supabase, "nexus_execute", true, Date.now() - start, channel);
+      return earlyReturn(`🔍 On it — researching and building: *${instruction}*\n\nI'll send you updates as it progresses.`);
+    }
+
     if (msgLower === "agent now" || msgLower === "nexus agent" || msgLower === "run agent") {
       const start = Date.now();
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-agent`, {
