@@ -1,6 +1,6 @@
 # NEXUS ZC — CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 9, 2026 — v5
+# Last updated: May 10, 2026 — v6
 
 ---
 
@@ -81,9 +81,10 @@ Then productized and sold to other multi-business operators.
 
 ### Git Branch Structure:
 - `main` — production (Cloudflare Pages deploys from here)
-- `dev` — staging (auto-fix commits here; approve to merge to main)
+- `dev` — staging (auto-fix and nexus-builder commit here; approve to merge to main)
 - **Rule:** auto-fix always syncs dev to main before writing, then commits fix to dev
 - **Rule:** `approve` command does a content-based merge (reads files from dev, writes to main — conflict-proof)
+- **Rule:** nexus-builder commits to dev only. Only Zach's `approve` command writes to main.
 
 ---
 
@@ -347,7 +348,7 @@ You reply "reject":
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 9, 2026)
+## CURRENT BUILD PRIORITIES (as of May 10, 2026)
 
 **DONE this session:**
 - ✅ Telegram EarlyDrop bug fixed
@@ -368,6 +369,8 @@ You reply "reject":
 - ✅ Roofing OS Phase 3 — roofing-notify (Twilio SMS + Resend email dispatcher, 5 events: homeowner_message, payment_received, job_created, portal_link, document_ready), roofing-payments (Stripe PaymentIntents, PayButton with Stripe Elements in portal), 4-step contractor onboarding wizard, portal branding with primary_color/logo/tagline
 - ✅ Nexus COO Upgrade (v3) — nexus-coo function (focus, stale_check, momentum_check, health_score, contradiction_check), voice memos via Whisper, 6 new chat commands, briefing upgraded to COO-style with direct data, auto-fix 80% size guard + handler preservation rules, Dashboard upgraded (focus button, health score badges, stale indicators), 4 new DB tables (voice_memos, contradiction_log, focus_sessions, stale_alerts)
 - ✅ Nexus Autonomous Engine (v4) — nexus-agent (15-min loop: observe/think/act/report), nexus-research (6-hour loop: web scan + gap detection + knowledge building), nexus-builder (self-skill creator: writes handlers, deploys to dev, notifies for prod approval), 7 new DB tables, 9 new Telegram commands, full audit trail in nexus_audit_log, preference model with 6 seeds, 2 new cron jobs (jobs 4+5)
+- ✅ nexus-builder locked to dev only, 2000-line corruption guard, approve all capped at 5
+- ✅ Strategic Intelligence — nexus-director, nexus-tasks, directive system, task decomposition
 
 **NEXT:**
 1. Schedule dedicated scoping call with Kevin Cantwell
@@ -376,7 +379,7 @@ You reply "reject":
 4. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 5. Add VITE_STRIPE_PUBLISHABLE_KEY to Cloudflare Pages env vars (app/.env has blank placeholder)
 6. Dump session summary to Nexus via Telegram
-7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. The 80% size guard is now live — auto-fix will abort and notify if it tries to truncate chat/index.ts.
+7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. The 80% size guard is live — auto-fix will abort and notify if it tries to truncate chat/index.ts. nexus-builder is now dev-only with a 2000-line corruption guard.
 
 ---
 
@@ -399,7 +402,18 @@ You reply "reject":
 - Never end a session with uncommitted working changes
 - Always pull before push if remote has diverged: `git pull origin main --rebase`
 - Remote: `https://github.com/nexuszc/nexus-zc.git`
-- **Never commit to `dev` directly** — dev is managed by the auto-fix system
+- **Never commit to `dev` directly** — dev is managed by the auto-fix and nexus-builder systems
+
+---
+
+## NEXUS-BUILDER RULES (enforced in code — never override)
+
+- nexus-builder ONLY commits to dev branch — never main
+- Main branch is only updated via Zach's `approve` command (content-based merge)
+- nexus-builder aborts if chat/index.ts would drop below 2000 lines (corruption guard)
+- `approve all` is capped at 5 abilities per call
+- Every ability goes through: proposed → approved → building → testing (dev) → Zach approves → live (main)
+- nexus-builder never batch deploys — one ability at a time
 
 ---
 
