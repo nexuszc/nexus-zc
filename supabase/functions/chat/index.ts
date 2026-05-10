@@ -1939,24 +1939,143 @@ Be specific. Reference actual numbers.` }],
       if (!instruction) {
         return earlyReturn("What should I build? Example: `build: a command that summarizes my week in plain English`");
       }
-      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-execute`, {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-        body: JSON.stringify({ instruction }),
+        body: JSON.stringify({ instruction, source: "telegram" }),
       });
-      await logUsage(supabase, "nexus_execute", true, Date.now() - start, channel);
-      return earlyReturn(`🔍 On it — researching and building: *${instruction}*\n\nI'll send you updates as it progresses.`);
+      await logUsage(supabase, "nexus_build", true, Date.now() - start, channel);
+      return earlyReturn(`Building: *${instruction}*\n\nCreating manifest and building... I'll notify you when it's ready for review.`);
+    }
+
+    if (msgLower.startsWith("deploy build ")) {
+      const start = Date.now();
+      const manifestId = message.trim().split(" ").pop()?.trim();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ action: "deploy", manifest_id: manifestId }),
+      });
+      await logUsage(supabase, "deploy_build", true, Date.now() - start, channel);
+      return earlyReturn(`Deploying build \`${manifestId?.slice(0, 8)}\`... Live in ~60 seconds.`);
+    }
+
+    if (msgLower.startsWith("discard build ")) {
+      const start = Date.now();
+      const manifestId = message.trim().split(" ").pop()?.trim();
+      await supabase.from("nexus_build_manifests")
+        .update({ status: "failed" })
+        .or(`id.eq.${manifestId},id.ilike.${manifestId}%`);
+      await logUsage(supabase, "discard_build", true, Date.now() - start, channel);
+      return earlyReturn(`Build \`${manifestId?.slice(0, 8)}\` discarded.`);
+    }
+
+    if (msgLower === "builds" || msgLower === "build status") {
+      const start = Date.now();
+      try {
+        const { data: builds } = await supabase
+          .from("nexus_build_manifests")
+          .select("id, goal, status, tests_passed, tests_failed, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (!builds?.length) {
+          await logUsage(supabase, "builds_status", true, Date.now() - start, channel);
+          return earlyReturn("No builds yet. Send `build: [what to build]` to start.");
+        }
+
+        const reply = `*Recent builds:*\n\n` +
+          builds.map((b: any) =>
+            `*${(b.goal || "").slice(0, 60)}*\n` +
+            `Status: ${b.status} | Tests: ${b.tests_passed || 0} passed, ${b.tests_failed || 0} failed\n` +
+            (b.status === "staged" ? `Deploy: \`deploy build ${b.id.slice(0, 8)}\`` : "")
+          ).join("\n\n");
+
+        await logUsage(supabase, "builds_status", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "builds_status", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "improvements" || msgLower === "self improvements") {
+      const start = Date.now();
+      try {
+        const { data: improvements } = await supabase
+          .from("nexus_self_improvements")
+          .select("id, title, problem, complexity, status, directive_priority")
+          .in("status", ["proposed", "building", "live"])
+          .order("directive_priority")
+          .limit(10);
+
+        if (!improvements?.length) {
+          await logUsage(supabase, "self_improvements", true, Date.now() - start, channel);
+          return earlyReturn("No improvements identified yet. Send `core now` to run a cycle.");
+        }
+
+        const reply = `*Self-improvements identified:*\n\n` +
+          improvements.map((i: any) =>
+            `*${i.title}* (${i.complexity}, directive ${i.directive_priority})\n` +
+            `${(i.problem || "").slice(0, 80)}\n` +
+            (i.status === "proposed" ? `Build: \`build: ${i.title}\`` : `Status: ${i.status}`)
+          ).join("\n\n");
+
+        await logUsage(supabase, "self_improvements", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "self_improvements", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "core now" || msgLower === "nexus core") {
+      const start = Date.now();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-core`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ source: "manual" }),
+      });
+      await logUsage(supabase, "core_now", true, Date.now() - start, channel);
+      return earlyReturn("Nexus Core cycle triggered. Running observation, thinking, and action cycle...");
+    }
+
+    if (msgLower === "reflections" || msgLower === "what did you learn") {
+      const start = Date.now();
+      try {
+        const { data: reflections } = await supabase
+          .from("nexus_reflections")
+          .select("observation, learned, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (!reflections?.length) {
+          await logUsage(supabase, "reflections", true, Date.now() - start, channel);
+          return earlyReturn("No reflections yet. Give it a few cycles.");
+        }
+
+        const reply = `*What Nexus has learned:*\n\n` +
+          reflections.map((r: any) =>
+            `*${new Date(r.created_at).toLocaleTimeString("en-US", { timeZone: "America/Denver" })} MT*\n${r.learned || r.observation}`
+          ).join("\n\n");
+
+        await logUsage(supabase, "reflections", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "reflections", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
     }
 
     if (msgLower === "agent now" || msgLower === "nexus agent" || msgLower === "run agent") {
       const start = Date.now();
-      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-agent`, {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-core`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ source: "manual" }),
       });
       await logUsage(supabase, "agent_now", true, Date.now() - start, channel);
-      return earlyReturn(" -  Agent cycle triggered. Observing, thinking, acting...");
+      return earlyReturn("Nexus Core cycle triggered. Observing, thinking, acting...");
     }
 
     //  -  ABILITIES  - 

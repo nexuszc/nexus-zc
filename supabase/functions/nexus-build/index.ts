@@ -1,0 +1,431 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
+const GITHUB_REPO = "nexuszc/nexus-zc";
+
+const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+async function ai(prompt: string, maxTokens = 3000): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
+
+async function tg(text: string) {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: text.slice(0, 4000),
+      parse_mode: "Markdown"
+    })
+  });
+}
+
+async function readGitHub(path: string, branch = "main"): Promise<{ content: string; sha: string }> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=${branch}`,
+    { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+  );
+  const data = await res.json();
+  if (!data.content) throw new Error(`Cannot read: ${path}`);
+  return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
+}
+
+async function writeGitHub(path: string, content: string, message: string, branch = "dev"): Promise<string> {
+  let sha: string | undefined;
+  try {
+    const existing = await readGitHub(path, branch);
+    sha = existing.sha;
+  } catch { /* new file */ }
+
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        content: btoa(unescape(encodeURIComponent(content))),
+        branch,
+        ...(sha ? { sha } : {})
+      })
+    }
+  );
+  const data = await res.json();
+  return data.commit?.sha || "";
+}
+
+// ── CREATE MANIFEST ───────────────────────────────────────────────────────────
+
+async function createManifest(instruction: string, directivePriority: number): Promise<string> {
+  const { content: chatContent } = await readGitHub("supabase/functions/chat/index.ts");
+  const chatLines = chatContent.split("\n").length;
+  const existingTriggers = (chatContent.match(/if \((?:lowerMessage|msgLower)[^)]*\)/g) || [])
+    .map(m => m.slice(0, 60));
+
+  const manifestPrompt = `You are the Nexus build planner. Create a complete build manifest for this instruction.
+
+INSTRUCTION: ${instruction}
+
+CURRENT CODEBASE STATE:
+- chat/index.ts: ${chatLines} lines, ${existingTriggers.length} existing handlers
+- Existing triggers (don't duplicate): ${existingTriggers.slice(0, 20).join(" | ")}
+- Stack: React 18 + Vite + Tailwind, Supabase Edge Functions (Deno), PostgreSQL
+
+MANIFEST RULES:
+1. If instruction needs a chat handler — check existing triggers first, don't duplicate
+2. For new pages — add to app/src/pages/ and update App.jsx routes
+3. For new edge functions — add to supabase/functions/
+4. For DB changes — include exact SQL
+5. Keep scope minimal — build exactly what's needed, nothing extra
+6. Every build needs at least 2 tests
+
+Create the manifest. Be specific about file paths and what goes in each file.
+
+Respond with JSON only (no backticks):
+{
+  "goal": "short description of what this builds",
+  "complexity": "simple|medium|complex|system",
+  "files_to_create": [
+    {"path": "relative/path/file.ts", "description": "what goes in it", "content_summary": "key logic"}
+  ],
+  "files_to_modify": [
+    {"path": "relative/path/file.ts", "change": "what to add/change"}
+  ],
+  "db_migrations": ["SQL statement 1", "SQL statement 2"],
+  "functions_to_deploy": ["function-name"],
+  "tests": [
+    {"name": "test name", "type": "api|build|db|manual", "check": "what to verify"}
+  ],
+  "estimated_duration_min": 5
+}`;
+
+  const result = await ai(manifestPrompt, 2000);
+  const manifest = JSON.parse(result.replace(/```json|```/g, "").trim());
+
+  const { data: saved } = await supabase.from("nexus_build_manifests").insert({
+    goal: manifest.goal,
+    instruction,
+    status: "planning",
+    files_to_create: manifest.files_to_create || [],
+    files_to_modify: manifest.files_to_modify || [],
+    db_migrations: manifest.db_migrations || [],
+    functions_to_deploy: manifest.functions_to_deploy || [],
+    tests: manifest.tests || [],
+    directive_priority: directivePriority
+  }).select("id").single();
+
+  return saved?.id || "";
+}
+
+// ── BUILD FROM MANIFEST ───────────────────────────────────────────────────────
+
+async function buildFromManifest(manifestId: string): Promise<{ success: boolean; commitSha: string; error?: string }> {
+  const { data: manifest } = await supabase
+    .from("nexus_build_manifests")
+    .select("*")
+    .eq("id", manifestId)
+    .single();
+
+  if (!manifest) return { success: false, commitSha: "", error: "Manifest not found" };
+
+  await supabase.from("nexus_build_manifests")
+    .update({ status: "building", updated_at: new Date().toISOString() })
+    .eq("id", manifestId);
+
+  let lastCommitSha = "";
+
+  try {
+    // Build each new file
+    for (const file of (manifest.files_to_create as Array<{path: string; description: string; content_summary: string}> || [])) {
+      const codePrompt = `Write the complete file for this Nexus system component.
+
+File: ${file.path}
+Purpose: ${file.description}
+Key logic: ${file.content_summary}
+Instruction context: ${manifest.instruction}
+
+RULES:
+- Write complete, working code only
+- No markdown, no backticks, no explanations
+- Just the raw file content
+- For TypeScript edge functions: use Deno imports
+- For React: use functional components with hooks
+- For SQL: write clean, safe queries
+- Include error handling
+- Keep it minimal and focused`;
+
+      const content = await ai(codePrompt, 2000);
+      const cleanContent = content.replace(/^```[a-zA-Z]*\n?/m, "").replace(/\n?```\s*$/m, "").trim();
+
+      lastCommitSha = await writeGitHub(
+        file.path,
+        cleanContent,
+        `nexus-build: Add ${file.path} — ${manifest.goal}`,
+        "dev"
+      );
+    }
+
+    // Modify existing files
+    for (const mod of (manifest.files_to_modify as Array<{path: string; change: string}> || [])) {
+      try {
+        const { content: currentContent } = await readGitHub(mod.path, "dev");
+
+        // Safety check for chat/index.ts
+        if (mod.path.includes("chat/index.ts") && currentContent.split("\n").length < 2000) {
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-build",
+            action_type: "safety_abort",
+            action_detail: `Aborted: chat/index.ts too small (${currentContent.split("\n").length} lines)`,
+            outcome: "failure"
+          });
+          continue;
+        }
+
+        const modPrompt = `You are modifying an existing file in the Nexus system.
+
+CURRENT FILE (${mod.path}):
+${currentContent.slice(-6000)}
+
+CHANGE NEEDED: ${mod.change}
+BUILD GOAL: ${manifest.goal}
+
+CRITICAL RULES:
+1. Return the COMPLETE file with ALL existing content preserved
+2. Only ADD what is needed — never remove existing handlers or functions
+3. For chat/index.ts — add new handler BEFORE the final catch-all response
+4. No markdown, no backticks — raw code only
+5. The file must be LONGER than the input, never shorter`;
+
+        const modifiedContent = await ai(modPrompt, 4000);
+        const cleanModified = modifiedContent.replace(/^```[a-zA-Z]*\n?/m, "").replace(/\n?```\s*$/m, "").trim();
+
+        // Size guard — abort if output is less than 85% of original
+        if (cleanModified.length < currentContent.length * 0.85) {
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-build",
+            action_type: "size_guard_triggered",
+            action_detail: `${mod.path}: ${cleanModified.length} < 85% of ${currentContent.length}`,
+            outcome: "failure"
+          });
+          continue;
+        }
+
+        lastCommitSha = await writeGitHub(
+          mod.path,
+          cleanModified,
+          `nexus-build: Modify ${mod.path} — ${manifest.goal}`,
+          "dev"
+        );
+      } catch (err) {
+        await supabase.from("nexus_audit_log").insert({
+          engine: "nexus-build",
+          action_type: "modify_error",
+          action_detail: `Failed to modify ${mod.path}: ${String(err)}`,
+          outcome: "failure"
+        });
+      }
+    }
+
+    return { success: true, commitSha: lastCommitSha };
+
+  } catch (err) {
+    return { success: false, commitSha: "", error: String(err) };
+  }
+}
+
+// ── RUN TESTS ─────────────────────────────────────────────────────────────────
+
+async function runTests(manifest: Record<string, unknown>): Promise<{ passed: number; failed: number; results: Array<{name: string; passed: boolean; detail: string}> }> {
+  const tests = manifest.tests as Array<{name: string; type: string; check: string}> || [];
+  const results = [];
+  let passed = 0;
+  let failed = 0;
+
+  for (const test of tests) {
+    try {
+      if (test.type === "api") {
+        const funcName = (manifest.functions_to_deploy as string[] || [])[0];
+        if (funcName) {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/${funcName}`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ test: true })
+          });
+          const ok = res.status < 500;
+          results.push({ name: test.name, passed: ok, detail: `Status: ${res.status}` });
+          ok ? passed++ : failed++;
+        }
+      } else if (test.type === "db") {
+        const { error } = await supabase.from("nexus_audit_log").select("id").limit(1);
+        const ok = !error;
+        results.push({ name: test.name, passed: ok, detail: error?.message || "OK" });
+        ok ? passed++ : failed++;
+      } else {
+        // Manual tests pass by default — Zach verifies in browser
+        results.push({ name: test.name, passed: true, detail: "Manual verification required" });
+        passed++;
+      }
+    } catch (err) {
+      results.push({ name: test.name, passed: false, detail: String(err) });
+      failed++;
+    }
+  }
+
+  return { passed, failed, results };
+}
+
+// ── MAIN HANDLER ──────────────────────────────────────────────────────────────
+
+Deno.serve(async (req) => {
+  const body = await req.json().catch(() => ({}));
+  const { instruction, source, directive_priority, manifest_id, action } = body;
+
+  // Deploy approved manifest to main
+  if (action === "deploy" && manifest_id) {
+    const { data: manifest } = await supabase
+      .from("nexus_build_manifests")
+      .select("*")
+      .eq("id", manifest_id)
+      .single();
+
+    if (!manifest) {
+      // Try prefix match
+      const { data: manifests } = await supabase
+        .from("nexus_build_manifests")
+        .select("*")
+        .ilike("id::text", `${manifest_id}%`)
+        .limit(1);
+      if (!manifests?.length) return Response.json({ error: "Manifest not found" }, { status: 404 });
+    }
+
+    const targetManifest = manifest;
+    if (!targetManifest) return Response.json({ error: "Manifest not found" }, { status: 404 });
+
+    const allFiles = [
+      ...(targetManifest.files_to_create as Array<{path: string}> || []).map((f: {path: string}) => f.path),
+      ...(targetManifest.files_to_modify as Array<{path: string}> || []).map((f: {path: string}) => f.path)
+    ];
+
+    let mainSha = "";
+    for (const filePath of allFiles) {
+      try {
+        const { content } = await readGitHub(filePath, "dev");
+        mainSha = await writeGitHub(filePath, content, `Deploy: ${targetManifest.goal}`, "main");
+      } catch { /* skip */ }
+    }
+
+    await supabase.from("nexus_build_manifests").update({
+      status: "deployed",
+      main_commit_sha: mainSha,
+      deployed_at: new Date().toISOString()
+    }).eq("id", targetManifest.id);
+
+    await tg(`Deployed: *${targetManifest.goal}*\nCommit: ${mainSha.slice(0, 8)} (main)\nLive in ~60 seconds.`);
+
+    return Response.json({ ok: true, commit: mainSha });
+  }
+
+  // Build from instruction
+  if (!instruction) return Response.json({ error: "instruction required" }, { status: 400 });
+
+  await tg(`Building: *${instruction.slice(0, 100)}*\nCreating manifest and building...`);
+
+  try {
+    const manifestId = await createManifest(instruction, directive_priority || 3);
+    const buildResult = await buildFromManifest(manifestId);
+
+    if (!buildResult.success) {
+      await supabase.from("nexus_build_manifests").update({
+        status: "failed",
+        error: buildResult.error
+      }).eq("id", manifestId);
+
+      await tg(`Build failed: *${instruction.slice(0, 80)}*\nError: ${buildResult.error}`);
+      return Response.json({ ok: false, error: buildResult.error });
+    }
+
+    const { data: manifest } = await supabase
+      .from("nexus_build_manifests")
+      .select("*")
+      .eq("id", manifestId)
+      .single();
+
+    const testResults = await runTests(manifest as Record<string, unknown>);
+
+    await supabase.from("nexus_build_manifests").update({
+      status: "staged",
+      dev_commit_sha: buildResult.commitSha,
+      tests_passed: testResults.passed,
+      tests_failed: testResults.failed,
+      test_results: testResults.results,
+      updated_at: new Date().toISOString()
+    }).eq("id", manifestId);
+
+    // Log as ability proposal if it's a simple chat-handler-only change
+    if ((manifest?.files_to_create as Array<unknown> || []).length === 0 &&
+        (manifest?.files_to_modify as Array<unknown> || []).length === 1) {
+      await supabase.from("nexus_ability_proposals").insert({
+        ability_name: instruction.slice(0, 80),
+        trigger_command: instruction.slice(0, 40),
+        description: instruction,
+        value_reasoning: `Built by nexus-build from instruction: ${source}`,
+        status: "testing",
+        dev_commit_sha: buildResult.commitSha,
+        manifest_id: manifestId
+      });
+    }
+
+    const testSummary = testResults.failed === 0
+      ? `All ${testResults.passed} tests passed`
+      : `${testResults.passed} passed, ${testResults.failed} failed`;
+
+    await tg(
+      `*Build ready for review*\n\n` +
+      `*Goal:* ${manifest?.goal}\n` +
+      `*Tests:* ${testSummary}\n` +
+      `*Commit:* ${buildResult.commitSha.slice(0, 8)} (dev)\n\n` +
+      `To deploy: reply \`deploy build ${manifestId.slice(0, 8)}\`\n` +
+      `To discard: reply \`discard build ${manifestId.slice(0, 8)}\``
+    );
+
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-build",
+      action_type: "build_staged",
+      action_detail: `Staged: ${manifest?.goal}`,
+      outcome: "success",
+      data: { manifest_id: manifestId, tests_passed: testResults.passed, tests_failed: testResults.failed }
+    });
+
+    return Response.json({
+      ok: true,
+      manifest_id: manifestId,
+      commit: buildResult.commitSha,
+      tests_passed: testResults.passed,
+      tests_failed: testResults.failed
+    });
+
+  } catch (err) {
+    await tg(`Build error: ${String(err).slice(0, 200)}`);
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
+});

@@ -1,6 +1,6 @@
 # NEXUS ZC — CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 10, 2026 — v6
+# Last updated: May 10, 2026 — v7
 
 ---
 
@@ -108,10 +108,13 @@ Then productized and sold to other multi-business operators.
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
-| `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score, contradiction_check | Called by chat + health-monitor |
-| `nexus-agent` | Autonomous 15-min operator loop: observe, think, act, report | Every 15 min cron |
-| `nexus-research` | Self-directed research: web scan, gap detection, knowledge building | Every 6 hour cron |
-| `nexus-builder` | Self-skill creator: builds new abilities on approval, deploys to dev | Triggered on approval |
+| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
+| `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
+| ~~`nexus-coo`~~ | _(absorbed into chat handlers)_ | Removed |
+| ~~`nexus-agent`~~ | _(absorbed into nexus-core)_ | Removed |
+| ~~`nexus-research`~~ | _(absorbed into nexus-core + VPS)_ | Removed |
+| ~~`nexus-builder`~~ | _(absorbed into nexus-build)_ | Removed |
+| ~~`nexus-execute`~~ | _(absorbed into nexus-build)_ | Removed |
 
 ---
 
@@ -163,6 +166,11 @@ Then productized and sold to other multi-business operators.
 - `nexus_action_queue` — actions pending 1-tap approval
 - `nexus_agent_cycles` — record of every agent run
 - `nexus_preferences` — learned preference model (6 seeds: approval thresholds, comms style, focus areas)
+
+### V5 Build System additions:
+- `nexus_build_manifests` — structured build plans with test results (goal, files_to_create, files_to_modify, db_migrations, tests, status, dev_commit_sha, main_commit_sha)
+- `nexus_reflections` — what Nexus learned each cycle (cycle_number, observation, insight, action_taken, learned)
+- `nexus_self_improvements` — self-identified improvement queue (title, problem, proposed_solution, improvement_type, complexity, directive_priority, status)
 
 ### V3 COO additions:
 - `voice_memos` — Telegram voice messages (telegram_file_id, transcript, classified_as, entry_id, duration_seconds)
@@ -237,7 +245,7 @@ Then productized and sold to other multi-business operators.
 - `assign va: [client] | va: [name]`
 - `provision: [name] | type: [business type] | about: [description]` — spin up client site
 
-### Autonomous Engine Commands (new in v4):
+### Autonomous Engine Commands (v4 + v5):
 - `pending` / `pending actions` / `queue` — show all actions and abilities awaiting approval
 - `approve action [id]` — approve a queued autonomous action
 - `reject action [id]` — reject a queued action
@@ -245,8 +253,15 @@ Then productized and sold to other multi-business operators.
 - `reject ability [id]` — reject an ability proposal
 - `audit` / `audit log` / `audit last [n]` — view autonomous action audit log
 - `research now` / `nexus research` — trigger immediate research cycle
-- `agent now` / `nexus agent` / `run agent` — trigger immediate agent cycle
+- `agent now` / `nexus agent` / `run agent` — trigger nexus-core cycle (replaces old nexus-agent)
 - `abilities` / `show abilities` — list all self-built abilities and their status
+- `build: [instruction]` — trigger nexus-build with plain English instruction
+- `deploy build [id]` — deploy a staged build to production (main branch)
+- `discard build [id]` — discard a staged build
+- `builds` / `build status` — see recent build status
+- `improvements` / `self improvements` — see what Nexus wants to improve about itself
+- `core now` / `nexus core` — trigger immediate nexus-core cycle
+- `reflections` / `what did you learn` — see what Nexus has learned from recent cycles
 
 ### COO Commands (new in v3):
 - `focus` / `what should i focus on` / `focus now` — top 3 priorities right now (fetches tasks, clients, projects, recent entries)
@@ -371,15 +386,17 @@ You reply "reject":
 - ✅ Nexus Autonomous Engine (v4) — nexus-agent (15-min loop: observe/think/act/report), nexus-research (6-hour loop: web scan + gap detection + knowledge building), nexus-builder (self-skill creator: writes handlers, deploys to dev, notifies for prod approval), 7 new DB tables, 9 new Telegram commands, full audit trail in nexus_audit_log, preference model with 6 seeds, 2 new cron jobs (jobs 4+5)
 - ✅ nexus-builder locked to dev only, 2000-line corruption guard, approve all capped at 5
 - ✅ Strategic Intelligence — nexus-director, nexus-tasks, directive system, task decomposition
+- ✅ Nexus v3 Full Rebuild — nexus-core (consolidated brain, 30-min cycle), nexus-build (consolidated builder, manifest system), 7 new chat handlers, CLAUDE.md v7
 
 **NEXT:**
-1. Schedule dedicated scoping call with Kevin Cantwell
-2. Brian's lead system — generate-queue + call cadence working, needs tuning
-3. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-4. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-5. Add VITE_STRIPE_PUBLISHABLE_KEY to Cloudflare Pages env vars (app/.env has blank placeholder)
-6. Dump session summary to Nexus via Telegram
-7. NOTE: Auto-fix system is active and modifying chat/index.ts — monitor approvals carefully. The 80% size guard is live — auto-fix will abort and notify if it tries to truncate chat/index.ts. nexus-builder is now dev-only with a 2000-line corruption guard.
+1. Run Phase 1 SQL in Supabase SQL Editor (DB cleanup + 3 new tables — see prompt above)
+2. Run Phase 6 SQL in Supabase SQL Editor (nexus-core cron job)
+3. Update VPS worker: SSH to 31.220.60.77, replace /root/nexus-worker/index.js, run `pm2 restart nexus-worker && pm2 save`
+4. Schedule dedicated scoping call with Kevin Cantwell
+5. Brian's lead system — generate-queue + call cadence working, needs tuning
+6. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
+7. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+8. NOTE: nexus-build writes only to dev. Deploy via `deploy build [id]` command. Size guard is live (85% threshold).
 
 ---
 
@@ -406,14 +423,28 @@ You reply "reject":
 
 ---
 
-## NEXUS-BUILDER RULES (enforced in code — never override)
+## NEXUS-BUILD RULES (enforced in code — never override)
 
-- nexus-builder ONLY commits to dev branch — never main
-- Main branch is only updated via Zach's `approve` command (content-based merge)
-- nexus-builder aborts if chat/index.ts would drop below 2000 lines (corruption guard)
+- nexus-build ONLY writes to dev branch — never main
+- Main branch is only updated via Zach's `deploy build [id]` or `approve` commands
+- nexus-build aborts if chat/index.ts would drop below 2000 lines (corruption guard)
+- Size guard: abort if modified file output < 85% of original size
+- Test gate: every build runs automated tests before staging
 - `approve all` is capped at 5 abilities per call
-- Every ability goes through: proposed → approved → building → testing (dev) → Zach approves → live (main)
-- nexus-builder never batch deploys — one ability at a time
+- One build per nexus-core cycle maximum
+- Every build goes through: planning → building → testing → staged (dev) → Zach deploys → deployed (main)
+
+---
+
+## VPS (Hostinger Phoenix — 31.220.60.77)
+
+- Worker: `/root/nexus-worker/index.js` (PM2, auto-restart on crash)
+- **Core cycle:** every 30 min → triggers nexus-core
+- **Reflection cycle:** every 30 min (offset 15 min) → decides whether to trigger builds
+- **Research cycle:** every 6 hours → web research + saves to knowledge_base
+- SSH: `ssh root@31.220.60.77`
+- Logs: `pm2 logs nexus-worker`
+- Restart: `pm2 restart nexus-worker && pm2 save`
 
 ---
 
