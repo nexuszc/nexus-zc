@@ -1966,6 +1966,149 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+```javascript
+// ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ PRIORITIZE_IMPROVEMENTS ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ
+if (msgLower.startsWith('/prioritize-improvements')) {
+  const startTime = Date.now();
+  try {
+    // Fetch pending improvements from database
+    const { data: improvements, error } = await supabase
+      .from('nexus_improvements')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!improvements || improvements.length === 0) {
+      await logUsage('prioritize_improvements', true, Date.now() - startTime, channel);
+      return earlyReturn("ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ No pending improvements to prioritize.");
+    }
+
+    // Build analysis prompt
+    const improvementsList = improvements.map((imp, idx) => 
+      `${idx + 1}. **${imp.name}** (trigger: ${imp.trigger || 'N/A'})\n   Description: ${imp.description}\n   Value: ${imp.value || 'Not specified'}`
+    ).join('\n\n');
+
+    const analysisPrompt = `You are analyzing a backlog of ${improvements.length} pending Nexus chat improvements. Score each by impact (1-10) and effort (1-10), then recommend priority order.
+
+PENDING IMPROVEMENTS:
+${improvementsList}
+
+Provide:
+1. Score table with Impact, Effort, and Priority Score (Impact/Effort ratio)
+2. Recommended build order (highest priority first)
+3. Brief reasoning for top 3 priorities
+
+Be concise and actionable.`;
+
+    const analysisRes = await callAnthropicWithRetry({
+      model: "claude-sonnet-4-5",
+      max_tokens: 2000,
+      system: "You are a product prioritization expert. Analyze features by impact and effort, recommend clear priority order.",
+      messages: [{ role: "user", content: analysisPrompt }],
+    });
+
+    const analysis = analysisRes?.content?.[0]?.text || "Unable to generate prioritization analysis.";
+
+    const reply = `**ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Improvements Prioritization**\n\n${analysis}\n\n_Found ${improvements.length} pending improvement(s) in backlog_`;
+
+    await logUsage('prioritize_improvements', true, Date.now() - startTime, channel);
+    return earlyReturn(reply);
+
+  } catch (err) {
+    console.error('prioritize_improvements error:', err);
+    await logUsage('prioritize_improvements', false, Date.now() - startTime, channel);
+    return earlyReturn("ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¯ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¸ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Error analyzing improvements backlog.");
+  }
+}
+
+```javascript
+// ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ COMPETITIVE_INTEL_SYNTHESIZER ÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂ
+if (msgLower.startsWith('/synthesize-competitive-intel')) {
+  const startTime = Date.now();
+  try {
+    // Fetch recent competitive research entries
+    const { data: compEntries } = await supabase
+      .from('entries')
+      .select('*')
+      .ilike('content', '%competitor%')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const { data: researchEntries } = await supabase
+      .from('entries')
+      .select('*')
+      .eq('entry_type', 'research')
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    const allEntries = [...(compEntries || []), ...(researchEntries || [])];
+    const uniqueEntries = Array.from(new Map(allEntries.map(e => [e.id, e])).values())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 15);
+
+    if (uniqueEntries.length === 0) {
+      await logUsage('competitive_intel_synthesizer', false, Date.now() - startTime, channel);
+      return earlyReturn("No competitive research found in memory. Add some competitive intel first, then run this command.");
+    }
+
+    const contextText = uniqueEntries.map(e => 
+      `[${new Date(e.created_at).toISOString().split('T')[0]}] ${e.content.slice(0, 500)}`
+    ).join('\n\n');
+
+    const synthPrompt = `You are a strategic analyst synthesizing competitive intelligence.
+
+COMPETITIVE RESEARCH DATA:
+${contextText}
+
+Generate a concise strategic synthesis with these sections:
+
+## Key Positioning Insights
+[What are the 3-4 most important positioning opportunities or threats?]
+
+## Feature Gap Analysis
+[What capabilities do competitors have that we lack? What do we have that they don't?]
+
+## Recommended Strategic Responses
+[3-5 specific, actionable recommendations with priority levels]
+
+## Market Trends Detected
+[Patterns or shifts visible across multiple competitors]
+
+Be specific, actionable, and concise. Use bullet points. Focus on what matters.`;
+
+    const synthRes = await callAnthropicWithRetry({
+      model: "claude-sonnet-4-5",
+      max_tokens: 2000,
+      system: "You are a strategic competitive analyst. Be concise and actionable.",
+      messages: [{ role: "user", content: synthPrompt }],
+    });
+
+    const synthesis = synthRes?.content?.[0]?.text || "Failed to generate synthesis.";
+
+    // Log the synthesis as a new entry
+    await supabase.from('entries').insert({
+      user_id: userId,
+      role: 'assistant',
+      content: `COMPETITIVE INTEL SYNTHESIS:\n\n${synthesis}`,
+      entry_type: 'research',
+      channel: channel
+    });
+
+    await logUsage('competitive_intel_synthesizer', true, Date.now() - startTime, channel);
+    return earlyReturn(`ÃÂÃÂ°ÃÂÃÂÃÂÃÂÃÂÃÂ **Competitive Intelligence Synthesis**\n\n${synthesis}\n\n*(Synthesized from ${uniqueEntries.length} recent competitive research entries)*`);
+
+  } catch (err) {
+    await logUsage('competitive_intel_synthesizer', false, Date.now() - startTime, channel);
+    return earlyReturn(`Error synthesizing competitive intel: ${err.message}`);
+  }
+}
+```
+
+```
+
+
 
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
