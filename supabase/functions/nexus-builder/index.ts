@@ -196,9 +196,20 @@ RULES (CRITICAL):
 7. Handler must be self-contained — no new imports needed
 8. Add a comment at the top: // ── ${proposal.ability_name.toUpperCase()} ──
 
-Write ONLY the handler code block. No explanation. No markdown. Just the code.`;
+OUTPUT FORMAT (ABSOLUTE RULES — violation will cause a deploy failure):
+- Raw TypeScript ONLY
+- Do NOT wrap output in backticks or code fences (\`\`\`typescript, \`\`\`javascript, \`\`\`, or any variant)
+- Do NOT include any explanation, prose, or markdown before or after the code
+- The very first character of your response must be a space or the start of the if statement
+- The very last character must be the closing } of the handler`;
 
-    const handlerCode = await claudeWrite(buildPrompt, 2000);
+    const rawHandler = await claudeWrite(buildPrompt, 2000);
+
+    // Strip any markdown fencing the model may have added despite instructions
+    const handlerCode = rawHandler
+      .replace(/^```[a-zA-Z]*\n?/m, "")
+      .replace(/\n?```\s*$/m, "")
+      .trim();
 
     // Safety check
     if (!handlerCode.includes("logUsage") || !handlerCode.includes("earlyReturn")) {
