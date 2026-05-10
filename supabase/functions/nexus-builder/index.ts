@@ -296,7 +296,7 @@ OUTPUT FORMAT (ABSOLUTE RULES — violation will cause a deploy failure):
     return Response.json({ ok: true, commit_sha: commitSha, status: "testing" });
   }
 
-  // ── DEPLOY (after Zach approves) ──────────────────────────────────────────────
+  // ── DEPLOY (stages to dev — Zach's approve command does the main merge) ─────
   if (action === "deploy") {
     if (proposal.status !== "testing") {
       return Response.json({ error: "Proposal must be in testing status" }, { status: 400 });
@@ -307,31 +307,45 @@ OUTPUT FORMAT (ABSOLUTE RULES — violation will cause a deploy failure):
       "dev"
     );
 
-    const mainCommitSha = await commitToGitHub(
+    // Guard: abort if file looks corrupted
+    const lineCount = devContent.split("\n").length;
+    if (lineCount < 2000) {
+      await sendTelegram(
+        `🚨 *Deploy aborted — file too small, possible corruption*\n\n` +
+        `Ability: *${proposal.ability_name}*\n` +
+        `Dev branch chat/index.ts has only ${lineCount} lines (expected 2000+).\n` +
+        `Manual review required before any deploy.`
+      );
+      await supabase.from("nexus_ability_proposals")
+        .update({ status: "testing" }).eq("id", proposal_id);
+      return Response.json({ error: "Deploy aborted — file too small, possible corruption" }, { status: 400 });
+    }
+
+    const devCommitSha = await commitToGitHub(
       "supabase/functions/chat/index.ts",
       devContent,
-      `Deploy ${proposal.ability_name} ability to production`,
-      "main"
+      `Stage ${proposal.ability_name} ability (ready for approve)`,
+      "dev"
     );
 
     await supabase.from("nexus_ability_proposals").update({
-      status: "live",
-      deployed_at: new Date().toISOString(),
+      status: "testing",
+      dev_commit_sha: devCommitSha,
     }).eq("id", proposal_id);
 
-    await auditLog("deploy_complete", `Deployed: ${proposal.ability_name} to production`, {
+    await auditLog("deploy_staged", `Staged to dev: ${proposal.ability_name}`, {
       proposal_id,
-      commit_sha: mainCommitSha,
+      commit_sha: devCommitSha,
     });
 
     await sendTelegram(
-      `✅ *${proposal.ability_name}* is now live in production!\n\n` +
+      `🔬 *${proposal.ability_name}* staged to dev — ready for production\n\n` +
       `Trigger: \`${proposal.trigger_command}\`\n` +
-      `Commit: \`${mainCommitSha.slice(0, 8)}\` (main)\n\n` +
-      `_Usage tracking active. Nexus will monitor adoption._`
+      `Commit: \`${devCommitSha.slice(0, 8)}\` (dev)\n\n` +
+      `Reply \`approve\` to merge to main, or \`reject\` to discard.`
     );
 
-    return Response.json({ ok: true, commit_sha: mainCommitSha, status: "live" });
+    return Response.json({ ok: true, commit_sha: devCommitSha, status: "testing" });
   }
 
   return Response.json({ error: "Unknown action. Use 'build' or 'deploy'." }, { status: 400 });
