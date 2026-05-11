@@ -68,7 +68,7 @@ async function listGitHubTree(branch = "main"): Promise<string[]> {
     `https://api.github.com/repos/${GITHUB_REPO}/git/trees/${branch}?recursive=1`,
     { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
   );
-  if (!res.ok) return [];
+  if (!res.ok) throw new Error(`GitHub tree fetch failed: ${res.status} ${res.statusText}`);
   const data = await res.json();
   return (data.tree as Array<{ type: string; path: string }> || [])
     .filter(item => item.type === "blob")
@@ -103,6 +103,28 @@ async function writeGitHub(path: string, content: string, message: string, branc
 
 function verifyFilePath(path: string, repoTree: string[]): boolean {
   return repoTree.includes(path);
+}
+
+// Prepend the correct top-level prefix when Claude omits it.
+// "chat/index.ts" → "supabase/functions/chat/index.ts"
+// "Navbar.jsx"    → "app/src/components/Navbar.jsx"
+function normalizePath(path: string): string {
+  if (
+    path.startsWith("supabase/functions/") ||
+    path.startsWith("app/src/") ||
+    path.startsWith("app/public/")
+  ) {
+    return path;
+  }
+  // Bare edge function path: ends with .ts and doesn't look like a React file
+  if (path.endsWith(".ts") && !path.startsWith("app/")) {
+    return `supabase/functions/${path}`;
+  }
+  // Bare React file with no directory prefix
+  if ((path.endsWith(".jsx") || path.endsWith(".tsx")) && !path.includes("/")) {
+    return `app/src/components/${path}`;
+  }
+  return path;
 }
 
 // ── PHASE 4B: SMOKE TEST ──────────────────────────────────────────────────────
@@ -262,8 +284,47 @@ async function buildFromManifest(manifestId: string): Promise<{ success: boolean
     .update({ status: "building", updated_at: new Date().toISOString() })
     .eq("id", manifestId);
 
-  // Phase 4A: Get the real repo tree to verify all file paths
-  const repoTree = await listGitHubTree("main");
+  // Phase 4A: Get the real repo tree — hard-abort if unavailable or empty
+  let repoTree: string[];
+  try {
+    repoTree = await listGitHubTree("main");
+  } catch (err) {
+    const errMsg = `Repo tree fetch failed — cannot verify paths: ${String(err)}`;
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-build",
+      action_type: "build_aborted",
+      action_detail: errMsg,
+      autonomous: true,
+      outcome: "failure",
+      data: { manifest_id: manifestId }
+    });
+    await supabase.from("nexus_build_manifests").update({
+      status: "failed",
+      error: errMsg,
+      updated_at: new Date().toISOString()
+    }).eq("id", manifestId);
+    await tg(`Build aborted: ${errMsg}`);
+    return { success: false, commitSha: "", error: errMsg };
+  }
+
+  if (repoTree.length === 0) {
+    const errMsg = "Repo tree returned empty — cannot verify file paths. Aborting build.";
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-build",
+      action_type: "build_aborted",
+      action_detail: errMsg,
+      autonomous: true,
+      outcome: "failure",
+      data: { manifest_id: manifestId }
+    });
+    await supabase.from("nexus_build_manifests").update({
+      status: "failed",
+      error: errMsg,
+      updated_at: new Date().toISOString()
+    }).eq("id", manifestId);
+    await tg(`Build aborted: ${errMsg}`);
+    return { success: false, commitSha: "", error: errMsg };
+  }
 
   let lastCommitSha = "";
 
@@ -312,22 +373,33 @@ RULES:
 
     // Modify existing files
     for (const mod of (manifest.files_to_modify as Array<{ path: string; change: string }> || [])) {
+      let normalizedPath = mod.path;
       try {
-        // Phase 4A: verify path exists before attempting to modify
-        if (!verifyFilePath(mod.path, repoTree)) {
+        // Phase 4A: normalize path then verify it exists — hard-abort on failure
+        normalizedPath = normalizePath(mod.path);
+        if (!verifyFilePath(normalizedPath, repoTree)) {
+          const verifyErr = `Path not in repo: ${mod.path}${normalizedPath !== mod.path ? ` (normalized: ${normalizedPath})` : ""}`;
           await supabase.from("nexus_audit_log").insert({
             engine: "nexus-build",
             action_type: "path_verify_failed",
-            action_detail: `File does not exist in repo: ${mod.path}`,
-            outcome: "failure"
+            action_detail: verifyErr,
+            autonomous: true,
+            outcome: "failure",
+            data: { manifest_id: manifestId, original_path: mod.path, normalized_path: normalizedPath }
           });
-          continue;
+          await supabase.from("nexus_build_manifests").update({
+            status: "failed",
+            error: verifyErr,
+            updated_at: new Date().toISOString()
+          }).eq("id", manifestId);
+          await tg(`Build aborted — path not in repo: \`${mod.path}\``);
+          return { success: false, commitSha: "", error: verifyErr };
         }
 
-        const { content: currentContent } = await readGitHub(mod.path, "dev");
+        const { content: currentContent } = await readGitHub(normalizedPath, "dev");
 
         // Safety check for chat/index.ts corruption guard
-        if (mod.path.includes("chat/index.ts") && currentContent.split("\n").length < 2000) {
+        if (normalizedPath.includes("chat/index.ts") && currentContent.split("\n").length < 2000) {
           await supabase.from("nexus_audit_log").insert({
             engine: "nexus-build",
             action_type: "safety_abort",
@@ -339,7 +411,7 @@ RULES:
 
         const modPrompt = `You are modifying an existing file in the Nexus system.
 
-CURRENT FILE (${mod.path}):
+CURRENT FILE (${normalizedPath}):
 ${currentContent.slice(-6000)}
 
 CHANGE NEEDED: ${mod.change}
@@ -360,35 +432,35 @@ CRITICAL RULES:
           await supabase.from("nexus_audit_log").insert({
             engine: "nexus-build",
             action_type: "size_guard_triggered",
-            action_detail: `${mod.path}: ${cleanModified.length} < 85% of ${currentContent.length}`,
+            action_detail: `${normalizedPath}: ${cleanModified.length} < 85% of ${currentContent.length}`,
             outcome: "failure"
           });
           continue;
         }
 
         // Phase 4B: smoke test the modified content
-        const smoke = smokeTest(mod.path, cleanModified);
+        const smoke = smokeTest(normalizedPath, cleanModified);
         if (!smoke.passed) {
           await supabase.from("nexus_audit_log").insert({
             engine: "nexus-build",
             action_type: "smoke_test_failed",
-            action_detail: `${mod.path}: ${smoke.issues.join("; ")}`,
+            action_detail: `${normalizedPath}: ${smoke.issues.join("; ")}`,
             outcome: "failure"
           });
           continue;
         }
 
         lastCommitSha = await writeGitHub(
-          mod.path,
+          normalizedPath,
           cleanModified,
-          `nexus-build: Modify ${mod.path} — ${manifest.goal}`,
+          `nexus-build: Modify ${normalizedPath} — ${manifest.goal}`,
           "dev"
         );
       } catch (err) {
         await supabase.from("nexus_audit_log").insert({
           engine: "nexus-build",
           action_type: "modify_error",
-          action_detail: `Failed to modify ${mod.path}: ${String(err)}`,
+          action_detail: `Failed to modify ${normalizedPath}: ${String(err)}`,
           outcome: "failure"
         });
       }
