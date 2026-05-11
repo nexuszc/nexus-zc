@@ -64,6 +64,42 @@ async function readGitHub(path: string): Promise<string> {
   return atob(data.content.replace(/\n/g, ""));
 }
 
+async function readGitHubFile(path: string): Promise<{ content: string; sha: string }> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=main`,
+    { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+  );
+  const data = await res.json();
+  if (!data.content) throw new Error(`Cannot read: ${path}`);
+  return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
+}
+
+async function writeGitHubMain(path: string, content: string, sha: string, message: string): Promise<string> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`,
+    {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        content: btoa(unescape(encodeURIComponent(content))),
+        sha,
+        branch: "main"
+      })
+    }
+  );
+  const data = await res.json();
+  return data.commit?.sha?.slice(0, 8) || "";
+}
+
+// Replace the body of a ## Section in a markdown doc, leaving the header and trailing --- intact
+function spliceMdSection(doc: string, headerKeyword: string, newBody: string): string {
+  const escaped = headerKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`(## ${escaped}[^\n]*\n)([\\s\\S]*?)(\n---)`, "m");
+  if (!pattern.test(doc)) return doc;
+  return doc.replace(pattern, `$1\n${newBody.trim()}\n$3`);
+}
+
 async function search(query: string): Promise<string> {
   try {
     const res = await fetch("https://google.serper.dev/search", {
@@ -121,7 +157,6 @@ async function observe() {
       .eq("status", "pending").order("priority", { ascending: false }).limit(5)
   ]);
 
-  // Read self — know what's currently built
   let chatHandlerCount = 0;
   let chatLines = 0;
   try {
@@ -274,7 +309,6 @@ Respond with JSON only (no backticks):
         const result = await ai(improvPrompt, 600);
         const improvement = JSON.parse(result.replace(/```json|```/g, "").trim());
 
-        // Check not already proposed
         const { data: existing } = await supabase
           .from("nexus_self_improvements")
           .select("id")
@@ -322,7 +356,6 @@ Respond with JSON only (no backticks):
       else if (action.type === "trigger_build" && !buildTriggered) {
         buildTriggered = true;
 
-        // Trigger nexus-build (fire and forget)
         fetch(`${SUPABASE_URL}/functions/v1/nexus-build`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
@@ -371,6 +404,183 @@ async function reflect(decisions: Awaited<ReturnType<typeof think>>, cycleNumber
   });
 }
 
+// ── SYNC CLAUDE.MD ────────────────────────────────────────────────────────────
+
+// Known function descriptions — used to build the Edge Functions table
+const FUNC_DESCRIPTIONS: Record<string, { purpose: string; trigger: string }> = {
+  "chat":                  { purpose: "Core brain: classify → retrieve → Claude → respond", trigger: "POST from Telegram webhook or web" },
+  "telegram":              { purpose: "Webhook: immediate 200 ACK, processes in waitUntil", trigger: "Telegram push" },
+  "briefing":              { purpose: "Morning brief at 7am MT (13:00 UTC) via pg_cron", trigger: "Daily cron (job ID 1)" },
+  "reminders":             { purpose: "Fire due reminders via Telegram", trigger: "Every 5 min cron (job ID 2)" },
+  "provision":             { purpose: "Spin up client subdomain + Claude-generated site", trigger: "chat provision: command or web UI" },
+  "health-monitor":        { purpose: "Hourly health check, identify improvements, trigger auto-fix", trigger: "Every hour cron (job ID 3)" },
+  "auto-fix":              { purpose: "Read code from GitHub → Claude writes fix → commit to dev → notify", trigger: "Called by health-monitor" },
+  "send-email":            { purpose: "Send email via Resend", trigger: "Internal" },
+  "email-webhook":         { purpose: "Inbound email handling", trigger: "Resend webhook" },
+  "process-email-queue":   { purpose: "Batch process email queue", trigger: "Cron" },
+  "generate-queue":        { purpose: "Generate lead call queue", trigger: "On demand" },
+  "log-call":              { purpose: "VA logs call outcome + auto-enrolls lead sequences", trigger: "VA web form" },
+  "roofing-ai":            { purpose: "Roofing AI actions: estimate, contract, invoice, timeline, supplement_request", trigger: "Internal" },
+  "contractor-auth":       { purpose: "Contractor magic link invite + session lookup", trigger: "Internal" },
+  "roofing-notify":        { purpose: "SMS (Twilio) + email (Resend) dispatcher for all roofing events", trigger: "Internal" },
+  "roofing-payments":      { purpose: "Stripe payment intent creation + payment confirmation", trigger: "Internal" },
+  "nexus-core":            { purpose: "Consolidated brain: observe, think, act, reflect — every 30 min", trigger: "Cron (every 30 min) + VPS + manual" },
+  "nexus-build":           { purpose: "Consolidated builder: manifest → build → test → stage → notify", trigger: "On demand (telegram, nexus-core, VPS)" },
+  "generate-va-tasks":     { purpose: "Generate daily VA task lists", trigger: "Cron / on demand" },
+  "get-dashboard-stats":   { purpose: "Aggregate stats for React dashboard", trigger: "API call from frontend" },
+  "import-leads":          { purpose: "Bulk import leads from CSV or external source", trigger: "On demand" },
+  "reclassify":            { purpose: "Re-run classification on existing entries", trigger: "On demand" },
+  "refresh-assessments":   { purpose: "Refresh project assessment scores", trigger: "On demand" },
+  "assess-project":        { purpose: "Run AI assessment on a project", trigger: "On demand" },
+  "synthesize-portfolio":  { purpose: "Generate portfolio-level synthesis and insights", trigger: "On demand" },
+  "brain-api":             { purpose: "REST API for brain browser access", trigger: "GET/POST from nexus-brain.html" },
+  "nexus-coo":             { purpose: "COO intelligence: focus, stale_check, momentum_check, health_score", trigger: "Called by chat + health-monitor" },
+  "nexus-agent":           { purpose: "Legacy agent loop (superseded by nexus-core)", trigger: "Deprecated" },
+  "nexus-research":        { purpose: "Legacy research loop (absorbed into nexus-core + VPS)", trigger: "Deprecated" },
+  "nexus-builder":         { purpose: "Legacy builder (superseded by nexus-build)", trigger: "Deprecated" },
+  "nexus-execute":         { purpose: "Legacy executor (superseded by nexus-build)", trigger: "Deprecated" },
+};
+
+async function syncClaudeMd(state: Awaited<ReturnType<typeof observe>>, cycleNumber: number): Promise<boolean> {
+  try {
+    // Throttle: skip if synced in last 2 hours AND no new deployed builds
+    const [{ data: lastSync }, { data: recentDeploys }] = await Promise.all([
+      supabase.from("nexus_audit_log")
+        .select("created_at")
+        .eq("action_type", "claude_md_synced")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from("nexus_build_manifests")
+        .select("id")
+        .eq("status", "deployed")
+        .gt("created_at", new Date(Date.now() - 2 * 3600000).toISOString())
+        .limit(1)
+    ]);
+
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
+    if (lastSync?.created_at > twoHoursAgo && !recentDeploys?.length) {
+      return false; // synced recently, nothing new deployed
+    }
+
+    // Read current CLAUDE.md
+    const { content: currentContent, sha } = await readGitHubFile("CLAUDE.md");
+
+    // List deployed function directories from GitHub
+    const funcDirRes = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}/contents/supabase/functions?ref=main`,
+      { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+    );
+    const funcDirData = await funcDirRes.json();
+    const functionNames: string[] = Array.isArray(funcDirData)
+      ? funcDirData.filter((f: { type: string }) => f.type === "dir").map((f: { name: string }) => f.name).sort()
+      : [];
+
+    // Get all deployed builds (for DONE list)
+    const { data: deployedBuilds } = await supabase
+      .from("nexus_build_manifests")
+      .select("goal, deployed_at")
+      .eq("status", "deployed")
+      .order("deployed_at", { ascending: false })
+      .limit(20);
+
+    // ── UPDATE 1: Edge Functions table ───────────────────────────────────────
+
+    const tableRows = functionNames.map(name => {
+      const desc = FUNC_DESCRIPTIONS[name] || { purpose: "See function source for details", trigger: "Internal" };
+      return `| \`${name}\` | ${desc.purpose} | ${desc.trigger} |`;
+    }).join("\n");
+
+    const newFuncTable = `| Function | Purpose | Trigger |
+|----------|---------|---------|
+${tableRows}`;
+
+    let updated = spliceMdSection(currentContent, "EDGE FUNCTIONS", newFuncTable);
+
+    // ── UPDATE 2: Build Priorities section ───────────────────────────────────
+
+    // Extract existing ✅ DONE items from current CLAUDE.md
+    const existingDoneLines = (currentContent.match(/^- ✅.+/gm) || []);
+    const existingDoneSet = new Set(existingDoneLines.map(l => l.slice(0, 60)));
+
+    // Add any deployed builds not already in the DONE list
+    const newDoneLines = (deployedBuilds || [])
+      .filter((b: { goal: string }) => {
+        const candidate = `- ✅ ${(b.goal || "").slice(0, 55)}`;
+        return ![...existingDoneSet].some(existing => existing.includes((b.goal || "").slice(0, 30)));
+      })
+      .map((b: { goal: string }) => `- ✅ ${b.goal}`);
+
+    // Claude generates the NEXT list only (bounded, ~500 tokens)
+    const nextPrompt = `Generate a prioritized NEXT list for the Nexus build priorities section.
+Return ONLY a numbered list (1-8 items). No headers, no extra text.
+
+PENDING SELF-IMPROVEMENTS (highest priority):
+${state.improvements.map((i: { title: string; complexity: string; directive_priority: number }) =>
+  `${i.directive_priority}. ${i.title} (${i.complexity})`).join("\n") || "None"}
+
+OPEN TASKS:
+${state.tasks.slice(0, 4).map((t: { content: string }) => `- ${(t.content || "").slice(0, 80)}`).join("\n") || "None"}
+
+ACTIVE CLIENTS (${state.clients.length} total — mention if any need attention):
+${state.clients.slice(0, 3).map((c: { name: string; health_score: number }) => `- ${c.name} (health: ${c.health_score || "?"}`).join("\n") || "None"}`;
+
+    const nextList = await ai(nextPrompt, 500);
+
+    const allDoneLines = [...existingDoneLines, ...newDoneLines].join("\n");
+    const newPrioritiesBody = `**DONE this session:**
+${allDoneLines || "- (nothing yet this session)"}
+
+**NEXT:**
+${nextList.trim()}`;
+
+    updated = spliceMdSection(updated, "CURRENT BUILD PRIORITIES", newPrioritiesBody);
+
+    // ── UPDATE 3: Date header ─────────────────────────────────────────────────
+
+    const today = new Date().toLocaleDateString("en-US", {
+      month: "long", day: "numeric", year: "numeric", timeZone: "America/Denver"
+    });
+    updated = updated.replace(/# Last updated: [^\n]+/, `# Last updated: ${today} — v7`);
+
+    // ── GUARDS ────────────────────────────────────────────────────────────────
+
+    // Size guard: new content must be >= 85% of original
+    if (updated.length < currentContent.length * 0.85) {
+      await log("claude_md_sync_aborted",
+        `Size guard: ${updated.length} chars < 85% of ${currentContent.length}`, "failure");
+      return false;
+    }
+
+    // Diff check: skip commit if nothing actually changed
+    if (updated.trim() === currentContent.trim()) {
+      await log("claude_md_sync_skipped", "No changes detected");
+      return false;
+    }
+
+    // ── COMMIT TO MAIN ────────────────────────────────────────────────────────
+
+    const commitSha = await writeGitHubMain(
+      "CLAUDE.md",
+      updated,
+      sha,
+      `[auto] Sync CLAUDE.md — cycle ${cycleNumber}`
+    );
+
+    await log("claude_md_synced",
+      `CLAUDE.md updated on main — commit ${commitSha}`,
+      "success",
+      { commit: commitSha, cycle: cycleNumber, functions: functionNames.length, new_done: newDoneLines.length }
+    );
+
+    return true;
+
+  } catch (err) {
+    await log("claude_md_sync_error", String(err), "failure");
+    return false;
+  }
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (_req) => {
@@ -389,19 +599,29 @@ Deno.serve(async (_req) => {
     const actionsExecuted = await act(decisions, state);
     await reflect(decisions, cycleNumber, actionsExecuted);
 
+    // Auto-sync CLAUDE.md at the end of every cycle
+    const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
+
     const duration = Date.now() - startTime;
 
-    if (actionsExecuted > 0 || state.errors.length > 3) {
+    if (actionsExecuted > 0 || state.errors.length > 3 || claudeMdUpdated) {
       await tg(
         `*Nexus Core — Cycle ${cycleNumber}*\n\n` +
         `${decisions.summary}\n\n` +
         (actionsExecuted > 0 ? `Actions taken: ${actionsExecuted}\n` : "") +
+        (claudeMdUpdated ? `CLAUDE.md synced to main\n` : "") +
         (state.pendingApprovals.length > 0 ? `Pending your approval: ${state.pendingApprovals.length}\n` : "") +
         `_${duration}ms_`
       );
     }
 
-    return Response.json({ ok: true, cycle: cycleNumber, actions: actionsExecuted, summary: decisions.summary });
+    return Response.json({
+      ok: true,
+      cycle: cycleNumber,
+      actions: actionsExecuted,
+      claude_md_updated: claudeMdUpdated,
+      summary: decisions.summary
+    });
 
   } catch (err) {
     await log("cycle_error", String(err), "failure");
