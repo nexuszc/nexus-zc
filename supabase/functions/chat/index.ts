@@ -2550,7 +2550,14 @@ Write a concise report covering: current status, what's been done, what's next, 
 // CORE HELPERS (classification, Claude, embeddings, retrieval)
 // ================================================================
 
+// Strip null bytes and ASCII control chars (keep \n \r \t) to prevent Anthropic 400 errors
+function sanitize(str: string): string {
+  if (!str || typeof str !== "string") return "";
+  return str.replace(/\0/g, "").replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+}
+
 async function classifyEntry(message: string, ventures: string[], ideas: string[], people: string[]) {
+  const safeMessage = sanitize(message).slice(0, 3000);
   const establishedList = ventures.length ? ventures.join(", ") : "(none yet)";
   const ideasList = ideas.length ? ideas.join(", ") : "(none yet)";
   const peopleList = people.length ? people.join(", ") : "(none yet)";
@@ -2560,7 +2567,7 @@ ESTABLISHED PROJECTS (platform, vertical, personal, external): ${establishedList
 LOOSE IDEAS (not yet committed): ${ideasList}
 KNOWN PEOPLE: ${peopleList}
 
-ENTRY: """${message}"""
+ENTRY: """${safeMessage}"""
 
 CRITICAL RULES:
 1. **Use exact existing names.** Match any reference to an existing project/person to the exact name in the lists above.
@@ -2599,10 +2606,11 @@ Return JSON:
 }
 
 async function callClaude(message: string, context: string, ventures: string[], ideas: string[]) {
+  const safeMessage = sanitize(message).slice(0, 4000);
   const systemPrompt = `You are Nexus, Zach's personal Chief of Staff and AI operator.
 
-CURRENT VENTURES: ${ventures.join(", ") || "(none)"}
-CURRENT IDEAS: ${ideas.join(", ") || "(none)"}
+CURRENT VENTURES: ${ventures.map(sanitize).join(", ") || "(none)"}
+CURRENT IDEAS: ${ideas.map(sanitize).join(", ") || "(none)"}
 
 ${context}
 
@@ -2657,7 +2665,7 @@ Task rules:
     const data = await callAnthropicWithRetry({
       model: "claude-sonnet-4-5", max_tokens: 1500,
       system: systemPrompt,
-      messages: [{ role: "user", content: message }],
+      messages: [{ role: "user", content: safeMessage }],
     });
     return data?.content?.[0]?.text || "(no reply)";
   } catch (err: any) {
@@ -2703,19 +2711,20 @@ function buildContext(sources: any) {
   const parts: string[] = [];
   if (sources.recent.length > 0) {
     parts.push("RECENT CONVERSATION:\n" + sources.recent.reverse().slice(-10)
-      .map((e: any) => `[${e.role}] ${e.content.slice(0, 300)}`).join("\n"));
+      .map((e: any) => `[${e.role}] ${sanitize(e.content).slice(0, 300)}`).join("\n"));
   }
   if (sources.projects.length > 0) {
     parts.push("PROJECT MEMORY:\n" + sources.projects.slice(0, 8)
-      .map((e: any) => `[${e.entry_type || "note"}, ${(e.project_names || []).join(",")}] ${e.content.slice(0, 250)}`).join("\n"));
+      .map((e: any) => `[${e.entry_type || "note"}, ${(e.project_names || []).join(",")}] ${sanitize(e.content).slice(0, 250)}`).join("\n"));
   }
   if (sources.people.length > 0) {
     parts.push("PEOPLE MEMORY:\n" + sources.people.slice(0, 5)
-      .map((e: any) => `[${(e.people_names || []).join(",")}] ${e.content.slice(0, 200)}`).join("\n"));
+      .map((e: any) => `[${(e.people_names || []).join(",")}] ${sanitize(e.content).slice(0, 200)}`).join("\n"));
   }
   if (sources.semantic.length > 0) {
     parts.push("SEMANTIC MATCHES:\n" + sources.semantic.slice(0, 5)
-      .map((e: any) => `${e.content.slice(0, 250)}`).join("\n"));
+      .map((e: any) => `${sanitize(e.content).slice(0, 250)}`).join("\n"));
   }
-  return parts.length ? "MEMORY CONTEXT:\n\n" + parts.join("\n\n") : "";
+  const result = parts.length ? "MEMORY CONTEXT:\n\n" + parts.join("\n\n") : "";
+  return result.slice(0, 12000); // hard cap ~3000 tokens
 }
