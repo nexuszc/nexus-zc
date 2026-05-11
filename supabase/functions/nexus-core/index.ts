@@ -172,8 +172,11 @@ async function buildSelfModel(cycleNumber: number): Promise<Record<string, unkno
       .eq("active", true).order("priority").limit(5),
     supabase.from("nexus_self_improvements").select("title, complexity, directive_priority")
       .eq("status", "proposed").limit(10),
-    supabase.from("nexus_audit_log").select("action_type, action_detail")
-      .eq("outcome", "failure").gt("created_at", dayAgo).limit(10),
+    supabase.from("nexus_audit_log").select("action_type, action_detail, created_at")
+      .eq("outcome", "failure")
+      .gt("created_at", dayAgo)
+      .not("action_type", "in", '("size_guard_triggered","path_verify_failed")')
+      .limit(20),
     supabase.from("nexus_self_model").select("consecutive_clean_cycles")
       .order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);
@@ -183,7 +186,13 @@ async function buildSelfModel(cycleNumber: number): Promise<Record<string, unkno
     ? Math.round(((approvedJudgments?.length || 0) / totalJudgments) * 100)
     : 0;
 
-  const hasErrors = (problems?.length || 0) > 0;
+  const twoHoursAgo = new Date(Date.now() - 7200000).toISOString();
+  const filteredProblems = (problems || []).filter(
+    (p: { action_type: string; created_at: string }) =>
+      p.action_type !== "modify_error" || p.created_at > twoHoursAgo
+  );
+
+  const hasErrors = filteredProblems.length > 0;
   const consecutiveCleanCycles = hasErrors
     ? 0
     : ((previousModel?.consecutive_clean_cycles || 0) + 1);
@@ -204,7 +213,7 @@ async function buildSelfModel(cycleNumber: number): Promise<Record<string, unkno
     known_gaps: (gaps || []).map((g: { title: string; complexity: string }) =>
       ({ title: g.title, complexity: g.complexity })
     ),
-    known_problems: (problems || []).map((p: { action_type: string; action_detail: string }) =>
+    known_problems: filteredProblems.map((p: { action_type: string; action_detail: string }) =>
       ({ type: p.action_type, detail: p.action_detail?.slice(0, 100) })
     ),
     last_heartbeat: new Date().toISOString(),
@@ -241,8 +250,11 @@ async function observe() {
       .eq("task_status", "open").order("importance", { ascending: false }).limit(10),
     supabase.from("clients").select("name, status, health_score, last_activity_at")
       .eq("status", "active"),
-    supabase.from("nexus_audit_log").select("action_type, action_detail")
-      .eq("outcome", "failure").gt("created_at", ago.day).limit(10),
+    supabase.from("nexus_audit_log").select("action_type, action_detail, created_at")
+      .eq("outcome", "failure")
+      .gt("created_at", ago.day)
+      .not("action_type", "in", '("size_guard_triggered","path_verify_failed")')
+      .limit(20),
     supabase.from("nexus_self_improvements").select("title, problem, complexity, directive_priority")
       .eq("status", "proposed").order("directive_priority").limit(5),
     supabase.from("nexus_ability_proposals").select("ability_name, trigger_command, usage_count")
@@ -257,18 +269,71 @@ async function observe() {
       .eq("status", "pending").order("priority", { ascending: false }).limit(5)
   ]);
 
+  const twoHoursAgoObs = new Date(Date.now() - 7200000).toISOString();
+  const filteredErrors = (errors || []).filter(
+    (e: { action_type: string; created_at: string }) =>
+      e.action_type !== "modify_error" || e.created_at > twoHoursAgoObs
+  );
+
   let chatHandlerCount = 0;
   let chatLines = 0;
   try {
-    const chatContent = await readGitHub("supabase/functions/chat/index.ts");
-    chatLines = chatContent.split("\n").length;
-    chatHandlerCount = (chatContent.match(/if \((?:lowerMessage|msgLower)/g) || []).length;
-  } catch { /* ok */ }
+    const ghPath = "supabase/functions/chat/index.ts";
+    const ghUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${ghPath}?ref=main`;
+    const ghRes = await fetch(ghUrl, {
+      headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" }
+    });
+    const ghBody = await ghRes.text();
+    if (!ghRes.ok) {
+      await supabase.from("nexus_audit_log").insert({
+        engine: "nexus-core",
+        action_type: "github_read_debug",
+        action_detail: `GET ${ghUrl}`,
+        autonomous: true,
+        outcome: "failure",
+        data: {
+          status: ghRes.status,
+          statusText: ghRes.statusText,
+          headers: Object.fromEntries(ghRes.headers.entries()),
+          body: ghBody.slice(0, 2000),
+        }
+      });
+    } else {
+      const ghData = JSON.parse(ghBody);
+      if (!ghData.content) {
+        await supabase.from("nexus_audit_log").insert({
+          engine: "nexus-core",
+          action_type: "github_read_debug",
+          action_detail: `GET ${ghUrl} — ok but no content field`,
+          autonomous: true,
+          outcome: "failure",
+          data: {
+            status: ghRes.status,
+            headers: Object.fromEntries(ghRes.headers.entries()),
+            body: ghBody.slice(0, 2000),
+          }
+        });
+      } else {
+        const chatContent = atob(ghData.content.replace(/\n/g, ""));
+        chatLines = chatContent.split("\n").length;
+        chatHandlerCount = (chatContent.match(/if \((?:lowerMessage|msgLower)/g) || []).length;
+      }
+    }
+  } catch (err) {
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-core",
+      action_type: "github_read_debug",
+      action_detail: `fetch threw: ${String(err)}`,
+      autonomous: true,
+      outcome: "failure",
+      data: { thrown: String(err) }
+    });
+  }
 
   return {
     tasks: tasks || [],
     clients: clients || [],
-    errors: errors || [],
+    errors: filteredErrors,
     improvements: improvements || [],
     liveAbilities: liveAbilities || [],
     directives: directives || [],
@@ -743,7 +808,7 @@ ${nextList.trim()}`;
     const today = new Date().toLocaleDateString("en-US", {
       month: "long", day: "numeric", year: "numeric", timeZone: "America/Denver"
     });
-    updated = updated.replace(/# Last updated: [^\n]+/, `# Last updated: ${today} — v7`);
+    updated = updated.replace(/# Last updated: [^\n]+/, `# Last updated: ${today} — v8`);
 
     // ── GUARDS ────────────────────────────────────────────────────────────────
 
