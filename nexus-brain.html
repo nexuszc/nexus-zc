@@ -2,607 +2,535 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Nexus Brain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Ops</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  body { background: #0a0a0a; color: #e5e5e5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
-  .card { background: #161616; border: 1px solid #262626; transition: all 0.15s ease; position: relative; }
-  .card:hover { border-color: #404040; background: #1a1a1a; cursor: pointer; }
-  .card.selected { border-color: #a78bfa; background: #1c1432; }
-  .card.selected::after { content: '✓'; position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; background: #a78bfa; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
-  .card-platform { border-left: 3px solid #a78bfa; }
-  .card-vertical { border-left: 3px solid #34d399; }
-  .card-personal { border-left: 3px solid #60a5fa; }
-  .card-external { border-left: 3px solid #fbbf24; }
-  .card-idea { border-left: 3px solid #525252; }
-  .accent { color: #a78bfa; }
-  .badge { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #262626; color: #a3a3a3; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
-  .badge-imp { background: #2e1065; color: #c4b5fd; }
-  .badge-attn { padding: 3px 10px; font-size: 10px; font-weight: 600; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .attn-decision { background: #7f1d1d; color: #fca5a5; }
-  .attn-focus { background: #92400e; color: #fcd34d; }
-  .attn-appropriate { background: #064e3b; color: #6ee7b7; }
-  .attn-overinvested { background: #1e3a8a; color: #93c5fd; }
-  .attn-archive { background: #44403c; color: #d6d3d1; }
-  .entry { background: #141414; border-left: 3px solid #262626; transition: all 0.15s ease; }
-  .entry.high-importance { border-left-color: #a78bfa; }
-  .entry:hover { background: #1a1a1a; }
-  .entry.expandable { cursor: pointer; }
-  .merge-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #161616; border-top: 1px solid #404040; padding: 16px 32px; display: flex; align-items: center; gap: 12px; z-index: 50; flex-wrap: wrap; }
-  .btn { padding: 8px 14px; border-radius: 6px; font-size: 14px; font-weight: 500; transition: all 0.15s ease; cursor: pointer; white-space: nowrap; }
-  .btn-primary { background: #7c3aed; color: white; }
-  .btn-primary:hover { background: #6d28d9; }
-  .btn-ghost { background: transparent; color: #a3a3a3; border: 1px solid #404040; }
-  .btn-ghost:hover { color: white; border-color: #737373; }
-  .btn-success { background: #047857; color: white; }
-  .btn-success:hover { background: #065f46; }
-  .btn-warn { background: #92400e; color: white; }
-  .btn-warn:hover { background: #78350f; }
-  .btn-danger { background: transparent; color: #fca5a5; border: 1px solid #7f1d1d; }
-  .btn-danger:hover { background: #7f1d1d; color: white; }
-  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; margin-top: 28px; }
-  .section-header:first-child { margin-top: 0; }
-  .section-header h2 { font-size: 13px; font-weight: 600; color: #737373; text-transform: uppercase; letter-spacing: 0.12em; }
-  .section-header .line { flex: 1; height: 1px; background: #262626; }
-  .section-platform h2 { color: #c4b5fd; }
-  .section-vertical h2 { color: #6ee7b7; }
-  .section-personal h2 { color: #93c5fd; }
-  .section-external h2 { color: #fcd34d; }
-  .section-idea h2 { color: #a3a3a3; }
-  .brief-banner { background: linear-gradient(180deg, #1c1432 0%, #0a0a0a 100%); border: 1px solid #2e1065; border-radius: 8px; padding: 24px; margin-bottom: 32px; }
-  .brief-headline { font-size: 18px; font-weight: 600; color: #c4b5fd; line-height: 1.5; margin-bottom: 12px; }
-  .brief-leverage { font-size: 14px; color: #e5e5e5; line-height: 1.6; }
-  .brief-leverage-label { font-size: 11px; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; margin-bottom: 6px; }
-  .brief-meta { display: flex; gap: 16px; margin-top: 16px; font-size: 12px; color: #737373; }
-  .brief-expand { font-size: 12px; color: #a78bfa; cursor: pointer; margin-top: 12px; user-select: none; }
-  .brief-expand:hover { color: #c4b5fd; }
-  .brief-full { margin-top: 16px; padding-top: 16px; border-top: 1px solid #2e1065; font-size: 13px; line-height: 1.7; color: #d4d4d4; white-space: pre-wrap; }
-  ::-webkit-scrollbar { width: 10px; }
-  ::-webkit-scrollbar-track { background: #0a0a0a; }
-  ::-webkit-scrollbar-thumb { background: #262626; border-radius: 5px; }
-  ::-webkit-scrollbar-thumb:hover { background: #404040; }
-  .fade-in { animation: fadeIn 0.2s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-  select, input[type="text"] { background: #0a0a0a; color: white; border: 1px solid #404040; padding: 6px 10px; border-radius: 4px; font-size: 14px; }
-  select:focus, input[type="text"]:focus { outline: none; border-color: #a78bfa; }
+  body { background:#0a0a0a; color:#e5e5e5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:13px; line-height:1.5; margin:0; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:#0a0a0a; }
+  ::-webkit-scrollbar-thumb { background:#2a2a2a; border-radius:3px; }
+  .card { background:#111; border:1px solid #1e1e1e; border-radius:8px; padding:16px; }
+  .row-item { padding:9px 0; border-bottom:1px solid #181818; }
+  .row-item:last-child { border-bottom:none; }
+  .sec-hdr { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .sec-hdr .lbl { font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; white-space:nowrap; }
+  .sec-hdr .cnt { font-size:10px; color:#444; }
+  .sec-hdr .line { flex:1; height:1px; background:#1e1e1e; }
+  .kpi { background:#111; border:1px solid #1e1e1e; border-radius:8px; padding:14px 18px; flex:1; min-width:110px; }
+  .kpi .num { font-size:26px; font-weight:700; line-height:1; margin-bottom:4px; }
+  .kpi .lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; color:#444; }
+  .badge { display:inline-flex; align-items:center; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; }
+  .dot { width:7px; height:7px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .entry-row { padding:10px 12px; border-radius:5px; background:#0e0e0e; border-left:2px solid #1e1e1e; margin-bottom:5px; }
+  .entry-row.hi { border-left-color:#8b5cf6; }
+  .entry-row.task { border-left-color:#3b82f6; }
+  .fade-in { animation:fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  .live-pulse { animation:livePulse 2s ease-in-out infinite; }
+  @keyframes livePulse { 0%,100% { opacity:1; box-shadow:0 0 4px #06b6d4; } 50% { opacity:.5; box-shadow:0 0 10px #06b6d4; } }
+  mark { background:#3b2f0080; color:#fbbf24; border-radius:2px; padding:0 1px; }
+  input[type=text] { background:#111; border:1px solid #2a2a2a; border-radius:5px; padding:5px 12px; color:#e5e5e5; font-size:12px; outline:none; transition:border-color .15s; }
+  input[type=text]:focus { border-color:#8b5cf6; }
+  .attention-row { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:6px; margin-bottom:6px; }
+  @media(max-width:900px) { .grid-3col { grid-template-columns:1fr 1fr !important; } }
+  @media(max-width:600px) { .grid-3col,.grid-2col { grid-template-columns:1fr !important; } }
 </style>
 </head>
-<body class="min-h-screen pb-32">
+<body>
 
-<div id="app"></div>
+<header style="position:sticky;top:0;z-index:100;background:rgba(10,10,10,.96);backdrop-filter:blur(12px);border-bottom:1px solid #1e1e1e;padding:10px 24px;display:flex;align-items:center;gap:14px;">
+  <div style="font-weight:800;font-size:14px;letter-spacing:.1em;color:#a78bfa;white-space:nowrap;">NEXUS OPS</div>
+  <input type="text" id="search" placeholder="Search all data…" style="width:260px;" />
+  <div style="flex:1"></div>
+  <span id="live-ind" style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.08em;color:#06b6d4;">
+    <span id="live-dot" class="dot live-pulse" style="background:#06b6d4;"></span> LIVE
+  </span>
+  <span id="hdr-info" style="font-size:11px;color:#444;"></span>
+  <button id="refresh-btn" style="background:#111;border:1px solid #2a2a2a;color:#888;padding:5px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit;">↻ Refresh</button>
+</header>
+
+<div id="app" style="padding:20px 24px;max-width:1600px;margin:0 auto;">
+  <div style="text-align:center;padding:80px 0;color:#333;">Loading Nexus Ops…</div>
+</div>
 
 <script>
-const API_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/brain-api';
-const REFRESH_ASSESSMENTS_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/refresh-assessments';
+const SB_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
 
-const CATEGORY_ORDER = ['platform', 'vertical', 'personal', 'external', 'idea'];
-const CATEGORY_LABELS = {
-  platform: 'Platform',
-  vertical: 'Verticals',
-  personal: 'Personal',
-  external: 'External',
-  idea: 'Ideas',
-};
-const CATEGORY_DESCRIPTIONS = {
-  platform: 'The engine you\'re building',
-  vertical: 'GTM channels — built on the platform',
-  personal: 'Your investments, separate from platform',
-  external: 'Companies you contribute to but don\'t drive',
-  idea: 'Loose threads not yet committed',
+const { createClient } = supabase;
+const db = createClient(SB_URL, SB_KEY);
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const S = {
+  entries:[], tasks:[], clients:[], builds:[], reflections:[],
+  improvements:[], auditLog:[], abilities:[], actionQueue:[], roofingJobs:[],
+  feed:[], search:'', loading:false, lastRefresh:null, countdown:30,
+  entryCount:0, taskCount:0,
 };
 
-let state = {
-  password: localStorage.getItem('nexus_brain_password') || null,
-  view: 'dashboard',
-  currentProject: null,
-  projects: [],
-  entries: [],
-  stats: null,
-  brief: null,
-  briefExpanded: false,
-  expandedEntries: new Set(),
-  manageMode: false,
-  selectedProjects: new Set(),
-  refreshing: false,
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const h = s => s == null ? '' : String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function ago(ts) {
+  if (!ts) return '—';
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s/86400)}d ago`;
+  return new Date(ts).toLocaleDateString('en',{month:'short',day:'numeric'});
+}
+
+function hl(text, q) {
+  if (!q || !text) return h(text);
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return h(text).replace(new RegExp(`(${esc})`,'gi'),'<mark>$1</mark>');
+}
+
+function badge(lbl, color, bg) {
+  return `<span class="badge" style="background:${bg||'#1e1e1e'};color:${color||'#888'}">${h(lbl)}</span>`;
+}
+
+function dot(color) {
+  return `<span class="dot" style="background:${color}"></span>`;
+}
+
+function secHdr(lbl, cnt, accent) {
+  return `<div class="sec-hdr"><span class="lbl" style="color:${accent||'#555'}">${h(lbl)}</span>${cnt!=null?`<span class="cnt">${cnt}</span>`:''}<div class="line"></div></div>`;
+}
+
+const STATUS_COLOR = {
+  staged:'#a78bfa', deployed:'#10b981', failed:'#ef4444', building:'#f59e0b',
+  planned:'#6b7280', testing:'#06b6d4', proposed:'#f59e0b', approved:'#10b981',
+  rejected:'#ef4444', live:'#10b981', active:'#10b981', inactive:'#6b7280',
+  pending:'#f59e0b', success:'#10b981', failure:'#ef4444', complete:'#10b981',
+  in_progress:'#f97316', signed:'#60a5fa', lead:'#6b7280',
+  inspection_scheduled:'#f59e0b', proposal_sent:'#3b82f6', invoice_sent:'#a78bfa',
+};
+const sc = s => STATUS_COLOR[s] || '#888';
+
+const TYPE_COLOR = {
+  idea:'#a78bfa', task:'#60a5fa', decision:'#34d399', note:'#666',
+  question:'#fbbf24', observation:'#f472b6', meta:'#94a3b8', other:'#555',
 };
 
-async function callAPI(action, params = {}) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-brain-password': state.password },
-    body: JSON.stringify({ action, ...params }),
+function clientGroup(c) {
+  const dt = (c.deal_type||'').toLowerCase();
+  const nm = (c.name||'').toLowerCase();
+  if (dt.includes('roof')||nm.includes('roof')) return 'Roofing OS';
+  if (dt.includes('refi')||dt.includes('mortgage')||dt.includes('cash_out')||dt.includes('reverse')||nm.includes('refi')||nm.includes('mortgage')) return 'Mortgage / Refi';
+  if (dt.includes('va')||dt.includes('agency')||dt.includes('staff')) return 'VA Services';
+  if (dt.includes('nexus')||dt.includes('platform')||dt.includes('saas')||dt.includes('software')) return 'Platform';
+  return (dt||'other').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+}
+
+const GROUP_COLORS = {'Roofing OS':'#f97316','Mortgage / Refi':'#3b82f6','VA Services':'#10b981','Platform':'#a78bfa'};
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+async function sq(table, params='') {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
+      headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}` }
+    });
+    if (!r.ok) return [];
+    return r.json();
+  } catch { return []; }
+}
+
+async function sqCount(table, filter='') {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?select=id&limit=1${filter?'&'+filter:''}`, {
+      headers:{ apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, Prefer:'count=exact' }
+    });
+    const cr = r.headers.get('content-range');
+    const total = cr?.split('/')[1];
+    return total && total !== '*' ? parseInt(total) : 0;
+  } catch { return 0; }
+}
+
+async function loadAll() {
+  S.loading = true;
+  document.getElementById('hdr-info').textContent = 'Refreshing…';
+
+  const [
+    entries, tasks, clients, builds, reflections, improvements,
+    auditLog, abilities, actionQueue, roofingJobs, entryCount, taskCount
+  ] = await Promise.all([
+    sq('entries','select=id,content,entry_type,importance,created_at,tags,project_names,people_names,task_status,role&order=created_at.desc&limit=100'),
+    sq('entries','select=id,content,created_at,client_id&task_status=eq.open&order=created_at.asc&limit=50'),
+    sq('clients','select=*,client_context(*)&order=created_at.desc'),
+    sq('nexus_build_manifests','select=id,goal,status,dev_commit_sha,main_commit_sha,created_at&order=created_at.desc&limit=20'),
+    sq('nexus_reflections','select=id,cycle_number,observation,insight,action_taken,learned,created_at&order=created_at.desc&limit=10'),
+    sq('nexus_self_improvements','select=*&order=directive_priority.asc,created_at.desc&limit=30'),
+    sq('nexus_audit_log','select=id,engine,action_type,action_detail,outcome,created_at&order=created_at.desc&limit=50'),
+    sq('nexus_ability_proposals','select=*&order=created_at.desc&limit=20'),
+    sq('nexus_action_queue','select=*&status=eq.pending&order=created_at.desc&limit=20'),
+    sq('roofing_jobs','select=id,homeowner_name,property_address,status,contract_amount,created_at&order=created_at.desc&limit=30'),
+    sqCount('entries',''),
+    sqCount('entries','task_status=eq.open'),
+  ]);
+
+  Object.assign(S, {
+    entries:entries||[], tasks:tasks||[], clients:clients||[], builds:builds||[],
+    reflections:reflections||[], improvements:improvements||[], auditLog:auditLog||[],
+    abilities:abilities||[], actionQueue:actionQueue||[], roofingJobs:roofingJobs||[],
+    entryCount:entryCount||0, taskCount:taskCount||0,
   });
-  if (res.status === 401) {
-    localStorage.removeItem('nexus_brain_password');
-    state.password = null;
-    render();
-    throw new Error('Unauthorized');
-  }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data.data;
+  S.feed = [...(auditLog||[]).slice(0,10)];
+  S.loading = false;
+  S.lastRefresh = new Date();
+  S.countdown = 30;
+  render();
 }
 
-function loginView() {
-  return `
-    <div class="min-h-screen flex items-center justify-center px-4">
-      <div class="w-full max-w-sm">
-        <div class="text-center mb-8">
-          <div class="text-3xl font-bold accent mb-2">NEXUS</div>
-          <div class="text-sm text-neutral-500">Enter password to access your brain</div>
+// ── Render sections ───────────────────────────────────────────────────────────
+
+function renderKPIs() {
+  const staged = S.builds.filter(b=>b.status==='staged').length;
+  const pendImp = S.improvements.filter(i=>['proposed','pending'].includes(i.status)).length;
+  const activeClients = S.clients.filter(c=>!['inactive','archived'].includes(c.status)).length;
+
+  const kpis = [
+    {lbl:'Entries',     val:S.entryCount||S.entries.length,  color:'#a78bfa', plus: S.entryCount>S.entries.length},
+    {lbl:'Open Tasks',  val:S.taskCount||S.tasks.length,     color:S.tasks.length?'#60a5fa':'#10b981', plus: S.taskCount>S.tasks.length},
+    {lbl:'Clients',     val:activeClients,                    color:'#10b981'},
+    {lbl:'Staged',      val:staged,                           color:staged?'#a78bfa':'#333', urgent:staged>0},
+    {lbl:'Improvements',val:pendImp,                          color:pendImp?'#f59e0b':'#333'},
+    {lbl:'Pending',     val:S.actionQueue.length,             color:S.actionQueue.length?'#ef4444':'#333', urgent:S.actionQueue.length>0},
+    {lbl:'Roofing',     val:S.roofingJobs.length,             color:S.roofingJobs.length?'#f97316':'#333'},
+  ];
+
+  return `<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+    ${kpis.map(k=>`<div class="kpi" style="${k.urgent?`border-color:${k.color}40;box-shadow:0 0 10px ${k.color}10`:''}"}>
+      <div class="num" style="color:${k.color}">${k.val}${k.plus?'+':''}</div>
+      <div class="lbl">${h(k.lbl)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderAttentionBanner() {
+  const staged = S.builds.filter(b=>b.status==='staged');
+  const pending = S.actionQueue;
+  if (!staged.length && !pending.length) return '';
+
+  const rows = [
+    ...staged.map(b=>`<div class="attention-row" style="background:#1c1432;border:1px solid #a78bfa30;">
+      ${dot('#a78bfa')}<span style="font-size:10px;font-weight:700;color:#a78bfa;letter-spacing:.06em;">BUILD STAGED</span>
+      <span style="color:#d4d4d4;flex:1;">${h((b.goal||'').slice(0,70))}</span>
+      <code style="font-size:10px;color:#555;font-family:monospace;">deploy build ${(b.id||'').slice(0,8)}</code>
+      <span style="font-size:10px;color:#444;">${ago(b.created_at)}</span>
+    </div>`),
+    ...pending.map(a=>`<div class="attention-row" style="background:#1a1010;border:1px solid #ef444430;">
+      ${dot('#ef4444')}<span style="font-size:10px;font-weight:700;color:#ef4444;letter-spacing:.06em;">ACTION PENDING</span>
+      <span style="color:#d4d4d4;flex:1;">${h((a.action_summary||'').slice(0,70))}</span>
+      <span style="font-size:10px;color:#444;">${ago(a.created_at)}</span>
+    </div>`),
+  ].join('');
+
+  return `<div style="margin-bottom:16px;">${secHdr('⚡ Attention Required', null, '#ef4444')}${rows}</div>`;
+}
+
+function feedItemHTML(e) {
+  const oc = e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#555';
+  return `<div class="row-item" style="display:flex;gap:10px;align-items:flex-start;">
+    ${dot(oc)}
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+        <span style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.06em;">${h(e.engine||'system')}</span>
+        <span style="font-size:10px;color:#333;">${h(e.action_type||'')}</span>
+        <span style="margin-left:auto;font-size:10px;color:#2e2e2e;white-space:nowrap;">${ago(e.created_at)}</span>
+      </div>
+      <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h((e.action_detail||'').slice(0,120))}</div>
+    </div>
+  </div>`;
+}
+
+function renderActivityFeed() {
+  const items = S.feed.length
+    ? S.feed.map(feedItemHTML).join('')
+    : '<div style="padding:20px 0;text-align:center;color:#2e2e2e;font-size:12px;">No activity yet</div>';
+  return `<div class="card">
+    ${secHdr('Live Activity Feed','','#06b6d4')}
+    <div id="live-feed">${items}</div>
+  </div>`;
+}
+
+function renderTasks(q) {
+  const shown = q ? S.tasks.filter(t=>t.content?.toLowerCase().includes(q)) : S.tasks;
+  const items = shown.length ? shown.map(t=>`
+    <div class="row-item" style="display:flex;gap:10px;align-items:flex-start;">
+      <div style="width:13px;height:13px;border:1.5px solid #3b82f6;border-radius:3px;flex-shrink:0;margin-top:1px;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:#d4d4d4;line-height:1.5;">${hl(t.content,q)}</div>
+        <div style="font-size:10px;color:#3a3a3a;margin-top:2px;">${ago(t.created_at)}</div>
+      </div>
+    </div>`).join('')
+    : '<div style="padding:16px 0;text-align:center;color:#2e2e2e;font-size:12px;">No open tasks</div>';
+  return `<div class="card">${secHdr('Open Tasks',shown.length,'#60a5fa')}${items}</div>`;
+}
+
+function renderBuilds() {
+  const items = S.builds.slice(0,10).map(b=>{
+    const col = sc(b.status);
+    const sha = (b.main_commit_sha||b.dev_commit_sha||'').slice(0,8);
+    return `<div class="row-item">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+        ${dot(col)}<span style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.04em;">${h(b.status)}</span>
+        <span style="font-size:10px;color:#2e2e2e;margin-left:auto;">${ago(b.created_at)}</span>
+      </div>
+      <div style="font-size:12px;color:#c0c0c0;margin-bottom:2px;">${h((b.goal||'').slice(0,80))}</div>
+      ${sha?`<div style="font-size:10px;color:#3a3a3a;font-family:monospace;">${sha}</div>`:''}
+    </div>`;
+  }).join('') || '<div style="padding:16px 0;text-align:center;color:#2e2e2e;font-size:12px;">No builds</div>';
+  return `<div class="card">${secHdr('Builds',S.builds.length,'#a78bfa')}${items}</div>`;
+}
+
+function renderImprovements() {
+  const pending = S.improvements.filter(i=>['proposed','pending','in_progress'].includes(i.status));
+  const CXCOL = {low:'#10b981',medium:'#f59e0b',high:'#ef4444'};
+  const items = pending.slice(0,8).map(i=>`
+    <div class="row-item">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+        ${i.directive_priority?`<span style="font-size:10px;font-weight:700;color:#a78bfa;">P${i.directive_priority}</span>`:''}
+        <span style="font-size:11px;font-weight:600;color:#d4d4d4;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(i.title||'')}</span>
+        ${i.complexity?`<span style="font-size:10px;color:${CXCOL[i.complexity]||'#888'}">${h(i.complexity)}</span>`:''}
+      </div>
+      <div style="font-size:11px;color:#555;line-height:1.4;">${h((i.problem||'').slice(0,80))}</div>
+      <div style="font-size:10px;color:#333;margin-top:2px;">${ago(i.created_at)}</div>
+    </div>`).join('')
+    || '<div style="padding:16px 0;text-align:center;color:#2e2e2e;font-size:12px;">No pending improvements</div>';
+  return `<div class="card">${secHdr('Self-Improvements',pending.length,'#f59e0b')}${items}</div>`;
+}
+
+function renderReflections() {
+  const items = S.reflections.slice(0,6).map(r=>`
+    <div class="row-item">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        ${r.cycle_number?`<span style="font-size:10px;font-weight:700;color:#10b981;">Cycle ${r.cycle_number}</span>`:''}
+        <span style="font-size:10px;color:#2e2e2e;margin-left:auto;">${ago(r.created_at)}</span>
+      </div>
+      ${r.insight?`<div style="font-size:12px;color:#d4d4d4;line-height:1.4;margin-bottom:3px;">${h((r.insight||'').slice(0,100))}</div>`:''}
+      ${r.learned?`<div style="font-size:11px;color:#10b981;font-style:italic;">${h((r.learned||'').slice(0,80))}</div>`:''}
+    </div>`).join('')
+    || '<div style="padding:16px 0;text-align:center;color:#2e2e2e;font-size:12px;">No reflections yet</div>';
+  return `<div class="card">${secHdr('Reflections',S.reflections.length,'#10b981')}${items}</div>`;
+}
+
+function renderClients(q) {
+  if (!S.clients.length) return '';
+  const filtered = q
+    ? S.clients.filter(c=>c.name?.toLowerCase().includes(q)||c.deal_type?.toLowerCase().includes(q)||(c.client_context?.[0]?.core_offer||'').toLowerCase().includes(q))
+    : S.clients;
+
+  const groups = {};
+  for (const c of filtered) {
+    const g = clientGroup(c);
+    if (!groups[g]) groups[g]=[];
+    groups[g].push(c);
+  }
+
+  const ORDER = ['Roofing OS','Mortgage / Refi','VA Services','Platform'];
+  const sorted = [...ORDER.filter(g=>groups[g]),...Object.keys(groups).filter(g=>!ORDER.includes(g))];
+
+  const groupHTML = sorted.map(gName=>{
+    const list = groups[gName];
+    const accent = GROUP_COLORS[gName]||'#888';
+    const cards = list.map(c=>{
+      const ctx = c.client_context?.[0]||{};
+      const hc = c.health_score;
+      const hcol = hc>=80?'#10b981':hc>=60?'#f59e0b':hc?'#ef4444':'#333';
+      const lastAct = c.last_activity_at||c.health_updated_at;
+      return `<div style="background:#161616;border:1px solid #1e1e1e;border-top:2px solid ${accent}30;border-radius:6px;padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div style="font-weight:600;font-size:13px;">${hl(c.name||'',q)}</div>
+          ${hc?`<div style="font-size:14px;font-weight:700;color:${hcol};">${hc}</div>`:''}
         </div>
-        <input id="password-input" type="password" placeholder="Password"
-          class="w-full bg-neutral-900 border border-neutral-800 rounded px-4 py-3 text-white focus:outline-none focus:border-violet-500" autofocus />
-        <button id="login-btn" class="w-full mt-3 bg-violet-600 hover:bg-violet-500 text-white font-medium py-3 rounded transition">Unlock</button>
-        <div id="login-error" class="text-red-400 text-sm mt-3 text-center hidden"></div>
-      </div>
-    </div>
-  `;
-}
-
-function header() {
-  const stats = state.stats;
-  const statsText = stats
-    ? `${stats.total_entries} entries · ${stats.platform || 0} platform · ${stats.vertical || 0} verticals · ${stats.idea || 0} ideas · ${stats.total_people} people`
-    : '';
-  return `
-    <header class="border-b border-neutral-900 px-8 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur z-10">
-      <div class="flex items-center gap-8">
-        <div class="font-bold text-lg accent">NEXUS</div>
-        <nav class="flex gap-6 text-sm">
-          <button data-view="dashboard" class="nav-btn ${state.view === 'dashboard' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'}">Projects</button>
-          <button data-view="all" class="nav-btn ${state.view === 'all' ? 'text-white' : 'text-neutral-500 hover:text-neutral-300'}">All Entries</button>
-        </nav>
-      </div>
-      <div class="flex items-center gap-4">
-        <div class="text-xs text-neutral-600">${statsText}</div>
-        ${state.view === 'dashboard' ? `
-          <button
-            id="refresh-assessments"
-            class="btn btn-ghost ${state.refreshing ? 'opacity-60 cursor-not-allowed' : ''}"
-            title="Re-run COO assessment of all projects"
-            ${state.refreshing ? 'disabled' : ''}
-          >
-            ${state.refreshing ? '⟳ Thinking…' : '↻ Refresh'}
-          </button>
-          <button id="manage-toggle" class="btn ${state.manageMode ? 'btn-primary' : 'btn-ghost'}">
-            ${state.manageMode ? 'Done' : 'Manage'}
-          </button>
-        ` : ''}
-      </div>
-    </header>
-  `;
-}
-
-function briefBanner() {
-  if (!state.brief) return '';
-  const b = state.brief;
-  const date = new Date(b.generated_at);
-  const ago = formatRelativeDate(date);
-  return `
-    <div class="brief-banner fade-in">
-      <div class="brief-leverage-label">COO Brief — ${ago}</div>
-      <div class="brief-headline">${escapeHTML(b.headline || '')}</div>
-      <div class="brief-leverage">
-        <span class="text-violet-300 font-semibold">Highest leverage move:</span> ${escapeHTML(b.highest_leverage_move || '')}
-      </div>
-      <div class="brief-meta">
-        <span>${b.projects_assessed || 0} projects assessed</span>
-        <span>${b.decisions_needed_count || 0} decisions needed</span>
-      </div>
-      <div class="brief-expand" id="brief-toggle">${state.briefExpanded ? '↑ collapse full brief' : '↓ read full brief'}</div>
-      ${state.briefExpanded ? `
-        <div class="brief-full">${escapeHTML(b.full_brief || '')}</div>
-      ` : ''}
-    </div>
-  `;
-}
-
-function projectCard(p) {
-  const last = p.last_activity ? new Date(p.last_activity) : null;
-  const daysAgo = last ? Math.floor((Date.now() - last.getTime()) / (1000 * 60 * 60 * 24)) : null;
-  const dotColor = daysAgo === null ? '#525252' : daysAgo < 3 ? '#22c55e' : daysAgo < 14 ? '#eab308' : '#737373';
-  const preview = p.latest_thought ? (p.latest_thought.length > 140 ? p.latest_thought.slice(0, 140) + '…' : p.latest_thought) : 'No entries yet';
-  const isSelected = state.selectedProjects.has(p.name);
-  
-  const attnBadge = p.attention_call ? `
-    <span class="badge-attn attn-${p.attention_call.replace(/[^a-z]/g, '').replace('decisionneeded','decision').replace('needsmorefocus','focus').replace('considerarchiving','archive')}">${p.attention_call}</span>
-  ` : '';
-
-  return `
-    <div class="card card-${p.category} rounded-lg p-5 ${isSelected ? 'selected' : ''}" data-project="${escapeAttr(p.name)}">
-      <div class="flex items-start justify-between mb-3">
-        <div class="flex items-center gap-2">
-          <div class="w-2 h-2 rounded-full" style="background:${dotColor}"></div>
-          <div class="font-semibold text-base">${escapeHTML(p.name)}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+          ${c.deal_type?badge(c.deal_type.replace(/_/g,' '),accent,accent+'18'):''}
+          ${c.status&&c.status!=='active'?badge(c.status,sc(c.status),sc(c.status)+'18'):''}
+          ${c.monthly_fee?`<span style="font-size:11px;color:#10b981;">$${Number(c.monthly_fee).toLocaleString()}/mo</span>`:''}
+          ${c.rev_share_pct?`<span style="font-size:11px;color:#10b981;">${c.rev_share_pct}% rev</span>`:''}
         </div>
-        <div class="text-xs text-neutral-500 ${isSelected ? 'mr-7' : ''}">${p.entry_count} ${p.entry_count === 1 ? 'entry' : 'entries'}</div>
+        ${ctx.core_offer?`<div style="font-size:11px;color:#555;line-height:1.4;margin-bottom:5px;">${h((ctx.core_offer||'').slice(0,80))}</div>`:''}
+        <div style="font-size:10px;color:#333;">${lastAct?`Active ${ago(lastAct)}`:'No activity recorded'}</div>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="width:10px;height:10px;border-radius:2px;background:${accent};display:inline-block;flex-shrink:0;"></span>
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${accent};">${h(gName)}</span>
+        <span style="font-size:10px;color:#444;">${list.length}</span>
+        <div style="flex:1;height:1px;background:#1e1e1e;"></div>
       </div>
-      ${attnBadge ? `<div class="mb-2">${attnBadge}</div>` : ''}
-      <div class="text-sm text-neutral-400 leading-relaxed mb-3">${escapeHTML(preview)}</div>
-      ${p.next_step ? `<div class="text-xs text-violet-400/70 mb-3 italic">→ ${escapeHTML(p.next_step.slice(0, 120))}</div>` : ''}
-      <div class="text-xs text-neutral-600">${last ? formatRelativeDate(last) : '—'}</div>
-    </div>
-  `;
-}
-
-function dashboardView() {
-  if (state.projects.length === 0) {
-    return `<div class="px-8 py-16 text-center text-neutral-500">No projects yet.</div>`;
-  }
-  
-  const grouped = {};
-  for (const cat of CATEGORY_ORDER) grouped[cat] = [];
-  for (const p of state.projects) {
-    if (grouped[p.category]) grouped[p.category].push(p);
-  }
-  
-  const sections = CATEGORY_ORDER.map(cat => {
-    const items = grouped[cat].sort((a, b) => (b.entry_count || 0) - (a.entry_count || 0));
-    if (items.length === 0) return '';
-    return `
-      <div class="section-header section-${cat}">
-        <h2>${CATEGORY_LABELS[cat]}</h2>
-        <span class="text-xs text-neutral-600">${items.length} · ${CATEGORY_DESCRIPTIONS[cat]}</span>
-        <div class="line"></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        ${items.map(projectCard).join('')}
-      </div>
-    `;
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">${cards}</div>
+    </div>`;
   }).join('');
 
-  return `
-    <div class="px-8 py-8 fade-in">
-      <h1 class="text-2xl font-bold mb-2">Your brain</h1>
-      ${state.manageMode ? `<div class="text-sm text-neutral-500 mb-6">Click projects to select. Set category, archive, or merge.</div>` : `<div class="mb-6"></div>`}
-      ${!state.manageMode ? briefBanner() : ''}
-      ${sections}
-    </div>
-    ${state.manageMode && state.selectedProjects.size > 0 ? manageBar() : ''}
-  `;
+  return `<div class="card" style="margin-bottom:16px;">${secHdr('Clients',filtered.length,'#10b981')}${groupHTML}</div>`;
 }
 
-function manageBar() {
-  const selected = Array.from(state.selectedProjects);
-  const canMerge = selected.length >= 2;
-  return `
-    <div class="merge-bar fade-in">
-      <div class="text-sm text-neutral-300 flex-1 min-w-0">
-        <span class="text-white font-semibold">${selected.length} selected:</span>
-        <span class="text-neutral-400">${selected.map(escapeHTML).join(', ')}</span>
+function renderAbilities() {
+  const pending = S.abilities.filter(a=>['pending','proposed','building','testing'].includes(a.status));
+  if (!pending.length) return '';
+  const items = pending.map(a=>`
+    <div class="row-item" style="display:flex;align-items:center;gap:10px;">
+      ${dot(sc(a.status))}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:12px;color:#ec4899;">${h(a.ability_name||'')}</div>
+        <div style="font-size:11px;color:#555;">${h((a.description||'').slice(0,80))}</div>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        ${selected.length === 1 ? `<button id="rename-btn" class="btn btn-ghost">Rename</button>` : ''}
-        <span class="text-sm text-neutral-500">Set category:</span>
-        <select id="category-select">
-          <option value="platform">Platform</option>
-          <option value="vertical">Vertical</option>
-          <option value="personal">Personal</option>
-          <option value="external">External</option>
-          <option value="idea">Idea</option>
-          <option value="archived">Archived</option>
-        </select>
-        <button id="apply-category-btn" class="btn btn-success">Apply</button>
-        ${canMerge ? `
-          <span class="text-sm text-neutral-500 ml-2">Merge into:</span>
-          <select id="merge-target">
-            ${selected.map(n => `<option value="${escapeAttr(n)}">${escapeHTML(n)}</option>`).join('')}
-          </select>
-          <button id="merge-confirm" class="btn btn-primary">Merge ${selected.length}</button>
-        ` : ''}
-        ${selected.length === 1 ? `<button id="delete-btn" class="btn btn-danger">Delete</button>` : ''}
-        <button id="clear-selection" class="btn btn-ghost">Clear</button>
-      </div>
-    </div>
-  `;
+      ${badge(a.status,sc(a.status),sc(a.status)+'20')}
+      <span style="font-size:10px;color:#333;white-space:nowrap;">${ago(a.created_at)}</span>
+    </div>`).join('');
+  return `<div class="card" style="margin-bottom:16px;">${secHdr('Ability Proposals',pending.length,'#ec4899')}${items}</div>`;
 }
 
-function entryCard(e) {
-  const date = new Date(e.created_at);
-  const isHighImp = e.importance >= 8;
-  const typeColor = {
-    idea: '#a78bfa', task: '#60a5fa', decision: '#34d399', note: '#737373',
-    question: '#fbbf24', observation: '#f472b6', meta: '#94a3b8',
-  }[e.entry_type] || '#737373';
-  const isExpanded = state.expandedEntries.has(e.id);
-  const canExpand = e.content.length > 200;
-  const displayContent = canExpand && !isExpanded
-    ? escapeHTML(e.content.slice(0, 200)) + '<span class="text-neutral-600">…</span>'
-    : escapeHTML(e.content);
-  return `
-    <div class="entry rounded p-4 mb-2 ${isHighImp ? 'high-importance' : ''} ${canExpand ? 'expandable' : ''}" data-entry-id="${e.id}">
-      <div class="flex items-center gap-3 mb-2 text-xs">
-        <span class="badge" style="color:${typeColor}; border:1px solid ${typeColor}40">${e.entry_type || 'other'}</span>
-        ${e.importance ? `<span class="badge badge-imp">${e.importance}/10</span>` : ''}
-        <span class="text-neutral-600">${formatDate(date)}</span>
-        ${canExpand ? `<span class="text-neutral-700 ml-auto">${isExpanded ? '↑ collapse' : '↓ expand'}</span>` : ''}
-      </div>
-      <div class="text-sm text-neutral-200 leading-relaxed whitespace-pre-wrap">${displayContent}</div>
-      ${isExpanded && e.tags && e.tags.length ? `
-        <div class="flex flex-wrap gap-1 mt-3">
-          ${e.tags.map(t => `<span class="badge" style="color:#a3a3a3">#${escapeHTML(t)}</span>`).join('')}
+function renderRoofingJobs(q) {
+  if (!S.roofingJobs.length) return '';
+  const filtered = q
+    ? S.roofingJobs.filter(j=>j.homeowner_name?.toLowerCase().includes(q)||j.property_address?.toLowerCase().includes(q))
+    : S.roofingJobs;
+  if (!filtered.length) return '';
+
+  const STEPS = ['lead','inspection_scheduled','proposal_sent','signed','in_progress','invoice_sent','complete'];
+  const rows = filtered.map(j=>{
+    const step = STEPS.indexOf(j.status);
+    const pct = step>=0?Math.round(((step+1)/STEPS.length)*100):0;
+    const col = j.status==='complete'?'#10b981':j.status==='in_progress'?'#f97316':'#f59e0b';
+    return `<div class="row-item">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:12px;">${hl(j.homeowner_name||'',q)}</div>
+          <div style="font-size:11px;color:#555;">${hl(j.property_address||'',q)}</div>
         </div>
-      ` : ''}
-      ${(e.project_names && e.project_names.length) || (e.people_names && e.people_names.length) ? `
-        <div class="flex flex-wrap gap-1 mt-3">
-          ${(e.project_names || []).map(n => `<span class="badge">${escapeHTML(n)}</span>`).join('')}
-          ${(e.people_names || []).map(n => `<span class="badge" style="color:#fbbf24">${escapeHTML(n)}</span>`).join('')}
+        ${j.contract_amount?`<span style="font-size:12px;font-weight:700;color:#10b981;">$${Number(j.contract_amount).toLocaleString()}</span>`:''}
+        ${badge((j.status||'').replace(/_/g,' '),col,col+'20')}
+        <span style="font-size:10px;color:#333;white-space:nowrap;">${ago(j.created_at)}</span>
+      </div>
+      <div style="height:3px;background:#1e1e1e;border-radius:2px;overflow:hidden;">
+        <div style="width:${pct}%;height:100%;background:${col};border-radius:2px;"></div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="card" style="margin-bottom:16px;">${secHdr('Roofing Jobs',filtered.length,'#f97316')}${rows}</div>`;
+}
+
+function renderEntries(q) {
+  const shown = q
+    ? S.entries.filter(e=>e.content?.toLowerCase().includes(q)||(e.tags||[]).some(t=>t.toLowerCase().includes(q))||(e.project_names||[]).some(p=>p.toLowerCase().includes(q)))
+    : S.entries.slice(0,50);
+
+  const rows = shown.slice(0,50).map(e=>{
+    const tc = TYPE_COLOR[e.entry_type]||'#555';
+    const isTask = e.task_status==='open';
+    const isHigh = e.importance>=8;
+    return `<div class="entry-row ${isHigh?'hi':isTask?'task':''}">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+        <span style="font-size:10px;font-weight:600;color:${tc};border:1px solid ${tc}30;padding:0 4px;border-radius:2px;text-transform:uppercase;letter-spacing:.04em;">${h(e.entry_type||'note')}</span>
+        ${e.importance?`<span style="font-size:10px;color:#444;">${e.importance}/10</span>`:''}
+        ${e.role==='assistant'?`<span style="font-size:10px;color:#6b4fa8;font-style:italic;">nexus</span>`:''}
+        <span style="font-size:10px;color:#2e2e2e;margin-left:auto;">${ago(e.created_at)}</span>
+      </div>
+      <div style="font-size:12px;color:#c0c0c0;line-height:1.5;">${hl((e.content||'').slice(0,300),q)}</div>
+      ${e.tags?.length?`<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px;">${e.tags.map(t=>`<span style="font-size:10px;color:#333;background:#161616;padding:0 5px;border-radius:2px;">#${h(t)}</span>`).join('')}</div>`:''}
+      ${(e.project_names?.length||e.people_names?.length)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${(e.project_names||[]).map(n=>`<span style="font-size:10px;color:#5a6a7a;background:#161616;padding:0 5px;border-radius:2px;">${h(n)}</span>`).join('')}${(e.people_names||[]).map(n=>`<span style="font-size:10px;color:#7a5a00;background:#161616;padding:0 5px;border-radius:2px;">${h(n)}</span>`).join('')}</div>`:''}
+    </div>`;
+  }).join('') || '<div style="padding:20px;text-align:center;color:#2e2e2e;">No entries found</div>';
+
+  const lbl = shown.length < S.entries.length ? `${shown.length} of ${S.entryCount||S.entries.length}` : shown.length;
+  return `<div class="card" style="margin-bottom:16px;">${secHdr('Memory / Entries',lbl,'#a78bfa')}${rows}</div>`;
+}
+
+function renderAuditLog(q) {
+  const shown = q
+    ? S.auditLog.filter(e=>e.action_detail?.toLowerCase().includes(q)||e.engine?.toLowerCase().includes(q)||e.action_type?.toLowerCase().includes(q))
+    : S.auditLog;
+
+  const rows = shown.map(e=>{
+    const oc = e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#444';
+    return `<div class="row-item" style="display:flex;gap:10px;align-items:flex-start;">
+      ${dot(oc)}
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+          <span style="font-size:10px;font-weight:700;color:#444;letter-spacing:.06em;">${h(e.engine||'system')}</span>
+          <span style="font-size:10px;color:#2e2e2e;">${h(e.action_type||'')}</span>
+          <span style="margin-left:auto;font-size:10px;color:#222;white-space:nowrap;">${ago(e.created_at)}</span>
         </div>
-      ` : ''}
-    </div>
-  `;
-}
-
-function projectDetailView() {
-  return `
-    <div class="px-8 py-8 fade-in">
-      <button id="back-btn" class="text-sm text-neutral-500 hover:text-white mb-4">← back to projects</button>
-      <h1 class="text-2xl font-bold mb-1">${escapeHTML(state.currentProject)}</h1>
-      <div class="text-sm text-neutral-500 mb-6">${state.entries.length} ${state.entries.length === 1 ? 'entry' : 'entries'}</div>
-      <div id="entry-list" class="max-w-3xl">
-        ${state.entries.length === 0 ? '<div class="text-neutral-500">No entries yet.</div>' : state.entries.map(entryCard).join('')}
+        <div style="font-size:11px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hl((e.action_detail||'').slice(0,120),q)}</div>
       </div>
+    </div>`;
+  }).join('') || '<div style="padding:16px;text-align:center;color:#2e2e2e;">No audit log entries</div>';
+
+  return `<div class="card" style="margin-bottom:16px;">${secHdr('Audit Log',shown.length,'#444')}
+    <div style="max-height:380px;overflow-y:auto;">${rows}</div>
+  </div>`;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function render() {
+  const q = S.search.toLowerCase().trim();
+  document.getElementById('app').innerHTML = `<div class="fade-in">
+    ${renderKPIs()}
+    ${renderAttentionBanner()}
+    <div class="grid-2col" style="display:grid;grid-template-columns:1fr 360px;gap:14px;margin-bottom:14px;">
+      ${renderActivityFeed()}
+      ${renderTasks(q)}
     </div>
-  `;
-}
-
-function allEntriesView() {
-  return `
-    <div class="px-8 py-8 fade-in">
-      <h1 class="text-2xl font-bold mb-6">All entries</h1>
-      <div id="entry-list" class="max-w-3xl">
-        ${state.entries.length === 0 ? '<div class="text-neutral-500">No entries yet.</div>' : state.entries.map(entryCard).join('')}
-      </div>
+    <div class="grid-3col" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px;">
+      ${renderBuilds()}
+      ${renderImprovements()}
+      ${renderReflections()}
     </div>
-  `;
+    ${renderClients(q)}
+    ${renderAbilities()}
+    ${renderRoofingJobs(q)}
+    ${renderEntries(q)}
+    ${renderAuditLog(q)}
+  </div>`;
+  updateHdr();
 }
 
-function escapeHTML(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function escapeAttr(s) { return escapeHTML(s); }
-function formatDate(d) { return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
-function formatRelativeDate(d) {
-  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-  if (days === 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return `${days} days ago`;
-  if (days < 30) return `${Math.floor(days/7)}w ago`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function updateHdr() {
+  const el = document.getElementById('hdr-info');
+  if (!el) return;
+  if (S.loading) { el.textContent='Refreshing…'; el.style.color='#a78bfa'; }
+  else if (S.lastRefresh) { el.textContent=`Updated ${ago(S.lastRefresh)} · ${S.countdown}s`; el.style.color='#444'; }
 }
 
-function attachEntryClickHandlers() {
-  document.querySelectorAll('[data-entry-id]').forEach(el => {
-    el.onclick = () => {
-      const id = el.dataset.entryId;
-      const entry = state.entries.find(x => x.id === id);
-      if (!entry || entry.content.length <= 200) return;
-      if (state.expandedEntries.has(id)) state.expandedEntries.delete(id);
-      else state.expandedEntries.add(id);
-      const container = document.getElementById('entry-list');
-      if (container) {
-        container.innerHTML = state.entries.map(entryCard).join('');
-        attachEntryClickHandlers();
-      }
-    };
+// ── Realtime subscription ─────────────────────────────────────────────────────
+db.channel('nexus-ops-v2')
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'nexus_audit_log'},(payload)=>{
+    S.feed.unshift(payload.new);
+    S.feed = S.feed.slice(0,10);
+    const el = document.getElementById('live-feed');
+    if (el) el.innerHTML = S.feed.map(feedItemHTML).join('');
+  })
+  .subscribe(status=>{
+    const d = document.getElementById('live-dot');
+    if (d) d.style.background = status==='SUBSCRIBED'?'#06b6d4':'#444';
   });
-}
 
-function attachProjectClickHandlers() {
-  document.querySelectorAll('[data-project]').forEach(el => {
-    el.onclick = () => {
-      const name = el.dataset.project;
-      if (state.manageMode) {
-        if (state.selectedProjects.has(name)) state.selectedProjects.delete(name);
-        else state.selectedProjects.add(name);
-        rerenderDashboard();
-      } else {
-        openProject(name);
-      }
-    };
-  });
-}
-
-function attachBriefHandlers() {
-  const toggle = document.getElementById('brief-toggle');
-  if (toggle) toggle.onclick = () => {
-    state.briefExpanded = !state.briefExpanded;
-    rerenderDashboard();
-  };
-}
-
-function attachManageBarHandlers() {
-  const clearBtn = document.getElementById('clear-selection');
-  if (clearBtn) clearBtn.onclick = () => { state.selectedProjects.clear(); rerenderDashboard(); };
-
-  const applyCatBtn = document.getElementById('apply-category-btn');
-  if (applyCatBtn) applyCatBtn.onclick = async () => {
-    const category = document.getElementById('category-select').value;
-    const names = Array.from(state.selectedProjects);
-    try {
-      for (const name of names) await callAPI('set_category', { name, category });
-      state.selectedProjects.clear();
-      state.stats = null;
-      await loadCurrentView();
-    } catch (err) { alert(`Error: ${err.message}`); }
-  };
-
-  const renameBtn = document.getElementById('rename-btn');
-  if (renameBtn) renameBtn.onclick = async () => {
-    const oldName = Array.from(state.selectedProjects)[0];
-    const newName = prompt(`Rename "${oldName}" to:`, oldName);
-    if (!newName || newName === oldName) return;
-    try {
-      await callAPI('rename_project', { old_name: oldName, new_name: newName });
-      state.selectedProjects.clear();
-      state.stats = null;
-      await loadCurrentView();
-    } catch (err) { alert(`Error: ${err.message}`); }
-  };
-
-  const mergeBtn = document.getElementById('merge-confirm');
-  if (mergeBtn) mergeBtn.onclick = async () => {
-    const target = document.getElementById('merge-target').value;
-    const sources = Array.from(state.selectedProjects);
-    if (!confirm(`Merge ${sources.length} projects into "${target}"?\n\n${sources.filter(s => s !== target).join('\n')}\n\nThis cannot be undone.`)) return;
-    mergeBtn.textContent = 'Merging...';
-    mergeBtn.disabled = true;
-    try {
-      const result = await callAPI('merge_projects', { source_names: sources, target_name: target });
-      state.selectedProjects.clear();
-      state.stats = null;
-      await loadCurrentView();
-      alert(`✓ Merged ${result.entries_updated} entries into "${target}"`);
-    } catch (err) {
-      alert(`Error: ${err.message}`);
-      mergeBtn.disabled = false;
-    }
-  };
-
-  const deleteBtn = document.getElementById('delete-btn');
-  if (deleteBtn) deleteBtn.onclick = async () => {
-    const name = Array.from(state.selectedProjects)[0];
-    if (!confirm(`Delete "${name}"?\n\nThis removes the project and unlinks it from all entries. Cannot be undone.`)) return;
-    try {
-      const result = await callAPI('delete_project', { name });
-      state.selectedProjects.clear();
-      state.stats = null;
-      await loadCurrentView();
-      alert(`✓ Deleted "${name}" — unlinked from ${result.entries_updated} entries`);
-    } catch (err) { alert(`Error: ${err.message}`); }
-  };
-}
-
-function rerenderDashboard() {
-  const content = document.getElementById('content');
-  if (content) {
-    content.innerHTML = dashboardView();
-    attachProjectClickHandlers();
-    attachManageBarHandlers();
-    attachBriefHandlers();
+// ── Auto-refresh countdown ────────────────────────────────────────────────────
+setInterval(()=>{
+  if (!S.loading) {
+    S.countdown = Math.max(0, S.countdown-1);
+    updateHdr();
+    if (S.countdown===0) loadAll();
   }
-  document.querySelector('header').outerHTML = header();
-  attachHeaderHandlers();
-}
+}, 1000);
 
-function attachHeaderHandlers() {
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.onclick = () => {
-      state.view = b.dataset.view;
-      state.currentProject = null;
-      state.expandedEntries.clear();
-      state.manageMode = false;
-      state.selectedProjects.clear();
-      loadCurrentView();
-    };
-  });
-  const mgmtBtn = document.getElementById('manage-toggle');
-  if (mgmtBtn) mgmtBtn.onclick = () => {
-    state.manageMode = !state.manageMode;
-    state.selectedProjects.clear();
-    rerenderDashboard();
-  };
-  const refreshBtn = document.getElementById('refresh-assessments');
-  if (refreshBtn) refreshBtn.onclick = async () => {
-    if (state.refreshing) return;
-    state.refreshing = true;
-    rerenderDashboard();
-    try {
-      const res = await fetch(REFRESH_ASSESSMENTS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-brain-password': state.password },
-        body: JSON.stringify({}),
-      });
-      if (res.status === 401) {
-        localStorage.removeItem('nexus_brain_password');
-        state.password = null;
-        await render();
-        throw new Error('Unauthorized');
-      }
-      let payload = {};
-      try { payload = await res.json(); } catch (_) {}
-      if (!res.ok) throw new Error(payload.error || 'Refresh failed');
-      state.stats = null;
-      await loadCurrentView();
-    } catch (err) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      state.refreshing = false;
-      if (state.view === 'dashboard') rerenderDashboard();
-    }
-  };
-}
+// ── Event listeners ───────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', e=>{
+  S.search = e.target.value;
+  render();
+});
 
-async function render() {
-  const app = document.getElementById('app');
-  if (!state.password) {
-    app.innerHTML = loginView();
-    document.getElementById('login-btn').onclick = handleLogin;
-    document.getElementById('password-input').onkeydown = (e) => { if (e.key === 'Enter') handleLogin(); };
-    return;
-  }
-  app.innerHTML = header() + '<div id="content"><div class="px-8 py-16 text-center text-neutral-500">Loading…</div></div>';
-  attachHeaderHandlers();
-  await loadCurrentView();
-}
+document.getElementById('refresh-btn').addEventListener('click', loadAll);
 
-async function loadCurrentView() {
-  const content = document.getElementById('content');
-  try {
-    if (!state.stats) state.stats = await callAPI('stats');
-    if (state.view === 'dashboard') {
-      const [projects, brief] = await Promise.all([
-        callAPI('list_projects'),
-        callAPI('get_portfolio_brief').catch(() => null),
-      ]);
-      state.projects = projects;
-      state.brief = brief;
-      content.innerHTML = dashboardView();
-      attachProjectClickHandlers();
-      attachManageBarHandlers();
-      attachBriefHandlers();
-    } else if (state.view === 'project') {
-      state.entries = await callAPI('list_entries', { project: state.currentProject });
-      content.innerHTML = projectDetailView();
-      document.getElementById('back-btn').onclick = () => { state.view = 'dashboard'; state.currentProject = null; state.expandedEntries.clear(); loadCurrentView(); };
-      attachEntryClickHandlers();
-    } else if (state.view === 'all') {
-      state.entries = await callAPI('list_entries', { limit: 100 });
-      content.innerHTML = allEntriesView();
-      attachEntryClickHandlers();
-    }
-    document.querySelector('header').outerHTML = header();
-    attachHeaderHandlers();
-  } catch (err) {
-    content.innerHTML = `<div class="px-8 py-16 text-center text-red-400">Error: ${escapeHTML(err.message)}</div>`;
-  }
-}
-
-function openProject(name) {
-  state.view = 'project';
-  state.currentProject = name;
-  state.expandedEntries.clear();
-  loadCurrentView();
-}
-
-async function handleLogin() {
-  const input = document.getElementById('password-input');
-  const errEl = document.getElementById('login-error');
-  errEl.classList.add('hidden');
-  const pw = input.value.trim();
-  if (!pw) return;
-  state.password = pw;
-  try {
-    state.stats = await callAPI('stats');
-    localStorage.setItem('nexus_brain_password', pw);
-    render();
-  } catch (err) {
-    state.password = null;
-    errEl.textContent = 'Wrong password';
-    errEl.classList.remove('hidden');
-  }
-}
-
-render();
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadAll();
 </script>
 </body>
 </html>
