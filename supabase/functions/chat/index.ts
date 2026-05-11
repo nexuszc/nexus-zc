@@ -2578,16 +2578,24 @@ Return JSON:
   "people": ["Name1", "Name2"],
   "projects": ["Project Name 1", "Project Name 2"]
 }`;
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: classifyPrompt }] }),
-  });
-  const data = await res.json();
-  const text = data?.content?.[0]?.text || "{}";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  try { return jsonMatch ? JSON.parse(jsonMatch[0]) : {}; }
-  catch { return { type: "other", importance: 5, tags: [], people: [], projects: [] }; }
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: classifyPrompt }] }),
+    });
+    if (!res.ok) {
+      console.error("classifyEntry API error:", res.status);
+      return { type: "note", importance: 5, tags: [], people: [], projects: [] };
+    }
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || "{}";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    try { return jsonMatch ? JSON.parse(jsonMatch[0]) : {}; }
+    catch { return { type: "note", importance: 5, tags: [], people: [], projects: [] }; }
+  } catch {
+    return { type: "note", importance: 5, tags: [], people: [], projects: [] };
+  }
 }
 
 async function callClaude(message: string, context: string, ventures: string[], ideas: string[]) {
@@ -2645,12 +2653,17 @@ Task rules:
 - task: or TODO: prefix  -  respond ONLY with: " -  Task logged: [task]. I'll track this until you mark it done."
 - done: prefix  -  respond ONLY with: " -  Done: [what was marked complete]."
 - done all  -  respond ONLY with: " -  All tasks cleared."`;
-  const data = await callAnthropicWithRetry({
-    model: "claude-sonnet-4-5", max_tokens: 1500,
-    system: systemPrompt,
-    messages: [{ role: "user", content: message }],
-  });
-  return data?.content?.[0]?.text || "(no reply)";
+  try {
+    const data = await callAnthropicWithRetry({
+      model: "claude-sonnet-4-5", max_tokens: 1500,
+      system: systemPrompt,
+      messages: [{ role: "user", content: message }],
+    });
+    return data?.content?.[0]?.text || "(no reply)";
+  } catch (err: any) {
+    console.error("callClaude error:", err.message);
+    return "I'm having trouble reaching my AI backend right now. Please try again in a moment.";
+  }
 }
 
 async function semanticSearch(supabase: any, query: string, limit = 8) {
