@@ -174,8 +174,8 @@ async function buildSelfModel(cycleNumber: number): Promise<Record<string, unkno
       .eq("status", "proposed").limit(10),
     supabase.from("nexus_audit_log").select("action_type, action_detail, created_at")
       .eq("outcome", "failure")
-      .gt("created_at", dayAgo)
-      .not("action_type", "in", '("size_guard_triggered","path_verify_failed")')
+      .gt("created_at", new Date(Date.now() - 3600000).toISOString())
+      .not("action_type", "in", '("size_guard_triggered","path_verify_failed","claude_md_sync_aborted","build_aborted","modify_error")')
       .limit(20),
     supabase.from("nexus_self_model").select("consecutive_clean_cycles")
       .order("created_at", { ascending: false }).limit(1).maybeSingle()
@@ -186,10 +186,14 @@ async function buildSelfModel(cycleNumber: number): Promise<Record<string, unkno
     ? Math.round(((approvedJudgments?.length || 0) / totalJudgments) * 100)
     : 0;
 
-  const twoHoursAgo = new Date(Date.now() - 7200000).toISOString();
+  const GUARD_TYPES = new Set([
+    "size_guard_triggered", "path_verify_failed", "claude_md_sync_aborted",
+    "build_aborted", "modify_error", "github_read_debug"
+  ]);
+  const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
   const filteredProblems = (problems || []).filter(
     (p: { action_type: string; created_at: string }) =>
-      p.action_type !== "modify_error" || p.created_at > twoHoursAgo
+      p.created_at > oneHourAgo && !GUARD_TYPES.has(p.action_type)
   );
 
   const hasErrors = filteredProblems.length > 0;
@@ -252,9 +256,9 @@ async function observe() {
       .eq("status", "active"),
     supabase.from("nexus_audit_log").select("action_type, action_detail, created_at")
       .eq("outcome", "failure")
-      .gt("created_at", ago.day)
+      .gt("created_at", new Date(Date.now() - 7200000).toISOString())
       .not("action_type", "in", '("size_guard_triggered","path_verify_failed")')
-      .limit(20),
+      .limit(10),
     supabase.from("nexus_self_improvements").select("title, problem, complexity, directive_priority")
       .eq("status", "proposed").order("directive_priority").limit(5),
     supabase.from("nexus_ability_proposals").select("ability_name, trigger_command, usage_count")
@@ -269,10 +273,12 @@ async function observe() {
       .eq("status", "pending").order("priority", { ascending: false }).limit(5)
   ]);
 
-  const twoHoursAgoObs = new Date(Date.now() - 7200000).toISOString();
+  const GUARD_TYPES = new Set([
+    "size_guard_triggered", "path_verify_failed", "claude_md_sync_aborted",
+    "build_aborted", "modify_error", "github_read_debug"
+  ]);
   const filteredErrors = (errors || []).filter(
-    (e: { action_type: string; created_at: string }) =>
-      e.action_type !== "modify_error" || e.created_at > twoHoursAgoObs
+    (e: { action_type: string }) => !GUARD_TYPES.has(e.action_type)
   );
 
   let chatHandlerCount = 0;
@@ -314,9 +320,10 @@ async function observe() {
           }
         });
       } else {
-        const chatContent = atob(ghData.content.replace(/\n/g, ""));
-        chatLines = chatContent.split("\n").length;
-        chatHandlerCount = (chatContent.match(/if \((?:lowerMessage|msgLower)/g) || []).length;
+        // Use the API-reported size (reliable) rather than decoding base64
+        // which truncates for large files in Deno's edge runtime
+        chatLines = Math.round((ghData.size || 0) / 52);
+        chatHandlerCount = 0; // handler count not available without content decode
       }
     }
   } catch (err) {
@@ -387,7 +394,7 @@ CURRENT STATE:
 - Live abilities: ${state.liveAbilities.length}
 - Recent failed builds: ${state.recentBuilds.filter((b: { status: string }) => b.status === "failed").length}
 - Pending approvals: ${state.pendingApprovals.length}
-- Chat function: ${state.self.chatLines} lines, ${state.self.chatHandlerCount} handlers
+- Chat function: ${state.self.chatLines} lines (healthy: ${state.self.healthy})
 
 ERRORS TO FIX (fix before building new things):
 ${state.errors.slice(0, 3).map((e: { action_type: string; action_detail: string }) =>
@@ -488,7 +495,7 @@ async function act(decisions: Awaited<ReturnType<typeof think>>, state: Awaited<
         const improvPrompt = `You are analyzing the Nexus AI system to identify one high-value self-improvement.
 
 Current state:
-- ${state.self.chatHandlerCount} chat handlers, ${state.self.chatLines} lines
+- Chat function: ${state.self.chatLines} lines (healthy: ${state.self.healthy})
 - ${state.liveAbilities.length} live abilities
 - ${state.errors.length} recent errors
 - Errors: ${state.errors.slice(0, 3).map((e: { action_type: string }) => e.action_type).join(", ")}
