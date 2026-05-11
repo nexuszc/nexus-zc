@@ -46,8 +46,22 @@ async function readGitHub(path: string, branch = "main"): Promise<{ content: str
     { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
   );
   const data = await res.json();
-  if (!data.content) throw new Error(`Cannot read: ${path}`);
+  if (res.status === 404) throw new Error(`File not found in repo (404): ${path}`);
+  if (!res.ok) throw new Error(`GitHub API error ${res.status} reading: ${path} — ${data.message || ""}`);
+  if (!data.content) throw new Error(`No content returned for: ${path}`);
   return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
+}
+
+async function listGitHubTree(branch = "main"): Promise<string[]> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/git/trees/${branch}?recursive=1`,
+    { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.tree as Array<{ type: string; path: string }> || [])
+    .filter(item => item.type === "blob")
+    .map(item => item.path);
 }
 
 async function writeGitHub(path: string, content: string, message: string, branch = "dev"): Promise<string> {
@@ -77,29 +91,59 @@ async function writeGitHub(path: string, content: string, message: string, branc
 // ── CREATE MANIFEST ───────────────────────────────────────────────────────────
 
 async function createManifest(instruction: string, directivePriority: number): Promise<string> {
-  const { content: chatContent } = await readGitHub("supabase/functions/chat/index.ts");
+  const [{ content: chatContent }, allFiles] = await Promise.all([
+    readGitHub("supabase/functions/chat/index.ts"),
+    listGitHubTree("main")
+  ]);
+
   const chatLines = chatContent.split("\n").length;
   const existingTriggers = (chatContent.match(/if \((?:lowerMessage|msgLower)[^)]*\)/g) || [])
     .map(m => m.slice(0, 60));
+
+  // Partition the tree into categories for the AI
+  const edgeFunctions = allFiles.filter(f => f.startsWith("supabase/functions/") && f.endsWith("/index.ts"));
+  const appPages = allFiles.filter(f => f.startsWith("app/src/pages/"));
+  const appComponents = allFiles.filter(f => f.startsWith("app/src/components/"));
+  const appOther = allFiles.filter(f => f.startsWith("app/src/") && !f.startsWith("app/src/pages/") && !f.startsWith("app/src/components/"));
+
+  const fileTree = [
+    "EDGE FUNCTIONS (supabase/functions/):",
+    ...edgeFunctions.map(f => `  ${f}`),
+    "",
+    "REACT PAGES (app/src/pages/):",
+    ...appPages.map(f => `  ${f}`),
+    "",
+    "REACT COMPONENTS (app/src/components/):",
+    ...appComponents.map(f => `  ${f}`),
+    "",
+    "OTHER APP FILES:",
+    ...appOther.map(f => `  ${f}`),
+  ].join("\n");
 
   const manifestPrompt = `You are the Nexus build planner. Create a complete build manifest for this instruction.
 
 INSTRUCTION: ${instruction}
 
+ACTUAL REPO FILE TREE (use ONLY these exact paths — never invent paths):
+${fileTree}
+
 CURRENT CODEBASE STATE:
-- chat/index.ts: ${chatLines} lines, ${existingTriggers.length} existing handlers
+- supabase/functions/chat/index.ts: ${chatLines} lines, ${existingTriggers.length} existing handlers
 - Existing triggers (don't duplicate): ${existingTriggers.slice(0, 20).join(" | ")}
 - Stack: React 18 + Vite + Tailwind, Supabase Edge Functions (Deno), PostgreSQL
+- Navigation component: app/src/components/Layout.jsx (NOT Navbar.jsx — that doesn't exist)
 
 MANIFEST RULES:
-1. If instruction needs a chat handler — check existing triggers first, don't duplicate
-2. For new pages — add to app/src/pages/ and update App.jsx routes
-3. For new edge functions — add to supabase/functions/
-4. For DB changes — include exact SQL
-5. Keep scope minimal — build exactly what's needed, nothing extra
-6. Every build needs at least 2 tests
+1. CRITICAL: Only reference files that appear in the ACTUAL REPO FILE TREE above
+2. If a file you need doesn't exist in the tree, list it under files_to_create (don't put it in files_to_modify)
+3. If instruction needs a chat handler — check existing triggers first, don't duplicate
+4. For new pages — add to app/src/pages/ and update app/src/App.jsx routes
+5. For new edge functions — add to supabase/functions/{name}/index.ts
+6. For DB changes — include exact SQL
+7. Keep scope minimal — build exactly what's needed, nothing extra
+8. Every build needs at least 2 tests
 
-Create the manifest. Be specific about file paths and what goes in each file.
+Create the manifest. Be specific about file paths (must match tree exactly) and what goes in each file.
 
 Respond with JSON only (no backticks):
 {
