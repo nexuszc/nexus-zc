@@ -32,43 +32,50 @@
   ::-webkit-scrollbar-thumb:hover { background: #333; }
 
   /* Header */
-  #hdr { height: 52px; border-bottom: 1px solid var(--b1); display: flex; align-items: center; gap: 0; padding: 0 20px; background: rgba(8,8,8,.98); backdrop-filter: blur(8px); flex-shrink: 0; position: relative; z-index: 50; }
-  #hdr-kpis { display: flex; align-items: center; gap: 1px; margin-left: 16px; overflow: hidden; }
-  .kchip { display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; color: var(--t2); cursor: default; white-space: nowrap; transition: color .15s; }
+  #hdr { height: 52px; border-bottom: 1px solid var(--b1); display: flex; align-items: center; gap: 0; padding: 0 16px; background: rgba(8,8,8,.98); backdrop-filter: blur(8px); flex-shrink: 0; position: relative; z-index: 50; }
+  #hdr-kpis { display: flex; align-items: center; gap: 1px; margin-left: 14px; overflow: hidden; flex-shrink: 1; min-width: 0; }
+  .kchip { display: flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; color: var(--t2); cursor: default; white-space: nowrap; transition: color .15s; }
   .kchip .kn { font-weight: 700; }
   .kchip.urgent { color: var(--t1); }
-  .ksep { width: 1px; height: 14px; background: var(--b1); margin: 0 4px; flex-shrink: 0; }
-  #search { background: var(--s1); border: 1px solid var(--b1); border-radius: 6px; padding: 5px 12px; color: var(--t1); font-size: 12px; outline: none; width: 220px; transition: border-color .15s; font-family: inherit; }
+  .ksep { width: 1px; height: 14px; background: var(--b1); margin: 0 3px; flex-shrink: 0; }
+  #search { background: var(--s1); border: 1px solid var(--b1); border-radius: 6px; padding: 5px 12px; color: var(--t1); font-size: 12px; outline: none; width: 180px; transition: border-color .15s; font-family: inherit; }
   #search:focus { border-color: var(--v); }
   #search::placeholder { color: var(--t3); }
-  #refresh-btn { background: transparent; border: 1px solid var(--b2); color: var(--t3); padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; font-family: inherit; transition: color .15s, border-color .15s; }
-  #refresh-btn:hover { color: var(--t2); border-color: #3a3a3a; }
+  .hdr-btn { background: transparent; border: 1px solid var(--b2); color: var(--t3); padding: 4px 10px; border-radius: 5px; font-size: 11px; cursor: pointer; font-family: inherit; transition: color .15s, border-color .15s, background .15s; white-space: nowrap; }
+  .hdr-btn:hover { color: var(--t2); border-color: #3a3a3a; }
+  .hdr-btn:disabled { opacity: .5; cursor: default; }
+  .hdr-btn.action { border-color: #3a1f6a; color: var(--v); }
+  .hdr-btn.action:hover { background: #1a0f30; border-color: var(--v); color: #c4b5fd; }
+  .hdr-btn.approve { border-color: #0f3a1f; color: var(--g); }
+  .hdr-btn.approve:hover { background: #0a1f10; border-color: var(--g); color: #6ee7b7; }
+  #conn-status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: .08em; flex-shrink: 0; }
+  #hdr-time { font-size: 10px; color: var(--t3); white-space: nowrap; flex-shrink: 0; text-align: right; min-width: 80px; }
 
   /* Layout */
   #layout { height: calc(100vh - 52px); display: grid; grid-template-columns: 1fr 264px; }
-  #main { overflow-y: auto; padding: 24px 28px; }
-  #sidebar { overflow-y: auto; border-left: 1px solid var(--b1); padding: 18px 16px; background: var(--bg); }
+  #main { overflow-y: auto; padding: 20px 24px; }
+  #sidebar { overflow-y: auto; border-left: 1px solid var(--b1); padding: 16px 14px; background: var(--bg); }
 
   /* Section blocks */
-  .sec { background: var(--s1); border: 1px solid var(--b1); border-radius: 10px; margin-bottom: 12px; overflow: hidden; transition: border-color .15s; }
+  .sec { background: var(--s1); border: 1px solid var(--b1); border-radius: 10px; margin-bottom: 10px; overflow: hidden; transition: border-color .15s; }
   .sec:hover { border-color: #262626; }
-  .sec-toggle { display: flex; align-items: center; gap: 10px; padding: 14px 18px; cursor: pointer; user-select: none; }
+  .sec-toggle { display: flex; align-items: center; gap: 10px; padding: 13px 16px; cursor: pointer; user-select: none; }
   .sec-toggle:hover .sec-arrow { color: var(--t2); }
   .sec-title { font-size: 13px; font-weight: 600; color: var(--t1); }
   .sec-count { font-size: 11px; font-weight: 600; }
   .sec-arrow { margin-left: auto; font-size: 16px; font-weight: 300; color: var(--t3); line-height: 1; transition: color .15s; }
-  .sec-body { padding: 4px 18px 18px; border-top: 1px solid var(--b1); }
+  .sec-body { padding: 4px 16px 16px; border-top: 1px solid var(--b1); }
 
   /* Attention items */
   .attn-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 7px; margin-bottom: 8px; }
 
-  /* Row items within sections */
+  /* Row items */
   .ri { padding: 10px 0; border-bottom: 1px solid #141414; }
   .ri:last-child { border-bottom: none; }
 
   /* Tabs */
-  .tabs { display: inline-flex; background: var(--bg); border: 1px solid var(--b1); border-radius: 6px; padding: 3px; gap: 1px; margin-bottom: 14px; }
-  .tab { padding: 5px 14px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--t3); cursor: pointer; border: none; background: transparent; font-family: inherit; transition: all .15s; }
+  .tabs { display: inline-flex; background: var(--bg); border: 1px solid var(--b1); border-radius: 6px; padding: 3px; gap: 1px; margin-bottom: 12px; }
+  .tab { padding: 5px 13px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--t3); cursor: pointer; border: none; background: transparent; font-family: inherit; transition: all .15s; }
   .tab.active { background: var(--s2); color: var(--t1); font-weight: 600; }
   .tab:hover:not(.active) { color: var(--t2); }
 
@@ -76,8 +83,8 @@
   .client-card { background: var(--s2); border: 1px solid var(--b1); border-radius: 8px; margin-bottom: 8px; overflow: hidden; cursor: pointer; transition: border-color .15s; }
   .client-card:hover { border-color: var(--b2); }
   .client-card:last-child { margin-bottom: 0; }
-  .client-compact { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
-  .client-detail { padding: 12px 14px 14px; border-top: 1px solid #181818; }
+  .client-compact { display: flex; align-items: center; gap: 12px; padding: 11px 13px; }
+  .client-detail { padding: 11px 13px 13px; border-top: 1px solid #181818; }
 
   /* Kanban */
   .kanban { display: grid; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
@@ -106,24 +113,26 @@
   @keyframes fadeIn { from{opacity:0;transform:translateY(3px);} to{opacity:1;transform:translateY(0);} }
   .accent-bar { width: 3px; height: 32px; border-radius: 2px; flex-shrink: 0; }
   .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+  .err-row { font-size: 10px; color: #444; font-style: italic; padding: 3px 0; }
 </style>
 </head>
 <body>
 
-<!-- Sticky header with KPIs -->
 <div id="hdr">
   <span style="font-weight:800;font-size:13px;letter-spacing:.12em;color:var(--v);flex-shrink:0;">NEXUS</span>
   <div id="hdr-kpis"></div>
-  <div style="flex:1;min-width:12px;"></div>
-  <input id="search" type="text" placeholder="Search…" style="margin-right:12px;" />
-  <span id="live-ind" style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--c);margin-right:12px;flex-shrink:0;">
-    <span id="live-dot" class="dot dot-live"></span> LIVE
-  </span>
-  <span id="hdr-info" style="font-size:11px;color:var(--t3);margin-right:10px;white-space:nowrap;flex-shrink:0;"></span>
-  <button id="refresh-btn">↻</button>
+  <div style="flex:1;min-width:8px;"></div>
+  <input id="search" type="text" placeholder="Search…" style="margin-right:10px;" />
+  <div id="conn-status" style="margin-right:10px;">
+    <span id="conn-dot" class="dot" style="background:#444;"></span>
+    <span id="conn-lbl" style="color:var(--t3);">—</span>
+  </div>
+  <div id="hdr-time" style="margin-right:10px;"></div>
+  <button id="run-agent-btn" class="hdr-btn action" style="margin-right:6px;" title="Trigger nexus-core cycle now">Run Agent</button>
+  <button id="approve-all-btn" class="hdr-btn approve" style="margin-right:8px;" title="Approve all pending ability proposals and actions (max 5 each)">Approve All</button>
+  <button id="refresh-btn" class="hdr-btn" title="Refresh all data">↻</button>
 </div>
 
-<!-- Main layout -->
 <div id="layout">
   <main id="main"><div style="text-align:center;padding:80px 0;color:var(--t3);">Loading…</div></main>
   <aside id="sidebar"></aside>
@@ -140,10 +149,11 @@ const S = {
   entries:[], tasks:[], clients:[], builds:[], reflections:[],
   improvements:[], auditLog:[], abilities:[], actionQueue:[], roofingJobs:[],
   feed:[], search:'', loading:false, lastRefresh:null, countdown:30,
-  entryCount:0, taskCount:0,
+  entryCount:0, taskCount:0, connStatus:'connecting',
   sections:{ tasks:true, clients:true, system:true, roofing:true, memory:false, audit:false },
   tab:'builds',
   expandedClients: new Set(),
+  fetchErrors: [],
 };
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -165,11 +175,10 @@ function hl(text, q) {
   return h(text).replace(new RegExp(`(${esc})`,'gi'),'<mark>$1</mark>');
 }
 
-const SC = {staged:'#a78bfa',deployed:'#10b981',failed:'#ef4444',building:'#f59e0b',planned:'#555',testing:'#06b6d4',proposed:'#f59e0b',approved:'#10b981',rejected:'#ef4444',live:'#10b981',active:'#10b981',inactive:'#555',pending:'#f59e0b',success:'#10b981',failure:'#ef4444',complete:'#10b981',in_progress:'#f97316',signed:'#8b5cf6',lead:'#555',inspection_scheduled:'#f59e0b',proposal_sent:'#3b82f6',invoice_sent:'#a78bfa'};
+const SC = {staged:'#a78bfa',deployed:'#10b981',failed:'#ef4444',building:'#f59e0b',planned:'#555',testing:'#06b6d4',proposed:'#f59e0b',approved:'#10b981',rejected:'#ef4444',live:'#10b981',active:'#10b981',inactive:'#555',pending:'#f59e0b',success:'#10b981',failure:'#ef4444',complete:'#10b981',in_progress:'#f97316',signed:'#8b5cf6',lead:'#555'};
 const sc = s => SC[s]||'#666';
 
 const TC = {idea:'#a78bfa',task:'#60a5fa',decision:'#34d399',note:'#555',question:'#fbbf24',observation:'#f472b6',meta:'#94a3b8'};
-
 const GC = {'Roofing OS':'#f97316','Mortgage / Refi':'#3b82f6','VA Services':'#10b981','Platform':'#8b5cf6'};
 
 function clientGroup(c) {
@@ -189,89 +198,183 @@ function dot(color, size=7) {
   return `<span style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;"></span>`;
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────────
-async function sq(table, params='') {
-  try {
-    const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`}});
-    if (!r.ok) return [];
-    return r.json();
-  } catch { return []; }
-}
-
-async function sqCount(table, filter='') {
-  try {
-    const r = await fetch(`${SB_URL}/rest/v1/${table}?select=id&limit=1${filter?'&'+filter:''}`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`,Prefer:'count=exact'}});
-    const cr = r.headers.get('content-range');
-    const t = cr?.split('/')[1];
-    return t&&t!=='*'?parseInt(t):0;
-  } catch { return 0; }
-}
-
+// ── Data — use Supabase JS client (not raw fetch) ─────────────────────────────
 async function loadAll() {
-  S.loading=true;
+  S.loading = true;
+  S.fetchErrors = [];
   updateHdr();
-  const [entries,tasks,clients,builds,reflections,improvements,auditLog,abilities,actionQueue,roofingJobs,ec,tc] = await Promise.all([
-    sq('entries','select=id,content,entry_type,importance,created_at,tags,project_names,people_names,task_status,role&order=created_at.desc&limit=100'),
-    sq('entries','select=id,content,created_at,client_id&task_status=eq.open&order=created_at.asc&limit=50'),
-    sq('clients','select=*,client_context(*)&order=created_at.desc'),
-    sq('nexus_build_manifests','select=id,goal,status,dev_commit_sha,main_commit_sha,created_at&order=created_at.desc&limit=20'),
-    sq('nexus_reflections','select=id,cycle_number,observation,insight,action_taken,learned,created_at&order=created_at.desc&limit=10'),
-    sq('nexus_self_improvements','select=*&order=directive_priority.asc,created_at.desc&limit=30'),
-    sq('nexus_audit_log','select=id,engine,action_type,action_detail,outcome,created_at&order=created_at.desc&limit=50'),
-    sq('nexus_ability_proposals','select=*&order=created_at.desc&limit=20'),
-    sq('nexus_action_queue','select=*&status=eq.pending&order=created_at.desc&limit=20'),
-    sq('roofing_jobs','select=id,homeowner_name,property_address,status,contract_amount,created_at&order=created_at.desc&limit=40'),
-    sqCount('entries'),
-    sqCount('entries','task_status=eq.open'),
+
+  const safe = async (promise, label) => {
+    try {
+      const { data, error, count } = await promise;
+      if (error) S.fetchErrors.push(`${label}: ${error.message}`);
+      return { data: data || [], count: count || 0, error };
+    } catch(e) {
+      S.fetchErrors.push(`${label}: ${e.message}`);
+      return { data: [], count: 0, error: e };
+    }
+  };
+
+  const [
+    entriesRes, tasksRes, clientsRes, buildsRes, reflectionsRes,
+    improvementsRes, auditLogRes, abilitiesRes, actionQueueRes, roofingRes,
+    entryCountRes, taskCountRes
+  ] = await Promise.all([
+    safe(db.from('entries').select('id,content,entry_type,importance,created_at,tags,project_names,people_names,task_status,role').order('created_at',{ascending:false}).limit(100), 'entries'),
+    safe(db.from('entries').select('id,content,created_at,client_id').eq('task_status','open').order('created_at',{ascending:true}).limit(50), 'tasks'),
+    safe(db.from('clients').select('*,client_context(*)').order('created_at',{ascending:false}), 'clients'),
+    safe(db.from('nexus_build_manifests').select('id,goal,status,dev_commit_sha,main_commit_sha,created_at').order('created_at',{ascending:false}).limit(20), 'builds'),
+    safe(db.from('nexus_reflections').select('id,cycle_number,observation,insight,action_taken,learned,created_at').order('created_at',{ascending:false}).limit(10), 'reflections'),
+    safe(db.from('nexus_self_improvements').select('*').order('directive_priority',{ascending:true}).limit(30), 'improvements'),
+    safe(db.from('nexus_audit_log').select('id,engine,action_type,action_detail,outcome,created_at').order('created_at',{ascending:false}).limit(50), 'auditLog'),
+    safe(db.from('nexus_ability_proposals').select('*').order('created_at',{ascending:false}).limit(20), 'abilities'),
+    safe(db.from('nexus_action_queue').select('*').eq('status','pending').order('created_at',{ascending:false}).limit(20), 'actionQueue'),
+    safe(db.from('roofing_jobs').select('id,homeowner_name,property_address,status,contract_amount,created_at').order('created_at',{ascending:false}).limit(40), 'roofing'),
+    safe(db.from('entries').select('*',{count:'exact',head:true}), 'entryCount'),
+    safe(db.from('entries').select('*',{count:'exact',head:true}).eq('task_status','open'), 'taskCount'),
   ]);
-  Object.assign(S,{entries:entries||[],tasks:tasks||[],clients:clients||[],builds:builds||[],reflections:reflections||[],improvements:improvements||[],auditLog:auditLog||[],abilities:abilities||[],actionQueue:actionQueue||[],roofingJobs:roofingJobs||[],entryCount:ec||0,taskCount:tc||0});
-  S.feed=[...(auditLog||[]).slice(0,10)];
-  S.loading=false; S.lastRefresh=new Date(); S.countdown=30;
+
+  Object.assign(S, {
+    entries:   entriesRes.data,
+    tasks:     tasksRes.data,
+    clients:   clientsRes.data,
+    builds:    buildsRes.data,
+    reflections: reflectionsRes.data,
+    improvements: improvementsRes.data,
+    auditLog:  auditLogRes.data,
+    abilities: abilitiesRes.data,
+    actionQueue: actionQueueRes.data,
+    roofingJobs: roofingRes.data,
+    entryCount:  entryCountRes.count,
+    taskCount:   taskCountRes.count,
+  });
+
+  S.feed = [...S.auditLog.slice(0,10)];
+  S.loading = false;
+  S.lastRefresh = new Date();
+  S.countdown = 30;
   render();
+}
+
+// ── Action: Run Agent ─────────────────────────────────────────────────────────
+async function triggerAgent() {
+  const btn = document.getElementById('run-agent-btn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    const r = await fetch(`${SB_URL}/functions/v1/nexus-core`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
+      body: JSON.stringify({ trigger: 'manual' })
+    });
+    btn.textContent = r.ok ? 'Triggered ✓' : `Error ${r.status}`;
+  } catch(e) {
+    btn.textContent = 'Error';
+  }
+  setTimeout(() => { btn.textContent = 'Run Agent'; btn.disabled = false; }, 3000);
+}
+
+// ── Action: Approve All ───────────────────────────────────────────────────────
+async function approveAll() {
+  const btn = document.getElementById('approve-all-btn');
+  if (!btn || btn.disabled) return;
+
+  const pendAbilities = S.abilities.filter(a => ['proposed','pending'].includes(a.status)).slice(0,5);
+  const pendActions   = S.actionQueue.slice(0,5);
+  const total = pendAbilities.length + pendActions.length;
+
+  if (!total) {
+    btn.textContent = 'Nothing pending';
+    setTimeout(() => { btn.textContent = 'Approve All'; }, 2000);
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = `Approving ${total}…`;
+
+  try {
+    const ops = [];
+    if (pendAbilities.length) {
+      ops.push(db.from('nexus_ability_proposals').update({ status: 'approved' }).in('id', pendAbilities.map(a => a.id)));
+    }
+    if (pendActions.length) {
+      ops.push(db.from('nexus_action_queue').update({ status: 'approved' }).in('id', pendActions.map(a => a.id)));
+    }
+    await Promise.all(ops);
+    btn.textContent = `Approved ${total} ✓`;
+    setTimeout(() => { btn.textContent = 'Approve All'; btn.disabled = false; loadAll(); }, 2000);
+  } catch(e) {
+    btn.textContent = 'Error';
+    setTimeout(() => { btn.textContent = 'Approve All'; btn.disabled = false; }, 2000);
+  }
 }
 
 // ── KPI header ────────────────────────────────────────────────────────────────
 function updateHdr() {
-  const staged=S.builds.filter(b=>b.status==='staged').length;
-  const pendImp=S.improvements.filter(i=>['proposed','pending'].includes(i.status)).length;
-  const chips=[
-    {n:S.entryCount||S.entries.length,lbl:'entries',color:'#6d5acd',plus:S.entryCount>S.entries.length},
-    {n:S.taskCount||S.tasks.length,lbl:'tasks',color:S.tasks.length?'#3b82f6':'#3d6b3d',urgent:S.tasks.length>0},
-    {n:S.clients.filter(c=>!['inactive','archived'].includes(c.status)).length,lbl:'clients',color:'#0a7a5a'},
-    {n:staged,lbl:'staged',color:'#7c3aed',urgent:staged>0},
-    {n:pendImp,lbl:'improvements',color:'#92400e',urgent:pendImp>0},
-    {n:S.actionQueue.length,lbl:'pending',color:'#991b1b',urgent:S.actionQueue.length>0},
+  const staged = S.builds.filter(b => b.status === 'staged').length;
+  const pendImp = S.improvements.filter(i => ['proposed','pending'].includes(i.status)).length;
+  const chips = [
+    {n: S.entryCount || S.entries.length, lbl:'entries', color:'#6d5acd', plus: S.entryCount > S.entries.length},
+    {n: S.taskCount || S.tasks.length,    lbl:'tasks',   color: S.tasks.length ? '#3b82f6' : '#3d6b3d', urgent: S.tasks.length > 0},
+    {n: S.clients.filter(c => !['inactive','archived'].includes(c.status)).length, lbl:'clients', color:'#0a7a5a'},
+    {n: staged,            lbl:'staged',       color:'#7c3aed', urgent: staged > 0},
+    {n: pendImp,           lbl:'improvements', color:'#92400e', urgent: pendImp > 0},
+    {n: S.actionQueue.length, lbl:'pending',   color:'#991b1b', urgent: S.actionQueue.length > 0},
   ];
-  const el=document.getElementById('hdr-kpis');
-  if (el) el.innerHTML=chips.map((k,i)=>`${i>0?'<span class="ksep"></span>':''}<span class="kchip ${k.urgent?'urgent':''}"><span class="kn" style="color:${k.color}">${k.n}${k.plus?'+':''}</span><span>${h(k.lbl)}</span></span>`).join('');
-  const info=document.getElementById('hdr-info');
-  if (info) {
-    if (S.loading) { info.textContent='Refreshing…'; info.style.color='#6d5acd'; }
-    else if (S.lastRefresh) { info.textContent=`${ago(S.lastRefresh)} · ${S.countdown}s`; info.style.color='var(--t3)'; }
+  const el = document.getElementById('hdr-kpis');
+  if (el) el.innerHTML = chips.map((k,i) =>
+    `${i>0?'<span class="ksep"></span>':''}<span class="kchip ${k.urgent?'urgent':''}"><span class="kn" style="color:${k.color}">${k.n}${k.plus?'+':''}</span><span>${h(k.lbl)}</span></span>`
+  ).join('');
+
+  // Connection status
+  const connDot = document.getElementById('conn-dot');
+  const connLbl = document.getElementById('conn-lbl');
+  const statusMap = {
+    connected:    { color:'#06b6d4', text:'LIVE',        style:'color:#06b6d4' },
+    connecting:   { color:'#f59e0b', text:'CONNECTING',  style:'color:#f59e0b' },
+    disconnected: { color:'#ef4444', text:'OFFLINE',      style:'color:#ef4444' },
+  };
+  const cs = statusMap[S.connStatus] || statusMap.connecting;
+  if (connDot) { connDot.style.background = cs.color; connDot.style.animation = S.connStatus==='connected' ? 'livePulse 2s ease-in-out infinite' : 'none'; }
+  if (connLbl) { connLbl.style.cssText = cs.style; connLbl.textContent = cs.text; }
+
+  // Last updated / countdown
+  const timeEl = document.getElementById('hdr-time');
+  if (timeEl) {
+    if (S.loading) {
+      timeEl.innerHTML = `<span style="color:#6d5acd;">Refreshing…</span>`;
+    } else if (S.lastRefresh) {
+      const t = S.lastRefresh.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      timeEl.innerHTML = `<span style="color:var(--t3);">${t}</span><br><span style="color:#2a2a2a;font-size:9px;">next in ${S.countdown}s</span>`;
+    }
   }
+
+  // Show errors as tooltip on refresh button if any
+  const rbtn = document.getElementById('refresh-btn');
+  if (rbtn) rbtn.title = S.fetchErrors.length ? `Errors:\n${S.fetchErrors.join('\n')}` : 'Refresh all data';
 }
 
 // ── Section wrapper ───────────────────────────────────────────────────────────
-function section(key, label, countN, accent, bodyHTML, badge='') {
-  const open=S.sections[key];
-  const countStr=countN!=null?`<span class="sec-count" style="color:${accent}">${countN}</span>`:'';
+function section(key, label, countN, accent, bodyHTML) {
+  const open = S.sections[key];
+  const countStr = countN != null ? `<span class="sec-count" style="color:${accent}">${countN}</span>` : '';
   return `<div class="sec">
     <div class="sec-toggle" data-toggle="${h(key)}">
       <span class="sec-title">${h(label)}</span>
       ${countStr}
-      ${badge}
       <span class="sec-arrow">${open?'−':'+'}</span>
     </div>
-    ${open?`<div class="sec-body">${bodyHTML}</div>`:''}
+    ${open ? `<div class="sec-body">${bodyHTML}</div>` : ''}
   </div>`;
 }
 
 // ── Attention banner ──────────────────────────────────────────────────────────
 function renderAttention() {
-  const staged=S.builds.filter(b=>b.status==='staged');
-  const pend=S.actionQueue;
-  if (!staged.length&&!pend.length) return '';
-  return `<div style="margin-bottom:14px;">
+  const staged = S.builds.filter(b => b.status === 'staged');
+  const pend   = S.actionQueue;
+  if (!staged.length && !pend.length) return '';
+  return `<div style="margin-bottom:12px;">
     ${staged.map(b=>`<div class="attn-item" style="background:#160f2e;border:1px solid #3b1fa840;">
       ${dot('#a78bfa')}
       <div style="flex:1;min-width:0;">
@@ -285,19 +388,28 @@ function renderAttention() {
       ${dot('#ef4444')}
       <div style="flex:1;min-width:0;">
         <span style="font-size:11px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.06em;margin-right:8px;">Action Pending</span>
-        <span style="color:#ccc;font-size:12px;">${h((a.action_summary||'').slice(0,70))}</span>
+        <span style="color:#ccc;font-size:12px;">${h((a.action_summary||a.description||'').slice(0,70))}</span>
       </div>
       <span style="font-size:10px;color:var(--t3);white-space:nowrap;">${ago(a.created_at)}</span>
     </div>`).join('')}
   </div>`;
 }
 
+// ── Error banner ──────────────────────────────────────────────────────────────
+function renderErrors() {
+  if (!S.fetchErrors.length) return '';
+  return `<div style="background:#1a0a0a;border:1px solid #3a1010;border-radius:8px;padding:10px 14px;margin-bottom:10px;">
+    <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:4px;">⚠ Fetch errors (check Supabase RLS / table names)</div>
+    ${S.fetchErrors.map(e=>`<div class="err-row">${h(e)}</div>`).join('')}
+  </div>`;
+}
+
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 function renderTasks(q) {
-  const shown=q?S.tasks.filter(t=>t.content?.toLowerCase().includes(q)):S.tasks;
+  const shown = q ? S.tasks.filter(t=>t.content?.toLowerCase().includes(q)) : S.tasks;
   if (!shown.length) return '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No open tasks</div>';
   return shown.map(t=>`<div class="ri" style="display:flex;gap:10px;align-items:flex-start;">
-    <div style="width:13px;height:13px;border:1.5px solid #3b82f660;border-radius:3px;flex-shrink:0;margin-top:2px;"></div>
+    <div style="width:12px;height:12px;border:1.5px solid #3b82f660;border-radius:3px;flex-shrink:0;margin-top:3px;"></div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;color:#ddd;line-height:1.5;">${hl(t.content,q)}</div>
       <div style="font-size:10px;color:var(--t3);margin-top:2px;">${ago(t.created_at)}</div>
@@ -307,37 +419,38 @@ function renderTasks(q) {
 
 // ── Clients ───────────────────────────────────────────────────────────────────
 function renderClients(q) {
-  const filtered=q?S.clients.filter(c=>c.name?.toLowerCase().includes(q)||c.deal_type?.toLowerCase().includes(q)||(c.client_context?.[0]?.core_offer||'').toLowerCase().includes(q)):S.clients;
+  const filtered = q
+    ? S.clients.filter(c=>c.name?.toLowerCase().includes(q)||c.deal_type?.toLowerCase().includes(q)||(c.client_context?.[0]?.core_offer||'').toLowerCase().includes(q))
+    : S.clients;
   if (!filtered.length) return '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No clients</div>';
 
-  const groups={};
-  for (const c of filtered) { const g=clientGroup(c); if (!groups[g]) groups[g]=[]; groups[g].push(c); }
-  const ORDER=['Roofing OS','Mortgage / Refi','VA Services','Platform'];
-  const sorted=[...ORDER.filter(g=>groups[g]),...Object.keys(groups).filter(g=>!ORDER.includes(g))];
+  const groups = {};
+  for (const c of filtered) { const g = clientGroup(c); if (!groups[g]) groups[g]=[]; groups[g].push(c); }
+  const ORDER = ['Roofing OS','Mortgage / Refi','VA Services','Platform'];
+  const sorted = [...ORDER.filter(g=>groups[g]),...Object.keys(groups).filter(g=>!ORDER.includes(g))];
 
-  return sorted.map(gName=>{
-    const list=groups[gName];
-    const accent=GC[gName]||'#888';
-    const cards=list.map(c=>{
-      const isExp=S.expandedClients.has(c.id);
-      const hc=c.health_score;
-      const hcol=!hc?'var(--t3)':hc>=80?'#10b981':hc>=60?'#f59e0b':'#ef4444';
-      const lastAct=c.last_activity_at||c.health_updated_at;
-      const ctx=c.client_context?.[0]||{};
+  return sorted.map(gName => {
+    const list   = groups[gName];
+    const accent = GC[gName] || '#888';
+    const cards  = list.map(c => {
+      const isExp  = S.expandedClients.has(c.id);
+      const hc     = c.health_score;
+      const hcol   = !hc ? 'var(--t3)' : hc>=80?'#10b981':hc>=60?'#f59e0b':'#ef4444';
+      const lastAct = c.last_activity_at || c.health_updated_at;
+      const ctx    = c.client_context?.[0] || {};
       return `<div class="client-card" data-client="${h(c.id)}">
         <div class="client-compact">
           <div class="accent-bar" style="background:${accent};"></div>
           <div style="flex:1;min-width:0;">
             <div style="font-weight:600;font-size:13px;color:var(--t1);">${hl(c.name||'',q)}</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:1px;">${h(gName)} · ${lastAct?ago(lastAct):'No activity'}</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:1px;">${lastAct?ago(lastAct):'No activity'}</div>
           </div>
-          ${hc?`<div style="font-size:17px;font-weight:700;color:${hcol};">${hc}</div>`:''}
+          ${hc!=null?`<div style="font-size:17px;font-weight:700;color:${hcol};">${hc}</div>`:''}
           <span style="font-size:14px;color:var(--t3);margin-left:4px;">${isExp?'−':'+'}</span>
         </div>
         ${isExp?`<div class="client-detail">
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">
             ${c.deal_type?pill(c.deal_type.replace(/_/g,' '),accent,accent+'18'):''}
-            ${c.status&&c.status!=='active'?pill(c.status,sc(c.status),sc(c.status)+'18'):''}
             ${c.monthly_fee?`<span style="font-size:11px;color:#10b981;">$${Number(c.monthly_fee).toLocaleString()}/mo</span>`:''}
             ${c.rev_share_pct?`<span style="font-size:11px;color:#10b981;">${c.rev_share_pct}% rev share</span>`:''}
           </div>
@@ -347,6 +460,7 @@ function renderClients(q) {
         </div>`:''}
       </div>`;
     }).join('');
+
     return `<div style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
         <span style="width:8px;height:8px;border-radius:2px;background:${accent};display:inline-block;"></span>
@@ -360,19 +474,19 @@ function renderClients(q) {
 
 // ── System tabs ───────────────────────────────────────────────────────────────
 function renderSystem() {
-  const pendImp=S.improvements.filter(i=>['proposed','pending','in_progress'].includes(i.status));
-  const tabs=[
-    {k:'builds',lbl:'Builds',n:S.builds.length},
-    {k:'improvements',lbl:'Improvements',n:pendImp.length},
-    {k:'reflections',lbl:'Reflections',n:S.reflections.length},
+  const pendImp = S.improvements.filter(i=>['proposed','pending','in_progress'].includes(i.status));
+  const tabs = [
+    {k:'builds',      lbl:'Builds',      n: S.builds.length},
+    {k:'improvements',lbl:'Improvements',n: pendImp.length},
+    {k:'reflections', lbl:'Reflections', n: S.reflections.length},
   ];
-  const tabBar=`<div class="tabs">${tabs.map(t=>`<button class="tab ${S.tab===t.k?'active':''}" data-tab="${t.k}">${h(t.lbl)}${t.n?` <span style="font-size:10px;opacity:.7">${t.n}</span>`:''}</button>`).join('')}</div>`;
+  const tabBar = `<div class="tabs">${tabs.map(t=>`<button class="tab ${S.tab===t.k?'active':''}" data-tab="${t.k}">${h(t.lbl)}${t.n?` <span style="font-size:10px;opacity:.7">${t.n}</span>`:''}</button>`).join('')}</div>`;
 
-  let body='';
-  if (S.tab==='builds') {
-    body=S.builds.slice(0,12).map(b=>{
-      const col=sc(b.status);
-      const sha=(b.main_commit_sha||b.dev_commit_sha||'').slice(0,8);
+  let body = '';
+  if (S.tab === 'builds') {
+    body = S.builds.slice(0,12).map(b => {
+      const col = sc(b.status);
+      const sha = (b.main_commit_sha||b.dev_commit_sha||'').slice(0,8);
       return `<div class="ri">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
           ${dot(col)}<span style="font-size:10px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:.04em;">${h(b.status)}</span>
@@ -381,10 +495,10 @@ function renderSystem() {
         <div style="font-size:12px;color:#ccc;">${h((b.goal||'').slice(0,90))}</div>
         ${sha?`<div class="mono" style="font-size:10px;color:var(--t3);margin-top:2px;">${sha}</div>`:''}
       </div>`;
-    }).join('') || '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No builds</div>';
-  } else if (S.tab==='improvements') {
-    const CXCOL={low:'#10b981',medium:'#f59e0b',high:'#ef4444'};
-    body=pendImp.slice(0,10).map(i=>`<div class="ri">
+    }).join('') || '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No builds yet</div>';
+  } else if (S.tab === 'improvements') {
+    const CXCOL = {low:'#10b981',medium:'#f59e0b',high:'#ef4444'};
+    body = pendImp.slice(0,10).map(i=>`<div class="ri">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
         ${i.directive_priority?`<span style="font-size:10px;font-weight:700;color:#8b5cf6;">P${i.directive_priority}</span>`:''}
         <span style="font-size:12px;font-weight:600;color:#ddd;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(i.title||'')}</span>
@@ -394,35 +508,38 @@ function renderSystem() {
       <div style="font-size:11px;color:var(--t3);line-height:1.4;">${h((i.problem||'').slice(0,90))}</div>
     </div>`).join('') || '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No pending improvements</div>';
   } else {
-    body=S.reflections.slice(0,8).map(r=>`<div class="ri">
+    body = S.reflections.slice(0,8).map(r=>`<div class="ri">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
         ${r.cycle_number?`<span style="font-size:10px;font-weight:700;color:#10b981;">Cycle ${r.cycle_number}</span>`:''}
         <span style="font-size:11px;color:var(--t3);margin-left:auto;">${ago(r.created_at)}</span>
       </div>
       ${r.insight?`<div style="font-size:12px;color:#ccc;line-height:1.4;margin-bottom:3px;">${h((r.insight||'').slice(0,110))}</div>`:''}
       ${r.learned?`<div style="font-size:11px;color:#10b981;font-style:italic;">${h((r.learned||'').slice(0,90))}</div>`:''}
-    </div>`).join('') || '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No reflections</div>';
+    </div>`).join('') || '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No reflections yet</div>';
   }
   return tabBar + body;
 }
 
 // ── Roofing kanban ────────────────────────────────────────────────────────────
-const KCOLS=[
-  {k:'lead',lbl:'Lead',c:'#6b7280'},
-  {k:'inspection_scheduled',lbl:'Inspect',c:'#f59e0b'},
-  {k:'proposal_sent',lbl:'Proposal',c:'#3b82f6'},
-  {k:'signed',lbl:'Signed',c:'#8b5cf6'},
-  {k:'in_progress',lbl:'Active',c:'#f97316'},
-  {k:'invoice_sent',lbl:'Invoice',c:'#a78bfa'},
-  {k:'complete',lbl:'Done',c:'#10b981'},
+const KCOLS = [
+  {k:'lead',                 lbl:'Lead',     c:'#6b7280'},
+  {k:'inspection_scheduled', lbl:'Inspect',  c:'#f59e0b'},
+  {k:'estimate_sent',        lbl:'Estimate', c:'#3b82f6'},
+  {k:'contract_signed',      lbl:'Signed',   c:'#8b5cf6'},
+  {k:'in_progress',          lbl:'Active',   c:'#f97316'},
+  {k:'invoiced',             lbl:'Invoice',  c:'#a78bfa'},
+  {k:'complete',             lbl:'Done',     c:'#10b981'},
 ];
 
 function renderRoofing(q) {
-  const filtered=q?S.roofingJobs.filter(j=>j.homeowner_name?.toLowerCase().includes(q)||j.property_address?.toLowerCase().includes(q)):S.roofingJobs;
-  const colCount=KCOLS.filter(col=>filtered.some(j=>j.status===col.k)||true).length;
+  const filtered = q
+    ? S.roofingJobs.filter(j=>j.homeowner_name?.toLowerCase().includes(q)||j.property_address?.toLowerCase().includes(q))
+    : S.roofingJobs;
+  if (!filtered.length) return '<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No roofing jobs yet</div>';
+
   return `<div class="kanban" style="grid-template-columns:repeat(${KCOLS.length},minmax(110px,1fr));">
-    ${KCOLS.map(col=>{
-      const jobs=filtered.filter(j=>j.status===col.k);
+    ${KCOLS.map(col => {
+      const jobs = filtered.filter(j=>j.status===col.k);
       return `<div>
         <div class="kanban-col-hdr" style="border-bottom:2px solid ${col.c}30;">
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${col.c};">${h(col.lbl)}</span>
@@ -441,10 +558,11 @@ function renderRoofing(q) {
 
 // ── Memory entries ────────────────────────────────────────────────────────────
 function renderEntries(q) {
-  const shown=q?S.entries.filter(e=>e.content?.toLowerCase().includes(q)||(e.tags||[]).some(t=>t.toLowerCase().includes(q))||(e.project_names||[]).some(p=>p.toLowerCase().includes(q))):S.entries.slice(0,50);
-  const lbl=shown.length<S.entries.length?`${shown.length} / ${S.entryCount||S.entries.length}`:shown.length;
+  const shown = q
+    ? S.entries.filter(e=>e.content?.toLowerCase().includes(q)||(e.tags||[]).some(t=>t.toLowerCase().includes(q))||(e.project_names||[]).some(p=>p.toLowerCase().includes(q)))
+    : S.entries.slice(0,50);
   return shown.slice(0,50).map(e=>{
-    const tc=TC[e.entry_type]||'#555';
+    const tc = TC[e.entry_type]||'#555';
     return `<div class="entry-card ${e.importance>=8?'hi':e.task_status==='open'?'task-open':''}">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
         <span style="font-size:10px;font-weight:600;color:${tc};border:1px solid ${tc}30;padding:0 5px;border-radius:3px;text-transform:uppercase;letter-spacing:.04em;">${h(e.entry_type||'note')}</span>
@@ -461,26 +579,28 @@ function renderEntries(q) {
 
 // ── Audit log ─────────────────────────────────────────────────────────────────
 function renderAudit(q) {
-  const shown=q?S.auditLog.filter(e=>e.action_detail?.toLowerCase().includes(q)||e.engine?.toLowerCase().includes(q)||e.action_type?.toLowerCase().includes(q)):S.auditLog;
+  const shown = q
+    ? S.auditLog.filter(e=>e.action_detail?.toLowerCase().includes(q)||e.engine?.toLowerCase().includes(q)||e.action_type?.toLowerCase().includes(q))
+    : S.auditLog;
   return `<div style="max-height:360px;overflow-y:auto;">${shown.map(e=>{
-    const oc=e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#444';
+    const oc = e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#444';
     return `<div class="ri" style="display:flex;gap:9px;align-items:flex-start;">
       ${dot(oc,6)}
       <div style="flex:1;min-width:0;">
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">
-          <span style="font-size:10px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.05em;">${h(e.engine||'system')}</span>
-          <span style="font-size:10px;color:#2e2e2e;">${h(e.action_type||'')}</span>
+          <span style="font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.05em;">${h(e.engine||'system')}</span>
+          <span style="font-size:10px;color:#333;">${h(e.action_type||'')}</span>
           <span style="margin-left:auto;font-size:10px;color:#2a2a2a;white-space:nowrap;">${ago(e.created_at)}</span>
         </div>
         <div style="font-size:11px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hl((e.action_detail||'').slice(0,110),q)}</div>
       </div>
     </div>`;
-  }).join('')||'<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No entries</div>'}</div>`;
+  }).join('')||'<div style="padding:12px 0;text-align:center;color:var(--t3);font-size:12px;">No audit entries</div>'}</div>`;
 }
 
 // ── Sidebar feed ──────────────────────────────────────────────────────────────
 function feedItemHTML(e, isNew=false) {
-  const oc=e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#444';
+  const oc = e.outcome==='success'?'#10b981':e.outcome==='failure'?'#ef4444':'#4a4a4a';
   return `<div class="feed-item${isNew?' new':''}">
     ${dot(oc,6)}
     <div style="flex:1;min-width:0;">
@@ -488,107 +608,97 @@ function feedItemHTML(e, isNew=false) {
         <span style="font-size:9px;font-weight:700;color:#444;text-transform:uppercase;letter-spacing:.06em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h(e.engine||'system')}</span>
         <span style="font-size:9px;color:var(--t3);margin-left:auto;white-space:nowrap;">${ago(e.created_at)}</span>
       </div>
-      <div style="font-size:11px;color:#777;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h((e.action_detail||'').slice(0,80))}</div>
+      <div style="font-size:11px;color:#666;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h((e.action_detail||'').slice(0,80))}</div>
     </div>
   </div>`;
 }
 
 function renderSidebar() {
-  const header=`<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--b1);">
-    <span style="font-size:11px;font-weight:700;color:var(--t1);">Activity</span>
-    <span class="dot dot-live" id="live-dot"></span>
-  </div>`;
-  const items=S.feed.length?S.feed.map(e=>feedItemHTML(e)).join(''):'<div style="font-size:11px;color:var(--t3);padding:12px 0;text-align:center;">No activity yet</div>';
+  const items = S.feed.length
+    ? S.feed.map(e=>feedItemHTML(e)).join('')
+    : '<div style="font-size:11px;color:var(--t3);padding:12px 0;text-align:center;">No activity yet</div>';
 
-  // Ability proposals in sidebar if any pending
-  const pendAbilities=S.abilities.filter(a=>['pending','proposed','building','testing'].includes(a.status));
-  const abilitiesSection=pendAbilities.length?`
+  const pendAbilities = S.abilities.filter(a=>['pending','proposed','building','testing'].includes(a.status));
+  const abilitiesSection = pendAbilities.length ? `
     <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--b1);">
       <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:10px;">Ability Proposals <span style="color:#ec4899;">${pendAbilities.length}</span></div>
       ${pendAbilities.map(a=>`<div style="padding:8px 0;border-bottom:1px solid #131313;">
         <div style="font-size:11px;font-weight:600;color:#ec4899;margin-bottom:2px;">${h(a.ability_name||'')}</div>
         <div style="font-size:10px;color:var(--t3);line-height:1.4;">${h((a.description||'').slice(0,70))}</div>
       </div>`).join('')}
-    </div>`:'' ;
+    </div>` : '';
 
-  return header+`<div id="feed-items">${items}</div>`+abilitiesSection;
+  return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--b1);">
+      <span style="font-size:11px;font-weight:700;color:var(--t1);">Activity</span>
+    </div>
+    <div id="feed-items">${items}</div>
+    ${abilitiesSection}`;
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
 function render() {
-  const q=S.search.toLowerCase().trim();
-  const staged=S.builds.filter(b=>b.status==='staged');
-  const pend=S.actionQueue;
+  const q = S.search.toLowerCase().trim();
 
-  document.getElementById('main').innerHTML=`<div class="fade-in">
+  document.getElementById('main').innerHTML = `<div class="fade-in">
+    ${renderErrors()}
     ${renderAttention()}
-    ${section('tasks','Open Tasks',S.taskCount||S.tasks.length,'#3b82f6',renderTasks(q))}
-    ${section('clients','Clients',S.clients.length,'#10b981',renderClients(q))}
-    ${section('system','System',null,'#8b5cf6',renderSystem())}
-    ${S.roofingJobs.length?section('roofing','Roofing Jobs',S.roofingJobs.length,'#f97316',renderRoofing(q)):''}
-    ${section('memory','Memory',(S.entryCount||S.entries.length)+(S.entryCount>S.entries.length?'+':''),'#7c4dcd',renderEntries(q))}
-    ${section('audit','Audit Log',S.auditLog.length,'var(--t3)',renderAudit(q))}
+    ${section('tasks','Open Tasks', S.taskCount || S.tasks.length, '#3b82f6', renderTasks(q))}
+    ${section('clients','Clients', S.clients.length, '#10b981', renderClients(q))}
+    ${section('system','System', null, '#8b5cf6', renderSystem())}
+    ${S.roofingJobs.length ? section('roofing','Roofing Jobs', S.roofingJobs.length, '#f97316', renderRoofing(q)) : ''}
+    ${section('memory','Memory', S.entryCount || S.entries.length, '#7c4dcd', renderEntries(q))}
+    ${section('audit','Audit Log', S.auditLog.length, 'var(--t3)', renderAudit(q))}
   </div>`;
 
-  document.getElementById('sidebar').innerHTML=renderSidebar();
+  document.getElementById('sidebar').innerHTML = renderSidebar();
   updateHdr();
   attachHandlers();
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
 function attachHandlers() {
-  // Section toggles
-  document.querySelectorAll('[data-toggle]').forEach(el=>{
-    el.addEventListener('click',()=>{
-      const k=el.dataset.toggle;
-      S.sections[k]=!S.sections[k];
-      render();
-    });
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', () => { S.sections[el.dataset.toggle] = !S.sections[el.dataset.toggle]; render(); });
   });
-  // Tab switches
-  document.querySelectorAll('[data-tab]').forEach(el=>{
-    el.addEventListener('click',e=>{
-      e.stopPropagation();
-      S.tab=el.dataset.tab;
-      render();
-    });
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); S.tab = el.dataset.tab; render(); });
   });
-  // Client card toggles
-  document.querySelectorAll('[data-client]').forEach(el=>{
-    el.addEventListener('click',()=>{
-      const id=el.dataset.client;
-      if (S.expandedClients.has(id)) S.expandedClients.delete(id);
-      else S.expandedClients.add(id);
+  document.querySelectorAll('[data-client]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.client;
+      if (S.expandedClients.has(id)) S.expandedClients.delete(id); else S.expandedClients.add(id);
       render();
     });
   });
 }
 
 // ── Realtime ──────────────────────────────────────────────────────────────────
-db.channel('nexus-ops-v3')
-  .on('postgres_changes',{event:'INSERT',schema:'public',table:'nexus_audit_log'},(payload)=>{
+db.channel('nexus-ops-v4')
+  .on('postgres_changes', {event:'INSERT', schema:'public', table:'nexus_audit_log'}, payload => {
     S.feed.unshift(payload.new);
-    S.feed=S.feed.slice(0,10);
-    const el=document.getElementById('feed-items');
-    if (el) el.innerHTML=S.feed.map((e,i)=>feedItemHTML(e,i===0)).join('');
+    S.feed = S.feed.slice(0, 10);
+    const el = document.getElementById('feed-items');
+    if (el) el.innerHTML = S.feed.map((e,i) => feedItemHTML(e, i===0)).join('');
   })
-  .subscribe(status=>{
-    const d=document.getElementById('live-dot');
-    if (d) d.style.background=status==='SUBSCRIBED'?'#06b6d4':'#444';
+  .subscribe(status => {
+    S.connStatus = status === 'SUBSCRIBED' ? 'connected' : status === 'CLOSED' ? 'disconnected' : 'connecting';
+    updateHdr();
   });
 
-// ── Auto-refresh ──────────────────────────────────────────────────────────────
-setInterval(()=>{
+// ── Auto-refresh countdown ────────────────────────────────────────────────────
+setInterval(() => {
   if (!S.loading) {
-    S.countdown=Math.max(0,S.countdown-1);
+    S.countdown = Math.max(0, S.countdown - 1);
     updateHdr();
-    if (S.countdown===0) loadAll();
+    if (S.countdown === 0) loadAll();
   }
-},1000);
+}, 1000);
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-document.getElementById('search').addEventListener('input',e=>{S.search=e.target.value;render();});
-document.getElementById('refresh-btn').addEventListener('click',loadAll);
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', e => { S.search = e.target.value; render(); });
+document.getElementById('refresh-btn').addEventListener('click', loadAll);
+document.getElementById('run-agent-btn').addEventListener('click', triggerAgent);
+document.getElementById('approve-all-btn').addEventListener('click', approveAll);
 
 loadAll();
 </script>
