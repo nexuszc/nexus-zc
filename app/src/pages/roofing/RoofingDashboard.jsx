@@ -74,45 +74,57 @@ export default function RoofingDashboard() {
     : jobs.filter(j => j.status === stageFilter)
 
   return (
-    <div className="max-w-5xl animate-fade-in">
-      {/* Header — orange branded */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-orange-900/40">
-            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white">
-              <path fillRule="evenodd" d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" clipRule="evenodd" />
-            </svg>
+    <div className="animate-fade-in">
+      {/* Header — orange branded, full width */}
+      <div className="relative overflow-hidden border-b border-white/[0.06]">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-600/[0.06] via-transparent to-transparent pointer-events-none" />
+        <div className="absolute -top-12 -left-12 w-64 h-64 bg-orange-600/8 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative px-6 lg:px-10 pt-8 pb-8">
+          <div className="flex items-start justify-between gap-4 mb-8">
+            <div>
+              <p className="text-[10px] font-bold text-orange-600/60 uppercase tracking-[0.2em] mb-1.5">Roofing OS · Operations</p>
+              <h1 className="text-[28px] font-black text-white tracking-tight leading-none">Job Pipeline</h1>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link to="/roofing/crew" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
+                Crew
+              </Link>
+              <Link to="/roofing/jobs/new"
+                className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl px-4 py-2 text-sm font-bold transition-all shadow-lg shadow-orange-900/30">
+                + New Job
+              </Link>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Roofing OS</h1>
-            <p className="text-orange-600 text-xs font-semibold uppercase tracking-widest">Operations</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/roofing/crew" className="text-sm text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
-            Crew
-          </Link>
-          <Link to="/roofing/jobs/new"
-            className="bg-orange-600 hover:bg-orange-500 text-white rounded-lg px-4 py-2 text-sm font-semibold transition-all shadow-lg shadow-orange-900/20">
-            + New Job
-          </Link>
+
+          {/* KPI row */}
+          {loading ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { value: stats.total, label: 'Total Jobs', gradient: 'from-white to-orange-300' },
+                { value: stats.active, label: 'Active', gradient: 'from-white to-orange-200' },
+                { value: `$${(stats.revenue||0).toLocaleString()}`, label: 'Contract Value', gradient: 'from-white to-amber-300' },
+                { value: `$${(stats.collected||0).toLocaleString()}`, label: 'Collected', gradient: 'from-white to-emerald-300',
+                  sub: stats.revenue > 0 ? `${Math.round((stats.collected/stats.revenue)*100)}% of contract` : null },
+              ].map((kpi, i) => (
+                <div key={i}>
+                  <div className={`text-[38px] font-black leading-none tracking-tight tabular-nums bg-gradient-to-br ${kpi.gradient} bg-clip-text text-transparent`}>
+                    {kpi.value}
+                  </div>
+                  <div className="text-[13px] font-semibold text-white/80 mt-2">{kpi.label}</div>
+                  {kpi.sub && <div className="text-xs text-gray-600 mt-0.5">{kpi.sub}</div>}
+                  <div className="mt-3 h-px bg-gradient-to-r from-orange-600/20 to-transparent" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* KPI row */}
-      {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <KpiCard label="Total Jobs" value={stats.total} />
-          <KpiCard label="Active" value={stats.active} valueColor="text-orange-400" />
-          <KpiCard label="Contract Value" value={`$${(stats.revenue || 0).toLocaleString()}`} valueColor="text-amber-400" />
-          <KpiCard label="Collected" value={`$${(stats.collected || 0).toLocaleString()}`} valueColor="text-emerald-400"
-            sub={stats.revenue > 0 ? `${Math.round((stats.collected / stats.revenue) * 100)}% of contract` : null} />
-        </div>
-      )}
+      <div className="px-6 lg:px-10 py-6">
 
       {/* Pipeline stage strip */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
@@ -221,6 +233,7 @@ export default function RoofingDashboard() {
           })}
         </div>
       )}
+      </div>
     </div>
   )
 }

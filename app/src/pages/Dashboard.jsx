@@ -1,324 +1,392 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SB_URL = import.meta.env.VITE_SUPABASE_URL
+const SB_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-function Skeleton({ className = '' }) {
-  return <div className={`skeleton ${className}`} />
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function ago(ts) {
+  if (!ts) return ''
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000)
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
 }
 
-function KpiCard({ label, value, sub, accent = 'card-accent-violet', valueColor = 'text-white' }) {
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function Skeleton({ cls = '' }) {
+  return <div className={`skeleton ${cls}`} />
+}
+
+const OUTCOME_COLOR = { success: 'bg-emerald-400', failure: 'bg-red-400', failed: 'bg-red-400', error: 'bg-red-400' }
+function outcomeDot(outcome) {
+  return OUTCOME_COLOR[outcome] || 'bg-violet-500'
+}
+
+// ── Quick action card ─────────────────────────────────────────────────────────
+function QuickAction({ icon, label, sub, onClick, color = 'violet', disabled = false }) {
+  const colors = {
+    violet:  'border-violet-500/20 hover:border-violet-500/50 hover:bg-violet-500/5 text-violet-300',
+    emerald: 'border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/5 text-emerald-300',
+    blue:    'border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/5 text-blue-300',
+    orange:  'border-orange-500/20 hover:border-orange-500/50 hover:bg-orange-500/5 text-orange-300',
+  }
   return (
-    <div className={`bg-gray-900 border border-gray-800 rounded-xl p-4 ${accent}`}>
-      <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">{label}</p>
-      <p className={`text-2xl font-bold ${valueColor} tabular-nums`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
-    </div>
+    <button onClick={onClick} disabled={disabled}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border bg-white/[0.02] transition-all text-left group disabled:opacity-50 disabled:cursor-default ${colors[color]}`}>
+      <span className="text-xl leading-none">{icon}</span>
+      <div>
+        <p className="text-sm font-semibold text-white leading-none mb-0.5">{label}</p>
+        {sub && <p className="text-xs text-gray-600">{sub}</p>}
+      </div>
+    </button>
   )
 }
 
-function ago(ts) {
-  if (!ts) return ''
-  const diff = Date.now() - new Date(ts).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-function auditDot(outcome) {
-  if (outcome === 'success') return 'bg-green-400'
-  if (outcome === 'failed' || outcome === 'error') return 'bg-red-400'
-  return 'bg-violet-400'
-}
-
 export default function Dashboard() {
-  const [clients, setClients] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [auditLog, setAuditLog] = useState([])
-  const [leadStats, setLeadStats] = useState({})
-  const [vaStats, setVaStats] = useState([])
-  const [nexusHealth, setNexusHealth] = useState([])
-  const [insights, setInsights] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [focusResponse, setFocusResponse] = useState(null)
+  const navigate = useNavigate()
+  const [clients,    setClients]    = useState([])
+  const [tasks,      setTasks]      = useState([])
+  const [auditLog,   setAuditLog]   = useState([])
+  const [vaStats,    setVaStats]    = useState([])
+  const [health,     setHealth]     = useState([])
+  const [leadStats,  setLeadStats]  = useState({})
+  const [entryCount, setEntryCount] = useState(0)
+  const [loading,    setLoading]    = useState(true)
+  const [focusResp,  setFocusResp]  = useState(null)
   const [focusLoading, setFocusLoading] = useState(false)
+  const [agentState, setAgentState] = useState('idle')
+  const feedRef = useRef(null)
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => { load() }, [])
 
-  const loadDashboard = async () => {
-    const [clientsRes, tasksRes, auditRes, leadsRes, healthRes, insightsRes] = await Promise.all([
-      supabase.from('clients').select('id, name, deal_type, status, monthly_fee, rev_share_pct, health_score, last_activity_at').eq('status', 'active'),
-      supabase.from('entries').select('content, created_at').eq('task_status', 'open').order('created_at', { ascending: true }),
-      supabase.from('nexus_audit_log').select('id, engine, action_type, action_detail, outcome, created_at').order('created_at', { ascending: false }).limit(12),
-      supabase.from('leads').select('client_id, status'),
-      supabase.from('nexus_health').select('function_name, status, error_count, success_count').order('checked_at', { ascending: false }).limit(4),
-      supabase.from('platform_insights').select('id, insight').eq('status', 'new').order('created_at', { ascending: false }).limit(3),
+  // Realtime: new audit entries float in
+  useEffect(() => {
+    const ch = supabase.channel('dashboard-audit')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nexus_audit_log' }, payload => {
+        setAuditLog(prev => [payload.new, ...prev].slice(0, 30))
+      })
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [])
+
+  const load = async () => {
+    const today = new Date().toISOString().split('T')[0]
+    const [clRes, tkRes, auRes, leRes, hlRes, ecRes, vaRes] = await Promise.all([
+      supabase.from('clients').select('id,name,deal_type,status,monthly_fee,health_score,last_activity_at').eq('status','active'),
+      supabase.from('entries').select('id,content,created_at').eq('task_status','open').order('created_at',{ascending:true}).limit(20),
+      supabase.from('nexus_audit_log').select('id,engine,action_type,action_detail,outcome,created_at').order('created_at',{ascending:false}).limit(30),
+      supabase.from('leads').select('client_id,status'),
+      supabase.from('nexus_health').select('function_name,status,error_count,success_count').order('checked_at',{ascending:false}).limit(4),
+      supabase.from('entries').select('*',{count:'exact',head:true}),
+      supabase.from('va_task_queues').select('va_assignment_id,total_count,completed_count,va_assignments(va_name)').eq('date',today),
     ])
-
-    setClients(clientsRes.data || [])
-    setTasks(tasksRes.data || [])
-    setAuditLog(auditRes.data || [])
-    setNexusHealth(healthRes.data || [])
-    setInsights(insightsRes.data || [])
-
+    setClients(clRes.data || [])
+    setTasks(tkRes.data || [])
+    setAuditLog(auRes.data || [])
+    setHealth(hlRes.data || [])
+    setEntryCount(ecRes.count || 0)
+    setVaStats(vaRes.data || [])
     const stats = {}
-    for (const lead of (leadsRes.data || [])) {
-      if (!stats[lead.client_id]) stats[lead.client_id] = { total: 0, interested: 0 }
-      stats[lead.client_id].total++
-      if (lead.status === 'interested') stats[lead.client_id].interested++
+    for (const l of (leRes.data || [])) {
+      if (!stats[l.client_id]) stats[l.client_id] = { total: 0, interested: 0 }
+      stats[l.client_id].total++
+      if (l.status === 'interested') stats[l.client_id].interested++
     }
     setLeadStats(stats)
-
-    const today = new Date().toISOString().split('T')[0]
-    const { data: queues } = await supabase
-      .from('va_task_queues')
-      .select('va_assignment_id, total_count, completed_count, va_assignments(va_name)')
-      .eq('date', today)
-    setVaStats(queues || [])
     setLoading(false)
   }
 
   const handleFocus = async () => {
     setFocusLoading(true)
-    setFocusResponse(null)
+    setFocusResp(null)
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/nexus-coo`, {
+      const res = await fetch(`${SB_URL}/functions/v1/nexus-coo`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
         body: JSON.stringify({ action: 'focus' }),
       })
       const data = await res.json()
-      setFocusResponse(data.response || 'No focus generated.')
-    } catch {
-      setFocusResponse('Error generating focus. Try again.')
-    }
+      setFocusResp(data.response || 'No focus generated.')
+    } catch { setFocusResp('Error. Try again.') }
     setFocusLoading(false)
   }
 
-  const isStale = (lastActivity) => {
-    if (!lastActivity) return true
-    return (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24) > 5
+  const runAgent = async () => {
+    if (agentState === 'loading') return
+    setAgentState('loading')
+    try {
+      await fetch(`${SB_URL}/functions/v1/nexus-core`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ trigger: 'manual' }),
+      })
+      setAgentState('done')
+    } catch { setAgentState('error') }
+    setTimeout(() => setAgentState('idle'), 3000)
   }
 
-  const healthScoreColor = (score) => {
-    if (score == null) return 'text-gray-500'
-    if (score >= 75) return 'text-green-400'
+  const monthlyRevenue = clients.reduce((s, c) => s + (c.monthly_fee || 0), 0)
+  const activeClients  = clients.length
+  const openTasks      = tasks.length
+  const auditCount     = auditLog.length
+
+  const isStale = (ts) => !ts || (Date.now() - new Date(ts)) / 86400000 > 5
+
+  const healthColor = (score) => {
+    if (score == null) return 'text-gray-600'
+    if (score >= 75) return 'text-emerald-400'
     if (score >= 50) return 'text-amber-400'
     return 'text-red-400'
   }
 
-  const monthlyRevenue = clients.reduce((sum, c) => sum + (c.monthly_fee || 0), 0)
-
   return (
-    <div className="max-w-5xl animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Dashboard</h1>
-          <p className="text-gray-600 text-xs mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-        </div>
-        <button
-          onClick={handleFocus}
-          disabled={focusLoading}
-          className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 disabled:text-violet-400 text-white text-sm font-semibold rounded-lg transition-all shadow-lg shadow-violet-900/20"
-        >
-          {focusLoading ? 'Thinking…' : 'Get Focus'}
-        </button>
-      </div>
+    <div className="animate-fade-in">
 
-      {/* Focus panel */}
-      {focusResponse && (
-        <div className="bg-violet-950/30 border border-violet-700/30 rounded-xl p-4 mb-6 whitespace-pre-wrap text-sm text-violet-100 leading-relaxed">
-          {focusResponse}
-        </div>
-      )}
+      {/* ── Hero section ───────────────────────────────────────────────────── */}
+      <div className="relative overflow-hidden border-b border-gray-800/40">
+        {/* Background glows */}
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/[0.07] via-transparent to-transparent pointer-events-none" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-violet-700/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl pointer-events-none" />
 
-      {/* KPI row */}
-      {loading ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <KpiCard label="Active Clients" value={clients.length} accent="card-accent-violet" />
-          <KpiCard label="Monthly Revenue" value={`$${monthlyRevenue.toLocaleString()}`} accent="card-accent-green" valueColor="text-green-400" />
-          <KpiCard label="Open Tasks" value={tasks.length} accent="card-accent-blue" sub={tasks.length > 0 ? 'oldest first' : 'all clear'} />
-          <KpiCard label="Engine Events" value={auditLog.length} accent="card-accent-amber" sub="last 12 actions" />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        {/* Client pipeline */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Client Pipeline</h3>
-            <Link to="/clients" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View all →</Link>
+        <div className="relative px-6 lg:px-10 pt-8 pb-0">
+          {/* Header row */}
+          <div className="flex items-start justify-between mb-8 gap-4">
+            <div>
+              <p className="text-gray-600 text-xs font-semibold uppercase tracking-[0.15em] mb-1.5">
+                {greeting()} · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              <h1 className="text-[28px] font-black text-white tracking-tight leading-none">
+                Operations Overview
+              </h1>
+            </div>
+            <button
+              onClick={handleFocus}
+              disabled={focusLoading}
+              className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-800 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-violet-900/30"
+            >
+              {focusLoading ? 'Thinking…' : '↗ Get Focus'}
+            </button>
           </div>
+
+          {/* Focus response */}
+          {focusResp && (
+            <div className="bg-violet-950/40 border border-violet-700/30 rounded-xl p-4 mb-6 text-sm text-violet-100 whitespace-pre-wrap leading-relaxed">
+              {focusResp}
+            </div>
+          )}
+
+          {/* Hero KPI grid */}
           {loading ? (
-            <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-          ) : clients.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-gray-500 text-sm">No active clients</p>
-              <p className="text-gray-600 text-xs mt-1">Add via Telegram: "new client: [name]"</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pb-8">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} cls="h-20 rounded-xl" />)}
             </div>
           ) : (
-            <div>
-              {clients.map(c => {
-                const ls = leadStats[c.id] || { total: 0, interested: 0 }
-                const stale = isStale(c.last_activity_at)
-                return (
-                  <Link key={c.id} to={`/clients/${c.id}`}
-                    className="flex items-center justify-between py-2.5 border-b border-gray-800/60 last:border-0 group">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                      <span className="text-sm text-gray-200 group-hover:text-violet-300 truncate transition-colors">{c.name}</span>
-                      {stale && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-500 shrink-0">stale</span>}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pb-8">
+              {[
+                { value: `$${monthlyRevenue.toLocaleString()}`, label: 'Monthly Revenue', sub: `${activeClients} active clients`, gradient: 'from-white to-violet-300' },
+                { value: activeClients, label: 'Active Clients', sub: 'in pipeline', gradient: 'from-white to-blue-300' },
+                { value: openTasks,    label: 'Open Tasks',     sub: openTasks > 0 ? 'need attention' : 'all clear', gradient: openTasks > 5 ? 'from-white to-red-300' : 'from-white to-emerald-300' },
+                { value: entryCount,   label: 'Brain Entries',  sub: 'total memories', gradient: 'from-white to-amber-300' },
+              ].map((kpi, i) => (
+                <div key={i} className="group">
+                  <div className={`text-[42px] font-black leading-none tracking-tight tabular-nums bg-gradient-to-br ${kpi.gradient} bg-clip-text text-transparent`}>
+                    {kpi.value}
+                  </div>
+                  <div className="text-[13px] font-semibold text-white/80 mt-2 leading-none">{kpi.label}</div>
+                  <div className="text-xs text-gray-600 mt-1">{kpi.sub}</div>
+                  <div className="mt-3 h-px bg-gradient-to-r from-white/10 to-transparent" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="px-6 lg:px-10 py-6">
+
+        {/* ── Quick actions bar ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+          <QuickAction icon="⚡" label="Run Agent" sub={agentState === 'loading' ? 'Triggering…' : agentState === 'done' ? 'Triggered!' : 'Nexus-core cycle'} onClick={runAgent} color="violet" disabled={agentState === 'loading'} />
+          <QuickAction icon="✓" label="Approve All" sub="Pending abilities & actions" onClick={async () => {
+            const { data: ab } = await supabase.from('nexus_ability_proposals').select('id').in('status',['proposed','pending']).limit(5)
+            const { data: ac } = await supabase.from('nexus_action_queue').select('id').eq('status','pending').limit(5)
+            const ops = []
+            if (ab?.length) ops.push(supabase.from('nexus_ability_proposals').update({status:'approved'}).in('id',ab.map(a=>a.id)))
+            if (ac?.length) ops.push(supabase.from('nexus_action_queue').update({status:'approved'}).in('id',ac.map(a=>a.id)))
+            if (ops.length) await Promise.all(ops)
+          }} color="emerald" />
+          <QuickAction icon="+" label="New Client" sub="Add to pipeline" onClick={() => navigate('/clients')} color="blue" />
+          <QuickAction icon="🏠" label="New Job" sub="Roofing OS" onClick={() => navigate('/roofing/jobs/new')} color="orange" />
+        </div>
+
+        {/* ── Main content ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Live activity feed — 2 cols */}
+          <div className="lg:col-span-2">
+            <div className="bg-[#0c0c10] border border-white/[0.06] rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
+                <div>
+                  <h2 className="text-sm font-bold text-white">Live Engine Activity</h2>
+                  <p className="text-xs text-gray-600 mt-0.5">Real-time from nexus_audit_log</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 pulse-dot" />
+                  <span className="text-xs text-gray-600">live</span>
+                </div>
+              </div>
+
+              <div ref={feedRef} className="divide-y divide-white/[0.03] max-h-[480px] overflow-y-auto">
+                {loading ? (
+                  <div className="p-5 space-y-3">
+                    {[...Array(6)].map((_, i) => <Skeleton key={i} cls="h-10 rounded-lg" />)}
+                  </div>
+                ) : auditLog.length === 0 ? (
+                  <div className="px-5 py-12 text-center">
+                    <p className="text-gray-600 text-sm">No engine activity yet</p>
+                    <p className="text-gray-700 text-xs mt-1">Trigger a nexus-core cycle to see events here</p>
+                  </div>
+                ) : auditLog.map((e, i) => (
+                  <div key={e.id || i} className="flex items-start gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors group">
+                    <div className={`w-1.5 h-1.5 rounded-full mt-2 shrink-0 ${outcomeDot(e.outcome)}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-300 leading-snug truncate">
+                        {e.action_detail || e.action_type || 'action'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">{e.engine}</span>
+                        <span className="text-[10px] text-gray-700">·</span>
+                        <span className="text-[10px] text-gray-700">{e.action_type}</span>
+                      </div>
                     </div>
-                    <div className="text-right shrink-0 ml-2">
+                    <span className="text-[11px] text-gray-700 shrink-0 tabular-nums">{ago(e.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right column — clients + tasks */}
+          <div className="space-y-5">
+
+            {/* Client pipeline */}
+            <div className="bg-[#0c0c10] border border-white/[0.06] rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
+                <h2 className="text-sm font-bold text-white">Clients</h2>
+                <Link to="/clients" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View all →</Link>
+              </div>
+              <div className="divide-y divide-white/[0.03]">
+                {loading ? (
+                  <div className="p-4 space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} cls="h-12 rounded-lg" />)}</div>
+                ) : clients.length === 0 ? (
+                  <div className="px-5 py-8 text-center">
+                    <p className="text-gray-600 text-sm">No active clients</p>
+                    <Link to="/clients" className="text-xs text-violet-500 hover:text-violet-400 mt-1 block">Add one →</Link>
+                  </div>
+                ) : clients.map(c => {
+                  const ls = leadStats[c.id] || { total: 0, interested: 0 }
+                  const initials = c.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                  return (
+                    <Link key={c.id} to={`/clients/${c.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors group">
+                      <div className="w-7 h-7 rounded-lg bg-violet-600/30 flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-bold text-violet-300">{initials}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-200 font-medium group-hover:text-violet-300 transition-colors truncate">{c.name}</p>
+                        {ls.total > 0 && <p className="text-[11px] text-gray-700">{ls.total} leads · {ls.interested} hot</p>}
+                      </div>
                       {c.health_score != null && (
-                        <p className={`text-xs font-semibold ${healthScoreColor(c.health_score)}`}>{c.health_score}</p>
+                        <span className={`text-sm font-bold tabular-nums ${healthColor(c.health_score)}`}>{c.health_score}</span>
                       )}
-                      {ls.total > 0 && <p className="text-xs text-gray-600">{ls.total} leads</p>}
-                    </div>
-                  </Link>
-                )
-              })}
+                      {isStale(c.last_activity_at) && (
+                        <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">stale</span>
+                      )}
+                    </Link>
+                  )
+                })}
+              </div>
             </div>
-          )}
+
+            {/* Open tasks */}
+            {!loading && tasks.length > 0 && (
+              <div className="bg-[#0c0c10] border border-white/[0.06] rounded-2xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/[0.04]">
+                  <h2 className="text-sm font-bold text-white">Open Tasks <span className="text-blue-400 ml-1">{tasks.length}</span></h2>
+                </div>
+                <div className="divide-y divide-white/[0.03] max-h-64 overflow-y-auto">
+                  {tasks.map((t, i) => {
+                    const overdue = (Date.now() - new Date(t.created_at)) > 172800000
+                    return (
+                      <div key={i} className="flex items-start gap-3 px-4 py-3">
+                        <div className={`w-1 h-1 rounded-full mt-2 shrink-0 ${overdue ? 'bg-red-400' : 'bg-blue-400'}`} />
+                        <p className="text-sm text-gray-400 leading-snug flex-1">{t.content?.slice(0, 100)}</p>
+                        <span className={`text-[11px] tabular-nums shrink-0 ${overdue ? 'text-red-500' : 'text-gray-700'}`}>
+                          {ago(t.created_at)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* VA tasks today */}
+            {!loading && vaStats.length > 0 && (
+              <div className="bg-[#0c0c10] border border-white/[0.06] rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
+                  <h2 className="text-sm font-bold text-white">VA Today</h2>
+                  <Link to="/va" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">VA →</Link>
+                </div>
+                <div className="divide-y divide-white/[0.03]">
+                  {vaStats.map((q, i) => {
+                    const pct = q.total_count > 0 ? Math.round((q.completed_count / q.total_count) * 100) : 0
+                    return (
+                      <div key={i} className="px-4 py-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm text-gray-300">{q.va_assignments?.va_name || 'VA'}</p>
+                          <p className="text-xs text-gray-600 tabular-nums">{q.completed_count}/{q.total_count}</p>
+                        </div>
+                        <div className="w-full bg-gray-800/60 rounded-full h-0.5">
+                          <div className="bg-violet-500 h-0.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Engine activity feed */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Engine Activity</h3>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-400 pulse-dot" />
-              <span className="text-xs text-gray-600">live</span>
-            </div>
-          </div>
-          {loading ? (
-            <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-          ) : auditLog.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-gray-500 text-sm">No engine activity yet</p>
-              <p className="text-gray-600 text-xs mt-1">Nexus logs all autonomous actions here</p>
-            </div>
-          ) : (
-            <div className="space-y-0">
-              {auditLog.map((e, i) => (
-                <div key={e.id || i} className="flex items-start gap-2.5 py-2 border-b border-gray-800/50 last:border-0">
-                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${auditDot(e.outcome)}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-300 truncate">{e.action_detail || e.action_type || 'action'}</p>
-                    <p className="text-xs text-gray-600">{e.engine} · {ago(e.created_at)}</p>
-                  </div>
+        {/* Nexus health strip */}
+        {!loading && health.length > 0 && (
+          <div className="mt-6 bg-[#0c0c10] border border-white/[0.06] rounded-2xl overflow-hidden">
+            <div className="flex items-center divide-x divide-white/[0.04]">
+              <div className="px-5 py-3 shrink-0">
+                <p className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">System Health</p>
+              </div>
+              {health.map(h => (
+                <div key={h.function_name} className="flex items-center gap-2.5 px-5 py-3">
+                  <span className={`w-1.5 h-1.5 rounded-full ${h.status === 'healthy' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                  <span className="text-xs text-gray-500">{h.function_name}</span>
+                  <span className="text-[11px] text-gray-700">{h.success_count}↑ {h.error_count}↓</span>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        {/* VA tasks */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">VA Tasks Today</h3>
-            <Link to="/va" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">VA interface →</Link>
-          </div>
-          {loading ? (
-            <Skeleton className="h-12" />
-          ) : vaStats.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-gray-500 text-sm">No queues generated today</p>
-              <p className="text-gray-600 text-xs mt-1">Trigger via Telegram: "generate va tasks"</p>
-            </div>
-          ) : (
-            <div>
-              {vaStats.map((q, i) => {
-                const pct = q.total_count > 0 ? Math.round((q.completed_count / q.total_count) * 100) : 0
-                return (
-                  <div key={i} className="py-2.5 border-b border-gray-800/60 last:border-0">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-sm text-gray-200">{q.va_assignments?.va_name || 'VA'}</p>
-                      <p className="text-xs text-gray-500">{q.completed_count}/{q.total_count}</p>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-1">
-                      <div className="bg-violet-500 h-1 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Nexus health */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Nexus Health</h3>
-          {loading ? (
-            <div className="space-y-3">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-          ) : nexusHealth.length === 0 ? (
-            <div className="py-6 text-center">
-              <p className="text-gray-500 text-sm">No health data yet</p>
-            </div>
-          ) : (
-            <div>
-              {nexusHealth.map(h => (
-                <div key={h.function_name} className="flex items-center justify-between py-2.5 border-b border-gray-800/60 last:border-0">
-                  <p className="text-sm text-gray-300">{h.function_name}</p>
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-xs text-gray-600">{h.success_count} ok · {h.error_count} err</span>
-                    <span className={`w-2 h-2 rounded-full ${h.status === 'healthy' ? 'bg-green-400' : 'bg-red-400'}`} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Open tasks */}
-      {!loading && tasks.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Open Tasks</h3>
-          <div>
-            {tasks.map((t, i) => {
-              const ageMs = Date.now() - new Date(t.created_at).getTime()
-              const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24))
-              const overdue = ageMs > 48 * 60 * 60 * 1000
-              return (
-                <div key={i} className="flex items-start justify-between py-2.5 border-b border-gray-800/60 last:border-0 gap-3">
-                  <div className="flex items-start gap-2 min-w-0">
-                    <div className={`w-1 h-1 rounded-full mt-2 shrink-0 ${overdue ? 'bg-red-400' : 'bg-gray-600'}`} />
-                    <p className="text-sm text-gray-300 leading-snug">{t.content?.slice(0, 120)}</p>
-                  </div>
-                  <span className={`text-xs shrink-0 tabular-nums ${overdue ? 'text-red-400' : 'text-gray-600'}`}>
-                    {ageDays === 0 ? 'today' : `${ageDays}d`}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Platform insights */}
-      {!loading && insights.length > 0 && (
-        <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
-          <h3 className="text-xs font-bold text-amber-500/80 uppercase tracking-wider mb-3">Platform Insights</h3>
-          <div className="space-y-2">
-            {insights.map(ins => (
-              <p key={ins.id} className="text-sm text-amber-200/80 leading-relaxed">{ins.insight}</p>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
