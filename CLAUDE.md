@@ -1,4 +1,4 @@
-# NEXUS ZC — CLAUDE.md
+# NEXUS ZC â CLAUDE.md
 # Master context file. Read this at the start of every session.
 # Last updated: May 10, 2026 — v7
 
@@ -6,7 +6,7 @@
 
 ## WHO I AM
 
-**Zach Curtis** — Denver, CO. Multi-venture entrepreneur running a portfolio of businesses
+**Zach Curtis** â Denver, CO. Multi-venture entrepreneur running a portfolio of businesses
 generating ~$1M/year in revenue. I operate as my own CEO/COO across all ventures.
 I am building Nexus to replace myself as COO and eventually productize it.
 
@@ -36,27 +36,27 @@ A second brain organizes information. A strategist *organizes attention*.
 
 ### The full vision (locked):
 ```
-Nexus (AI brain — the product)
-VA Company (human delivery layer — 100+ VAs trained on Nexus)
-    ↓ deployed through vertical channels:
-    ├── Roofing OS (roofing contractors)
-    ├── Cash Out Refinances (mortgage/refi)
-    └── [future verticals]
+Nexus (AI brain â the product)
+VA Company (human delivery layer â 100+ VAs trained on Nexus)
+    â deployed through vertical channels:
+    âââ Roofing OS (roofing contractors)
+    âââ Cash Out Refinances (mortgage/refi)
+    âââ [future verticals]
 ```
 
 Roofing OS and Cash Out Refinances are NOT separate businesses.
-They are GTM beachheads — vertical channels for deploying Nexus + VAs.
+They are GTM beachheads â vertical channels for deploying Nexus + VAs.
 
-**End state:** A system that takes a business owner from zero to fully operational —
-websites, CRMs, outreach, research, SOPs — with Nexus as the brain and VAs as the hands.
+**End state:** A system that takes a business owner from zero to fully operational â
+websites, CRMs, outreach, research, SOPs â with Nexus as the brain and VAs as the hands.
 Then productized and sold to other multi-business operators.
 
 ### What a real COO does (what Nexus must do):
-1. Maintains state on every initiative — status, next step, blocker, owner
-2. Allocates attention — tells me where to focus THIS week vs. delegate/drop
-3. Surfaces problems early — notices silence, slipping commitments, conflicts
-4. Drives accountability — "You said you'd call Mike Tuesday. It's Wednesday."
-5. Synthesizes patterns — "You keep deferring decisions on X. Want to talk about why?"
+1. Maintains state on every initiative â status, next step, blocker, owner
+2. Allocates attention â tells me where to focus THIS week vs. delegate/drop
+3. Surfaces problems early â notices silence, slipping commitments, conflicts
+4. Drives accountability â "You said you'd call Mike Tuesday. It's Wednesday."
+5. Synthesizes patterns â "You keep deferring decisions on X. Want to talk about why?"
 
 ---
 
@@ -67,23 +67,23 @@ Then productized and sold to other multi-business operators.
 | Database | Supabase (Postgres + pgvector) |
 | Project ref | `koqpbnxkhgbsnbdjwldx.supabase.co` |
 | Region | eu-central-1 |
-| AI — responses | Claude Sonnet 4.5 (`claude-sonnet-4-5`) |
-| AI — embeddings | OpenAI text-embedding-3-small |
+| AI â responses | Claude Sonnet 4.5 (`claude-sonnet-4-5`) |
+| AI â embeddings | OpenAI text-embedding-3-small |
 | Capture | Telegram bot `@nexuszc_bot` |
 | Brain browser | `/Users/zachdaniels/Documents/NEXUS/nexus-brain.html` |
 | Edge Functions | Supabase Edge Runtime (Deno), all deployed `--no-verify-jwt` |
 | Frontend | React 18 + Vite + Tailwind v3, hosted on Cloudflare Pages |
-| Domain | nexuszc.com (Cloudflare) — app.nexuszc.com, [client].nexuszc.com |
+| Domain | nexuszc.com (Cloudflare) â app.nexuszc.com, [client].nexuszc.com |
 | Email | zach@nexuszc.com / brain@nexuszc.com (Google Workspace) |
 | Web search | Serper.dev (SERPER_API_KEY set in Supabase secrets) |
 | Repo | github.com/nexuszc/nexus-zc |
 | Local path | `/Users/zachdaniels/Documents/NEXUS` |
 
 ### Git Branch Structure:
-- `main` — production (Cloudflare Pages deploys from here)
-- `dev` — staging (auto-fix and nexus-builder commit here; approve to merge to main)
+- `main` â production (Cloudflare Pages deploys from here)
+- `dev` â staging (auto-fix and nexus-builder commit here; approve to merge to main)
 - **Rule:** auto-fix always syncs dev to main before writing, then commits fix to dev
-- **Rule:** `approve` command does a content-based merge (reads files from dev, writes to main — conflict-proof)
+- **Rule:** `approve` command does a content-based merge (reads files from dev, writes to main â conflict-proof)
 - **Rule:** nexus-builder commits to dev only. Only Zach's `approve` command writes to main.
 
 ---
@@ -92,192 +92,200 @@ Then productized and sold to other multi-business operators.
 
 | Function | Purpose | Trigger |
 |----------|---------|---------|
-| `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
-| `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
-| `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
-| `reminders` | Fire due reminders via Telegram | Every 5 min cron (job ID 2) |
-| `provision` | Spin up client subdomain + Claude-generated site | chat `provision:` command or web UI |
-| `health-monitor` | Hourly health check, identify improvements, trigger auto-fix | Every hour cron (job ID 3) |
+| `assess-project` | Run AI assessment on a project | On demand |
 | `auto-fix` | Read code from GitHub → Claude writes fix → commit to dev → notify | Called by health-monitor |
-| `send-email` | Send email via Resend | Internal |
-| `email-webhook` | Inbound email handling | Resend webhook |
-| `process-email-queue` | Batch process email queue | Cron |
-| `generate-queue` | Generate lead call queue | On demand |
-| `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
-| `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
+| `brain-api` | REST API for brain browser access | GET/POST from nexus-brain.html |
+| `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
+| `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
+| `email-webhook` | Inbound email handling | Resend webhook |
+| `generate-queue` | Generate lead call queue | On demand |
+| `generate-va-tasks` | Generate daily VA task lists | Cron / on demand |
+| `get-dashboard-stats` | Aggregate stats for React dashboard | API call from frontend |
+| `health-monitor` | Hourly health check, identify improvements, trigger auto-fix | Every hour cron (job ID 3) |
+| `import-leads` | Bulk import leads from CSV or external source | On demand |
+| `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
+| `nexus-agent` | Legacy agent loop (superseded by nexus-core) | Deprecated |
+| `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
+| `nexus-builder` | Legacy builder (superseded by nexus-build) | Deprecated |
+| `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
+| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
+| `nexus-execute` | Legacy executor (superseded by nexus-build) | Deprecated |
+| `nexus-research` | Legacy research loop (absorbed into nexus-core + VPS) | Deprecated |
+| `process-email-queue` | Batch process email queue | Cron |
+| `provision` | Spin up client subdomain + Claude-generated site | chat provision: command or web UI |
+| `reclassify` | Re-run classification on existing entries | On demand |
+| `refresh-assessments` | Refresh project assessment scores | On demand |
+| `reminders` | Fire due reminders via Telegram | Every 5 min cron (job ID 2) |
+| `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
-| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
-| `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
-| ~~`nexus-coo`~~ | _(absorbed into chat handlers)_ | Removed |
-| ~~`nexus-agent`~~ | _(absorbed into nexus-core)_ | Removed |
-| ~~`nexus-research`~~ | _(absorbed into nexus-core + VPS)_ | Removed |
-| ~~`nexus-builder`~~ | _(absorbed into nexus-build)_ | Removed |
-| ~~`nexus-execute`~~ | _(absorbed into nexus-build)_ | Removed |
+| `send-email` | Send email via Resend | Internal |
+| `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
+| `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
 
 ---
 
 ## DATABASE TABLES (key tables)
 
 ### Core brain:
-- `entries` — all thoughts, classified with type/importance/tags/project_names/people_names/task_status/client_id
-- `conversations` — conversation threads by channel
-- `channel_conversations` — maps external IDs (Telegram chat IDs) to conversations
-- `embeddings` — pgvector embeddings for semantic search
-- `projects` — ventures and ideas (categories: platform, vertical, personal, external, idea, archived)
-- `people` — named people extracted from entries
-- `reminders` — scheduled Telegram reminders (fire_at, fired, chat_id, message)
+- `entries` â all thoughts, classified with type/importance/tags/project_names/people_names/task_status/client_id
+- `conversations` â conversation threads by channel
+- `channel_conversations` â maps external IDs (Telegram chat IDs) to conversations
+- `embeddings` â pgvector embeddings for semantic search
+- `projects` â ventures and ideas (categories: platform, vertical, personal, external, idea, archived)
+- `people` â named people extracted from entries
+- `reminders` â scheduled Telegram reminders (fire_at, fired, chat_id, message)
 
 ### Multi-tenant client layer:
-- `clients` — client records (name, deal_type, status, monthly_fee, rev_share_pct, slug, provision_status, site_url)
-- `client_context` — per-client brain context (core_offer, goals, target_audience, script, pain_points)
-- `va_assignments` — which VA is assigned to which client
+- `clients` â client records (name, deal_type, status, monthly_fee, rev_share_pct, slug, provision_status, site_url)
+- `client_context` â per-client brain context (core_offer, goals, target_audience, script, pain_points)
+- `va_assignments` â which VA is assigned to which client
 
 ### Self-aware system:
-- `nexus_health` — hourly function health snapshots (error_count, success_count, avg_response_ms, status)
-- `nexus_improvements` — improvement queue (title, problem, recommended_fix, priority, status, auto_fix_code, files_changed, dev_commit_sha)
-- `nexus_usage` — ability usage analytics (ability, success, response_ms, channel)
-- `nexus_alerts` — instant alerts log (alert_type, message, resolved)
-- `platform_insights` — cross-client pattern observations
+- `nexus_health` â hourly function health snapshots (error_count, success_count, avg_response_ms, status)
+- `nexus_improvements` â improvement queue (title, problem, recommended_fix, priority, status, auto_fix_code, files_changed, dev_commit_sha)
+- `nexus_usage` â ability usage analytics (ability, success, response_ms, channel)
+- `nexus_alerts` â instant alerts log (alert_type, message, resolved)
+- `platform_insights` â cross-client pattern observations
 
 ### Brian's lead system:
-- `leads` — lead records linked to client_id
-- `sequences` — email/call sequences
-- `sequence_enrollments` — lead → sequence enrollment state
+- `leads` â lead records linked to client_id
+- `sequences` â email/call sequences
+- `sequence_enrollments` â lead â sequence enrollment state
 
 ### V2 additions:
-- `generated_docs` — documents from generate-* abilities (type, client_id, title, content, created_at)
-- `knowledge_base` — persistent knowledge store (topic, content, source_url, created_at)
-- `va_profiles` — VA accounts linked to Supabase auth user_id
-- `va_task_queues` — daily VA task lists (va_assignment_id, date, tasks JSON, completed_count)
-- `call_logs` — structured VA call records (lead_id, outcome, notes, va_profile_id)
-- `client_portal_access` — token-based portal access (client_id, access_token, last_accessed)
-- `invoice_sequence` — auto-incrementing invoice counter (last_number, produces INV-YYYY-XXXX)
-- `known_failure_patterns` — 6 seeded error patterns with auto-fix strategies for health-monitor
-- `weekly_reports` — weekly self-improvement reports (Sunday 13:00 UTC, also surfaced in Monday brief)
+- `generated_docs` â documents from generate-* abilities (type, client_id, title, content, created_at)
+- `knowledge_base` â persistent knowledge store (topic, content, source_url, created_at)
+- `va_profiles` â VA accounts linked to Supabase auth user_id
+- `va_task_queues` â daily VA task lists (va_assignment_id, date, tasks JSON, completed_count)
+- `call_logs` â structured VA call records (lead_id, outcome, notes, va_profile_id)
+- `client_portal_access` â token-based portal access (client_id, access_token, last_accessed)
+- `invoice_sequence` â auto-incrementing invoice counter (last_number, produces INV-YYYY-XXXX)
+- `known_failure_patterns` â 6 seeded error patterns with auto-fix strategies for health-monitor
+- `weekly_reports` â weekly self-improvement reports (Sunday 13:00 UTC, also surfaced in Monday brief)
 - `nexus_improvements` (new columns: fix_confidence, fix_verified, fix_verified_at, post_fix_error_count, rollback_triggered)
 
 ### V4 Autonomous Engine additions:
-- `nexus_audit_log` — permanent log of every autonomous action ever taken
-- `nexus_decisions` — decision log with outcome tracking for learning
-- `nexus_ability_proposals` — self-generated ability proposals lifecycle
-- `nexus_research_findings` — all web research findings saved permanently
-- `nexus_action_queue` — actions pending 1-tap approval
-- `nexus_agent_cycles` — record of every agent run
-- `nexus_preferences` — learned preference model (6 seeds: approval thresholds, comms style, focus areas)
+- `nexus_audit_log` â permanent log of every autonomous action ever taken
+- `nexus_decisions` â decision log with outcome tracking for learning
+- `nexus_ability_proposals` â self-generated ability proposals lifecycle
+- `nexus_research_findings` â all web research findings saved permanently
+- `nexus_action_queue` â actions pending 1-tap approval
+- `nexus_agent_cycles` â record of every agent run
+- `nexus_preferences` â learned preference model (6 seeds: approval thresholds, comms style, focus areas)
 
 ### V5 Build System additions:
-- `nexus_build_manifests` — structured build plans with test results (goal, files_to_create, files_to_modify, db_migrations, tests, status, dev_commit_sha, main_commit_sha)
-- `nexus_reflections` — what Nexus learned each cycle (cycle_number, observation, insight, action_taken, learned)
-- `nexus_self_improvements` — self-identified improvement queue (title, problem, proposed_solution, improvement_type, complexity, directive_priority, status)
+- `nexus_build_manifests` â structured build plans with test results (goal, files_to_create, files_to_modify, db_migrations, tests, status, dev_commit_sha, main_commit_sha)
+- `nexus_reflections` â what Nexus learned each cycle (cycle_number, observation, insight, action_taken, learned)
+- `nexus_self_improvements` â self-identified improvement queue (title, problem, proposed_solution, improvement_type, complexity, directive_priority, status)
 
 ### V3 COO additions:
-- `voice_memos` — Telegram voice messages (telegram_file_id, transcript, classified_as, entry_id, duration_seconds)
-- `contradiction_log` — detected contradictions (entry_id_new, entry_id_existing, topic, new_claim, existing_claim, resolved)
-- `focus_sessions` — focus command results (top_priorities, context_snapshot, created_at)
-- `stale_alerts` — stale client alerts deduplication (client_id, days_inactive, alerted_at, dismissed)
+- `voice_memos` â Telegram voice messages (telegram_file_id, transcript, classified_as, entry_id, duration_seconds)
+- `contradiction_log` â detected contradictions (entry_id_new, entry_id_existing, topic, new_claim, existing_claim, resolved)
+- `focus_sessions` â focus command results (top_priorities, context_snapshot, created_at)
+- `stale_alerts` â stale client alerts deduplication (client_id, days_inactive, alerted_at, dismissed)
 - `projects` (new columns: last_update_at, momentum_status, next_milestone, owner)
 - `clients` (new columns: health_score, health_updated_at, last_activity_at)
 
 ### Project categories:
-- `platform` — core businesses (Nexus, VA Company)
-- `vertical` — GTM channels (Roofing OS, Cash Out Refinances)
-- `personal` — personal investments (Water Station)
-- `external` — things Zach contributes to but doesn't drive (Bora)
-- `idea` — loose ideas not yet committed
-- `archived` — dead or paused
+- `platform` â core businesses (Nexus, VA Company)
+- `vertical` â GTM channels (Roofing OS, Cash Out Refinances)
+- `personal` â personal investments (Water Station)
+- `external` â things Zach contributes to but doesn't drive (Bora)
+- `idea` â loose ideas not yet committed
+- `archived` â dead or paused
 
 ---
 
 ## FULL TELEGRAM COMMAND REFERENCE
 
 ### Brain / Memory:
-- `[anything]` — captures to memory, classifies, responds as Chief of Staff
-- `task: [what]` — logs an open task
-- `done: [partial match]` — marks matching task done
-- `done all` — clears all open tasks
+- `[anything]` â captures to memory, classifies, responds as Chief of Staff
+- `task: [what]` â logs an open task
+- `done: [partial match]` â marks matching task done
+- `done all` â clears all open tasks
 
-### Abilities — Original:
-- `search: [query]` — web search via Serper
-- `research: [name/topic]` — deep intelligence brief (2x searches + synthesis)
-- `summarize: [url]` — fetch and summarize any webpage
-- `competitors: [market]` — competitive landscape analysis
-- `draft email: [to] | subject: [x] | about: [x]` — draft email
-- `send email: [to] | subject: [x] | body: [x]` — send via Gmail (requires Gmail secrets)
+### Abilities â Original:
+- `search: [query]` â web search via Serper
+- `research: [name/topic]` â deep intelligence brief (2x searches + synthesis)
+- `summarize: [url]` â fetch and summarize any webpage
+- `competitors: [market]` â competitive landscape analysis
+- `draft email: [to] | subject: [x] | about: [x]` â draft email
+- `send email: [to] | subject: [x] | body: [x]` â send via Gmail (requires Gmail secrets)
 - `generate proposal: [client] | for: [details]`
 - `generate script: [client] | objective: [x]`
 - `generate report: [client] | for: [details]`
 - `generate onepager: [topic]`
 - `remind me: [what] | in: [2 hours / 3 days]`
-- `report: [client]` — full client status report
+- `report: [client]` â full client status report
 
-### Abilities — V2 (Tier 1: Client Intelligence):
-- `client snapshot: [name]` — full client status: context, leads, calls, entries, open tasks
-- `prioritize tasks` — Claude sorts all open tasks by urgency × impact
-- `task estimate: [task description]` — time/effort estimate + breakdown
-- `sprint plan: [timeframe]` — sprint plan from open tasks + client obligations
+### Abilities â V2 (Tier 1: Client Intelligence):
+- `client snapshot: [name]` â full client status: context, leads, calls, entries, open tasks
+- `prioritize tasks` â Claude sorts all open tasks by urgency Ã impact
+- `task estimate: [task description]` â time/effort estimate + breakdown
+- `sprint plan: [timeframe]` â sprint plan from open tasks + client obligations
 
-### Abilities — V2 (Tier 2: Document Generation, saved to generated_docs):
+### Abilities â V2 (Tier 2: Document Generation, saved to generated_docs):
 - `generate invoice: [client] | for: [services] | amount: [x]`
 - `generate contract: [client] | for: [scope] | amount: [x]`
-- `follow up: [name/topic]` — draft follow-up based on conversation history
-- `weekly digest: [optional focus]` — 7-day summary saved to generated_docs
-- `status update: [project/client]` — status report from entries + open tasks
-- `generate sop: [process name]` — full SOP document
+- `follow up: [name/topic]` â draft follow-up based on conversation history
+- `weekly digest: [optional focus]` â 7-day summary saved to generated_docs
+- `status update: [project/client]` â status report from entries + open tasks
+- `generate sop: [process name]` â full SOP document
 
-### Abilities — V2 (Tier 3: Sales & Marketing, saved to generated_docs):
+### Abilities â V2 (Tier 3: Sales & Marketing, saved to generated_docs):
 - `generate pitch: [client/prospect] | for: [context]`
-- `generate case study: [client]` — pulls call/lead data for social proof
+- `generate case study: [client]` â pulls call/lead data for social proof
 - `generate ad copy: [product/service] | audience: [x] | goal: [x]`
 - `calculate roi: [project] | revenue: [x] | cost: [x]`
 - `pricing calculator: [service] | hours: [x] | overhead: [x] | margin: [x]`
 
-### Abilities — V2 (Tier 4: Knowledge Base):
-- `save knowledge: [topic] | [content]` — save to knowledge_base table
-- `recall knowledge: [topic]` — search knowledge_base
-- `learn from: [url]` — fetch URL, extract key insights, save to knowledge_base
-- `nexus brain dump` — dump knowledge_base + recent entries + clients + open tasks
+### Abilities â V2 (Tier 4: Knowledge Base):
+- `save knowledge: [topic] | [content]` â save to knowledge_base table
+- `recall knowledge: [topic]` â search knowledge_base
+- `learn from: [url]` â fetch URL, extract key insights, save to knowledge_base
+- `nexus brain dump` â dump knowledge_base + recent entries + clients + open tasks
 
 ### Client management:
-- `new client: [name]` — create client brain
-- `client context: [name] | deal: [type] | offer: [x] | goals: [x]` — set context
+- `new client: [name]` â create client brain
+- `client context: [name] | deal: [type] | offer: [x] | goals: [x]` â set context
 - `assign va: [client] | va: [name]`
-- `provision: [name] | type: [business type] | about: [description]` — spin up client site
+- `provision: [name] | type: [business type] | about: [description]` â spin up client site
 
 ### Autonomous Engine Commands (v4 + v5):
-- `pending` / `pending actions` / `queue` — show all actions and abilities awaiting approval
-- `approve action [id]` — approve a queued autonomous action
-- `reject action [id]` — reject a queued action
-- `approve ability [id]` — approve building a new ability (or deploy if testing)
-- `reject ability [id]` — reject an ability proposal
-- `audit` / `audit log` / `audit last [n]` — view autonomous action audit log
-- `research now` / `nexus research` — trigger immediate research cycle
-- `agent now` / `nexus agent` / `run agent` — trigger nexus-core cycle (replaces old nexus-agent)
-- `abilities` / `show abilities` — list all self-built abilities and their status
-- `build: [instruction]` — trigger nexus-build with plain English instruction
-- `deploy build [id]` — deploy a staged build to production (main branch)
-- `discard build [id]` — discard a staged build
-- `builds` / `build status` — see recent build status
-- `improvements` / `self improvements` — see what Nexus wants to improve about itself
-- `core now` / `nexus core` — trigger immediate nexus-core cycle
-- `reflections` / `what did you learn` — see what Nexus has learned from recent cycles
+- `pending` / `pending actions` / `queue` â show all actions and abilities awaiting approval
+- `approve action [id]` â approve a queued autonomous action
+- `reject action [id]` â reject a queued action
+- `approve ability [id]` â approve building a new ability (or deploy if testing)
+- `reject ability [id]` â reject an ability proposal
+- `audit` / `audit log` / `audit last [n]` â view autonomous action audit log
+- `research now` / `nexus research` â trigger immediate research cycle
+- `agent now` / `nexus agent` / `run agent` â trigger nexus-core cycle (replaces old nexus-agent)
+- `abilities` / `show abilities` â list all self-built abilities and their status
+- `build: [instruction]` â trigger nexus-build with plain English instruction
+- `deploy build [id]` â deploy a staged build to production (main branch)
+- `discard build [id]` â discard a staged build
+- `builds` / `build status` â see recent build status
+- `improvements` / `self improvements` â see what Nexus wants to improve about itself
+- `core now` / `nexus core` â trigger immediate nexus-core cycle
+- `reflections` / `what did you learn` â see what Nexus has learned from recent cycles
 
 ### COO Commands (new in v3):
-- `focus` / `what should i focus on` / `focus now` — top 3 priorities right now (fetches tasks, clients, projects, recent entries)
-- `stale check` / `who needs attention` — clients with no activity 5+ days
-- `momentum` / `project momentum` — projects with no update 7+ days
-- `health scores` / `client health` — all client health scores (50 baseline + activity + calls - open tasks)
-- `project update: [name] | [milestone]` — log progress on a project
-- `contradictions` / `show contradictions` — unresolved contradictions in your brain
-- Voice memos — send voice messages via Telegram, auto-transcribed via Whisper → classified + saved
+- `focus` / `what should i focus on` / `focus now` â top 3 priorities right now (fetches tasks, clients, projects, recent entries)
+- `stale check` / `who needs attention` â clients with no activity 5+ days
+- `momentum` / `project momentum` â projects with no update 7+ days
+- `health scores` / `client health` â all client health scores (50 baseline + activity + calls - open tasks)
+- `project update: [name] | [milestone]` â log progress on a project
+- `contradictions` / `show contradictions` â unresolved contradictions in your brain
+- Voice memos â send voice messages via Telegram, auto-transcribed via Whisper â classified + saved
 
 ### System:
-- `nexus status` — what's in dev, improvement queue, function health
-- `nexus audit` — comprehensive self-assessment with health score (0-100)
-- `nexus heal` — trigger health-monitor immediately (on-demand self-heal cycle)
-- `approve` — merge current dev improvement to main (content-based, conflict-proof) + schedules 1hr verification reminder
-- `reject` — discard dev improvement, reset dev to main
+- `nexus status` â what's in dev, improvement queue, function health
+- `nexus audit` â comprehensive self-assessment with health score (0-100)
+- `nexus heal` â trigger health-monitor immediately (on-demand self-heal cycle)
+- `approve` â merge current dev improvement to main (content-based, conflict-proof) + schedules 1hr verification reminder
+- `reject` â discard dev improvement, reset dev to main
 
 ---
 
@@ -286,29 +294,29 @@ Then productized and sold to other multi-business operators.
 ```
 Every hour (pg_cron job 3):
   health-monitor runs
-    → checks all function health (nexus_usage data)
-    → analyzes ability usage patterns (last 7 days)
-    → Claude identifies top 3 improvements
-    → sends instant alert if any function has >3 errors/hour
-    → triggers auto-fix for top pending improvement (max 1/hour)
+    â checks all function health (nexus_usage data)
+    â analyzes ability usage patterns (last 7 days)
+    â Claude identifies top 3 improvements
+    â sends instant alert if any function has >3 errors/hour
+    â triggers auto-fix for top pending improvement (max 1/hour)
 
 auto-fix runs (fire-and-forget):
-    → syncs dev branch to main (force-reset)
-    → reads target file from GitHub main
-    → Claude writes minimal surgical fix
-    → commits fixed file to dev branch
-    → sends Telegram: "Fix ready — approve or reject"
+    â syncs dev branch to main (force-reset)
+    â reads target file from GitHub main
+    â Claude writes minimal surgical fix
+    â commits fixed file to dev branch
+    â sends Telegram: "Fix ready â approve or reject"
 
 You reply "approve":
-    → reads changed files from dev, writes directly to main
-    → no git merge (conflict-proof)
-    → Cloudflare deploys in ~60 seconds
-    → improvement marked live
+    â reads changed files from dev, writes directly to main
+    â no git merge (conflict-proof)
+    â Cloudflare deploys in ~60 seconds
+    â improvement marked live
 
 You reply "reject":
-    → dev branch force-reset to main
-    → improvement marked rejected
-    → health-monitor tries next improvement next cycle
+    â dev branch force-reset to main
+    â improvement marked rejected
+    â health-monitor tries next improvement next cycle
 ```
 
 ---
@@ -316,28 +324,28 @@ You reply "reject":
 ## CURRENT PORTFOLIO
 
 ### Platform (building):
-- **Nexus** — the brain/product (this system)
-- **VA Company** — human delivery layer, Sam is the sales lead
+- **Nexus** â the brain/product (this system)
+- **VA Company** â human delivery layer, Sam is the sales lead
 
 ### Verticals (GTM channels, paused while platform is built):
-- **Roofing OS** — roofing contractor channel
-- **Cash Out Refinances** — mortgage/refi channel
+- **Roofing OS** â roofing contractor channel
+- **Cash Out Refinances** â mortgage/refi channel
 
 ### Personal:
-- **Water Station** — investment, needs an app then runs itself
+- **Water Station** â investment, needs an app then runs itself
 
 ### External:
-- **Bora** — contributor not driver
+- **Bora** â contributor not driver
 
 ---
 
 ## KEY PEOPLE
 
-- **Sam** — VA Company sales lead. Calls leads, closes clients. Not yet fluent in pitching Nexus as a standalone product. Needs Nexus to be undeniable before she can sell it.
-- **Kristine** — VA onboarding. Manages VA sourcing and deployment.
-- **Brian** — Anchor client. Reverse mortgage calling, rev share model. Also considering VA bodies for his operation. Brian is Sam's training ground — when she sees Nexus work for Brian, she can pitch it.
-- **Jesse** — Part of cash-out refi deal. Referred Brian.
-- **Kevin Cantwell** — Runs HireSuccess.com (25-year-old pre-employment testing SaaS, 2,000+ customers, 4.9 Capterra). Wants AI upgrade + packaging for acquisition. Potential $15-25K project fee OR 2-3% success fee on acquisition. Warm lead, needs dedicated scoping call.
+- **Sam** â VA Company sales lead. Calls leads, closes clients. Not yet fluent in pitching Nexus as a standalone product. Needs Nexus to be undeniable before she can sell it.
+- **Kristine** â VA onboarding. Manages VA sourcing and deployment.
+- **Brian** â Anchor client. Reverse mortgage calling, rev share model. Also considering VA bodies for his operation. Brian is Sam's training ground â when she sees Nexus work for Brian, she can pitch it.
+- **Jesse** â Part of cash-out refi deal. Referred Brian.
+- **Kevin Cantwell** â Runs HireSuccess.com (25-year-old pre-employment testing SaaS, 2,000+ customers, 4.9 Capterra). Wants AI upgrade + packaging for acquisition. Potential $15-25K project fee OR 2-3% success fee on acquisition. Warm lead, needs dedicated scoping call.
 
 ---
 
@@ -345,7 +353,7 @@ You reply "reject":
 
 1. **Nexus is the product. VAs are one execution mechanism.** Long-term: sell Nexus with VAs optional. Short-term: sell VAs, include Nexus for anchor clients.
 
-2. **Nexus mandatory pricing trigger:** When Sam can independently pitch the Nexus value prop in 60 seconds and feel good defending the price. Not date-based — capability-based.
+2. **Nexus mandatory pricing trigger:** When Sam can independently pitch the Nexus value prop in 60 seconds and feel good defending the price. Not date-based â capability-based.
 
 3. **Every Nexus build decision passes this test:** "Does this make Sam more confident pitching it?"
 
@@ -366,47 +374,27 @@ You reply "reject":
 ## CURRENT BUILD PRIORITIES (as of May 10, 2026)
 
 **DONE this session:**
-- ✅ Telegram EarlyDrop bug fixed
-- ✅ Abilities bundle (8 abilities: search, research, summarize, email, docs, reminders, competitive, reports)
-- ✅ Client provisioning system ([client].nexuszc.com auto-deploy)
-- ✅ Self-aware system (health monitoring, improvement queue, approve/reject)
-- ✅ Self-healing system (auto-fix, instant alerts, retry logic, audit command)
-- ✅ dev/prod branch structure with conflict-proof merge
-- ✅ React app at app.nexuszc.com (Dashboard, Clients, VA Interface)
-- ✅ Nexus V2 — VA layer (va_profiles, va_task_queues, generate-va-tasks), lead pipeline, white-label portal, deal intelligence, Dashboard V2
-- ✅ Nexus Abilities V2 — 19 new commands (client intelligence, document generation, sales/marketing, knowledge base)
-- ✅ generated_docs + knowledge_base tables live
-- ✅ Auto-fix deployed self-improvement to provision.ts (usage analytics)
-- ✅ Abilities V2 fixes — brain dump summary, invoice sequence, status update, documents page
-- ✅ Self-healing final push — pattern detection, confidence scoring, fix verification, weekly reports, nexus heal, rollback alerts
-- ✅ nexus_usage logUsage() audit — all 9 missing handlers fixed across chat/index.ts
-- ✅ Roofing OS Phase 2 — contractor logins (contractor_auth + ContractorContext + magic link), photo uploads (job-photos bucket + grid UI), insurance claim workflow (supplement_request AI letter), crew management (crew_members table + RoofingCrew page), Telegram notifications on homeowner message, self-healing integration (roofing-ai + contractor-auth in health-monitor), 5 roofing Telegram commands, provision integration for type=roofing
-- ✅ Roofing OS Phase 3 — roofing-notify (Twilio SMS + Resend email dispatcher, 5 events: homeowner_message, payment_received, job_created, portal_link, document_ready), roofing-payments (Stripe PaymentIntents, PayButton with Stripe Elements in portal), 4-step contractor onboarding wizard, portal branding with primary_color/logo/tagline
-- ✅ Nexus COO Upgrade (v3) — nexus-coo function (focus, stale_check, momentum_check, health_score, contradiction_check), voice memos via Whisper, 6 new chat commands, briefing upgraded to COO-style with direct data, auto-fix 80% size guard + handler preservation rules, Dashboard upgraded (focus button, health score badges, stale indicators), 4 new DB tables (voice_memos, contradiction_log, focus_sessions, stale_alerts)
-- ✅ Nexus Autonomous Engine (v4) — nexus-agent (15-min loop: observe/think/act/report), nexus-research (6-hour loop: web scan + gap detection + knowledge building), nexus-builder (self-skill creator: writes handlers, deploys to dev, notifies for prod approval), 7 new DB tables, 9 new Telegram commands, full audit trail in nexus_audit_log, preference model with 6 seeds, 2 new cron jobs (jobs 4+5)
-- ✅ nexus-builder locked to dev only, 2000-line corruption guard, approve all capped at 5
-- ✅ Strategic Intelligence — nexus-director, nexus-tasks, directive system, task decomposition
-- ✅ Nexus v3 Full Rebuild — nexus-core (consolidated brain, 30-min cycle), nexus-build (consolidated builder, manifest system), 7 new chat handlers, CLAUDE.md v7
+- (nothing yet this session)
 
 **NEXT:**
-1. Run Phase 1 SQL in Supabase SQL Editor (DB cleanup + 3 new tables — see prompt above)
-2. Run Phase 6 SQL in Supabase SQL Editor (nexus-core cron job)
-3. Update VPS worker: SSH to 31.220.60.77, replace /root/nexus-worker/index.js, run `pm2 restart nexus-worker && pm2 save`
-4. Schedule dedicated scoping call with Kevin Cantwell
-5. Brian's lead system — generate-queue + call cadence working, needs tuning
-6. Connect Cloudflare Pages `dev` branch → dev.nexuszc.com (manual Cloudflare Dashboard step)
-7. Add secrets to Supabase: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-8. NOTE: nexus-build writes only to dev. Deploy via `deploy build [id]` command. Size guard is live (85% threshold).
+1. Implement pending ability usage analytics and performance tracking system
+2. Build complete Roofing OS go-to-market system with public landing page
+3. Address Brian's client health (currently at 65) - investigate and resolve issues
+4. Develop comprehensive A-Z task handling automation framework
+5. Create persistent memory system for accessing past decisions and context
+6. Establish continuous self-improvement loop for immediate implementation
+7. Build Roofing OS core infrastructure and automation capabilities
+8. Set up proactive client monitoring and health tracking system
 
 ---
 
 ## MY WORKING PREFERENCES
 
-- **Full file rewrites** over targeted edits — always
-- **No overengineering** — clean and direct solutions only
-- **"Clear and powerful"** — tools and responses should feel that way
-- **Short focused sessions** work best — don't over-scope a session
-- **Late-night sessions carry higher bug risk** — flag this when relevant
+- **Full file rewrites** over targeted edits â always
+- **No overengineering** â clean and direct solutions only
+- **"Clear and powerful"** â tools and responses should feel that way
+- **Short focused sessions** work best â don't over-scope a session
+- **Late-night sessions carry higher bug risk** â flag this when relevant
 - Commit and push to GitHub after every meaningful change
 - Never leave working changes uncommitted at end of session
 
@@ -419,29 +407,29 @@ You reply "reject":
 - Never end a session with uncommitted working changes
 - Always pull before push if remote has diverged: `git pull origin main --rebase`
 - Remote: `https://github.com/nexuszc/nexus-zc.git`
-- **Never commit to `dev` directly** — dev is managed by the auto-fix and nexus-builder systems
+- **Never commit to `dev` directly** â dev is managed by the auto-fix and nexus-builder systems
 
 ---
 
-## NEXUS-BUILD RULES (enforced in code — never override)
+## NEXUS-BUILD RULES (enforced in code â never override)
 
-- nexus-build ONLY writes to dev branch — never main
+- nexus-build ONLY writes to dev branch â never main
 - Main branch is only updated via Zach's `deploy build [id]` or `approve` commands
 - nexus-build aborts if chat/index.ts would drop below 2000 lines (corruption guard)
 - Size guard: abort if modified file output < 85% of original size
 - Test gate: every build runs automated tests before staging
 - `approve all` is capped at 5 abilities per call
 - One build per nexus-core cycle maximum
-- Every build goes through: planning → building → testing → staged (dev) → Zach deploys → deployed (main)
+- Every build goes through: planning â building â testing â staged (dev) â Zach deploys â deployed (main)
 
 ---
 
-## VPS (Hostinger Phoenix — 31.220.60.77)
+## VPS (Hostinger Phoenix â 31.220.60.77)
 
 - Worker: `/root/nexus-worker/index.js` (PM2, auto-restart on crash)
-- **Core cycle:** every 30 min → triggers nexus-core
-- **Reflection cycle:** every 30 min (offset 15 min) → decides whether to trigger builds
-- **Research cycle:** every 6 hours → web research + saves to knowledge_base
+- **Core cycle:** every 30 min â triggers nexus-core
+- **Reflection cycle:** every 30 min (offset 15 min) â decides whether to trigger builds
+- **Research cycle:** every 6 hours â web research + saves to knowledge_base
 - SSH: `ssh root@31.220.60.77`
 - Logs: `pm2 logs nexus-worker`
 - Restart: `pm2 restart nexus-worker && pm2 save`
@@ -465,7 +453,7 @@ At the end of every significant session, Claude Code should:
 2. Update any decisions that changed
 3. Add new key people if introduced
 4. Add new Edge Functions or commands to the reference tables
-5. Commit: `git commit -am "Update CLAUDE.md — [session summary]"`
+5. Commit: `git commit -am "Update CLAUDE.md â [session summary]"`
 6. Push to GitHub
 
 Zach also dumps session summaries to Nexus via Telegram for persistent memory.
