@@ -248,7 +248,8 @@ async function observe() {
     { data: directives },
     { data: recentBuilds },
     { data: reflections },
-    { data: pendingApprovals }
+    { data: pendingApprovals },
+    { data: recentProposals }
   ] = await Promise.all([
     supabase.from("entries").select("content, created_at, importance")
       .eq("task_status", "open").order("importance", { ascending: false }).limit(10),
@@ -270,7 +271,10 @@ async function observe() {
     supabase.from("nexus_reflections").select("observation, learned")
       .order("created_at", { ascending: false }).limit(5),
     supabase.from("nexus_action_queue").select("action_summary, priority")
-      .eq("status", "pending").order("priority", { ascending: false }).limit(5)
+      .eq("status", "pending").order("priority", { ascending: false }).limit(5),
+    supabase.from("nexus_ability_proposals").select("ability_name")
+      .in("status", ["proposed", "live", "rejected"])
+      .gt("created_at", ago.week).limit(50)
   ]);
 
   const GUARD_TYPES = new Set([
@@ -347,6 +351,7 @@ async function observe() {
     recentBuilds: recentBuilds || [],
     reflections: reflections || [],
     pendingApprovals: pendingApprovals || [],
+    recentProposals: (recentProposals || []).map((p: { ability_name: string }) => p.ability_name),
     self: { chatLines, chatHandlerCount, healthy: chatLines > 2000 }
   };
 }
@@ -408,6 +413,9 @@ RECENT LEARNINGS:
 ${state.reflections.map((r: { observation: string; learned: string }) =>
   `- ${r.learned || r.observation}`).join("\n") || "None yet"}
 
+ABILITIES ALREADY PROPOSED/LIVE/REJECTED IN LAST 7 DAYS (do not re-propose these):
+${state.recentProposals.join(", ") || "None"}
+
 JUDGMENT FILTER — apply this strictly before proposing any trigger_build action:
 Q1: Would Zach immediately notice value if this didn't exist? (if no → skip it)
 Q2: Is this the single highest-value action right now? (fix errors → serve clients → core improvements → new features)
@@ -422,6 +430,7 @@ RULES:
 4. Research before building complex systems
 5. Simple improvements > complex ones
 6. Never repeat what's already in rejected patterns
+7. Before proposing any ability, check if a similar one (by name or description) already exists in the last 7 days in nexus_ability_proposals — if so, skip it entirely. Do not propose duplicates.
 
 AVAILABLE ACTIONS:
 - research: search web for specific topic, save insight
