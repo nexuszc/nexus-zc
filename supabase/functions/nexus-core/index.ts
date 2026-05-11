@@ -60,7 +60,9 @@ async function readGitHub(path: string): Promise<string> {
     { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
   );
   const data = await res.json();
-  if (!data.content) throw new Error(`Cannot read: ${path}`);
+  if (res.status === 404) throw new Error(`File not found (404): ${path}`);
+  if (!res.ok) throw new Error(`GitHub API error ${res.status}: ${path}`);
+  if (!data.content) throw new Error(`No content returned: ${path}`);
   return atob(data.content.replace(/\n/g, ""));
 }
 
@@ -70,7 +72,9 @@ async function readGitHubFile(path: string): Promise<{ content: string; sha: str
     { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
   );
   const data = await res.json();
-  if (!data.content) throw new Error(`Cannot read: ${path}`);
+  if (res.status === 404) throw new Error(`File not found (404): ${path}`);
+  if (!res.ok) throw new Error(`GitHub API error ${res.status}: ${path}`);
+  if (!data.content) throw new Error(`No content returned: ${path}`);
   return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
 }
 
@@ -100,6 +104,18 @@ function spliceMdSection(doc: string, headerKeyword: string, newBody: string): s
   return doc.replace(pattern, `$1\n${newBody.trim()}\n$3`);
 }
 
+async function listGitHubTree(branch = "main"): Promise<string[]> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/git/trees/${branch}?recursive=1`,
+    { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.tree as Array<{ type: string; path: string }> || [])
+    .filter(item => item.type === "blob")
+    .map(item => item.path);
+}
+
 async function search(query: string): Promise<string> {
   try {
     const res = await fetch("https://google.serper.dev/search", {
@@ -115,6 +131,90 @@ async function search(query: string): Promise<string> {
   } catch {
     return "";
   }
+}
+
+// ── BUILD SELF MODEL (Phase 2B) ───────────────────────────────────────────────
+
+async function buildSelfModel(cycleNumber: number): Promise<Record<string, unknown>> {
+  // Get real function inventory from GitHub tree
+  const tree = await listGitHubTree("main").catch(() => [] as string[]);
+  const functionDirs = [...new Set(
+    tree
+      .filter(p => p.startsWith("supabase/functions/") && p.split("/").length > 2)
+      .map(p => p.split("/")[2])
+  )].filter(Boolean).sort();
+
+  // Cron jobs hardcoded — cron schema is not accessible via PostgREST
+  const cronJobs = [
+    { id: 1, schedule: "0 13 * * *", jobname: "daily-briefing", function: "briefing" },
+    { id: 2, schedule: "*/5 * * * *", jobname: "reminders", function: "reminders" },
+    { id: 3, schedule: "0 * * * *", jobname: "health-monitor", function: "health-monitor" },
+    { id: 6, schedule: "*/30 * * * *", jobname: "nexus-core", function: "nexus-core" }
+  ];
+
+  const dayAgo = new Date(Date.now() - 86400000).toISOString();
+
+  const [
+    { data: activeAbilities },
+    { data: approvedJudgments },
+    { data: rejectedJudgments },
+    { data: priorities },
+    { data: gaps },
+    { data: problems },
+    { data: previousModel }
+  ] = await Promise.all([
+    supabase.from("nexus_ability_proposals").select("ability_name").eq("status", "live"),
+    supabase.from("nexus_judgment_log").select("proposal_name, decision_reason")
+      .eq("decision", "approved").order("created_at", { ascending: false }).limit(20),
+    supabase.from("nexus_judgment_log").select("proposal_name, decision_reason")
+      .eq("decision", "rejected").order("created_at", { ascending: false }).limit(20),
+    supabase.from("nexus_directives").select("priority, title, description")
+      .eq("active", true).order("priority").limit(5),
+    supabase.from("nexus_self_improvements").select("title, complexity, directive_priority")
+      .eq("status", "proposed").limit(10),
+    supabase.from("nexus_audit_log").select("action_type, action_detail")
+      .eq("outcome", "failure").gt("created_at", dayAgo).limit(10),
+    supabase.from("nexus_self_model").select("consecutive_clean_cycles")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+
+  const totalJudgments = (approvedJudgments?.length || 0) + (rejectedJudgments?.length || 0);
+  const approvalRate = totalJudgments > 0
+    ? Math.round(((approvedJudgments?.length || 0) / totalJudgments) * 100)
+    : 0;
+
+  const hasErrors = (problems?.length || 0) > 0;
+  const consecutiveCleanCycles = hasErrors
+    ? 0
+    : ((previousModel?.consecutive_clean_cycles || 0) + 1);
+
+  const model: Record<string, unknown> = {
+    cycle_number: cycleNumber,
+    function_inventory: functionDirs,
+    cron_jobs: cronJobs,
+    active_abilities: (activeAbilities || []).map((a: { ability_name: string }) => a.ability_name),
+    approval_rate: approvalRate,
+    approved_patterns: (approvedJudgments || []).slice(0, 10).map((j: { proposal_name: string; decision_reason: string }) =>
+      ({ name: j.proposal_name, reason: j.decision_reason })
+    ),
+    rejected_patterns: (rejectedJudgments || []).slice(0, 10).map((j: { proposal_name: string; decision_reason: string }) =>
+      ({ name: j.proposal_name, reason: j.decision_reason })
+    ),
+    current_priorities: priorities || [],
+    known_gaps: (gaps || []).map((g: { title: string; complexity: string }) =>
+      ({ title: g.title, complexity: g.complexity })
+    ),
+    known_problems: (problems || []).map((p: { action_type: string; action_detail: string }) =>
+      ({ type: p.action_type, detail: p.action_detail?.slice(0, 100) })
+    ),
+    last_heartbeat: new Date().toISOString(),
+    consecutive_clean_cycles: consecutiveCleanCycles,
+    last_updated_at: new Date().toISOString()
+  };
+
+  await supabase.from("nexus_self_model").insert(model);
+
+  return model;
 }
 
 // ── OBSERVE ───────────────────────────────────────────────────────────────────
@@ -179,11 +279,37 @@ async function observe() {
   };
 }
 
-// ── THINK ─────────────────────────────────────────────────────────────────────
+// ── THINK (Phase 3: judgment filter) ─────────────────────────────────────────
 
-async function think(state: Awaited<ReturnType<typeof observe>>) {
+async function think(
+  state: Awaited<ReturnType<typeof observe>>,
+  selfModel: Record<string, unknown>,
+  cycleNumber: number
+) {
+  const approvedPatterns = (selfModel.approved_patterns as Array<{ name: string; reason: string }> || [])
+    .map(p => `- ${p.name}: ${p.reason}`).join("\n") || "None yet";
+  const rejectedPatterns = (selfModel.rejected_patterns as Array<{ name: string; reason: string }> || [])
+    .map(p => `- ${p.name}: ${p.reason}`).join("\n") || "None yet";
+  const knownProblems = (selfModel.known_problems as Array<{ type: string; detail: string }> || [])
+    .map(p => `- ${p.type}: ${p.detail}`).join("\n") || "None";
+
   const prompt = `You are Nexus Core v3 — an autonomous AI business operating system.
 You have one job: continuously improve yourself and build value for Zach.
+
+SELF MODEL (cycle ${cycleNumber}):
+- Functions deployed: ${(selfModel.function_inventory as string[] || []).length}
+- Active abilities: ${(selfModel.active_abilities as string[] || []).length}
+- Approval rate: ${selfModel.approval_rate}% (${selfModel.consecutive_clean_cycles} consecutive clean cycles)
+
+JUDGMENT HISTORY — learn from this:
+Previously APPROVED (do more of this):
+${approvedPatterns}
+
+Previously REJECTED (avoid these):
+${rejectedPatterns}
+
+KNOWN PROBLEMS RIGHT NOW:
+${knownProblems}
 
 STRATEGIC DIRECTIVES (every decision must serve these):
 ${state.directives.map(d => `${d.priority}. ${d.title}: ${d.description}`).join("\n")}
@@ -192,42 +318,53 @@ CURRENT STATE:
 - Open tasks: ${state.tasks.length}
 - Active clients: ${state.clients.length}
 - Errors in last 24h: ${state.errors.length}
-- Pending self-improvements: ${state.improvements.length}
+- Pending improvements: ${state.improvements.length}
 - Live abilities: ${state.liveAbilities.length}
-- Recent failed builds: ${state.recentBuilds.filter((b: {status: string}) => b.status === 'failed').length}
+- Recent failed builds: ${state.recentBuilds.filter((b: { status: string }) => b.status === "failed").length}
 - Pending approvals: ${state.pendingApprovals.length}
 - Chat function: ${state.self.chatLines} lines, ${state.self.chatHandlerCount} handlers
 
-ERRORS TO FIX:
-${state.errors.slice(0, 3).map((e: {action_type: string; action_detail: string}) => `- ${e.action_type}: ${e.action_detail?.slice(0, 100)}`).join("\n") || "None"}
+ERRORS TO FIX (fix before building new things):
+${state.errors.slice(0, 3).map((e: { action_type: string; action_detail: string }) =>
+  `- ${e.action_type}: ${e.action_detail?.slice(0, 100)}`).join("\n") || "None"}
 
 PENDING IMPROVEMENTS:
-${state.improvements.map((i: {title: string; complexity: string; directive_priority: number}) => `- ${i.title} (${i.complexity}, directive ${i.directive_priority})`).join("\n") || "None"}
+${state.improvements.map((i: { title: string; complexity: string; directive_priority: number }) =>
+  `- ${i.title} (${i.complexity}, directive ${i.directive_priority})`).join("\n") || "None"}
 
 RECENT LEARNINGS:
-${state.reflections.map((r: {observation: string; learned: string}) => `- ${r.learned || r.observation}`).join("\n") || "None yet"}
+${state.reflections.map((r: { observation: string; learned: string }) =>
+  `- ${r.learned || r.observation}`).join("\n") || "None yet"}
+
+JUDGMENT FILTER — apply this strictly before proposing any trigger_build action:
+Q1: Would Zach immediately notice value if this didn't exist? (if no → skip it)
+Q2: Is this the single highest-value action right now? (fix errors → serve clients → core improvements → new features)
+Q3: Can this be built reliably without hallucinating file paths or breaking existing code?
+
+All three must be YES to justify a trigger_build.
 
 RULES:
 1. Fix errors before building new things
-2. Only 1 build action per cycle
+2. Only 1 trigger_build per cycle
 3. Every action must serve a directive
 4. Research before building complex systems
-5. Simple improvements > complex ones at this stage
+5. Simple improvements > complex ones
+6. Never repeat what's already in rejected patterns
 
 AVAILABLE ACTIONS:
 - research: search web for specific topic, save insight
-- fix_error: identify and queue a fix for a known error
-- identify_improvement: analyze codebase and identify one self-improvement
+- identify_improvement: analyze state and identify one self-improvement
 - save_insight: save an observation to knowledge base
 - update_health: update client health scores
-- trigger_build: trigger nexus-build with a specific instruction (1 per cycle max)
+- trigger_build: trigger nexus-build with a specific instruction (1 per cycle, judgment filter required)
 - send_alert: send Zach an important alert
 
-Choose 2-3 actions max. Only 1 trigger_build allowed.
+Choose 2-3 actions max. Only 1 trigger_build allowed. Include your judgment reasoning.
 
 Respond with JSON only (no markdown, no backticks):
 {
   "observations": ["what you notice about current state"],
+  "judgment": "your Q1/Q2/Q3 reasoning for any trigger_build, or 'no build this cycle' if skipping",
   "actions": [
     {
       "type": "action_type",
@@ -242,12 +379,13 @@ Respond with JSON only (no markdown, no backticks):
 }`;
 
   try {
-    const response = await ai(prompt, 1500);
+    const response = await ai(prompt, 1800);
     return JSON.parse(response.replace(/```json|```/g, "").trim());
   } catch {
     return {
       observations: ["Think parse error"],
-      actions: [{ type: "save_insight", priority: 1, instruction: "Log parse error", reasoning: "System health", data: {} }],
+      judgment: "Parse error — defaulting to safe action",
+      actions: [{ type: "save_insight", priority: 1, instruction: "Log parse error in think()", reasoning: "System health", data: {} }],
       reflection: "Parse error this cycle",
       summary: "Cycle completed with parse error"
     };
@@ -288,9 +426,9 @@ Current state:
 - ${state.self.chatHandlerCount} chat handlers, ${state.self.chatLines} lines
 - ${state.liveAbilities.length} live abilities
 - ${state.errors.length} recent errors
-- Errors: ${state.errors.slice(0, 3).map((e: {action_type: string}) => e.action_type).join(", ")}
+- Errors: ${state.errors.slice(0, 3).map((e: { action_type: string }) => e.action_type).join(", ")}
 
-Strategic directives: ${state.directives.map((d: {priority: number; title: string}) => `${d.priority}. ${d.title}`).join(", ")}
+Strategic directives: ${state.directives.map((d: { priority: number; title: string }) => `${d.priority}. ${d.title}`).join(", ")}
 
 Identify ONE specific self-improvement. Be concrete and buildable.
 Prefer: fixing errors > improving existing abilities > adding new abilities > adding new systems
@@ -404,41 +542,106 @@ async function reflect(decisions: Awaited<ReturnType<typeof think>>, cycleNumber
   });
 }
 
+// ── CHECK RESILIENCE (Phase 5) ────────────────────────────────────────────────
+
+async function checkResilience(): Promise<void> {
+  const checks: Array<{ check_type: string; status: "ok" | "degraded" | "failed"; detail: string }> = [];
+
+  // Check GitHub token
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${GITHUB_REPO}`,
+      { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+    );
+    if (res.ok) {
+      checks.push({ check_type: "github_token", status: "ok", detail: "GitHub API accessible" });
+    } else {
+      checks.push({ check_type: "github_token", status: "failed", detail: `HTTP ${res.status}` });
+    }
+  } catch (err) {
+    checks.push({ check_type: "github_token", status: "failed", detail: String(err) });
+  }
+
+  // Check Anthropic API
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 10,
+        messages: [{ role: "user", content: "ping" }]
+      })
+    });
+    if (res.ok) {
+      checks.push({ check_type: "anthropic_api", status: "ok", detail: "Anthropic API reachable" });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      checks.push({
+        check_type: "anthropic_api",
+        status: "failed",
+        detail: `HTTP ${res.status}: ${(data as { error?: { message?: string } }).error?.message || ""}`
+      });
+    }
+  } catch (err) {
+    checks.push({ check_type: "anthropic_api", status: "failed", detail: String(err) });
+  }
+
+  // Check Supabase — already connected if we're running, but verify DB query works
+  const { error: dbErr } = await supabase.from("nexus_audit_log").select("id").limit(1);
+  checks.push({
+    check_type: "supabase_db",
+    status: dbErr ? "failed" : "ok",
+    detail: dbErr ? String(dbErr.message) : "Database reachable"
+  });
+
+  await supabase.from("nexus_resilience_log").insert(checks);
+
+  const failures = checks.filter(c => c.status === "failed");
+  if (failures.length > 0) {
+    const msg = `*Nexus Resilience Alert*\n\n` +
+      failures.map(f => `X ${f.check_type}: ${f.detail}`).join("\n");
+    await tg(msg);
+    await log("resilience_check", `${failures.length} check(s) failed`, "failure", { failures });
+  } else {
+    await log("resilience_check", `All ${checks.length} checks passed`);
+  }
+}
+
 // ── SYNC CLAUDE.MD ────────────────────────────────────────────────────────────
 
-// Known function descriptions — used to build the Edge Functions table
+// Active function descriptions — deprecated functions removed (Phase 7)
 const FUNC_DESCRIPTIONS: Record<string, { purpose: string; trigger: string }> = {
-  "chat":                  { purpose: "Core brain: classify → retrieve → Claude → respond", trigger: "POST from Telegram webhook or web" },
-  "telegram":              { purpose: "Webhook: immediate 200 ACK, processes in waitUntil", trigger: "Telegram push" },
-  "briefing":              { purpose: "Morning brief at 7am MT (13:00 UTC) via pg_cron", trigger: "Daily cron (job ID 1)" },
-  "reminders":             { purpose: "Fire due reminders via Telegram", trigger: "Every 5 min cron (job ID 2)" },
-  "provision":             { purpose: "Spin up client subdomain + Claude-generated site", trigger: "chat provision: command or web UI" },
-  "health-monitor":        { purpose: "Hourly health check, identify improvements, trigger auto-fix", trigger: "Every hour cron (job ID 3)" },
+  "assess-project":        { purpose: "Run AI assessment on a project", trigger: "On demand" },
   "auto-fix":              { purpose: "Read code from GitHub → Claude writes fix → commit to dev → notify", trigger: "Called by health-monitor" },
-  "send-email":            { purpose: "Send email via Resend", trigger: "Internal" },
-  "email-webhook":         { purpose: "Inbound email handling", trigger: "Resend webhook" },
-  "process-email-queue":   { purpose: "Batch process email queue", trigger: "Cron" },
-  "generate-queue":        { purpose: "Generate lead call queue", trigger: "On demand" },
-  "log-call":              { purpose: "VA logs call outcome + auto-enrolls lead sequences", trigger: "VA web form" },
-  "roofing-ai":            { purpose: "Roofing AI actions: estimate, contract, invoice, timeline, supplement_request", trigger: "Internal" },
+  "brain-api":             { purpose: "REST API for brain browser access", trigger: "GET/POST from nexus-brain.html" },
+  "briefing":              { purpose: "Morning brief at 7am MT (13:00 UTC) via pg_cron", trigger: "Daily cron (job ID 1)" },
+  "chat":                  { purpose: "Core brain: classify → retrieve → Claude → respond", trigger: "POST from Telegram webhook or web" },
   "contractor-auth":       { purpose: "Contractor magic link invite + session lookup", trigger: "Internal" },
-  "roofing-notify":        { purpose: "SMS (Twilio) + email (Resend) dispatcher for all roofing events", trigger: "Internal" },
-  "roofing-payments":      { purpose: "Stripe payment intent creation + payment confirmation", trigger: "Internal" },
-  "nexus-core":            { purpose: "Consolidated brain: observe, think, act, reflect — every 30 min", trigger: "Cron (every 30 min) + VPS + manual" },
-  "nexus-build":           { purpose: "Consolidated builder: manifest → build → test → stage → notify", trigger: "On demand (telegram, nexus-core, VPS)" },
+  "email-webhook":         { purpose: "Inbound email handling", trigger: "Resend webhook" },
+  "generate-queue":        { purpose: "Generate lead call queue", trigger: "On demand" },
   "generate-va-tasks":     { purpose: "Generate daily VA task lists", trigger: "Cron / on demand" },
   "get-dashboard-stats":   { purpose: "Aggregate stats for React dashboard", trigger: "API call from frontend" },
+  "health-monitor":        { purpose: "Hourly health check, identify improvements, trigger auto-fix", trigger: "Every hour cron (job ID 3)" },
   "import-leads":          { purpose: "Bulk import leads from CSV or external source", trigger: "On demand" },
+  "log-call":              { purpose: "VA logs call outcome + auto-enrolls lead sequences", trigger: "VA web form" },
+  "nexus-build":           { purpose: "Consolidated builder: manifest → build → test → stage → notify", trigger: "On demand (telegram, nexus-core, VPS)" },
+  "nexus-core":            { purpose: "Consolidated brain: observe, think, act, reflect — every 30 min", trigger: "Cron (every 30 min) + VPS + manual" },
+  "nexus-coo":             { purpose: "COO intelligence: focus, stale_check, momentum_check, health_score", trigger: "Called by chat + health-monitor" },
+  "process-email-queue":   { purpose: "Batch process email queue", trigger: "Cron" },
+  "provision":             { purpose: "Spin up client subdomain + Claude-generated site", trigger: "chat provision: command or web UI" },
   "reclassify":            { purpose: "Re-run classification on existing entries", trigger: "On demand" },
   "refresh-assessments":   { purpose: "Refresh project assessment scores", trigger: "On demand" },
-  "assess-project":        { purpose: "Run AI assessment on a project", trigger: "On demand" },
+  "roofing-ai":            { purpose: "Roofing AI actions: estimate, contract, invoice, timeline, supplement_request", trigger: "Internal" },
+  "roofing-notify":        { purpose: "SMS (Twilio) + email (Resend) dispatcher for all roofing events", trigger: "Internal" },
+  "roofing-payments":      { purpose: "Stripe payment intent creation + payment confirmation", trigger: "Internal" },
+  "send-email":            { purpose: "Send email via Resend", trigger: "Internal" },
   "synthesize-portfolio":  { purpose: "Generate portfolio-level synthesis and insights", trigger: "On demand" },
-  "brain-api":             { purpose: "REST API for brain browser access", trigger: "GET/POST from nexus-brain.html" },
-  "nexus-coo":             { purpose: "COO intelligence: focus, stale_check, momentum_check, health_score", trigger: "Called by chat + health-monitor" },
-  "nexus-agent":           { purpose: "Legacy agent loop (superseded by nexus-core)", trigger: "Deprecated" },
-  "nexus-research":        { purpose: "Legacy research loop (absorbed into nexus-core + VPS)", trigger: "Deprecated" },
-  "nexus-builder":         { purpose: "Legacy builder (superseded by nexus-build)", trigger: "Deprecated" },
-  "nexus-execute":         { purpose: "Legacy executor (superseded by nexus-build)", trigger: "Deprecated" },
+  "telegram":              { purpose: "Webhook: immediate 200 ACK, processes in waitUntil", trigger: "Telegram push" },
 };
 
 async function syncClaudeMd(state: Awaited<ReturnType<typeof observe>>, cycleNumber: number): Promise<boolean> {
@@ -460,10 +663,9 @@ async function syncClaudeMd(state: Awaited<ReturnType<typeof observe>>, cycleNum
 
     const twoHoursAgo = new Date(Date.now() - 2 * 3600000).toISOString();
     if (lastSync?.created_at > twoHoursAgo && !recentDeploys?.length) {
-      return false; // synced recently, nothing new deployed
+      return false;
     }
 
-    // Read current CLAUDE.md
     const { content: currentContent, sha } = await readGitHubFile("CLAUDE.md");
 
     // List deployed function directories from GitHub
@@ -476,7 +678,6 @@ async function syncClaudeMd(state: Awaited<ReturnType<typeof observe>>, cycleNum
       ? funcDirData.filter((f: { type: string }) => f.type === "dir").map((f: { name: string }) => f.name).sort()
       : [];
 
-    // Get all deployed builds (for DONE list)
     const { data: deployedBuilds } = await supabase
       .from("nexus_build_manifests")
       .select("goal, deployed_at")
@@ -499,19 +700,17 @@ ${tableRows}`;
 
     // ── UPDATE 2: Build Priorities section ───────────────────────────────────
 
-    // Extract existing ✅ DONE items from current CLAUDE.md
-    const existingDoneLines = (currentContent.match(/^- ✅.+/gm) || []);
+    const existingDoneLines = (currentContent.match(/^- .+/gm) || [])
+      .filter(l => l.includes("DONE") || l.startsWith("- (nothing"));
     const existingDoneSet = new Set(existingDoneLines.map(l => l.slice(0, 60)));
 
-    // Add any deployed builds not already in the DONE list
     const newDoneLines = (deployedBuilds || [])
       .filter((b: { goal: string }) => {
-        const candidate = `- ✅ ${(b.goal || "").slice(0, 55)}`;
+        const candidate = `- ${(b.goal || "").slice(0, 55)}`;
         return ![...existingDoneSet].some(existing => existing.includes((b.goal || "").slice(0, 30)));
       })
-      .map((b: { goal: string }) => `- ✅ ${b.goal}`);
+      .map((b: { goal: string }) => `- ${b.goal}`);
 
-    // Claude generates the NEXT list only (bounded, ~500 tokens)
     const nextPrompt = `Generate a prioritized NEXT list for the Nexus build priorities section.
 Return ONLY a numbered list (1-8 items). No headers, no extra text.
 
@@ -522,14 +721,17 @@ ${state.improvements.map((i: { title: string; complexity: string; directive_prio
 OPEN TASKS:
 ${state.tasks.slice(0, 4).map((t: { content: string }) => `- ${(t.content || "").slice(0, 80)}`).join("\n") || "None"}
 
-ACTIVE CLIENTS (${state.clients.length} total — mention if any need attention):
-${state.clients.slice(0, 3).map((c: { name: string; health_score: number }) => `- ${c.name} (health: ${c.health_score || "?"}`).join("\n") || "None"}`;
+ACTIVE CLIENTS (${state.clients.length} total):
+${state.clients.slice(0, 3).map((c: { name: string; health_score: number }) => `- ${c.name} (health: ${c.health_score || "?"})`).join("\n") || "None"}`;
 
     const nextList = await ai(nextPrompt, 500);
 
-    const allDoneLines = [...existingDoneLines, ...newDoneLines].join("\n");
+    const allDoneText = newDoneLines.length > 0
+      ? `\n${newDoneLines.join("\n")}`
+      : "";
+
     const newPrioritiesBody = `**DONE this session:**
-${allDoneLines || "- (nothing yet this session)"}
+- (nothing yet this session)${allDoneText}
 
 **NEXT:**
 ${nextList.trim()}`;
@@ -545,14 +747,12 @@ ${nextList.trim()}`;
 
     // ── GUARDS ────────────────────────────────────────────────────────────────
 
-    // Size guard: new content must be >= 85% of original
     if (updated.length < currentContent.length * 0.85) {
       await log("claude_md_sync_aborted",
         `Size guard: ${updated.length} chars < 85% of ${currentContent.length}`, "failure");
       return false;
     }
 
-    // Diff check: skip commit if nothing actually changed
     if (updated.trim() === currentContent.trim()) {
       await log("claude_md_sync_skipped", "No changes detected");
       return false;
@@ -594,10 +794,18 @@ Deno.serve(async (_req) => {
   await log("cycle_start", `Nexus Core cycle ${cycleNumber}`);
 
   try {
+    // Build self model first — before observe/think/act (Phase 2B)
+    const selfModel = await buildSelfModel(cycleNumber);
+
     const state = await observe();
-    const decisions = await think(state);
+    const decisions = await think(state, selfModel, cycleNumber);
     const actionsExecuted = await act(decisions, state);
     await reflect(decisions, cycleNumber, actionsExecuted);
+
+    // Resilience check every 5 cycles (Phase 5)
+    if (cycleNumber % 5 === 0) {
+      await checkResilience();
+    }
 
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
@@ -619,6 +827,11 @@ Deno.serve(async (_req) => {
       ok: true,
       cycle: cycleNumber,
       actions: actionsExecuted,
+      self_model: {
+        functions: (selfModel.function_inventory as string[] || []).length,
+        approval_rate: selfModel.approval_rate,
+        consecutive_clean: selfModel.consecutive_clean_cycles
+      },
       claude_md_updated: claudeMdUpdated,
       summary: decisions.summary
     });

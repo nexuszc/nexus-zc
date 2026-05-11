@@ -52,6 +52,17 @@ async function readGitHub(path: string, branch = "main"): Promise<{ content: str
   return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
 }
 
+async function readGitHubAtCommit(path: string, commitSha: string): Promise<{ content: string; sha: string }> {
+  const res = await fetch(
+    `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=${commitSha}`,
+    { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(`GitHub API error ${res.status} reading ${path} at ${commitSha}`);
+  if (!data.content) throw new Error(`No content at commit ${commitSha} for: ${path}`);
+  return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
+}
+
 async function listGitHubTree(branch = "main"): Promise<string[]> {
   const res = await fetch(
     `https://api.github.com/repos/${GITHUB_REPO}/git/trees/${branch}?recursive=1`,
@@ -88,6 +99,62 @@ async function writeGitHub(path: string, content: string, message: string, branc
   return data.commit?.sha || "";
 }
 
+// ── PHASE 4A: VERIFY FILE PATH ────────────────────────────────────────────────
+
+function verifyFilePath(path: string, repoTree: string[]): boolean {
+  return repoTree.includes(path);
+}
+
+// ── PHASE 4B: SMOKE TEST ──────────────────────────────────────────────────────
+
+function smokeTest(filePath: string, content: string): { passed: boolean; issues: string[] } {
+  const issues: string[] = [];
+
+  // Balanced braces check
+  const openBraces = (content.match(/\{/g) || []).length;
+  const closeBraces = (content.match(/\}/g) || []).length;
+  if (Math.abs(openBraces - closeBraces) > 5) {
+    issues.push(`Unbalanced braces: ${openBraces} open vs ${closeBraces} close`);
+  }
+
+  // Edge function specific checks
+  if (filePath.includes("supabase/functions/") && filePath.endsWith("index.ts")) {
+    if (!content.includes("Deno.serve")) {
+      issues.push("Edge function missing Deno.serve()");
+    }
+    if (content.split("\n").length < 20) {
+      issues.push(`Edge function suspiciously short: ${content.split("\n").length} lines`);
+    }
+  }
+
+  // Check for known hallucinated paths that don't exist in the repo
+  const hallucinatedPaths = [
+    "Navbar.jsx",
+    "nexus-chat/",
+    "research/index.ts",
+    "nexus-director/",
+    "nexus-tasks/",
+    "nexus-agent/",
+    "nexus-builder/",
+    "nexus-execute/",
+    "nexus-research/"
+  ];
+  for (const bad of hallucinatedPaths) {
+    if (content.includes(bad)) {
+      issues.push(`Hallucinated path reference: "${bad}"`);
+    }
+  }
+
+  // React component checks
+  if (filePath.endsWith(".jsx") || filePath.endsWith(".tsx")) {
+    if (!content.includes("export default") && !content.includes("export {")) {
+      issues.push("React file missing export");
+    }
+  }
+
+  return { passed: issues.length === 0, issues };
+}
+
 // ── CREATE MANIFEST ───────────────────────────────────────────────────────────
 
 async function createManifest(instruction: string, directivePriority: number): Promise<string> {
@@ -100,7 +167,6 @@ async function createManifest(instruction: string, directivePriority: number): P
   const existingTriggers = (chatContent.match(/if \((?:lowerMessage|msgLower)[^)]*\)/g) || [])
     .map(m => m.slice(0, 60));
 
-  // Partition the tree into categories for the AI
   const edgeFunctions = allFiles.filter(f => f.startsWith("supabase/functions/") && f.endsWith("/index.ts"));
   const appPages = allFiles.filter(f => f.startsWith("app/src/pages/"));
   const appComponents = allFiles.filter(f => f.startsWith("app/src/components/"));
@@ -135,7 +201,7 @@ CURRENT CODEBASE STATE:
 
 MANIFEST RULES:
 1. CRITICAL: Only reference files that appear in the ACTUAL REPO FILE TREE above
-2. If a file you need doesn't exist in the tree, list it under files_to_create (don't put it in files_to_modify)
+2. If a file you need doesn't exist in the tree, list it under files_to_create (not files_to_modify)
 3. If instruction needs a chat handler — check existing triggers first, don't duplicate
 4. For new pages — add to app/src/pages/ and update app/src/App.jsx routes
 5. For new edge functions — add to supabase/functions/{name}/index.ts
@@ -196,11 +262,14 @@ async function buildFromManifest(manifestId: string): Promise<{ success: boolean
     .update({ status: "building", updated_at: new Date().toISOString() })
     .eq("id", manifestId);
 
+  // Phase 4A: Get the real repo tree to verify all file paths
+  const repoTree = await listGitHubTree("main");
+
   let lastCommitSha = "";
 
   try {
     // Build each new file
-    for (const file of (manifest.files_to_create as Array<{path: string; description: string; content_summary: string}> || [])) {
+    for (const file of (manifest.files_to_create as Array<{ path: string; description: string; content_summary: string }> || [])) {
       const codePrompt = `Write the complete file for this Nexus system component.
 
 File: ${file.path}
@@ -221,6 +290,18 @@ RULES:
       const content = await ai(codePrompt, 2000);
       const cleanContent = content.replace(/^```[a-zA-Z]*\n?/m, "").replace(/\n?```\s*$/m, "").trim();
 
+      // Phase 4B: smoke test the generated content
+      const smoke = smokeTest(file.path, cleanContent);
+      if (!smoke.passed) {
+        await supabase.from("nexus_audit_log").insert({
+          engine: "nexus-build",
+          action_type: "smoke_test_failed",
+          action_detail: `${file.path}: ${smoke.issues.join("; ")}`,
+          outcome: "failure"
+        });
+        continue;
+      }
+
       lastCommitSha = await writeGitHub(
         file.path,
         cleanContent,
@@ -230,11 +311,22 @@ RULES:
     }
 
     // Modify existing files
-    for (const mod of (manifest.files_to_modify as Array<{path: string; change: string}> || [])) {
+    for (const mod of (manifest.files_to_modify as Array<{ path: string; change: string }> || [])) {
       try {
+        // Phase 4A: verify path exists before attempting to modify
+        if (!verifyFilePath(mod.path, repoTree)) {
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-build",
+            action_type: "path_verify_failed",
+            action_detail: `File does not exist in repo: ${mod.path}`,
+            outcome: "failure"
+          });
+          continue;
+        }
+
         const { content: currentContent } = await readGitHub(mod.path, "dev");
 
-        // Safety check for chat/index.ts
+        // Safety check for chat/index.ts corruption guard
         if (mod.path.includes("chat/index.ts") && currentContent.split("\n").length < 2000) {
           await supabase.from("nexus_audit_log").insert({
             engine: "nexus-build",
@@ -274,6 +366,18 @@ CRITICAL RULES:
           continue;
         }
 
+        // Phase 4B: smoke test the modified content
+        const smoke = smokeTest(mod.path, cleanModified);
+        if (!smoke.passed) {
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-build",
+            action_type: "smoke_test_failed",
+            action_detail: `${mod.path}: ${smoke.issues.join("; ")}`,
+            outcome: "failure"
+          });
+          continue;
+        }
+
         lastCommitSha = await writeGitHub(
           mod.path,
           cleanModified,
@@ -299,8 +403,8 @@ CRITICAL RULES:
 
 // ── RUN TESTS ─────────────────────────────────────────────────────────────────
 
-async function runTests(manifest: Record<string, unknown>): Promise<{ passed: number; failed: number; results: Array<{name: string; passed: boolean; detail: string}> }> {
-  const tests = manifest.tests as Array<{name: string; type: string; check: string}> || [];
+async function runTests(manifest: Record<string, unknown>): Promise<{ passed: number; failed: number; results: Array<{ name: string; passed: boolean; detail: string }> }> {
+  const tests = manifest.tests as Array<{ name: string; type: string; check: string }> || [];
   const results = [];
   let passed = 0;
   let failed = 0;
@@ -344,7 +448,81 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const { instruction, source, directive_priority, manifest_id, action } = body;
 
-  // Deploy approved manifest to main
+  // ── ROLLBACK: restore pre-deploy file content to main (Phase 4D) ─────────────
+
+  if (action === "rollback" && manifest_id) {
+    const { data: manifest } = await supabase
+      .from("nexus_build_manifests")
+      .select("*")
+      .eq("id", manifest_id)
+      .single();
+
+    if (!manifest) return Response.json({ error: "Manifest not found" }, { status: 404 });
+    if (manifest.status !== "deployed") {
+      return Response.json({ error: `Cannot rollback — manifest status is "${manifest.status}"` }, { status: 400 });
+    }
+
+    const preDeployShas = (manifest.pre_deploy_shas || {}) as Record<string, string>;
+    if (Object.keys(preDeployShas).length === 0) {
+      return Response.json({ error: "No pre-deploy SHAs recorded — cannot auto-rollback. Restore manually from git history." }, { status: 400 });
+    }
+
+    const allFiles = [
+      ...(manifest.files_to_create as Array<{ path: string }> || []).map((f: { path: string }) => f.path),
+      ...(manifest.files_to_modify as Array<{ path: string }> || []).map((f: { path: string }) => f.path)
+    ];
+
+    let rollbackSha = "";
+    const rolledBack: string[] = [];
+    const failed: string[] = [];
+
+    for (const filePath of allFiles) {
+      const preDeployCommitSha = preDeployShas[filePath];
+      if (!preDeployCommitSha) {
+        // File was newly created — delete it by restoring to empty? Skip for safety.
+        failed.push(`${filePath} (no pre-deploy SHA — was newly created, manual removal required)`);
+        continue;
+      }
+
+      try {
+        const { content: restoredContent } = await readGitHubAtCommit(filePath, preDeployCommitSha);
+        rollbackSha = await writeGitHub(
+          filePath,
+          restoredContent,
+          `rollback: Restore ${filePath} to pre-deploy state (manifest ${manifest_id.slice(0, 8)})`,
+          "main"
+        );
+        rolledBack.push(filePath);
+      } catch (err) {
+        failed.push(`${filePath}: ${String(err)}`);
+      }
+    }
+
+    await supabase.from("nexus_build_manifests").update({
+      status: "rolled_back",
+      updated_at: new Date().toISOString()
+    }).eq("id", manifest.id);
+
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-build",
+      action_type: "rollback_executed",
+      action_detail: `Rolled back manifest ${manifest_id.slice(0, 8)}: ${rolledBack.length} files restored`,
+      outcome: failed.length > 0 ? "partial" : "success",
+      data: { manifest_id, rolled_back: rolledBack, failed, commit: rollbackSha }
+    });
+
+    const msg = `*Rollback complete*\n\n` +
+      `Manifest: ${manifest.goal}\n` +
+      `Restored: ${rolledBack.join(", ") || "none"}\n` +
+      (failed.length > 0 ? `Failed: ${failed.join(", ")}\n` : "") +
+      `Commit: ${rollbackSha.slice(0, 8)} (main)\nLive in ~60 seconds.`;
+    await tg(msg);
+
+    return Response.json({ ok: true, rolled_back: rolledBack, failed, commit: rollbackSha });
+  }
+
+  // ── DEPLOY: approved manifest → main (Phase 4C: capture pre-deploy SHAs) ────
+
   if (action === "deploy" && manifest_id) {
     const { data: manifest } = await supabase
       .from("nexus_build_manifests")
@@ -353,7 +531,6 @@ Deno.serve(async (req) => {
       .single();
 
     if (!manifest) {
-      // Try prefix match
       const { data: manifests } = await supabase
         .from("nexus_build_manifests")
         .select("*")
@@ -366,9 +543,23 @@ Deno.serve(async (req) => {
     if (!targetManifest) return Response.json({ error: "Manifest not found" }, { status: 404 });
 
     const allFiles = [
-      ...(targetManifest.files_to_create as Array<{path: string}> || []).map((f: {path: string}) => f.path),
-      ...(targetManifest.files_to_modify as Array<{path: string}> || []).map((f: {path: string}) => f.path)
+      ...(targetManifest.files_to_create as Array<{ path: string }> || []).map((f: { path: string }) => f.path),
+      ...(targetManifest.files_to_modify as Array<{ path: string }> || []).map((f: { path: string }) => f.path)
     ];
+
+    // Phase 4C: capture current (pre-deploy) SHAs from main before overwriting
+    const preDeployShas: Record<string, string> = {};
+    for (const filePath of allFiles) {
+      try {
+        const { sha } = await readGitHub(filePath, "main");
+        preDeployShas[filePath] = sha;
+      } catch { /* new file — no pre-deploy SHA */ }
+    }
+
+    // Save pre-deploy SHAs before any writes happen
+    await supabase.from("nexus_build_manifests").update({
+      pre_deploy_shas: preDeployShas
+    }).eq("id", targetManifest.id);
 
     let mainSha = "";
     for (const filePath of allFiles) {
@@ -384,12 +575,22 @@ Deno.serve(async (req) => {
       deployed_at: new Date().toISOString()
     }).eq("id", targetManifest.id);
 
-    await tg(`Deployed: *${targetManifest.goal}*\nCommit: ${mainSha.slice(0, 8)} (main)\nLive in ~60 seconds.`);
+    // Phase 4C: log post-deploy monitoring window entry
+    await supabase.from("nexus_audit_log").insert({
+      engine: "nexus-build",
+      action_type: "deploy_monitoring_window",
+      action_detail: `Deployed: ${targetManifest.goal} — monitoring for errors next 60 min`,
+      outcome: "success",
+      data: { manifest_id: targetManifest.id, commit: mainSha, files: allFiles }
+    });
+
+    await tg(`Deployed: *${targetManifest.goal}*\nCommit: ${mainSha.slice(0, 8)} (main)\nLive in ~60 seconds.\nTo rollback: \`rollback build ${targetManifest.id.slice(0, 8)}\``);
 
     return Response.json({ ok: true, commit: mainSha });
   }
 
-  // Build from instruction
+  // ── BUILD: from instruction ────────────────────────────────────────────────
+
   if (!instruction) return Response.json({ error: "instruction required" }, { status: 400 });
 
   await tg(`Building: *${instruction.slice(0, 100)}*\nCreating manifest and building...`);
@@ -425,7 +626,7 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString()
     }).eq("id", manifestId);
 
-    // Log as ability proposal if it's a simple chat-handler-only change
+    // Log as ability proposal if it's a simple single-file change
     if ((manifest?.files_to_create as Array<unknown> || []).length === 0 &&
         (manifest?.files_to_modify as Array<unknown> || []).length === 1) {
       await supabase.from("nexus_ability_proposals").insert({

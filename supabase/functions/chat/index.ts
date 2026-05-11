@@ -1661,7 +1661,7 @@ Be specific. Reference actual numbers.` }],
           await supabase.from("nexus_ability_proposals")
             .update({ status: "approved", approved_at: now })
             .eq("id", ability.id);
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({ proposal_id: ability.id, action: "build" }),
@@ -1669,7 +1669,7 @@ Be specific. Reference actual numbers.` }],
         }
 
         for (const ability of toDeploy) {
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({ proposal_id: ability.id, action: "deploy" }),
@@ -1709,7 +1709,7 @@ Be specific. Reference actual numbers.` }],
           await supabase.from("nexus_ability_proposals")
             .update({ status: "approved", approved_at: now })
             .eq("id", ability.id);
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({ proposal_id: ability.id, action: "build" }),
@@ -1800,8 +1800,17 @@ Be specific. Reference actual numbers.` }],
         const proposal = proposals?.[0];
         if (!proposal) return earlyReturn(`No pending ability proposal found matching: ${abilityId}`);
 
+        // Log decision to judgment log
+        await supabase.from("nexus_judgment_log").insert({
+          proposal_id: proposal.id,
+          proposal_name: proposal.ability_name,
+          proposal_type: "ability",
+          decision: "approved",
+          decision_reason: "Approved by Zach via chat",
+        });
+
         if (proposal.status === "testing") {
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({ proposal_id: proposal.id, action: "deploy" }),
@@ -1813,7 +1822,7 @@ Be specific. Reference actual numbers.` }],
             .update({ status: "approved", approved_at: new Date().toISOString() })
             .eq("id", proposal.id);
 
-          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-builder`, {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
             body: JSON.stringify({ proposal_id: proposal.id, action: "build" }),
@@ -1828,16 +1837,36 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
-    //  -  REJECT ABILITY  - 
+    //  -  REJECT ABILITY  -
     if (msgLower.startsWith("reject ability")) {
       const start = Date.now();
       try {
         const parts = message.split(" ");
         const abilityId = parts[parts.length - 1]?.trim();
 
+        // Fetch proposal first to get its name for the judgment log
+        const { data: rejectProposals } = await supabase
+          .from("nexus_ability_proposals")
+          .select("id, ability_name, proposal_type")
+          .filter("id::text", "ilike", `${abilityId}%`)
+          .limit(1);
+
+        const rejectProposal = rejectProposals?.[0];
+
         await supabase.from("nexus_ability_proposals")
           .update({ status: "rejected" })
           .filter("id::text", "ilike", `${abilityId}%`);
+
+        // Log decision to judgment log
+        if (rejectProposal) {
+          await supabase.from("nexus_judgment_log").insert({
+            proposal_id: rejectProposal.id,
+            proposal_name: rejectProposal.ability_name,
+            proposal_type: "ability",
+            decision: "rejected",
+            decision_reason: "Rejected by Zach via chat",
+          });
+        }
 
         await logUsage(supabase, "reject_ability", true, Date.now() - start, channel);
         return earlyReturn(` -  Ability rejected and removed from queue.`);
@@ -1964,10 +1993,51 @@ Be specific. Reference actual numbers.` }],
       const start = Date.now();
       const manifestId = message.trim().split(" ").pop()?.trim();
       await supabase.from("nexus_build_manifests")
-        .update({ status: "failed" })
+        .update({ status: "discarded" })
         .or(`id.eq.${manifestId},id.ilike.${manifestId}%`);
       await logUsage(supabase, "discard_build", true, Date.now() - start, channel);
       return earlyReturn(`Build \`${manifestId?.slice(0, 8)}\` discarded.`);
+    }
+
+    //  -  ROLLBACK DEPLOYED BUILD  -
+    if (msgLower.startsWith("rollback build ") || msgLower.startsWith("rollback ")) {
+      const start = Date.now();
+      try {
+        const parts = message.trim().split(" ");
+        const manifestId = parts[parts.length - 1]?.trim();
+        if (!manifestId || manifestId.length < 4) {
+          return earlyReturn("Specify a build ID. Send `builds` to see recent builds.");
+        }
+
+        const { data: manifests } = await supabase
+          .from("nexus_build_manifests")
+          .select("id, goal, status, pre_deploy_shas")
+          .filter("id::text", "ilike", `${manifestId}%`)
+          .limit(1);
+
+        const manifest = manifests?.[0];
+        if (!manifest) return earlyReturn(`No build found matching: ${manifestId}`);
+        if (manifest.status !== "deployed") {
+          return earlyReturn(`Cannot rollback — build status is "${manifest.status}" (only deployed builds can be rolled back).`);
+        }
+
+        const preDeployShas = manifest.pre_deploy_shas || {};
+        if (Object.keys(preDeployShas).length === 0) {
+          return earlyReturn(`No pre-deploy snapshot for this build. Restore manually from git history.\nBuild: ${manifest.goal}`);
+        }
+
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ action: "rollback", manifest_id: manifest.id }),
+        });
+
+        await logUsage(supabase, "rollback_build", true, Date.now() - start, channel);
+        return earlyReturn(`Rolling back *${manifest.goal}*...\nRestoring ${Object.keys(preDeployShas).length} file(s) to pre-deploy state.\nLive in ~60 seconds.`);
+      } catch (err: any) {
+        await logUsage(supabase, "rollback_build", false, Date.now() - start, channel);
+        return earlyReturn(`Rollback failed: ${err.message}`);
+      }
     }
 
     if (msgLower === "builds" || msgLower === "build status") {
@@ -1988,7 +2058,8 @@ Be specific. Reference actual numbers.` }],
           builds.map((b: any) =>
             `*${(b.goal || "").slice(0, 60)}*\n` +
             `Status: ${b.status} | Tests: ${b.tests_passed || 0} passed, ${b.tests_failed || 0} failed\n` +
-            (b.status === "staged" ? `Deploy: \`deploy build ${b.id.slice(0, 8)}\`` : "")
+            (b.status === "staged" ? `Deploy: \`deploy build ${b.id.slice(0, 8)}\`` :
+              b.status === "deployed" ? `Rollback: \`rollback build ${b.id.slice(0, 8)}\`` : "")
           ).join("\n\n");
 
         await logUsage(supabase, "builds_status", true, Date.now() - start, channel);
