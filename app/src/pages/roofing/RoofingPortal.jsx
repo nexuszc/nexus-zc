@@ -103,13 +103,14 @@ export default function RoofingPortal() {
   useEffect(() => { loadPortal() }, [token])
 
   const loadPortal = async () => {
-    const { data: jobData } = await supabase
+    const { data: jobData, error: portalError } = await supabase
       .from('roofing_jobs')
-      .select('*, clients(*)')
+      .select('*')
       .eq('portal_token', token)
       .single()
 
-    if (!jobData) {
+    if (portalError || !jobData) {
+      console.error('Portal lookup failed:', portalError)
       setError('Invalid portal link. Please contact your contractor.')
       setLoading(false)
       return
