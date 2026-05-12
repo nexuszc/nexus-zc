@@ -63,7 +63,7 @@ async function readGitHub(path: string): Promise<string> {
   if (res.status === 404) throw new Error(`File not found (404): ${path}`);
   if (!res.ok) throw new Error(`GitHub API error ${res.status}: ${path}`);
   if (!data.content) throw new Error(`No content returned: ${path}`);
-  return atob(data.content.replace(/\n/g, ""));
+  return decodeURIComponent(escape(atob(data.content.replace(/\n/g, ""))));
 }
 
 async function readGitHubFile(path: string): Promise<{ content: string; sha: string }> {
@@ -75,7 +75,7 @@ async function readGitHubFile(path: string): Promise<{ content: string; sha: str
   if (res.status === 404) throw new Error(`File not found (404): ${path}`);
   if (!res.ok) throw new Error(`GitHub API error ${res.status}: ${path}`);
   if (!data.content) throw new Error(`No content returned: ${path}`);
-  return { content: atob(data.content.replace(/\n/g, "")), sha: data.sha };
+  return { content: decodeURIComponent(escape(atob(data.content.replace(/\n/g, "")))), sha: data.sha };
 }
 
 async function writeGitHubMain(path: string, content: string, sha: string, message: string): Promise<string> {
