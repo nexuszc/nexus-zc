@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 12, 2026 -- v9 (encoding restored)
+# Last updated: May 12, 2026 — v8
 
 ---
 
@@ -94,10 +94,10 @@ Then productized and sold to other multi-business operators.
 | Function | Purpose | Trigger |
 |----------|---------|---------|
 | `assess-project` | Run AI assessment on a project | On demand |
-| `auto-fix` | Read code from GitHub -- Claude writes fix -- commit to dev -- notify | Called by health-monitor |
+| `auto-fix` | Read code from GitHub → Claude writes fix → commit to dev → notify | Called by health-monitor |
 | `brain-api` | REST API for brain browser access | GET/POST from nexus-brain.html |
 | `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
-| `chat` | Core brain: classify -- retrieve -- Claude -- respond | POST from Telegram webhook or web |
+| `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
 | `email-webhook` | Inbound email handling | Resend webhook |
 | `generate-queue` | Generate lead call queue | On demand |
@@ -106,14 +106,14 @@ Then productized and sold to other multi-business operators.
 | `health-monitor` | Hourly health check, identify improvements, trigger auto-fix | Every hour cron (job ID 3) |
 | `import-leads` | Bulk import leads from CSV or external source | On demand |
 | `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
-| `nexus-build` | Consolidated builder: manifest -- build -- test -- stage -- notify | On demand (telegram, nexus-core, VPS) |
+| `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
-| `nexus-core` | Consolidated brain: observe, think, act, reflect -- every 30 min | Cron (every 30 min) + VPS + manual |
+| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
 | `process-email-queue` | Batch process email queue | Cron |
 | `provision` | Spin up client subdomain + Claude-generated site | chat provision: command or web UI |
 | `reclassify` | Re-run classification on existing entries | On demand |
 | `refresh-assessments` | Refresh project assessment scores | On demand |
-| `reminders` | Scheduled Telegram reminder delivery | Internal cron |
+| `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
@@ -225,13 +225,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 12, 2026)
 
-1. Fix modify_error recurring failure in self-modification system
-2. Build complete Roofing OS go-to-market system with public landing page
-3. Draft complete operating agreement for Nexus ZC LLC (single member, manager-managed)
-4. Implement comprehensive A-Z task handling and routing system
-5. Add ability usage analytics and performance tracking
-6. Improve client health monitoring and proactive engagement (Brian at 65%)
-7. Develop continuous Roofing OS feature building pipeline
+**DONE this session:**
+- (nothing yet this session)
+
+**NEXT:**
+1. Fix Failing Smoke Tests (simple)
+2. Fix modify_error recurring failure in self-modification system (medium)
+3. Add conversation memory persistence to retain context across sessions (medium)
+4. Build complete Roofing OS go-to-market system with public landing page
+5. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
+6. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+7. Add ability usage analytics and performance tracking (medium)
+8. Develop comprehensive A-Z task handling system for autonomous operations
 
 ---
 
