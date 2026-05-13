@@ -543,6 +543,126 @@ Deno.serve(async (req) => {
   const { diagnostic_id } = body;
   if (!diagnostic_id) return Response.json({ error: "diagnostic_id required" }, { status: 400 });
 
+  // Report regeneration mode — skips layers, just rewrites internal + client reports
+  if (body.regenerate_reports) {
+    const { data: diagnostic } = await supabase.from("nexus_diagnostics").select("*").eq("id", diagnostic_id).single();
+    if (!diagnostic) return Response.json({ error: "Diagnostic not found" }, { status: 404 });
+
+    const { data: layers } = await supabase
+      .from("nexus_diagnostic_layers")
+      .select("layer_number, layer_name, score, findings, gaps, opportunities, raw_data")
+      .eq("diagnostic_id", diagnostic_id)
+      .order("layer_number");
+
+    if (!layers || layers.length === 0) return Response.json({ error: "No layers found — run full diagnostic first" }, { status: 400 });
+
+    // Deduplicate layers (keep highest layer_number occurrence if dupes)
+    const layerMap = new Map<number, typeof layers[0]>();
+    for (const l of layers) layerMap.set(l.layer_number, l);
+    const deduped = Array.from(layerMap.values()).sort((a, b) => a.layer_number - b.layer_number);
+
+    const l19 = deduped.find(l => l.layer_number === 19)?.raw_data as any || {};
+    const l20 = deduped.find(l => l.layer_number === 20)?.raw_data as any || {};
+    const l22 = deduped.find(l => l.layer_number === 22)?.raw_data as any || {};
+    const l24 = deduped.find(l => l.layer_number === 24)?.raw_data as any || {};
+
+    const gapSummary = deduped
+      .filter(l => l.layer_number <= 18 && l.gaps?.length)
+      .flatMap(l => l.gaps.map((g: string) => `[L${l.layer_number} ${l.layer_name}] ${g}`))
+      .join("\n");
+
+    const oppSummary = deduped
+      .filter(l => l.layer_number <= 18 && l.opportunities?.length)
+      .flatMap(l => l.opportunities.map((o: string) => `[L${l.layer_number} ${l.layer_name}] ${o}`))
+      .join("\n");
+
+    // Fire-and-forget: return 200 immediately, run both Claude calls in waitUntil
+    const work = (async () => {
+      try {
+        const internalPrompt = `You are Nexus. Generate a complete INTERNAL sales intelligence report for Zach on this business.
+
+Business: ${diagnostic.business_name}
+URL: ${diagnostic.business_url}
+Industry: ${diagnostic.industry}
+Nexus Score: ${l24?.nexus_score || "?"}/100
+Revenue leakage: $${(l19?.revenue_leakage || 0).toLocaleString()}/year
+Acquisition urgency: ${diagnostic.intake_urgency || "not specified"}
+Owner: ${diagnostic.owner_name || "unknown"}
+
+Layer-by-layer gaps found:
+${gapSummary}
+
+Layer-by-layer opportunities:
+${oppSummary}
+
+Acquisition potential: current ~$${(l22?.currentValue || 0).toLocaleString()}, post-Nexus ~$${(l22?.postNexusValue || 0).toLocaleString()}
+
+Generate the FULL internal report with NO truncation:
+1. executive_summary (3 sentences)
+2. top_10_gaps — each with gap, severity 1-10, revenue_impact, explanation
+3. recommended_package — package_name, price, payment_terms, justification, what_included (array), deliverables_timeline
+4. call_prep_top_3_concerns — concern, why_it_matters, how_to_address
+5. likely_objections — minimum 4 objections with exact word-for-word responses
+6. opening_line — exact first sentence Zach should say on the call
+7. red_flags — deal-killers or caution flags
+
+Respond with valid JSON only. No markdown fences.`;
+
+        const clientPrompt = `You are Nexus. Generate a complete CLIENT-FACING diagnostic report for ${diagnostic.business_name}.
+
+Nexus Score: ${l24?.nexus_score || "?"}/100
+Revenue leakage: $${(l19?.revenue_leakage || 0).toLocaleString()}/year
+Industry: ${diagnostic.industry}
+Report URL: https://nexuszc.com/report/${diagnostic.slug}
+Book a call: ${CALENDLY_LINK}
+
+Top gaps:
+${gapSummary.split("\n").slice(0, 12).join("\n")}
+
+Top opportunities:
+${oppSummary.split("\n").slice(0, 8).join("\n")}
+
+Generate the FULL client report — score, score_context, revenue_leakage, revenue_leakage_context, top_gaps (5 items with title/description/severity/revenue_impact), quick_wins (3 items with title/action/expected_result), roadmap_90_days (week_1_2/week_3_6/week_7_10/week_11_13 each with title/actions/expected_impact, plus total_90_day_impact), nexus_path (recommended_package/price/package_description/benefits/expected_roi/next_step), cta_primary (text/url), disclaimer.
+
+Tone: trusted advisor, not salesy.
+Respond with valid JSON only. No markdown fences.`;
+
+        // Sequential: internal first, then client
+        const internalRaw = await claude(internalPrompt, 4000);
+        const clientRaw = await claude(clientPrompt, 4000);
+
+        let internalParsed: Record<string, unknown>;
+        let clientParsed: Record<string, unknown>;
+        try { internalParsed = JSON.parse(internalRaw.replace(/```json|```/g, "").trim()); }
+        catch { internalParsed = { raw: internalRaw }; }
+        try { clientParsed = JSON.parse(clientRaw.replace(/```json|```/g, "").trim()); }
+        catch { clientParsed = { raw: clientRaw }; }
+
+        await supabase.from("nexus_diagnostics").update({
+          internal_report: internalParsed,
+          client_report: clientParsed,
+          status: "report_ready",
+          updated_at: new Date().toISOString()
+        }).eq("id", diagnostic_id);
+
+        await tg(`✅ *Nexus Report Ready: ${diagnostic.business_name}*\n\nScore: ${l24?.nexus_score || "?"}/100\nRevenue leakage: $${(l19?.revenue_leakage || 0).toLocaleString()}/year\n\nReport: https://nexuszc.com/report/${diagnostic.slug}\n\n_Reply \`send report: ${diagnostic.slug}\` to get the link and password._`);
+      } catch (err) {
+        await supabase.from("nexus_diagnostics").update({ status: "error" }).eq("id", diagnostic_id);
+        await tg(`❌ Report regeneration failed for ${diagnostic.business_name}: ${String(err).slice(0, 200)}`);
+      }
+    })();
+
+    // @ts-ignore — Supabase edge runtime specific
+    if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
+
+    return Response.json({
+      ok: true,
+      diagnostic_id,
+      status: "regenerating",
+      message: "Reports generating in background — Telegram alert when complete (~2 min)"
+    });
+  }
+
   const { data: diagnostic } = await supabase.from("nexus_diagnostics").select("*").eq("id", diagnostic_id).single();
   if (!diagnostic) return Response.json({ error: "Diagnostic not found" }, { status: 404 });
 
@@ -632,7 +752,7 @@ Deno.serve(async (req) => {
       const newAvg = (existingBench.metric_value * existingBench.sample_size + (l24data?.nexus_score || 0)) / (existingBench.sample_size + 1);
       await supabase.from("nexus_benchmarks").update({ metric_value: newAvg, sample_size: existingBench.sample_size + 1, last_updated: new Date().toISOString() }).eq("id", existingBench.id);
     } else {
-      await supabase.from("nexus_benchmarks").insert({ industry, metric_name: "avg_nexus_score", metric_value: l24data?.nexus_score || 0, sample_size: 1 }).catch(() => {});
+      try { await supabase.from("nexus_benchmarks").insert({ industry, metric_name: "avg_nexus_score", metric_value: l24data?.nexus_score || 0, sample_size: 1 }); } catch { /* ignore */ }
     }
 
     // Route the diagnostic
