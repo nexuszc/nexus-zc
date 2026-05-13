@@ -888,6 +888,18 @@ Deno.serve(async (_req) => {
       await checkResilience();
     }
 
+    // Every 12th cycle (~6 hours at 30-min intervals), run roofing product monitor
+    if (cycleNumber % 12 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-product-monitor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SERVICE_KEY}`
+        },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

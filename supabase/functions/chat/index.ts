@@ -2244,6 +2244,161 @@ Be specific. Reference actual numbers.` }],
       return earlyReturn('📧 Sending outreach emails now. Check back in a few minutes.');
     }
 
+    // ── ROOFING IMPROVEMENTS ──────────────────────────────────────────────────────
+    if (msgLower === 'roofing improvements' || msgLower === 'product improvements') {
+      const start = Date.now();
+      try {
+        const { data: improvements } = await supabase
+          .from('roofing_improvements')
+          .select('id, title, category, priority, impact_estimate, status')
+          .eq('status', 'proposed')
+          .order('priority', { ascending: false })
+          .limit(8);
+
+        if (!improvements || improvements.length === 0) {
+          await logUsage(supabase, 'roofing_improvements', true, Date.now() - start, channel);
+          return earlyReturn('✅ No pending Roofing OS improvements. Product is healthy.');
+        }
+
+        const categoryEmoji: Record<string, string> = {
+          bug_fix: '🐛', portal_ux: '🎨', contractor_dashboard: '📊',
+          email_notifications: '📧', payments: '💳', onboarding: '🚀',
+          new_feature: '✨', competitive_response: '⚔️'
+        };
+
+        const reply = `*🏠 Roofing OS Improvement Queue (${improvements.length}):*\n\n` +
+          improvements.map((i: any) =>
+            `${categoryEmoji[i.category] || '💡'} [${i.id.slice(0, 8)}] P${i.priority} — *${i.title}*\n` +
+            `  Impact: ${i.impact_estimate} | Build: \`approve roofing improvement ${i.id.slice(0, 8)}\``
+          ).join('\n\n');
+
+        await logUsage(supabase, 'roofing_improvements', true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, 'roofing_improvements', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ── APPROVE ROOFING IMPROVEMENT ───────────────────────────────────────────────
+    if (msgLower.startsWith('approve roofing improvement')) {
+      const start = Date.now();
+      try {
+        const improvementId = message.split(' ').pop()?.trim();
+
+        const { data: improvements } = await supabase
+          .from('roofing_improvements')
+          .select('*')
+          .or(`id.eq.${improvementId},id.ilike.${improvementId}%`)
+          .eq('status', 'proposed')
+          .limit(1);
+
+        const improvement = improvements?.[0];
+        if (!improvement) {
+          await logUsage(supabase, 'approve_roofing_improvement', false, Date.now() - start, channel);
+          return earlyReturn(`No pending improvement found: ${improvementId}`);
+        }
+
+        await supabase.from('roofing_improvements')
+          .update({ status: 'approved', approved_at: new Date().toISOString() })
+          .eq('id', improvement.id);
+
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-build`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({
+            improvement_id: improvement.id,
+            title: improvement.title,
+            problem: improvement.problem,
+            solution: improvement.proposed_solution,
+            implementation_plan: improvement.implementation_plan,
+            source: 'roofing_improvement'
+          })
+        });
+
+        await logUsage(supabase, 'approve_roofing_improvement', true, Date.now() - start, channel);
+        return earlyReturn(`🔨 Building: *${improvement.title}*\nI'll notify you when it's ready to test.`);
+      } catch (err: any) {
+        await logUsage(supabase, 'approve_roofing_improvement', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ── ROOFING HEALTH ────────────────────────────────────────────────────────────
+    if (msgLower === 'roofing health' || msgLower === 'product health') {
+      const start = Date.now();
+      try {
+        const { data: latest } = await supabase
+          .from('roofing_health_snapshots')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (!latest) {
+          fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-product-monitor`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+            body: JSON.stringify({})
+          });
+          await logUsage(supabase, 'roofing_health', true, Date.now() - start, channel);
+          return earlyReturn('Running product health check now — check back in 30 seconds.');
+        }
+
+        const healthEmoji = latest.product_health_score >= 70 ? '🟢' : latest.product_health_score >= 40 ? '🟡' : '🔴';
+
+        const reply = `*🏠 Roofing OS Health*\n\n` +
+          `${healthEmoji} *Score: ${latest.product_health_score}/100*\n\n` +
+          `*Product:*\n` +
+          `• Contractors: ${latest.total_contractors} active, ${latest.onboarded_contractors} onboarded\n` +
+          `• Jobs: ${latest.total_jobs} total, ${latest.jobs_with_portal_sent} with portal\n` +
+          `• Messages: ${latest.total_homeowner_messages} homeowner messages\n` +
+          `• Documents: ${latest.total_documents_generated} generated\n` +
+          `• Errors (24h): ${latest.portal_errors_24h}\n\n` +
+          `*Sales Pipeline:*\n` +
+          `• Prospects: ${latest.total_prospects}\n` +
+          `• Active outreach: ${latest.active_outreach}\n` +
+          `• Hot leads: ${latest.hot_leads}\n` +
+          `• Closed/won: ${latest.closed_won}`;
+
+        await logUsage(supabase, 'roofing_health', true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, 'roofing_health', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ── COMPETITOR INTEL ──────────────────────────────────────────────────────────
+    if (msgLower === 'competitor intel' || msgLower === 'competitors') {
+      const start = Date.now();
+      try {
+        const { data: intel } = await supabase
+          .from('competitor_intel')
+          .select('competitor_name, feature_found, relevance, already_have_this, found_at')
+          .eq('relevance', 'high')
+          .eq('already_have_this', false)
+          .order('found_at', { ascending: false })
+          .limit(10);
+
+        if (!intel || intel.length === 0) {
+          await logUsage(supabase, 'competitor_intel', true, Date.now() - start, channel);
+          return earlyReturn('No high-relevance competitor intel yet. Run `roofing health` to trigger a check.');
+        }
+
+        const reply = `*⚔️ Competitor Intel (high relevance, we don\'t have):*\n\n` +
+          intel.map((i: any) =>
+            `• *${i.competitor_name}*: ${i.feature_found.slice(0, 100)}`
+          ).join('\n');
+
+        await logUsage(supabase, 'competitor_intel', true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, 'competitor_intel', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
