@@ -47,6 +47,7 @@ export default function RoofingDashboard() {
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [stageFilter, setStageFilter] = useState('active')
+  const [onboardingProgress, setOnboardingProgress] = useState(null)
 
   useEffect(() => {
     if (contractorClientId === undefined) return
@@ -62,8 +63,28 @@ export default function RoofingDashboard() {
         collected: data?.reduce((acc, j) => acc + (j.amount_paid || 0), 0) || 0,
       })
       setLoading(false)
+      if (data && data.length > 0) {
+        const ids = data.map(j => j.id)
+        supabase.from('job_documents').select('*', { count: 'exact', head: true }).in('job_id', ids).then(({ count }) => {
+          setStats(prev => ({ ...prev, docsGenerated: count || 0 }))
+        })
+      }
     })
   }, [contractorClientId])
+
+  useEffect(() => {
+    if (!contractor?.clients) return
+    const c = contractor.clients
+    if (c.onboarding_complete === true) return
+    const steps = [
+      { label: 'Phone number', done: !!c.phone },
+      { label: 'Service area', done: !!c.service_area },
+      { label: 'Notification email', done: !!c.notification_email },
+      { label: 'Brand color / tagline', done: !!(c.company_tagline || c.primary_color) },
+      { label: 'Onboarding complete', done: !!c.onboarding_complete },
+    ]
+    setOnboardingProgress(steps)
+  }, [contractor])
 
   const stageCounts = jobs.reduce((acc, j) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc }, {})
 
@@ -75,6 +96,26 @@ export default function RoofingDashboard() {
 
   return (
     <div className="animate-fade-in">
+      {onboardingProgress && (
+        <div className="mx-6 lg:mx-10 mt-6 bg-amber-900/20 border border-amber-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-400 text-sm font-semibold mb-1.5">
+              Setup incomplete — {onboardingProgress.filter(s => s.done).length} of {onboardingProgress.length} steps done
+            </p>
+            <div className="flex gap-1.5 flex-wrap">
+              {onboardingProgress.map(s => (
+                <span key={s.label} className={`text-xs px-2 py-0.5 rounded-full ${s.done ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-500'}`}>
+                  {s.done ? '✓' : '○'} {s.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <Link to="/roofing/onboarding"
+            className="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+            Finish Setup →
+          </Link>
+        </div>
+      )}
       {/* Header — orange branded, full width */}
       <div className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-600/[0.06] via-transparent to-transparent pointer-events-none" />
@@ -98,17 +139,18 @@ export default function RoofingDashboard() {
 
           {/* KPI row */}
           {loading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
               {[
                 { value: stats.total, label: 'Total Jobs', gradient: 'from-white to-orange-300' },
                 { value: stats.active, label: 'Active', gradient: 'from-white to-orange-200' },
                 { value: `$${(stats.revenue||0).toLocaleString()}`, label: 'Contract Value', gradient: 'from-white to-amber-300' },
                 { value: `$${(stats.collected||0).toLocaleString()}`, label: 'Collected', gradient: 'from-white to-emerald-300',
                   sub: stats.revenue > 0 ? `${Math.round((stats.collected/stats.revenue)*100)}% of contract` : null },
+                { value: stats.docsGenerated ?? '—', label: 'Docs Generated', gradient: 'from-white to-blue-300' },
               ].map((kpi, i) => (
                 <div key={i}>
                   <div className={`text-[38px] font-black leading-none tracking-tight tabular-nums bg-gradient-to-br ${kpi.gradient} bg-clip-text text-transparent`}>

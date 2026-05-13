@@ -23,6 +23,9 @@ export default function RoofingJobDetail() {
   const [loading, setLoading] = useState(true)
   const [sentPortal, setSentPortal] = useState(false)
   const [claimForm, setClaimForm] = useState({})
+  const [showMsgModal, setShowMsgModal] = useState(false)
+  const [templates, setTemplates] = useState([])
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
 
   const load = async () => {
     const [{ data: j }, { data: t }, { data: m }, { data: d }, { data: p }, { data: ca }] = await Promise.all([
@@ -54,7 +57,10 @@ export default function RoofingJobDetail() {
     setCrewMembers(data || [])
   }
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => {
+    load()
+    supabase.from('message_templates').select('*').order('category').then(({ data }) => setTemplates(data || []))
+  }, [id])
   useEffect(() => { loadCrewMembers() }, [contractorClientId])
 
   const updateStatus = async (status) => {
@@ -161,8 +167,15 @@ export default function RoofingJobDetail() {
           <h2 className="text-2xl font-bold text-white">{job.homeowner_name}</h2>
           <p className="text-gray-400 mt-1">{job.property_address}</p>
           <p className="text-gray-500 text-sm mt-0.5">{job.job_type?.replace(/_/g, ' ')} · {job.clients?.name}</p>
+          {job.portal_last_viewed_at && (Date.now() - new Date(job.portal_last_viewed_at).getTime()) < 86400000 && (
+            <span className="text-xs bg-green-900/40 text-green-400 px-2 py-0.5 rounded-full">Portal viewed recently</span>
+          )}
         </div>
         <div className="flex gap-2 shrink-0">
+          <button onClick={() => setShowMsgModal(true)}
+            className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-3 py-2 text-sm transition-colors">
+            ✉️ Message
+          </button>
           <button onClick={copyPortalLink}
             className="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-3 py-2 text-sm transition-colors">
             📋 Copy
@@ -220,8 +233,11 @@ export default function RoofingJobDetail() {
           </div>
 
           {/* AI document generation */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <p className="text-xs text-gray-400 font-semibold uppercase mb-3">Generate Documents</p>
+          <div className={`bg-gray-900 rounded-xl p-4 transition-all ${docs.length === 0 ? 'border border-orange-600/50 ring-1 ring-orange-600/20' : 'border border-gray-800'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-400 font-semibold uppercase">Generate Documents</p>
+              {docs.length === 0 && <span className="text-xs text-orange-400 animate-pulse">← Start here</span>}
+            </div>
             <div className="flex gap-2 flex-wrap">
               {[
                 { action: 'generate_estimate', label: '📋 Estimate' },
@@ -425,6 +441,54 @@ export default function RoofingJobDetail() {
               No crew members in roster. <a href="/roofing/crew" className="text-blue-400">Add crew →</a>
             </p>
           )}
+        </div>
+      )}
+
+      {showMsgModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 p-4" onClick={() => setShowMsgModal(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-5 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-white font-semibold">Message {job.homeowner_name}</p>
+              <button onClick={() => setShowMsgModal(false)} className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+            </div>
+            {templates.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-gray-500 mb-2 uppercase font-semibold tracking-wider">Quick templates</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {templates.map(t => (
+                    <button key={t.id} onClick={() => {
+                      const filled = t.body
+                        .replace(/{homeowner_name}/g, job.homeowner_name || '')
+                        .replace(/{company_name}/g, job.clients?.name || 'our company')
+                      setNewMessage(filled)
+                      setSelectedTemplate(t.id)
+                    }}
+                      className={`px-2.5 py-1 rounded-lg text-xs transition-colors ${selectedTemplate === t.id ? 'bg-orange-600/30 text-orange-300 ring-1 ring-orange-600/40' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <textarea
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              rows={4}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm outline-none focus:border-orange-500 resize-none"
+              placeholder="Type a message to the homeowner..."
+            />
+            <div className="flex gap-2 mt-3">
+              <button onClick={() => { setShowMsgModal(false); setSelectedTemplate(null) }}
+                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white rounded-xl py-2.5 text-sm transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => { sendMessage(); setShowMsgModal(false); setSelectedTemplate(null) }}
+                disabled={!newMessage.trim()}
+                className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold transition-colors">
+                Send Message
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
