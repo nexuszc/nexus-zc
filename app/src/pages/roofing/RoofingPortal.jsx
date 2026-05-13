@@ -103,6 +103,7 @@ export default function RoofingPortal() {
   useEffect(() => { loadPortal() }, [token])
 
   const loadPortal = async () => {
+    console.log('ANON_KEY prefix:', (import.meta.env.VITE_SUPABASE_ANON_KEY || '').slice(0, 20))
     const portalRes = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/roofing_jobs?portal_token=eq.${token}&select=*`,
       {
