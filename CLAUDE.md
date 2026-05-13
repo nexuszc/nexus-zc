@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 12, 2026 — v8
+# Last updated: May 13, 2026 — v8
 
 ---
 
@@ -115,12 +115,12 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
-| `roofing-closer` | Handles inbound email replies: classifies intent, responds autonomously, alerts Zach on hot leads | Resend email webhook via email-webhook |
+| `roofing-closer` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
-| `roofing-outreach` | 16-touch email sequence over 90 days, Claude-generated per prospect, sends from roofing@nexuszc.com | Cron every 4h (roofing-outreach-4h) |
+| `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
-| `roofing-product-monitor` | Autonomous product manager: observes usage/errors, scans 5 competitors weekly, proposes improvements via AI | Daily cron 18:00 UTC + nexus-core every 6h |
-| `roofing-prospector` | Finds roofing contractors via Serper (Denver metro + hail zones), scores leads 1-100, saves to roofing_prospects | Daily cron 14:00 UTC (roofing-prospector-daily) |
+| `roofing-product-monitor` | See function source for details | Internal |
+| `roofing-prospector` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
@@ -239,19 +239,17 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 12, 2026)
 
 **DONE this session:**
-- ✅ Homeowner portal fixed (RLS, Cloudflare env vars, all Supabase calls converted to direct fetch)
-- ✅ Roofing OS GTM autonomous sales machine (roofing-prospector, roofing-outreach, roofing-closer, landing page, 16-touch sequence, cron jobs, Telegram commands)
-- ✅ Roofing OS autonomous product manager (roofing-product-monitor, competitor intel, improvement queue, health dashboard)
+- (nothing yet this session)
 
 **NEXT:**
-1. Fix modify_error recurring failure in self-modification system
-2. Add conversation memory persistence
-3. Add ability usage analytics and performance tracking
-4. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
-5. Improve client health scores for Brian (65%) and proactive engagement
-6. Wire Resend to send from roofing@nexuszc.com (DNS records needed)
-7. Connect roofingos.dev domain in Cloudflare Pages → roofingos-landing/ directory
-8. Add STRIPE_PAYMENT_LINK secret once Stripe product is created
+1. Fix Failing Smoke Tests (simple)
+2. Fix modify_error recurring failure in self-modification system (medium)
+3. Add conversation memory persistence (medium)
+4. Draft complete operating agreement for Nexus ZC LLC — single member LLC
+5. Build complete Roofing OS go-to-market system with public landing page
+6. Add ability usage analytics and performance tracking (medium)
+7. Address Denver Pro Roofing client health (50) - investigate and improve
+8. Address Brian client health (65) - check status and follow up
 
 ---
 
