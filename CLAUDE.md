@@ -242,14 +242,14 @@ Then productized and sold to other multi-business operators.
 - (nothing yet this session)
 
 **NEXT:**
-1. Fix Failing Smoke Tests (simple)
-2. Fix modify_error recurring failure in self-modification system (medium)
-3. Add conversation memory persistence (medium)
-4. Draft complete operating agreement for Nexus ZC LLC — single member LLC
-5. Build complete Roofing OS go-to-market system with public landing page
-6. Add ability usage analytics and performance tracking (medium)
+1. Fix Failing Smoke Tests
+2. Fix modify_error recurring failure in self-modification system
+3. Add conversation memory persistence
+4. Add ability usage analytics and performance tracking
+5. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
+6. Build complete Roofing OS go-to-market system with public landing page
 7. Address Denver Pro Roofing client health (50) - investigate and improve
-8. Address Brian client health (65) - check status and follow up
+8. Address Brian client health (65) - investigate and improve
 
 ---
 
