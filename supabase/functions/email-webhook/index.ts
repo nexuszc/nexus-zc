@@ -236,6 +236,28 @@ async function handleWebhook(
         }
       }
     }
+
+    // Route roofing replies to roofing-closer
+    const toField = data.to as string | null;
+    const subjectField = data.subject as string | null;
+    const fromEmail = senderEmail;
+    const fromNameMatch = fromField.match(/^([^<]+)</) ?? null;
+    const fromName = fromNameMatch?.[1]?.trim() ?? null;
+    const textBody = data.text as string | null;
+    const htmlBody = data.html as string | null;
+    if (toField?.includes('roofingos.dev') || subjectField?.toLowerCase().includes('roofing')) {
+      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-closer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({
+          from_email: fromEmail,
+          from_name: fromName,
+          subject: subjectField,
+          body: textBody || htmlBody
+        })
+      });
+    }
+
     return ok({ received: true });
   }
 

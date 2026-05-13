@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roofing OS — The Homeowner Portal for Roofing Contractors</title>
+  <meta name="description" content="Give your homeowners a branded project portal with real-time updates, photos, documents, and messaging. $499/month. Set up in 30 minutes.">
+  <meta property="og:title" content="Roofing OS — Homeowner Portal for Roofers">
+  <meta property="og:description" content="Win more jobs. Get 5-star reviews. Give homeowners a portal they'll rave about.">
+  <meta property="og:url" content="https://roofingos.dev">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0f; color: #ffffff; line-height: 1.6; }
+    nav { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .logo { font-size: 20px; font-weight: 800; color: #f97316; }
+    .nav-cta { background: #f97316; color: white; padding: 10px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .hero { max-width: 900px; margin: 0 auto; padding: 100px 40px 60px; text-align: center; }
+    .hero-badge { display: inline-block; background: rgba(249,115,22,0.15); color: #f97316; padding: 6px 16px; border-radius: 100px; font-size: 13px; font-weight: 600; margin-bottom: 24px; border: 1px solid rgba(249,115,22,0.3); }
+    .hero h1 { font-size: clamp(36px, 5vw, 64px); font-weight: 900; line-height: 1.1; margin-bottom: 24px; letter-spacing: -1px; }
+    .hero h1 span { color: #f97316; }
+    .hero p { font-size: 20px; color: rgba(255,255,255,0.6); max-width: 600px; margin: 0 auto 48px; }
+    .demo-section { max-width: 900px; margin: 0 auto; padding: 0 40px 80px; }
+    .demo-label { text-align: center; font-size: 13px; color: rgba(255,255,255,0.4); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .demo-frame { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 40px 80px rgba(0,0,0,0.5); }
+    .demo-frame iframe { width: 100%; height: 600px; border: none; background: #0f0f18; }
+    .features { max-width: 900px; margin: 0 auto; padding: 60px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 32px; }
+    .feature { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 32px; }
+    .feature-icon { font-size: 32px; margin-bottom: 16px; }
+    .feature h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .feature p { color: rgba(255,255,255,0.5); font-size: 15px; }
+    .pricing { max-width: 500px; margin: 0 auto; padding: 60px 40px; text-align: center; }
+    .price-card { background: rgba(249,115,22,0.08); border: 1px solid rgba(249,115,22,0.3); border-radius: 24px; padding: 48px; }
+    .price-amount { font-size: 64px; font-weight: 900; color: #f97316; line-height: 1; }
+    .price-period { color: rgba(255,255,255,0.4); font-size: 18px; margin-bottom: 32px; }
+    .price-features { text-align: left; margin: 32px 0; }
+    .price-feature { display: flex; align-items: center; gap: 12px; padding: 8px 0; color: rgba(255,255,255,0.8); font-size: 16px; }
+    .price-feature::before { content: "✓"; color: #f97316; font-weight: 700; }
+    .capture-section { max-width: 600px; margin: 0 auto; padding: 60px 40px 100px; text-align: center; }
+    .capture-section h2 { font-size: 36px; font-weight: 800; margin-bottom: 12px; }
+    .capture-section p { color: rgba(255,255,255,0.5); margin-bottom: 40px; }
+    .capture-form { display: flex; flex-direction: column; gap: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .capture-form input { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 16px 20px; color: white; font-size: 16px; outline: none; transition: border-color 0.2s; }
+    .capture-form input:focus { border-color: #f97316; }
+    .capture-form input::placeholder { color: rgba(255,255,255,0.3); }
+    .submit-btn { background: #f97316; color: white; border: none; border-radius: 12px; padding: 18px; font-size: 18px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+    .submit-btn:hover { background: #ea6c0a; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .success-msg { display: none; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 24px; color: #10b981; font-size: 18px; font-weight: 600; }
+    footer { border-top: 1px solid rgba(255,255,255,0.06); padding: 40px; text-align: center; color: rgba(255,255,255,0.3); font-size: 14px; }
+    footer a { color: rgba(255,255,255,0.4); text-decoration: none; }
+    @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } nav { padding: 16px 20px; } .hero { padding: 60px 20px 40px; } }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="logo">🏠 Roofing OS</div>
+    <a href="#get-started" class="nav-cta">Get Started</a>
+  </nav>
+  <section class="hero">
+    <div class="hero-badge">Built for roofing contractors</div>
+    <h1>Give homeowners a portal they'll <span>rave about</span></h1>
+    <p>Real-time job updates, photos, documents, and messaging — all under your brand. Win more referrals. Get 5-star reviews.</p>
+    <a href="#get-started" class="nav-cta" style="font-size:18px;padding:16px 40px;display:inline-block;">Try it free for 2 weeks →</a>
+  </section>
+  <section class="demo-section">
+    <p class="demo-label">Live homeowner portal demo</p>
+    <div class="demo-frame">
+      <iframe src="https://app.nexuszc.com/roofing/portal/64afb2c5c1eacfd790a899493b23b867ce8ef8a277d31ee8" title="Roofing OS homeowner portal demo" loading="lazy"></iframe>
+    </div>
+  </section>
+  <section class="features">
+    <div class="feature"><div class="feature-icon">📍</div><h3>Real-time job timeline</h3><p>Homeowners see exactly where their job stands — no more "where's my roofer?" calls.</p></div>
+    <div class="feature"><div class="feature-icon">📸</div><h3>Photo updates</h3><p>Upload job site photos. Homeowners see progress. They share it with their neighbors.</p></div>
+    <div class="feature"><div class="feature-icon">💬</div><h3>Two-way messaging</h3><p>Homeowners message you directly through the portal. You reply when it's convenient.</p></div>
+    <div class="feature"><div class="feature-icon">📄</div><h3>Documents &amp; estimates</h3><p>Estimates, contracts, and invoices live in the portal. Always accessible. Always professional.</p></div>
+    <div class="feature"><div class="feature-icon">🎨</div><h3>Your brand, not ours</h3><p>Homeowners see your company name, your colors, your logo. Roofing OS is invisible.</p></div>
+    <div class="feature"><div class="feature-icon">⚡</div><h3>Set up in 30 minutes</h3><p>Add your first job, send the portal link. That's it. No training. No IT required.</p></div>
+  </section>
+  <section class="pricing">
+    <div class="price-card">
+      <div class="price-amount">$499</div>
+      <div class="price-period">/month</div>
+      <div class="price-features">
+        <div class="price-feature">Unlimited jobs</div>
+        <div class="price-feature">Unlimited homeowner portals</div>
+        <div class="price-feature">Photo uploads</div>
+        <div class="price-feature">Two-way messaging</div>
+        <div class="price-feature">AI-generated estimates &amp; contracts</div>
+        <div class="price-feature">Your brand on everything</div>
+        <div class="price-feature">Cancel anytime</div>
+      </div>
+      <a href="#get-started" class="submit-btn" style="display:block;text-decoration:none;margin-top:8px;">Start free trial →</a>
+    </div>
+  </section>
+  <section class="capture-section" id="get-started">
+    <h2>Start your free trial</h2>
+    <p>2 weeks free. No credit card. We'll send you a link to try it on your next job.</p>
+    <form class="capture-form" id="captureForm">
+      <div class="form-row">
+        <input type="text" id="name" placeholder="Your name" required>
+        <input type="text" id="company" placeholder="Company name" required>
+      </div>
+      <div class="form-row">
+        <input type="email" id="email" placeholder="Email address" required>
+        <input type="text" id="city" placeholder="City, State">
+      </div>
+      <button type="submit" class="submit-btn" id="submitBtn">Send me the trial link →</button>
+    </form>
+    <div class="success-msg" id="successMsg">✓ Check your email — your trial link is on the way!</div>
+  </section>
+  <footer>
+    <p>© 2026 Roofing OS · <a href="mailto:zach@roofingos.dev">zach@roofingos.dev</a> · <a href="/privacy">Privacy</a></p>
+  </footer>
+  <script>
+    const SUPABASE_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
+
+    document.getElementById('captureForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      const data = {
+        name: document.getElementById('name').value,
+        company: document.getElementById('company').value,
+        email: document.getElementById('email').value,
+        city: document.getElementById('city').value
+      };
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/roofing_captures`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(data)
+        });
+        document.getElementById('captureForm').style.display = 'none';
+        document.getElementById('successMsg').style.display = 'block';
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Send me the trial link →';
+        alert('Something went wrong. Email us at zach@roofingos.dev');
+      }
+    });
+  </script>
+</body>
+</html>

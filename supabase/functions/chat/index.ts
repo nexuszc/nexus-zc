@@ -2189,6 +2189,61 @@ Be specific. Reference actual numbers.` }],
     }
 
 
+    // ── ROOFING PIPELINE ─────────────────────────────────────────────────────────
+    if (msgLower === 'roofing pipeline' || msgLower === 'roofing sales') {
+      const start = Date.now();
+      try {
+        const { data: prospects } = await supabase
+          .from('roofing_prospects')
+          .select('status, lead_score, company_name')
+          .order('lead_score', { ascending: false })
+          .limit(50);
+
+        const byStatus = prospects?.reduce((acc: Record<string, number>, p: {status: string}) => {
+          acc[p.status] = (acc[p.status] || 0) + 1;
+          return acc;
+        }, {}) || {};
+
+        const hot = prospects?.filter((p: {status: string}) => p.status === 'hot') || [];
+
+        const reply = `*🏠 Roofing OS Pipeline*\n\n` +
+          `*Status breakdown:*\n` +
+          Object.entries(byStatus).map(([s, c]) => `• ${s}: ${c}`).join('\n') +
+          (hot.length > 0 ? `\n\n*🔥 Hot leads:*\n${hot.slice(0, 5).map((p: {company_name: string}) => `• ${p.company_name}`).join('\n')}` : '') +
+          `\n\n_Reply \`roofing prospect now\` to run prospector immediately._`;
+
+        await logUsage(supabase, 'roofing_pipeline', true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, 'roofing_pipeline', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ── ROOFING PROSPECT NOW ──────────────────────────────────────────────────────
+    if (msgLower === 'roofing prospect now' || msgLower === 'find roofers') {
+      const start = Date.now();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-prospector`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({})
+      });
+      await logUsage(supabase, 'roofing_prospect_now', true, Date.now() - start, channel);
+      return earlyReturn('🔍 Prospector running — finding roofers now. I\'ll report back in a few minutes.');
+    }
+
+    // ── ROOFING OUTREACH NOW ──────────────────────────────────────────────────────
+    if (msgLower === 'roofing outreach now' || msgLower === 'send roofing emails') {
+      const start = Date.now();
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-outreach`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({})
+      });
+      await logUsage(supabase, 'roofing_outreach_now', true, Date.now() - start, channel);
+      return earlyReturn('📧 Sending outreach emails now. Check back in a few minutes.');
+    }
+
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================

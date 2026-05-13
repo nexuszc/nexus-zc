@@ -1,0 +1,189 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY")!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+async function searchRoofers(query: string): Promise<Array<{
+  title: string; link: string; snippet: string;
+}>> {
+  const res = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: { "X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ q: query, num: 10, gl: "us", hl: "en" })
+  });
+  const data = await res.json();
+  return data.organic || [];
+}
+
+async function checkHailZones(): Promise<string[]> {
+  const results = await searchRoofers("hail storm damage roofing 2026 site:weather.com OR site:noaa.gov OR site:hailstrike.com");
+  const cities: string[] = [];
+  const cityPattern = /\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?),?\s*([A-Z]{2})\b/g;
+  for (const result of results) {
+    const matches = (result.snippet + result.title).matchAll(cityPattern);
+    for (const match of matches) {
+      cities.push(`${match[1]}, ${match[2]}`);
+    }
+  }
+  return [...new Set(cities)].slice(0, 5);
+}
+
+async function extractLeadInfo(result: { title: string; link: string; snippet: string }): Promise<{
+  company_name: string;
+  website: string;
+  email: string | null;
+  phone: string | null;
+  city: string;
+} | null> {
+  const phoneMatch = result.snippet.match(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/);
+  const phone = phoneMatch ? phoneMatch[0] : null;
+  const emailMatch = result.snippet.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const email = emailMatch ? emailMatch[0] : null;
+  const company_name = result.title
+    .replace(/\s*[-|–]\s*.+$/, '')
+    .replace(/\s*\|\s*.+$/, '')
+    .trim();
+  return { company_name, website: result.link, email, phone, city: 'Denver' };
+}
+
+async function scoreLead(lead: { company_name: string; website: string; snippet: string }): Promise<{
+  score: number;
+  reasoning: string;
+  hook_1: string;
+  hook_2: string;
+  crew_size: string;
+  tech_sophistication: string;
+}> {
+  const prompt = `You are scoring a roofing contractor as a sales prospect for Roofing OS — a $499/month software that gives their homeowners a branded project portal with timeline, photos, documents, and messaging.
+
+Company: ${lead.company_name}
+Website: ${lead.website}
+Description: ${lead.snippet}
+
+Score this prospect 1-100 for likelihood to buy. Higher score = more likely.
+
+Factors that increase score:
+- Small to medium size (2-8 crews)
+- No mention of existing software/portal/app
+- Active in residential roofing
+- Local/independent (not a franchise)
+- Storm damage/insurance work (more jobs = more need for organization)
+
+Factors that decrease score:
+- Large franchise (they have their own software)
+- Commercial only
+- Very new company (no budget)
+- Already has digital tools mentioned
+
+Respond with JSON only (no backticks):
+{
+  "score": 75,
+  "reasoning": "brief reason",
+  "hook_1": "personalized opening hook about their specific situation",
+  "hook_2": "second angle specific to them",
+  "crew_size": "small|medium|large",
+  "tech_sophistication": "low|medium|high"
+}`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 300,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const data = await res.json();
+  try {
+    return JSON.parse(data.content[0].text.replace(/```json|```/g, "").trim());
+  } catch {
+    return { score: 50, reasoning: "Could not parse", hook_1: "", hook_2: "", crew_size: "medium", tech_sophistication: "low" };
+  }
+}
+
+Deno.serve(async (_req) => {
+  const newProspects: string[] = [];
+
+  const denverQueries = [
+    "roofing contractor Denver CO residential reviews",
+    "roofing company Aurora Colorado insurance claims",
+    "roof repair Lakewood CO small business",
+    "roofer Englewood Colorado residential",
+    "roofing contractor Centennial CO"
+  ];
+
+  const hailCities = await checkHailZones();
+  const hailQueries = hailCities.map(city => `roofing contractor ${city} hail damage repair`);
+  const allQueries = [...denverQueries, ...hailQueries];
+
+  for (const query of allQueries) {
+    const results = await searchRoofers(query);
+    for (const result of results) {
+      const leadInfo = await extractLeadInfo(result);
+      if (!leadInfo) continue;
+      if (!leadInfo.email && !leadInfo.phone) continue;
+
+      const { data: existing } = await supabase
+        .from("roofing_prospects")
+        .select("id")
+        .or(`website.eq.${leadInfo.website},company_name.ilike.${leadInfo.company_name}`)
+        .maybeSingle();
+
+      if (existing) continue;
+
+      const score = await scoreLead({
+        company_name: leadInfo.company_name,
+        website: leadInfo.website,
+        snippet: result.snippet
+      });
+
+      if (score.score < 40) continue;
+
+      const isHailZone = hailCities.some(city => query.includes(city.split(',')[0]));
+
+      await supabase.from("roofing_prospects").insert({
+        company_name: leadInfo.company_name,
+        email: leadInfo.email,
+        phone: leadInfo.phone,
+        website: leadInfo.website,
+        city: leadInfo.city,
+        source: isHailZone ? "hail_zone" : "serper",
+        lead_score: score.score,
+        score_reasoning: score.reasoning,
+        hook_1: score.hook_1,
+        hook_2: score.hook_2,
+        crew_size_estimate: score.crew_size,
+        tech_sophistication: score.tech_sophistication,
+        status: "researched",
+        next_touch_at: new Date().toISOString()
+      });
+
+      newProspects.push(leadInfo.company_name);
+    }
+  }
+
+  if (newProspects.length > 0) {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: `🏠 *Roofing OS Prospector*\n\nFound ${newProspects.length} new prospects:\n${newProspects.slice(0, 10).map(n => `• ${n}`).join('\n')}\n\n_Starting outreach automatically._`,
+        parse_mode: "Markdown"
+      })
+    });
+  }
+
+  return Response.json({ ok: true, new_prospects: newProspects.length });
+});
