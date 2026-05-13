@@ -127,24 +127,41 @@ export default function RoofingPortal() {
     setJob(jobData)
     setContractor(jobData.clients)
 
-    const [{ data: t }, { data: p }, { data: m }, { data: d }] = await Promise.all([
-      supabase.from('job_timeline').select('*').eq('job_id', jobData.id).order('created_at'),
-      supabase.from('job_photos').select('*').eq('job_id', jobData.id).order('created_at'),
-      supabase.from('job_messages').select('*').eq('job_id', jobData.id).order('created_at'),
-      supabase.from('job_documents').select('doc_type, title, content, signed').eq('job_id', jobData.id),
+    const sbUrl = import.meta.env.VITE_SUPABASE_URL
+    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    const sbHeaders = { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
+    const jid = jobData.id
+
+    const [tRes, pRes, mRes, dRes] = await Promise.all([
+      fetch(`${sbUrl}/rest/v1/job_timeline?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
+      fetch(`${sbUrl}/rest/v1/job_photos?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
+      fetch(`${sbUrl}/rest/v1/job_messages?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
+      fetch(`${sbUrl}/rest/v1/job_documents?job_id=eq.${jid}&select=doc_type,title,content,signed`, { headers: sbHeaders }),
     ])
 
-    setTimeline(t || [])
-    setPhotos(p || [])
-    setMessages(m || [])
-    setDocs(d || [])
+    const [t, p, m, d] = await Promise.all([tRes.json(), pRes.json(), mRes.json(), dRes.json()])
+
+    setTimeline(Array.isArray(t) ? t : [])
+    setPhotos(Array.isArray(p) ? p : [])
+    setMessages(Array.isArray(m) ? m : [])
+    setDocs(Array.isArray(d) ? d : [])
     setLoading(false)
   }
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return
     const msg = newMessage
-    await supabase.from('job_messages').insert({ job_id: job.id, sender: 'homeowner', message: msg })
+    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/job_messages`, {
+      method: 'POST',
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({ job_id: job.id, sender: 'homeowner', message: msg }),
+    })
     setNewMessage('')
     // Notify contractor via SMS/email
     fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
