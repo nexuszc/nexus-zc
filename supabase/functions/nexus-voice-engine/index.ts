@@ -4,7 +4,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RETELL_API_KEY = Deno.env.get("RETELL_API_KEY")!;
 const RETELL_AGENT_ID = Deno.env.get("RETELL_AGENT_ID") || "";
-const FROM_NUMBER = Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+const FROM_NUMBER = Deno.env.get("RETELL_PHONE_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
