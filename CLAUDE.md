@@ -247,9 +247,9 @@ Then productized and sold to other multi-business operators.
 3. Add Structured Self-Reflection Capability (medium)
 4. Add ability usage analytics and performance tracking (medium)
 5. Add conversation memory persistence (medium)
-6. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
-7. Build complete Roofing OS go-to-market system with public landing page
-8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
+6. Build the complete Roofing OS go-to-market system
+7. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
+8. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
