@@ -103,14 +103,21 @@ export default function RoofingPortal() {
   useEffect(() => { loadPortal() }, [token])
 
   const loadPortal = async () => {
-    const { data: jobData, error: portalError } = await supabase
-      .from('roofing_jobs')
-      .select('*')
-      .eq('portal_token', token)
-      .single()
+    const portalRes = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/roofing_jobs?portal_token=eq.${token}&select=*`,
+      {
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+      }
+    )
+    const portalRows = await portalRes.json()
+    console.log('Portal fetch status:', portalRes.status, portalRows)
+    const jobData = Array.isArray(portalRows) ? portalRows[0] : null
 
-    if (portalError || !jobData) {
-      console.error('Portal lookup failed:', portalError)
+    if (!portalRes.ok || !jobData) {
+      console.error('Portal lookup failed:', portalRes.status, portalRows)
       setError('Invalid portal link. Please contact your contractor.')
       setLoading(false)
       return
