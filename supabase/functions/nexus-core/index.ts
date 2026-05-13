@@ -979,6 +979,57 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // VOICE CALL SEQUENCER — every cycle, advance Starter tier lead call schedule
+    {
+      const { data: voicePref } = await supabase
+        .from("nexus_preferences")
+        .select("value")
+        .eq("key", "voice_paused")
+        .maybeSingle();
+      const voicePaused = voicePref?.value === "true";
+
+      if (!voicePaused) {
+        const { data: starterLeads } = await supabase
+          .from("nexus_diagnostics")
+          .select("id, business_name, owner_phone, voice_calls(*)")
+          .eq("recommended_model", "custom_starter")
+          .in("status", ["report_sent", "follow_up", "report_ready", "hot"])
+          .not("owner_phone", "is", null);
+
+        for (const lead of starterLeads || []) {
+          const calls = (lead as any).voice_calls || [];
+          if (calls.length >= 4) continue;
+
+          const lastCall = (calls as any[])
+            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+          const daysSinceLastCall = lastCall
+            ? (Date.now() - new Date(lastCall.created_at).getTime()) / (1000 * 60 * 60 * 24)
+            : 999;
+
+          // Call schedule: Day 1, 3, 7, 10
+          const callSchedule = [1, 3, 7, 10];
+          const nextCallDay = callSchedule[calls.length];
+
+          if (nextCallDay && daysSinceLastCall >= nextCallDay) {
+            fetch(`${SUPABASE_URL}/functions/v1/nexus-voice-engine`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ diagnostic_id: (lead as any).id, call_number: calls.length + 1 })
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    // VOICE LEARNING — every 336 cycles (~7 days at 30-min intervals)
+    if (cycleNumber % 336 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/nexus-voice-learning`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

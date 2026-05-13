@@ -2493,19 +2493,29 @@ Be specific. Reference actual numbers.` }],
     if (msgLower.startsWith("call:")) {
       const start = Date.now();
       try {
-        const diagnosticId = message.slice(5).trim();
-        if (!diagnosticId) return earlyReturn("Format: `call: [diagnostic_id]`");
-        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-voice`, {
+        const target = message.slice(5).trim();
+        if (!target) return earlyReturn("Format: `call: [business name or slug]`");
+        const { data: diagnostics } = await supabase
+          .from("nexus_diagnostics")
+          .select("id, business_name, owner_phone, nexus_score")
+          .or(`slug.ilike.%${target}%,business_name.ilike.%${target}%`)
+          .not("owner_phone", "is", null)
+          .limit(1);
+        const diagnostic = diagnostics?.[0];
+        if (!diagnostic) return earlyReturn(`No diagnostic with phone found for: ${target}`);
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-voice-engine`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-          body: JSON.stringify({ diagnostic_id: diagnosticId })
-        });
-        const data = await res.json();
-        await logUsage(supabase, 'nexus_call', true, Date.now() - start, channel);
-        if (data.skipped) return earlyReturn(`Call skipped: ${data.reason}`);
-        return earlyReturn(`📞 Call initiated (ID: ${data.call_id || 'pending'})\nI'll send transcript summary when it completes.`);
+          body: JSON.stringify({ diagnostic_id: diagnostic.id })
+        }).catch(() => {});
+        await logUsage(supabase, 'voice_call_manual', true, Date.now() - start, channel);
+        return earlyReturn(
+          `📞 *Initiating call to ${diagnostic.business_name}*\n` +
+          `Score: ${diagnostic.nexus_score}/100\n` +
+          `Watch Telegram for the call outcome.`
+        );
       } catch (err: any) {
-        await logUsage(supabase, 'nexus_call', false, Date.now() - start, channel);
+        await logUsage(supabase, 'voice_call_manual', false, Date.now() - start, channel);
         return earlyReturn(` -  Failed: ${err.message}`);
       }
     }
@@ -2658,6 +2668,171 @@ Be specific. Reference actual numbers.` }],
         return earlyReturn(`✅ Unsubscribed ${email} from all Nexus communications.`);
       } catch (err: any) {
         await logUsage(supabase, 'unsubscribe', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
+    // VOICE ENGINE COMMANDS
+    // ================================================================
+
+    if (msgLower === "voice stats" || msgLower === "voice metrics") {
+      const start = Date.now();
+      try {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: calls } = await supabase
+          .from("voice_calls")
+          .select("outcome, answered, revenue_generated")
+          .gt("created_at", sevenDaysAgo);
+        if (!calls?.length) {
+          await logUsage(supabase, "voice_stats", true, Date.now() - start, channel);
+          return earlyReturn("No calls made in the last 7 days.");
+        }
+        const answered = calls.filter((c: any) => c.answered).length;
+        const booked = calls.filter((c: any) => c.outcome === "booked").length;
+        const paid = calls.filter((c: any) => c.outcome === "paid").length;
+        const revenue = calls.reduce((s: number, c: any) => s + (c.revenue_generated || 0), 0);
+        await logUsage(supabase, "voice_stats", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📞 *Voice Stats — Last 7 Days*\n\n` +
+          `Calls made: ${calls.length}\n` +
+          `Answered: ${answered} (${Math.round(answered / calls.length * 100)}%)\n` +
+          `Booked: ${booked}\nPaid: ${paid}\n` +
+          `Revenue: $${revenue.toLocaleString()}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "voice_stats", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "voice calls today" || msgLower === "calls today") {
+      const start = Date.now();
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const { data: calls } = await supabase
+          .from("voice_calls")
+          .select("business_name, outcome, duration_seconds, created_at")
+          .gt("created_at", today.toISOString())
+          .order("created_at", { ascending: false });
+        if (!calls?.length) {
+          await logUsage(supabase, "voice_calls_today", true, Date.now() - start, channel);
+          return earlyReturn("No calls made today yet.");
+        }
+        const list = calls.map((c: any) =>
+          `• ${c.business_name}: ${c.outcome || "in progress"} (${c.duration_seconds || 0}s)`
+        ).join("\n");
+        await logUsage(supabase, "voice_calls_today", true, Date.now() - start, channel);
+        return earlyReturn(`📞 *Calls Today (${calls.length}):*\n\n${list}`);
+      } catch (err: any) {
+        await logUsage(supabase, "voice_calls_today", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "voice pause") {
+      const start = Date.now();
+      try {
+        await supabase.from("nexus_preferences").upsert({ key: "voice_paused", value: "true" });
+        await logUsage(supabase, "voice_pause", true, Date.now() - start, channel);
+        return earlyReturn("⏸ Voice calls paused. Send `voice resume` to restart.");
+      } catch (err: any) {
+        await logUsage(supabase, "voice_pause", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "voice resume") {
+      const start = Date.now();
+      try {
+        await supabase.from("nexus_preferences").upsert({ key: "voice_paused", value: "false" });
+        await logUsage(supabase, "voice_resume", true, Date.now() - start, channel);
+        return earlyReturn("▶️ Voice calls resumed.");
+      } catch (err: any) {
+        await logUsage(supabase, "voice_resume", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "voice scripts") {
+      const start = Date.now();
+      try {
+        const { data: scripts } = await supabase
+          .from("voice_scripts")
+          .select("name, module_type, conversion_rate, times_used, status, is_champion")
+          .eq("status", "active")
+          .order("conversion_rate", { ascending: false });
+        if (!scripts?.length) {
+          await logUsage(supabase, "voice_scripts", true, Date.now() - start, channel);
+          return earlyReturn("No active scripts found.");
+        }
+        const list = scripts.map((s: any) =>
+          `${s.is_champion ? "👑" : "•"} *${s.name}* (${s.module_type})\n` +
+          `  ${Math.round((s.conversion_rate || 0) * 100)}% conversion | ${s.times_used} uses`
+        ).join("\n\n");
+        await logUsage(supabase, "voice_scripts", true, Date.now() - start, channel);
+        return earlyReturn(`📋 *Active Voice Scripts:*\n\n${list}`);
+      } catch (err: any) {
+        await logUsage(supabase, "voice_scripts", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "voice learning") {
+      const start = Date.now();
+      try {
+        const { data: report } = await supabase
+          .from("voice_learning")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!report) {
+          await logUsage(supabase, "voice_learning", true, Date.now() - start, channel);
+          return earlyReturn("No learning report yet. Run more calls first.");
+        }
+        await logUsage(supabase, "voice_learning", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📊 *Latest Voice Learning Report*\n\n` +
+          `Week of: ${report.week_start}\n` +
+          `Calls: ${report.calls_made} | Answer rate: ${Math.round((report.answer_rate || 0) * 100)}%\n` +
+          `Revenue: $${(report.revenue_generated || 0).toLocaleString()}\n` +
+          `Best opener: ${report.best_opener || "none yet"}\n` +
+          `Best time: ${report.best_call_time || "unknown"}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "voice_learning", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("brief:")) {
+      const start = Date.now();
+      try {
+        const target = message.slice(6).trim();
+        if (!target) return earlyReturn("Format: `brief: [business name or slug]`");
+        const { data: diagnostics } = await supabase
+          .from("nexus_diagnostics")
+          .select("*")
+          .or(`slug.ilike.%${target}%,business_name.ilike.%${target}%`)
+          .limit(1);
+        const diagnostic = diagnostics?.[0];
+        if (!diagnostic) return earlyReturn(`No diagnostic found for: ${target}`);
+        const internal = (diagnostic.internal_report || {}) as Record<string, unknown>;
+        const concerns = (internal.call_prep_top_3_concerns as unknown[]) || [];
+        const reply =
+          `🎯 *Call Brief — ${diagnostic.business_name}*\n\n` +
+          `Score: ${diagnostic.nexus_score}/100\n` +
+          `Leakage: $${(diagnostic.estimated_revenue_leakage || 0).toLocaleString()}/year\n` +
+          `Package: ${diagnostic.recommended_model || "TBD"}\n\n` +
+          `*Open with:*\n${(internal.opening_line as string) || "Reference their score and top gap"}\n\n` +
+          `*Top concern:* ${concerns[0] ? JSON.stringify(concerns[0]).slice(0, 200) : "See full report"}\n\n` +
+          `[Full report: app.nexuszc.com/diagnostic/${diagnostic.slug}]`;
+        await logUsage(supabase, "voice_brief", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "voice_brief", false, Date.now() - start, channel);
         return earlyReturn(` -  Failed: ${err.message}`);
       }
     }
