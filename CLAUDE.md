@@ -242,14 +242,14 @@ Then productized and sold to other multi-business operators.
 - (nothing yet this session)
 
 **NEXT:**
-1. Fix smoke_test_failed error and failing smoke tests
-2. Fix modify_error failures in self-modification system
-3. Add conversation memory persistence
-4. Add ability usage analytics and performance tracking
-5. Draft complete operating agreement for Nexus ZC LLC
-6. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+1. Fix smoke_test_failed error (simple)
+2. Add memory consolidation ability (medium)
+3. Add Structured Self-Reflection Capability (medium)
+4. Add ability usage analytics and performance tracking (medium)
+5. Add conversation memory persistence (medium)
+6. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
 7. Build complete Roofing OS go-to-market system with public landing page
-8. Review and complete homeowner portal fixes from May 12 session
+8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
