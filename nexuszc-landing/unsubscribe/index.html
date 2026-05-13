@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unsubscribe — Nexus</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0a;
+      color: #e5e5e5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    a { color: #f97316; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      border-bottom: 1px solid #1f1f1f;
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+    }
+    .logo { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .logo span { color: #f97316; }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: #111;
+      border: 1px solid #1f1f1f;
+      border-radius: 16px;
+      padding: 48px 40px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+    .state-icon { font-size: 44px; margin-bottom: 20px; }
+    h1 { font-size: 26px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+    p { font-size: 15px; color: #888; line-height: 1.6; margin-bottom: 12px; }
+    .email-display {
+      background: #161616;
+      border: 1px solid #1f1f1f;
+      border-radius: 7px;
+      padding: 10px 16px;
+      font-size: 14px;
+      color: #ccc;
+      margin: 16px 0 24px;
+      word-break: break-all;
+    }
+    .btn {
+      display: inline-block;
+      background: #f97316;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px 28px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #ea6c0a; text-decoration: none; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .back-link { display: block; margin-top: 16px; font-size: 13px; color: #555; }
+    .back-link:hover { color: #f97316; }
+
+    footer {
+      border-top: 1px solid #1f1f1f;
+      padding: 20px 32px;
+      text-align: center;
+      font-size: 13px;
+      color: #444;
+    }
+    footer a { color: #666; margin: 0 6px; }
+    footer a:hover { color: #f97316; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Nexus<span>.</span></div>
+</nav>
+
+<main>
+  <!-- INITIAL / CONFIRM STATE -->
+  <div class="card" id="confirm-state">
+    <div class="state-icon" id="state-icon">&#128274;</div>
+    <h1 id="state-title">Unsubscribing...</h1>
+    <p id="state-desc">Please wait while we process your request.</p>
+    <div class="email-display" id="email-display" style="display:none;"></div>
+    <button class="btn" id="confirm-btn" style="display:none;" onclick="doUnsubscribe()">Confirm Unsubscribe</button>
+    <a href="https://nexuszc.com" class="back-link" id="back-link" style="display:none;">Return to nexuszc.com</a>
+  </div>
+</main>
+
+<footer>
+  &copy; 2026 Nexus ZC LLC &nbsp;|&nbsp;
+  <a href="/privacy.html">Privacy</a>
+  <a href="/terms.html">Terms</a>
+  <a href="mailto:zach@nexuszc.com">zach@nexuszc.com</a>
+</footer>
+
+<script>
+  const SUPABASE_URL = "https://koqpbnxkhgbsnbdjwldx.supabase.co";
+  const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g";
+  const UNSUBSCRIBE_URL = SUPABASE_URL + "/functions/v1/nexus-unsubscribe";
+
+  const params = new URLSearchParams(window.location.search);
+  const email = params.get('email') || '';
+  const token = params.get('token') || '';
+  const type = params.get('type') || 'email'; // 'email' | 'sms' | 'all'
+
+  const iconEl = document.getElementById('state-icon');
+  const titleEl = document.getElementById('state-title');
+  const descEl = document.getElementById('state-desc');
+  const emailEl = document.getElementById('email-display');
+  const confirmBtn = document.getElementById('confirm-btn');
+  const backLink = document.getElementById('back-link');
+
+  function showState(icon, title, desc, showBtn, showEmail, showBack) {
+    iconEl.innerHTML = icon;
+    titleEl.textContent = title;
+    descEl.textContent = desc;
+    emailEl.style.display = showEmail && email ? 'block' : 'none';
+    emailEl.textContent = email;
+    confirmBtn.style.display = showBtn ? 'inline-block' : 'none';
+    backLink.style.display = showBack ? 'block' : 'none';
+  }
+
+  async function doUnsubscribe() {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Processing...';
+
+    try {
+      const res = await fetch(UNSUBSCRIBE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + ANON_KEY
+        },
+        body: JSON.stringify({ email, token, type })
+      });
+      const result = await res.json();
+
+      if (result.ok || res.ok) {
+        showState(
+          '&#10003;',
+          'You\'ve been unsubscribed.',
+          'Your email address has been removed from our list. You won\'t receive any more marketing emails from Nexus ZC LLC.',
+          false,
+          true,
+          true
+        );
+      } else {
+        showState(
+          '&#9888;&#65039;',
+          'Something went wrong.',
+          'We couldn\'t process your unsubscribe request. Please email zach@nexuszc.com and we\'ll remove you manually within 24 hours.',
+          false,
+          true,
+          true
+        );
+      }
+    } catch (err) {
+      showState(
+        '&#9888;&#65039;',
+        'Something went wrong.',
+        'We couldn\'t process your request. Please email zach@nexuszc.com and we\'ll remove you manually within 24 hours.',
+        false,
+        true,
+        true
+      );
+    }
+  }
+
+  // On page load: if we have an email, confirm before sending
+  if (!email) {
+    showState(
+      '&#128274;',
+      'Invalid Link',
+      'This unsubscribe link is missing your email address. Please use the unsubscribe link from the email you received, or email zach@nexuszc.com directly.',
+      false,
+      false,
+      true
+    );
+  } else {
+    // Show confirm state
+    const typeLabels = { email: 'email', sms: 'SMS', all: 'all communications' };
+    const typeLabel = typeLabels[type] || 'email';
+    showState(
+      '&#128274;',
+      'Confirm unsubscribe',
+      `Are you sure you want to unsubscribe from ${typeLabel} from Nexus ZC LLC?`,
+      true,
+      true,
+      false
+    );
+  }
+</script>
+
+</body>
+</html>

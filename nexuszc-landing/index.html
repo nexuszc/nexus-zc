@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexus — Your Free AI Business Diagnostic</title>
+  <meta name="description" content="Get your free Nexus Score. 24-layer AI diagnostic shows exactly what's costing you money and your 90-day roadmap to fix it." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange: #f97316;
+      --orange-dark: #ea6c0a;
+      --bg: #0a0a0a;
+      --bg2: #111;
+      --bg3: #161616;
+      --border: #1f1f1f;
+      --text: #e5e5e5;
+      --muted: #888;
+      --dim: #555;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    a { color: var(--orange); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #fff;
+    }
+    .logo span { color: var(--orange); }
+    .nav-login {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .nav-login:hover { color: var(--orange); border-color: var(--orange); text-decoration: none; }
+
+    /* HERO */
+    .hero {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 96px 24px 72px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(249,115,22,0.1);
+      border: 1px solid rgba(249,115,22,0.25);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--orange);
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+    .hero-badge::before { content: "•"; font-size: 8px; }
+    h1 {
+      font-size: clamp(38px, 6vw, 64px);
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+    h1 em {
+      font-style: normal;
+      color: var(--orange);
+    }
+    .hero-sub {
+      font-size: clamp(17px, 2.5vw, 20px);
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.5;
+    }
+    .hero-cta {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 700;
+      border-radius: 8px;
+      padding: 14px 32px;
+      letter-spacing: -0.2px;
+      transition: background 0.2s, transform 0.1s;
+      border: none;
+      cursor: pointer;
+    }
+    .hero-cta:hover { background: var(--orange-dark); text-decoration: none; transform: translateY(-1px); }
+    .hero-cta:active { transform: translateY(0); }
+    .hero-meta {
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    /* SECTION WRAPPER */
+    section { padding: 72px 24px; }
+    .section-inner { max-width: 960px; margin: 0 auto; }
+    .section-label {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      text-align: center;
+      font-size: clamp(26px, 4vw, 36px);
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+    .section-sub {
+      text-align: center;
+      font-size: 16px;
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0 auto 48px;
+    }
+
+    /* HOW IT WORKS */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+      counter-reset: steps;
+    }
+    .step {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      position: relative;
+    }
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(249,115,22,0.12);
+      border: 1.5px solid rgba(249,115,22,0.3);
+      color: var(--orange);
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .step h3 { font-size: 17px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+    .step p { font-size: 14px; color: var(--muted); line-height: 1.5; }
+    .step-icon { font-size: 28px; margin-bottom: 14px; }
+
+    /* WHAT WE ANALYZE */
+    .analyze-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .analyze-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .analyze-card:hover { border-color: rgba(249,115,22,0.3); }
+    .analyze-card .card-icon { font-size: 26px; margin-bottom: 12px; }
+    .analyze-card h3 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .analyze-card p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    /* FORM SECTION */
+    #form-section {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .form-wrap {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 600px) { .form-grid-2 { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .field label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ccc;
+    }
+    .field label .req { color: var(--orange); margin-left: 2px; }
+    .field input,
+    .field select,
+    .field textarea {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 10px 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--orange);
+    }
+    .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+    .field textarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+    .field input::placeholder,
+    .field textarea::placeholder { color: #444; }
+    .consent-block { margin: 24px 0; display: flex; flex-direction: column; gap: 12px; }
+    .consent-item { display: flex; align-items: flex-start; gap: 10px; }
+    .consent-item input[type=checkbox] { margin-top: 3px; accent-color: var(--orange); width: 16px; height: 16px; flex-shrink: 0; cursor: pointer; }
+    .consent-item label { font-size: 13px; color: var(--muted); cursor: pointer; line-height: 1.4; }
+    .btn-submit {
+      width: 100%;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      padding: 16px;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: -0.2px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-submit:hover { background: var(--orange-dark); transform: translateY(-1px); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .form-footer {
+      text-align: center;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--dim);
+    }
+    .form-footer a { color: var(--dim); }
+    .form-footer a:hover { color: var(--orange); }
+    .form-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 28px 0;
+    }
+    .qa-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 20px;
+      display: block;
+    }
+
+    /* SUCCESS */
+    #success-section {
+      display: none;
+      text-align: center;
+      padding: 80px 24px;
+    }
+    .success-icon { font-size: 52px; margin-bottom: 20px; }
+    #success-section h2 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+    #success-section p { font-size: 16px; color: var(--muted); max-width: 500px; margin: 0 auto 24px; }
+    .report-link-wrap {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 24px;
+      display: inline-block;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .report-link-wrap a { font-weight: 600; }
+
+    /* FOOTER */
+    footer.site-footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--dim);
+    }
+    footer.site-footer a { color: #666; margin: 0 8px; }
+    footer.site-footer a:hover { color: var(--orange); }
+
+    /* EXIT POPUP */
+    #exit-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #exit-overlay.active { display: flex; }
+    .exit-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+    }
+    .exit-card h3 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 8px; line-height: 1.2; }
+    .exit-card p { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .exit-card .exit-fields { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    .exit-card input {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 10px 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+    .exit-card input:focus { border-color: var(--orange); }
+    .exit-card input::placeholder { color: #444; }
+    .btn-exit-submit {
+      width: 100%;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .btn-exit-submit:hover { background: var(--orange-dark); }
+    .btn-exit-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .exit-no-thanks {
+      display: block;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--dim);
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+    }
+    .exit-no-thanks:hover { color: var(--muted); }
+    .exit-success { font-size: 15px; color: var(--muted); padding: 12px 0; }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">Nexus<span>.</span></div>
+  <a class="nav-login" href="https://app.nexuszc.com">Login &rarr;</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">Free AI Diagnostic</div>
+  <h1>Your business has a<br><em>Nexus Score.</em></h1>
+  <p class="hero-sub">
+    Free AI diagnostic. 24 layers. No fluff.<br>
+    Find out exactly what's costing you money.
+  </p>
+  <a href="#form-section" class="hero-cta">Get My Free Nexus Score &rarr;</a>
+  <p class="hero-meta">Free. No credit card. Takes 2 minutes.</p>
+</div>
+
+<!-- HOW IT WORKS -->
+<section style="background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="section-inner">
+    <div class="section-label">How It Works</div>
+    <div class="section-title">Three steps. Ten minutes. Real answers.</div>
+    <div class="section-sub">No generic advice. No fluff. An honest look at what's actually happening in your business.</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-icon">&#9997;&#65039;</div>
+        <div class="step-num">1</div>
+        <h3>Tell us about your business</h3>
+        <p>Fill out a short intake form. Five questions about your biggest challenges. Takes about 2 minutes.</p>
+      </div>
+      <div class="step">
+        <div class="step-icon">&#129302;</div>
+        <div class="step-num">2</div>
+        <h3>Nexus runs a 24-layer AI diagnostic</h3>
+        <p>Our AI analyzes your business across 24 dimensions — digital presence, sales systems, operations, competitive position, and more.</p>
+      </div>
+      <div class="step">
+        <div class="step-icon">&#128200;</div>
+        <div class="step-num">3</div>
+        <h3>Get your score and 90-day roadmap</h3>
+        <p>You receive your Nexus Score, the top gaps costing you money, and a prioritized 90-day action plan. Free.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT WE ANALYZE -->
+<section>
+  <div class="section-inner">
+    <div class="section-label">What We Analyze</div>
+    <div class="section-title">24 layers. Nothing skipped.</div>
+    <div class="section-sub">We look at your entire business — not just one piece.</div>
+    <div class="analyze-grid">
+      <div class="analyze-card">
+        <div class="card-icon">&#127758;</div>
+        <h3>Digital Presence</h3>
+        <p>Website, SEO, Google Business Profile, social media, online reviews — how well does your digital footprint convert?</p>
+      </div>
+      <div class="analyze-card">
+        <div class="card-icon">&#128200;</div>
+        <h3>Sales Process</h3>
+        <p>Lead follow-up speed, conversion rates, pipeline visibility, proposal quality, and closing mechanics.</p>
+      </div>
+      <div class="analyze-card">
+        <div class="card-icon">&#9878;&#65039;</div>
+        <h3>Team &amp; Systems</h3>
+        <p>How well your team is leveraged, where SOPs are missing, and where you're personally stuck doing work that could be delegated.</p>
+      </div>
+      <div class="analyze-card">
+        <div class="card-icon">&#127919;</div>
+        <h3>Competitive Position</h3>
+        <p>Where you stand relative to competitors in your market, and what advantages you're not capitalizing on.</p>
+      </div>
+      <div class="analyze-card">
+        <div class="card-icon">&#128184;</div>
+        <h3>Revenue Leaks</h3>
+        <p>The silent killers — poor pricing, missed upsells, high churn, slow invoicing, and money left on the table.</p>
+      </div>
+      <div class="analyze-card">
+        <div class="card-icon">&#128640;</div>
+        <h3>Growth Opportunities</h3>
+        <p>Adjacent markets, untapped channels, referral systems, and the highest-leverage moves you should be making right now.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INTAKE FORM -->
+<section id="form-section">
+  <div class="section-inner">
+    <div class="form-wrap">
+      <div class="section-label" style="text-align:left;">Get Your Free Nexus Score</div>
+      <div class="section-title" style="text-align:left; font-size: 28px; margin-bottom:6px;">Run my diagnostic</div>
+      <p style="color: var(--muted); font-size: 15px; margin-bottom: 32px;">Fill out the form below. Your Nexus Score will be ready within 10 minutes.</p>
+
+      <form id="intake-form" novalidate>
+        <div class="form-grid-2">
+          <div class="field">
+            <label for="name">Full Name <span class="req">*</span></label>
+            <input type="text" id="name" name="name" placeholder="Jane Smith" required autocomplete="name" />
+          </div>
+          <div class="field">
+            <label for="business_name">Business Name <span class="req">*</span></label>
+            <input type="text" id="business_name" name="business_name" placeholder="Acme Roofing LLC" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="business_url">Business Website URL <span class="req">*</span></label>
+          <input type="url" id="business_url" name="business_url" placeholder="https://yourbusiness.com" required />
+        </div>
+        <div class="form-grid-2">
+          <div class="field">
+            <label for="email">Email Address <span class="req">*</span></label>
+            <input type="email" id="email" name="email" placeholder="jane@company.com" required autocomplete="email" />
+          </div>
+          <div class="field">
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" name="phone" placeholder="(720) 555-0100" autocomplete="tel" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="industry">Industry <span class="req">*</span></label>
+          <select id="industry" name="industry" required>
+            <option value="" disabled selected>Select your industry...</option>
+            <option value="Roofing">Roofing</option>
+            <option value="Mortgage/Lending">Mortgage / Lending</option>
+            <option value="HVAC">HVAC</option>
+            <option value="Plumbing">Plumbing</option>
+            <option value="Landscaping">Landscaping</option>
+            <option value="Legal Services">Legal Services</option>
+            <option value="Accounting">Accounting</option>
+            <option value="Real Estate">Real Estate</option>
+            <option value="Insurance">Insurance</option>
+            <option value="Healthcare">Healthcare</option>
+            <option value="Retail">Retail</option>
+            <option value="E-commerce">E-commerce</option>
+            <option value="Restaurant/Food">Restaurant / Food</option>
+            <option value="Construction">Construction</option>
+            <option value="Marketing Agency">Marketing Agency</option>
+            <option value="Consulting">Consulting</option>
+            <option value="Technology">Technology</option>
+            <option value="Fitness/Wellness">Fitness / Wellness</option>
+            <option value="Education">Education</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <hr class="form-divider" />
+        <span class="qa-label">Tell us about your business (5 quick questions)</span>
+
+        <div class="field">
+          <label for="q1">If you could fix one thing in your business tomorrow that would have the biggest revenue impact, what would it be? <span class="req">*</span></label>
+          <textarea id="q1" name="q1" placeholder="e.g. Our lead follow-up is inconsistent and we lose deals to faster competitors..." required></textarea>
+        </div>
+        <div class="field">
+          <label for="q2">Where are you today, and where do you want to be in 12 months? <span class="req">*</span></label>
+          <textarea id="q2" name="q2" placeholder="e.g. We're doing $800K/year with 3 people. In 12 months I want to be at $2M with systems that don't require me in every decision..." required></textarea>
+        </div>
+        <div class="field">
+          <label for="q3">What's the one thing only you can do right now that you wish someone else could handle?</label>
+          <textarea id="q3" name="q3" placeholder="e.g. Every proposal still requires me to review and approve it before it goes out..."></textarea>
+        </div>
+        <div class="field">
+          <label for="q4">What have you tried before to solve your biggest challenge that did not work, and why?</label>
+          <textarea id="q4" name="q4" placeholder="e.g. We hired a marketing agency but they didn't understand our sales cycle..."></textarea>
+        </div>
+        <div class="field">
+          <label for="q5">What happens to your business if nothing changes in the next 6 months?</label>
+          <textarea id="q5" name="q5" placeholder="e.g. We plateau. I stay stuck in the weeds. Good employees start looking elsewhere..."></textarea>
+        </div>
+
+        <hr class="form-divider" />
+
+        <div class="consent-block">
+          <div class="consent-item">
+            <input type="checkbox" id="consent_email" name="consent_email" required />
+            <label for="consent_email">I agree to receive email from Nexus ZC LLC. Unsubscribe anytime. <span style="color: var(--orange);">*</span></label>
+          </div>
+          <div class="consent-item">
+            <input type="checkbox" id="consent_sms" name="consent_sms" />
+            <label for="consent_sms">I agree to receive SMS from Nexus ZC LLC at the number provided. Reply STOP to opt out.</label>
+          </div>
+          <div class="consent-item">
+            <input type="checkbox" id="consent_voice" name="consent_voice" />
+            <label for="consent_voice">I agree to receive calls including AI-assisted calls from Nexus ZC LLC.</label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-submit">Run My Diagnostic &rarr;</button>
+        <p class="form-footer" style="margin-top:14px;">
+          Free. No credit card. Takes 2 minutes.<br>
+          <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
+          <a href="/terms.html">Terms</a> &nbsp;|&nbsp;
+          <a href="https://nexuszc.com">nexuszc.com</a>
+        </p>
+      </form>
+
+      <!-- SUCCESS STATE -->
+      <div id="success-section">
+        <div class="success-icon">&#10003;</div>
+        <h2>Your diagnostic is running.</h2>
+        <p>You'll receive your Nexus Score within 10 minutes. Check your email — we'll send it there the moment it's ready.</p>
+        <div class="report-link-wrap">
+          Your report link: <a id="report-link" href="#">nexuszc.com/report/<span id="report-slug"></span></a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- SITE FOOTER -->
+<footer class="site-footer">
+  &copy; 2026 Nexus ZC LLC &nbsp;|&nbsp;
+  <a href="/privacy.html">Privacy</a>
+  <a href="/terms.html">Terms</a>
+  <a href="/referral-terms.html">Referral Program</a>
+  <a href="mailto:zach@nexuszc.com">zach@nexuszc.com</a>
+</footer>
+
+<!-- EXIT INTENT POPUP -->
+<div id="exit-overlay" role="dialog" aria-modal="true" aria-labelledby="exit-heading">
+  <div class="exit-card">
+    <h3 id="exit-heading">Before you go &mdash;<br>get your free Nexus Score</h3>
+    <p>Enter your website and email. We'll run the AI diagnostic and send your score in minutes.</p>
+    <div id="exit-form-wrap">
+      <div class="exit-fields">
+        <input type="url" id="exit-url" placeholder="Your business website (https://...)" />
+        <input type="email" id="exit-email" placeholder="Your email address" />
+      </div>
+      <button class="btn-exit-submit" id="exit-submit-btn">Send My Score &rarr;</button>
+      <button class="exit-no-thanks" id="exit-no-thanks">No thanks</button>
+    </div>
+    <div id="exit-success" style="display:none;" class="exit-success">
+      Scanning&hellip; we'll email you your Nexus Score within 10 minutes.
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL = "https://koqpbnxkhgbsnbdjwldx.supabase.co";
+  const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g";
+  const INTAKE_URL = SUPABASE_URL + "/functions/v1/nexus-intake";
+  const QUICK_SCAN_URL = SUPABASE_URL + "/functions/v1/nexus-quick-scan";
+
+  // ── MAIN INTAKE FORM ──────────────────────────────────────────────────────
+  document.getElementById('intake-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const btn = form.querySelector('button[type=submit]');
+
+    // Basic validation
+    if (!form.consent_email.checked) {
+      alert('Please agree to receive email communications to continue.');
+      return;
+    }
+
+    btn.textContent = 'Running diagnostic...';
+    btn.disabled = true;
+
+    const data = {
+      name: form.name.value.trim(),
+      business_name: form.business_name.value.trim(),
+      business_url: form.business_url.value.trim(),
+      email: form.email.value.trim(),
+      phone: form.phone ? form.phone.value.trim() : '',
+      industry: form.industry.value,
+      q1: form.q1.value.trim(),
+      q2: form.q2.value.trim(),
+      q3: form.q3 ? form.q3.value.trim() : '',
+      q4: form.q4 ? form.q4.value.trim() : '',
+      q5: form.q5 ? form.q5.value.trim() : '',
+      consent_email: form.consent_email.checked,
+      consent_sms: form.consent_sms ? form.consent_sms.checked : false,
+      consent_voice: form.consent_voice ? form.consent_voice.checked : false,
+      referral_code: new URLSearchParams(window.location.search).get('ref') || undefined
+    };
+
+    try {
+      const res = await fetch(INTAKE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + ANON_KEY
+        },
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+
+      if (result.ok) {
+        document.getElementById('form-section').style.display = 'none';
+        const successEl = document.getElementById('success-section');
+        successEl.style.display = 'block';
+        if (result.slug) {
+          document.getElementById('report-link').href = '/report/' + result.slug;
+          document.getElementById('report-slug').textContent = result.slug;
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        btn.textContent = 'Run My Diagnostic →';
+        btn.disabled = false;
+        alert('Something went wrong. Please try again. ' + (result.error || ''));
+      }
+    } catch (err) {
+      btn.textContent = 'Run My Diagnostic →';
+      btn.disabled = false;
+      alert('Network error. Please check your connection and try again.');
+    }
+  });
+
+  // ── EXIT INTENT ───────────────────────────────────────────────────────────
+  let exitShown = false;
+  document.addEventListener('mouseleave', (e) => {
+    if (e.clientY <= 0 && !exitShown && sessionStorage.getItem('exitSeen') !== '1') {
+      exitShown = true;
+      sessionStorage.setItem('exitSeen', '1');
+      document.getElementById('exit-overlay').classList.add('active');
+    }
+  });
+
+  document.getElementById('exit-no-thanks').addEventListener('click', () => {
+    document.getElementById('exit-overlay').classList.remove('active');
+  });
+
+  document.getElementById('exit-overlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('exit-overlay')) {
+      document.getElementById('exit-overlay').classList.remove('active');
+    }
+  });
+
+  document.getElementById('exit-submit-btn').addEventListener('click', async () => {
+    const url = document.getElementById('exit-url').value.trim();
+    const email = document.getElementById('exit-email').value.trim();
+    if (!url || !email) {
+      alert('Please enter your website URL and email address.');
+      return;
+    }
+    const btn = document.getElementById('exit-submit-btn');
+    btn.textContent = 'Scanning...';
+    btn.disabled = true;
+
+    try {
+      await fetch(QUICK_SCAN_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + ANON_KEY
+        },
+        body: JSON.stringify({ business_url: url, email })
+      });
+    } catch (_) {}
+
+    document.getElementById('exit-form-wrap').style.display = 'none';
+    document.getElementById('exit-success').style.display = 'block';
+  });
+</script>
+
+</body>
+</html>

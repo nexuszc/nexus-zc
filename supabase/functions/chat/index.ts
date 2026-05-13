@@ -2400,6 +2400,269 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // NEXUS AUTONOMOUS OS COMMANDS
+    // ================================================================
+
+    if (msgLower === "nexus pipeline") {
+      const start = Date.now();
+      try {
+        const { data: counts } = await supabase
+          .from("nexus_diagnostics")
+          .select("routing_model, nexus_score")
+          .not("routing_model", "is", null);
+        const byModel: Record<string, number[]> = {};
+        for (const r of counts || []) {
+          if (!byModel[r.routing_model]) byModel[r.routing_model] = [];
+          byModel[r.routing_model].push(r.nexus_score || 0);
+        }
+        const lines = Object.entries(byModel).map(([model, scores]) => {
+          const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+          return `• *${model}* — ${scores.length} leads, avg score ${avg}`;
+        });
+        await logUsage(supabase, 'nexus_pipeline', true, Date.now() - start, channel);
+        return earlyReturn(`*📊 Nexus Pipeline*\n\n${lines.join('\n') || 'No routed diagnostics yet.'}\n\n_Reply \`nexus leads\` for recent list._`);
+      } catch (err: any) {
+        await logUsage(supabase, 'nexus_pipeline', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "nexus leads") {
+      const start = Date.now();
+      try {
+        const { data: leads } = await supabase
+          .from("nexus_diagnostics")
+          .select("business_name, business_url, nexus_score, routing_model, created_at, slug")
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (!leads || leads.length === 0) {
+          await logUsage(supabase, 'nexus_leads', true, Date.now() - start, channel);
+          return earlyReturn("No diagnostics run yet. Share nexuszc.com to get leads.");
+        }
+        const lines = leads.map((d: any) =>
+          `• *${d.business_name || d.business_url}* — score ${d.nexus_score || '?'} | ${d.routing_model || 'unrouted'}`
+        );
+        await logUsage(supabase, 'nexus_leads', true, Date.now() - start, channel);
+        return earlyReturn(`*🔬 Recent Nexus Leads*\n\n${lines.join('\n')}`);
+      } catch (err: any) {
+        await logUsage(supabase, 'nexus_leads', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("diagnose:")) {
+      const start = Date.now();
+      try {
+        const url = message.slice(9).trim();
+        if (!url) return earlyReturn("Format: `diagnose: https://example.com`");
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-quick-scan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ url, force: true })
+        });
+        const data = await res.json();
+        await logUsage(supabase, 'diagnose', true, Date.now() - start, channel);
+        if (data.skipped) return earlyReturn(`Skipped: ${data.reason}`);
+        return earlyReturn(`🔬 Quick scan started for ${url}\nScore: ${data.score || '?'}/100\nFull diagnostic running in background — I'll alert you when complete.`);
+      } catch (err: any) {
+        await logUsage(supabase, 'diagnose', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("send report:")) {
+      const start = Date.now();
+      try {
+        const slug = message.slice(12).trim();
+        if (!slug) return earlyReturn("Format: `send report: [slug]`");
+        const { data: diag } = await supabase
+          .from("nexus_diagnostics")
+          .select("business_name, slug, business_name, email")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (!diag) return earlyReturn(`No diagnostic found for slug: ${slug}`);
+        const password = (diag.business_name || "nexus").replace(/[^a-zA-Z]/g, "").slice(0, 3).toLowerCase() || "nex";
+        await logUsage(supabase, 'send_report', true, Date.now() - start, channel);
+        return earlyReturn(`*📋 Report for ${diag.business_name}*\n\nURL: https://nexuszc.com/report/${slug}\nPassword: \`${password}000\`\n\nSend this to: ${diag.email || 'no email on file'}`);
+      } catch (err: any) {
+        await logUsage(supabase, 'send_report', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("call:")) {
+      const start = Date.now();
+      try {
+        const diagnosticId = message.slice(5).trim();
+        if (!diagnosticId) return earlyReturn("Format: `call: [diagnostic_id]`");
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-voice`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ diagnostic_id: diagnosticId })
+        });
+        const data = await res.json();
+        await logUsage(supabase, 'nexus_call', true, Date.now() - start, channel);
+        if (data.skipped) return earlyReturn(`Call skipped: ${data.reason}`);
+        return earlyReturn(`📞 Call initiated (ID: ${data.call_id || 'pending'})\nI'll send transcript summary when it completes.`);
+      } catch (err: any) {
+        await logUsage(supabase, 'nexus_call', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "acquisition targets") {
+      const start = Date.now();
+      try {
+        const { data: targets } = await supabase
+          .from("nexus_acquisition_targets")
+          .select("business_name, industry, acquisition_score, estimated_value_min, estimated_value_max, status")
+          .order("acquisition_score", { ascending: false })
+          .limit(10);
+        if (!targets || targets.length === 0) {
+          await logUsage(supabase, 'acquisition_targets', true, Date.now() - start, channel);
+          return earlyReturn("No acquisition targets identified yet.");
+        }
+        const lines = targets.map((t: any) =>
+          `• *${t.business_name}* (${t.industry}) — score ${t.acquisition_score} | $${(t.estimated_value_min / 1000).toFixed(0)}K–$${(t.estimated_value_max / 1000).toFixed(0)}K | ${t.status}`
+        );
+        await logUsage(supabase, 'acquisition_targets', true, Date.now() - start, channel);
+        return earlyReturn(`*🎯 Acquisition Targets*\n\n${lines.join('\n')}`);
+      } catch (err: any) {
+        await logUsage(supabase, 'acquisition_targets', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "verticals") {
+      const start = Date.now();
+      try {
+        const { data: proposals } = await supabase
+          .from("nexus_vertical_proposals")
+          .select("industry, status, diagnostic_count, evidence_count, created_at")
+          .order("diagnostic_count", { ascending: false });
+        if (!proposals || proposals.length === 0) {
+          await logUsage(supabase, 'verticals', true, Date.now() - start, channel);
+          return earlyReturn("No vertical proposals yet. Need 5+ diagnostics in the same industry to trigger detection.");
+        }
+        const lines = proposals.map((v: any) =>
+          `• *${v.industry}* — ${v.diagnostic_count} diagnostics | ${v.status}${v.status === 'threshold_met' ? ' ← ready to approve' : ''}`
+        );
+        await logUsage(supabase, 'verticals', true, Date.now() - start, channel);
+        return earlyReturn(`*🏗️ Vertical Proposals*\n\n${lines.join('\n')}\n\n_Reply \`approve vertical: [industry]\` to greenlight one._`);
+      } catch (err: any) {
+        await logUsage(supabase, 'verticals', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("approve vertical:")) {
+      const start = Date.now();
+      try {
+        const industry = message.slice(17).trim();
+        if (!industry) return earlyReturn("Format: `approve vertical: [industry]`");
+        const { error } = await supabase
+          .from("nexus_vertical_proposals")
+          .update({ status: "approved", approved_at: new Date().toISOString() })
+          .ilike("industry", `%${industry}%`);
+        if (error) throw error;
+        await logUsage(supabase, 'approve_vertical', true, Date.now() - start, channel);
+        return earlyReturn(`✅ Vertical approved: *${industry}*\nNexus will begin building a dedicated OS for this vertical. I'll update you on progress.`);
+      } catch (err: any) {
+        await logUsage(supabase, 'approve_vertical', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "referral stats") {
+      const start = Date.now();
+      try {
+        const { data: refs } = await supabase
+          .from("nexus_referrals")
+          .select("referrer_email, status, credit_amount_cents")
+          .order("created_at", { ascending: false });
+        const total = refs?.length || 0;
+        const paid = refs?.filter((r: any) => r.status === "paid").reduce((sum: number, r: any) => sum + (r.credit_amount_cents || 0), 0) || 0;
+        const pending = refs?.filter((r: any) => r.status === "pending").length || 0;
+        await logUsage(supabase, 'referral_stats', true, Date.now() - start, channel);
+        return earlyReturn(`*🔗 Referral Stats*\n\nTotal referrals: ${total}\nPending: ${pending}\nTotal paid out: $${(paid / 100).toFixed(2)}`);
+      } catch (err: any) {
+        await logUsage(supabase, 'referral_stats', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "nexus revenue") {
+      const start = Date.now();
+      try {
+        const { data: diags } = await supabase
+          .from("nexus_diagnostics")
+          .select("routing_model, created_at");
+        const total = diags?.length || 0;
+        const enterprise = diags?.filter((d: any) => d.routing_model === "custom_enterprise").length || 0;
+        const growth = diags?.filter((d: any) => d.routing_model === "custom_growth").length || 0;
+        const starter = diags?.filter((d: any) => d.routing_model === "custom_starter").length || 0;
+        const acq = diags?.filter((d: any) => d.routing_model === "acquisition").length || 0;
+        const pipeline = enterprise * 5000 + growth * 2500 + starter * 1000 + acq * 500;
+        await logUsage(supabase, 'nexus_revenue', true, Date.now() - start, channel);
+        return earlyReturn(
+          `*💰 Nexus Revenue Pipeline*\n\n` +
+          `Total diagnostics: ${total}\n` +
+          `Enterprise (${enterprise}) × $5K = $${(enterprise * 5000).toLocaleString()}\n` +
+          `Growth (${growth}) × $2.5K = $${(growth * 2500).toLocaleString()}\n` +
+          `Starter (${starter}) × $1K = $${(starter * 1000).toLocaleString()}\n` +
+          `Acquisition (${acq}) × $500 = $${(acq * 500).toLocaleString()}\n\n` +
+          `*Estimated pipeline: $${pipeline.toLocaleString()}*`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, 'nexus_revenue', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "diagnostic stats") {
+      const start = Date.now();
+      try {
+        const { count: totalDiags } = await supabase
+          .from("nexus_diagnostics").select("*", { count: "exact", head: true });
+        const { data: scored } = await supabase
+          .from("nexus_diagnostics").select("nexus_score").not("nexus_score", "is", null);
+        const avgScore = scored?.length
+          ? Math.round(scored.reduce((s: number, d: any) => s + (d.nexus_score || 0), 0) / scored.length)
+          : 0;
+        const { count: withReport } = await supabase
+          .from("nexus_diagnostics").select("*", { count: "exact", head: true }).not("client_report", "is", null);
+        await logUsage(supabase, 'diagnostic_stats', true, Date.now() - start, channel);
+        return earlyReturn(
+          `*🔬 Diagnostic Stats*\n\n` +
+          `Total run: ${totalDiags || 0}\n` +
+          `With full report: ${withReport || 0}\n` +
+          `Avg Nexus Score: ${avgScore}/100`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, 'diagnostic_stats', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("unsubscribe:")) {
+      const start = Date.now();
+      try {
+        const email = message.slice(12).trim();
+        if (!email) return earlyReturn("Format: `unsubscribe: email@example.com`");
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/nexus-unsubscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ email, channel: "all" })
+        });
+        await logUsage(supabase, 'unsubscribe', true, Date.now() - start, channel);
+        return earlyReturn(`✅ Unsubscribed ${email} from all Nexus communications.`);
+      } catch (err: any) {
+        await logUsage(supabase, 'unsubscribe', false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase

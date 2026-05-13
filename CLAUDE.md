@@ -115,12 +115,20 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
-| `roofing-closer` | See function source for details | Internal |
+| `roofing-closer` | Handles inbound email replies: classifies intent, responds autonomously, alerts Zach on hot leads | Resend email webhook via email-webhook |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
-| `roofing-outreach` | See function source for details | Internal |
+| `roofing-outreach` | 16-touch email sequence over 90 days, Claude-generated per prospect, sends from roofing@nexuszc.com | Cron every 4h (roofing-outreach-4h) |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
-| `roofing-product-monitor` | See function source for details | Internal |
-| `roofing-prospector` | See function source for details | Internal |
+| `roofing-product-monitor` | Autonomous product manager: observes usage/errors, scans 5 competitors weekly, proposes improvements via AI | Daily cron 18:00 UTC + nexus-core every 6h |
+| `roofing-prospector` | Finds roofing contractors via Serper (Denver metro + hail zones), scores leads 1-100, saves to roofing_prospects | Daily cron 14:00 UTC (roofing-prospector-daily) |
+| `nexus-intake` | Landing page form handler: validate → consent → create diagnostic record → fire diagnostic async | POST from nexuszc.com landing page |
+| `nexus-unsubscribe` | CAN-SPAM unsubscribe handler: GET/POST, updates nexus_consents, renders confirmation page | Email footer links + chat command |
+| `nexus-quick-scan` | 3-layer proactive scan (fetch + 2x Serper): scores URL, skips low scorers, fires full diagnostic async | nexus-core every 4h (cycle % 8) + chat diagnose: |
+| `nexus-diagnostic` | 24-layer diagnostic engine: 18-layer parallel wave + 6-layer synthesis, saves to nexus_diagnostic_layers | Fired by nexus-intake + nexus-quick-scan |
+| `nexus-router` | Routes completed diagnostics to model (custom_enterprise/growth/starter/acquisition/vertical_os/nurture), sends Telegram alert | Fired by nexus-diagnostic on completion |
+| `nexus-follow-up` | 10-touch follow-up sequence (days 0/1/2/3/5/7/10/14/21/90): email + voice, CAN-SPAM compliant | Cron hourly (nexus-follow-up-hourly) + nexus-core every cycle |
+| `nexus-voice` | Bland.ai voice call initiator + webhook receiver: graceful skip if BLAND_API_KEY not set | nexus-router for custom_starter + chat call: command |
+| `nexus-self-build` | Vertical opportunity detector: groups diagnostics by industry, proposes new OS at 5+/10+ threshold | Cron 4h (nexus-prospector-4h) + nexus-core every 24h |
 | `send-email` | Send email via Resend | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
@@ -184,6 +192,18 @@ Then productized and sold to other multi-business operators.
 - `nexus_agent_cycles` -- record of every agent run
 - `nexus_preferences` -- learned preference model (6 seeds: approval thresholds, comms style, focus areas)
 
+### Nexus Autonomous Business OS (added May 13, 2026):
+- `nexus_consents` -- email/SMS/voice consent records per lead (CAN-SPAM + TCPA compliance)
+- `nexus_diagnostics` -- full diagnostic records (slug, score, routing_model, internal_report, client_report)
+- `nexus_diagnostic_layers` -- individual layer results (24 layers per diagnostic, score + findings + gaps)
+- `nexus_outreach_log` -- every outbound/inbound touch per diagnostic (email, voice, SMS)
+- `nexus_referrals` -- referral tracking (referrer, referred, credit tier, status)
+- `nexus_benchmarks` -- rolling industry averages for nexus_score (seeded per industry)
+- `nexus_vertical_proposals` -- detected vertical opportunities (detecting → threshold_met → approved)
+- `nexus_acquisition_targets` -- businesses flagged for acquisition routing (score, estimated_value)
+- `nexus_unsubscribes` -- unsubscribe records (email, channel, timestamp)
+- `nexus_developer_waitlist` -- developer API waitlist (email, use_case, created_at)
+
 ### Project categories:
 - `platform` -- core businesses (Nexus, VA Company)
 - `vertical` -- GTM channels (Roofing OS, Cash Out Refinances)
@@ -236,20 +256,25 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 12, 2026)
+## CURRENT BUILD PRIORITIES (as of May 13, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- ✅ Roofing OS improvements: message templates, document template UX, portal view tracking, stalled onboarding alerts
+- ✅ NEXUS Complete Autonomous Business OS v1 (all 8 new edge functions deployed, all 10 new DB tables)
+- ✅ nexuszc-landing: full landing page, privacy/terms/referral-terms, report page, unsubscribe page
+- ✅ 12 new Telegram commands: nexus pipeline, nexus leads, diagnose:, send report:, call:, acquisition targets, verticals, approve vertical:, referral stats, nexus revenue, diagnostic stats, unsubscribe:
+- ✅ nexus-core surgical additions: follow-up sequencer every cycle, proactive prospecting every 8th, hail detection every 8th, vertical detection every 48th
+- ✅ pg_cron jobs: nexus-follow-up-hourly, nexus-prospector-4h, nexus-data-retention
+- ✅ RLS anon SELECT on nexus_diagnostics (report page access)
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Add memory consolidation ability (medium)
-3. Add Structured Self-Reflection Capability (medium)
-4. Add ability usage analytics and performance tracking (medium)
-5. Add conversation memory persistence (medium)
-6. Build the complete Roofing OS go-to-market system
-7. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
-8. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+1. **Deploy nexuszc-landing to Cloudflare Pages** — new Pages project pointing to nexuszc-landing/ dir, connect nexuszc.com domain
+2. **Add BLAND_API_KEY secret** — required for nexus-voice to make actual calls (graceful skip without it)
+3. **Add STRIPE_PAYMENT_LINK secret** — pending Stripe product creation
+4. **Wire Resend DNS** — roofing@nexuszc.com sending domain
+5. Fix modify_error recurring failure in self-modification system
+6. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
+7. Connect roofingos.dev domain in Cloudflare Pages → roofingos-landing/ directory
 
 ---
 

@@ -900,6 +900,85 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // Every cycle: advance nexus follow-up sequences
+    fetch(`${SUPABASE_URL}/functions/v1/nexus-follow-up`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+      body: JSON.stringify({})
+    }).catch(() => {});
+
+    // Every 8th cycle (~4 hours): proactive prospecting scan
+    if (cycleNumber % 8 === 0) {
+      (async () => {
+        const serperKey = Deno.env.get("SERPER_API_KEY");
+        if (!serperKey) return;
+        const queries = [
+          "small business owner Denver Colorado struggling with operations",
+          "Denver small business needs help with systems and processes",
+          "roofing contractor Denver growing business"
+        ];
+        const query = queries[Math.floor(cycleNumber / 8) % queries.length];
+        const res = await fetch("https://google.serper.dev/search", {
+          method: "POST",
+          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ q: query, num: 5 })
+        });
+        const data = await res.json();
+        for (const result of data.organic || []) {
+          if (!result.link || !result.link.startsWith("http")) continue;
+          fetch(`${SUPABASE_URL}/functions/v1/nexus-quick-scan`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+            body: JSON.stringify({ url: result.link, business_name: result.title?.slice(0, 80) })
+          }).catch(() => {});
+        }
+        await log("proactive_prospecting", `Scanned results for: ${query}`);
+      })().catch(() => {});
+    }
+
+    // Every 8th cycle: hail storm detection
+    if (cycleNumber % 8 === 0) {
+      (async () => {
+        const serperKey = Deno.env.get("SERPER_API_KEY");
+        if (!serperKey) return;
+        const res = await fetch("https://google.serper.dev/news", {
+          method: "POST",
+          headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+          body: JSON.stringify({ q: "hail storm damage Colorado Denver 2026", num: 5 })
+        });
+        const data = await res.json();
+        const articles = data.news || [];
+        const newHail = articles.filter((a: any) =>
+          a.title?.toLowerCase().includes("hail") && a.title?.toLowerCase().includes("colorado")
+        );
+        for (const article of newHail.slice(0, 3)) {
+          const { data: existing } = await supabase
+            .from("hail_events")
+            .select("id")
+            .eq("source_url", article.link)
+            .maybeSingle();
+          if (existing) continue;
+          await supabase.from("hail_events").insert({
+            location: "Colorado",
+            event_date: new Date().toISOString().slice(0, 10),
+            source_url: article.link,
+            headline: article.title?.slice(0, 200),
+            detected_at: new Date().toISOString()
+          });
+          await tg(`⛈️ *Hail Event Detected*\n\n${article.title}\n${article.link}\n\n_Roofing OS prospecting can target affected areas._`);
+        }
+      })().catch(() => {});
+    }
+
+    // Every 48th cycle (~24 hours): vertical opportunity detection
+    if (cycleNumber % 48 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/nexus-self-build`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Nexus Score Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --orange: #f97316;
+      --orange-dark: #ea6c0a;
+      --bg: #0a0a0a;
+      --bg2: #111;
+      --bg3: #161616;
+      --border: #1f1f1f;
+      --text: #e5e5e5;
+      --muted: #888;
+      --dim: #555;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    a { color: var(--orange); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav {
+      background: rgba(10,10,10,0.95);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+    .logo span { color: var(--orange); }
+    .nav-back { font-size: 14px; color: var(--muted); }
+    .nav-back:hover { color: var(--orange); }
+
+    /* PASSWORD WALL */
+    #password-wall {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 60px);
+      padding: 24px;
+    }
+    .pw-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+    .pw-card .lock-icon { font-size: 40px; margin-bottom: 20px; }
+    .pw-card h2 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .pw-card p { font-size: 14px; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+    .pw-card input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 20px;
+      letter-spacing: 4px;
+      text-align: center;
+      padding: 12px 16px;
+      font-family: inherit;
+      outline: none;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+    .pw-card input:focus { border-color: var(--orange); }
+    .pw-card input::placeholder { letter-spacing: 1px; font-size: 14px; color: #444; }
+    .btn-pw {
+      width: 100%;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      padding: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .btn-pw:hover { background: var(--orange-dark); }
+    .btn-pw:disabled { opacity: 0.6; cursor: not-allowed; }
+    .pw-error { margin-top: 12px; font-size: 13px; color: var(--red); display: none; }
+
+    /* LOADING */
+    #loading-state {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 60px);
+      flex-direction: column;
+      gap: 16px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-state p { font-size: 15px; color: var(--muted); }
+
+    /* ERROR */
+    #error-state {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 60px);
+      padding: 24px;
+      text-align: center;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #error-state h2 { color: #fff; font-size: 22px; }
+    #error-state p { color: var(--muted); font-size: 15px; max-width: 420px; }
+
+    /* REPORT */
+    #report-content { display: none; }
+    .report-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* SCORE GAUGE */
+    .score-hero {
+      text-align: center;
+      padding: 48px 24px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin-bottom: 32px;
+    }
+    .score-hero .business-name {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--orange);
+      margin-bottom: 8px;
+    }
+    .score-hero h1 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 32px; }
+
+    /* Arc gauge */
+    .gauge-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+    .gauge-svg { overflow: visible; }
+    .gauge-bg { fill: none; stroke: #222; stroke-width: 18; stroke-linecap: round; }
+    .gauge-fill {
+      fill: none;
+      stroke-width: 18;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 1.2s ease;
+      transform-origin: center;
+      transform: rotate(-220deg);
+    }
+    .gauge-score-text { font-size: 52px; font-weight: 800; fill: #fff; text-anchor: middle; dominant-baseline: central; }
+    .gauge-label { font-size: 13px; fill: var(--muted); text-anchor: middle; }
+
+    .score-grade {
+      display: inline-block;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 5px 16px;
+      border-radius: 100px;
+      margin-bottom: 16px;
+    }
+    .score-context { font-size: 16px; color: var(--muted); max-width: 580px; margin: 0 auto; line-height: 1.6; }
+
+    /* REVENUE LEAK */
+    .revenue-card {
+      background: rgba(239,68,68,0.06);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .revenue-card .label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--red); margin-bottom: 6px; }
+    .revenue-card .amount { font-size: 42px; font-weight: 800; color: var(--red); line-height: 1; }
+    .revenue-card .sub { font-size: 14px; color: var(--muted); margin-top: 6px; }
+    .revenue-card .description { font-size: 15px; color: #ccc; max-width: 420px; line-height: 1.5; }
+
+    /* SECTION HEADERS */
+    .rpt-section { margin-bottom: 40px; }
+    .rpt-section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .rpt-section-header h2 { font-size: 20px; font-weight: 700; color: #fff; }
+    .section-badge {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 100px;
+      background: rgba(249,115,22,0.12);
+      color: var(--orange);
+      border: 1px solid rgba(249,115,22,0.2);
+    }
+
+    /* GAPS */
+    .gap-list { display: flex; flex-direction: column; gap: 12px; }
+    .gap-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .gap-item:hover { border-color: #2a2a2a; }
+    .severity-badge {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .sev-5 { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .sev-4 { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
+    .sev-3 { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
+    .sev-2 { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+    .sev-1 { background: rgba(99,102,241,0.15); color: #6366f1; border: 1px solid rgba(99,102,241,0.3); }
+    .gap-body h3 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+    .gap-body p { font-size: 14px; color: var(--muted); line-height: 1.5; }
+    .gap-category { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 6px; }
+
+    /* QUICK WINS */
+    .quick-wins { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .win-card {
+      background: rgba(34,197,94,0.05);
+      border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .win-card .win-icon { font-size: 22px; margin-bottom: 10px; }
+    .win-card h3 { font-size: 15px; font-weight: 600; color: var(--green); margin-bottom: 6px; }
+    .win-card p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .win-card .win-impact { font-size: 12px; color: var(--green); margin-top: 10px; font-weight: 600; }
+
+    /* ROADMAP */
+    .roadmap { display: flex; flex-direction: column; gap: 0; position: relative; }
+    .roadmap::before {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .roadmap-item {
+      display: flex;
+      gap: 24px;
+      padding-bottom: 28px;
+      position: relative;
+    }
+    .roadmap-dot {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      position: relative;
+      z-index: 1;
+    }
+    .dot-1 { background: rgba(249,115,22,0.15); border: 2px solid var(--orange); color: var(--orange); }
+    .dot-2 { background: rgba(234,179,8,0.15); border: 2px solid var(--yellow); color: var(--yellow); }
+    .dot-3 { background: rgba(34,197,94,0.15); border: 2px solid var(--green); color: var(--green); }
+    .roadmap-body { padding-top: 6px; }
+    .roadmap-body .phase { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    .roadmap-body h3 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .roadmap-body ul { margin: 0 0 0 16px; }
+    .roadmap-body ul li { font-size: 14px; color: var(--muted); margin-bottom: 4px; line-height: 1.4; }
+
+    /* NEXUS PATH */
+    .nexus-path-card {
+      background: linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(10,10,10,0) 70%);
+      border: 1px solid rgba(249,115,22,0.25);
+      border-radius: 16px;
+      padding: 36px;
+      text-align: center;
+    }
+    .nexus-path-card .np-icon { font-size: 36px; margin-bottom: 16px; }
+    .nexus-path-card h2 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+    .nexus-path-card p { font-size: 15px; color: var(--muted); max-width: 540px; margin: 0 auto 28px; line-height: 1.6; }
+    .btn-book {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 17px;
+      font-weight: 700;
+      padding: 14px 32px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-book:hover { background: var(--orange-dark); text-decoration: none; transform: translateY(-1px); }
+    .btn-book:active { transform: translateY(0); }
+    .np-sub { margin-top: 12px; font-size: 13px; color: var(--dim); }
+
+    /* DISCLAIMER */
+    .disclaimer {
+      margin-top: 48px;
+      padding: 20px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--dim);
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 32px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--dim);
+    }
+    footer a { color: #666; margin: 0 8px; }
+    footer a:hover { color: var(--orange); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">Nexus<span>.</span></div>
+  <a class="nav-back" href="https://nexuszc.com">&larr; nexuszc.com</a>
+</nav>
+
+<!-- PASSWORD WALL -->
+<div id="password-wall">
+  <div class="pw-card">
+    <div class="lock-icon">&#128274;</div>
+    <h2>Access Your Report</h2>
+    <p>Enter the first 3 letters of your business name (lowercase) to view your Nexus Score report.</p>
+    <input type="text" id="pw-input" maxlength="3" placeholder="First 3 letters..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <button class="btn-pw" id="pw-btn">View My Report &rarr;</button>
+    <p class="pw-error" id="pw-error">Incorrect. Please check and try again.</p>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-state" style="display:flex; display:none;">
+  <div class="spinner"></div>
+  <p>Loading your report...</p>
+</div>
+
+<!-- ERROR -->
+<div id="error-state">
+  <h2>Report Not Found</h2>
+  <p>This diagnostic report could not be found. The link may have expired or the URL may be incorrect.</p>
+  <p style="margin-top:12px;"><a href="https://nexuszc.com">Go back to nexuszc.com</a></p>
+</div>
+
+<!-- REPORT -->
+<div id="report-content">
+  <div class="report-wrap">
+
+    <!-- SCORE HERO -->
+    <div class="score-hero">
+      <div class="business-name" id="rpt-business-name">Loading...</div>
+      <h1>Your Nexus Score</h1>
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" width="220" height="160" viewBox="0 0 220 160">
+          <defs>
+            <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#ef4444" />
+              <stop offset="50%" style="stop-color:#eab308" />
+              <stop offset="100%" style="stop-color:#22c55e" />
+            </linearGradient>
+          </defs>
+          <!-- Background arc: 220 degree sweep, start at -220deg from 3 o'clock = -130deg from top -->
+          <path class="gauge-bg" id="gauge-bg-path"
+            d="M 25 145 A 85 85 0 1 1 195 145"
+            stroke="#222" stroke-width="18" fill="none" stroke-linecap="round" />
+          <path class="gauge-fill" id="gauge-fill-path"
+            d="M 25 145 A 85 85 0 1 1 195 145"
+            stroke="url(#gauge-grad)" stroke-width="18" fill="none" stroke-linecap="round" />
+          <text class="gauge-score-text" id="gauge-score-text" x="110" y="118">--</text>
+          <text class="gauge-label" x="110" y="148" fill="#666" font-size="13" text-anchor="middle">/100</text>
+        </svg>
+      </div>
+      <div id="score-grade-badge" class="score-grade"></div>
+      <p class="score-context" id="score-context-text"></p>
+    </div>
+
+    <!-- REVENUE LEAKAGE -->
+    <div class="revenue-card">
+      <div>
+        <div class="label">Estimated Revenue Leakage</div>
+        <div class="amount" id="rpt-revenue-leak">--</div>
+        <div class="sub">per year, based on identified gaps</div>
+      </div>
+      <div class="description" id="rpt-revenue-desc"></div>
+    </div>
+
+    <!-- TOP GAPS -->
+    <div class="rpt-section">
+      <div class="rpt-section-header">
+        <h2>Top Gaps</h2>
+        <span class="section-badge">5 identified</span>
+      </div>
+      <div class="gap-list" id="rpt-gaps-list">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- QUICK WINS -->
+    <div class="rpt-section">
+      <div class="rpt-section-header">
+        <h2>Quick Wins</h2>
+        <span class="section-badge" style="background:rgba(34,197,94,0.1);color:#22c55e;border-color:rgba(34,197,94,0.25);">Top 3 moves</span>
+      </div>
+      <div class="quick-wins" id="rpt-quick-wins">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- 90-DAY ROADMAP -->
+    <div class="rpt-section">
+      <div class="rpt-section-header">
+        <h2>90-Day Roadmap</h2>
+        <span class="section-badge">prioritized</span>
+      </div>
+      <div class="roadmap" id="rpt-roadmap">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- NEXUS PATH -->
+    <div class="rpt-section">
+      <div class="nexus-path-card">
+        <div class="np-icon">&#129302;</div>
+        <h2 id="rpt-package-title">Your Recommended Nexus Path</h2>
+        <p id="rpt-package-desc">Based on your diagnostic, here's how Nexus can help you fix the gaps and execute the roadmap — faster than doing it alone.</p>
+        <a id="rpt-book-link" href="https://calendly.com/zach-nexuszc/30min" class="btn-book" target="_blank" rel="noopener">Book a Free Strategy Call &rarr;</a>
+        <p class="np-sub">30 minutes. No pressure. We'll walk through your report together.</p>
+      </div>
+    </div>
+
+    <!-- DISCLAIMER -->
+    <div class="disclaimer">
+      This diagnostic is based on publicly available information and AI analysis. For informational purposes only.
+      Not legal or financial advice. Nexus ZC LLC makes no guarantees of accuracy or fitness for any particular purpose.
+      &nbsp;&bull;&nbsp; <a href="/privacy.html">Privacy Policy</a> &nbsp;&bull;&nbsp; <a href="/terms.html">Terms</a>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  &copy; 2026 Nexus ZC LLC &nbsp;|&nbsp;
+  <a href="/privacy.html">Privacy</a>
+  <a href="/terms.html">Terms</a>
+  <a href="mailto:zach@nexuszc.com">zach@nexuszc.com</a>
+</footer>
+
+<script>
+  const SUPABASE_URL = "https://koqpbnxkhgbsnbdjwldx.supabase.co";
+  const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g";
+
+  // Read slug from URL path: /report/[slug] or /report/[slug]/
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  // pathParts = ['report', 'slug'] or just ['slug'] depending on hosting
+  const slug = pathParts[pathParts.length - 1] === 'report' ? null : pathParts[pathParts.length - 1];
+
+  if (!slug || slug === 'report') {
+    showError('No diagnostic slug found in URL.');
+  }
+
+  let reportData = null;
+
+  // ── PASSWORD WALL ──────────────────────────────────────────────────────────
+  async function unlockReport(attempt) {
+    document.getElementById('pw-error').style.display = 'none';
+    const btn = document.getElementById('pw-btn');
+    btn.textContent = 'Checking...';
+    btn.disabled = true;
+
+    // Fetch report from Supabase REST API
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/nexus_diagnostics?slug=eq.${encodeURIComponent(slug)}&select=*`,
+        {
+          headers: {
+            'apikey': ANON_KEY,
+            'Authorization': 'Bearer ' + ANON_KEY
+          }
+        }
+      );
+
+      if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+      const rows = await res.json();
+
+      if (!rows || rows.length === 0) {
+        showError('This report was not found.');
+        return;
+      }
+
+      const data = rows[0];
+      // Password = first 3 letters of business_name, lowercase
+      const expectedPw = (data.business_name || '').toLowerCase().replace(/[^a-z]/g, '').substring(0, 3);
+      const entered = attempt.toLowerCase().trim();
+
+      if (entered !== expectedPw) {
+        document.getElementById('pw-error').style.display = 'block';
+        btn.textContent = 'View My Report →';
+        btn.disabled = false;
+        return;
+      }
+
+      // Correct — show report
+      reportData = data;
+      document.getElementById('password-wall').style.display = 'none';
+      document.getElementById('report-content').style.display = 'block';
+      renderReport(data);
+      logReportOpen(data.id);
+
+    } catch (err) {
+      console.error(err);
+      showError('Could not load this report. Please try again.');
+    }
+  }
+
+  document.getElementById('pw-btn').addEventListener('click', () => {
+    const val = document.getElementById('pw-input').value.trim();
+    if (!val) return;
+    unlockReport(val);
+  });
+  document.getElementById('pw-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('pw-btn').click();
+  });
+
+  // ── LOG OPEN ───────────────────────────────────────────────────────────────
+  async function logReportOpen(id) {
+    try {
+      await fetch(`${SUPABASE_URL}/functions/v1/nexus-intake`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ANON_KEY },
+        body: JSON.stringify({ action: 'log_open', diagnostic_id: id })
+      });
+    } catch (_) {}
+  }
+
+  // ── RENDER REPORT ──────────────────────────────────────────────────────────
+  function renderReport(data) {
+    // Business name
+    document.getElementById('rpt-business-name').textContent = data.business_name || 'Your Business';
+    document.title = (data.business_name || 'Your Business') + ' — Nexus Score Report';
+
+    // Score
+    const score = typeof data.nexus_score === 'number' ? data.nexus_score : 0;
+    renderGauge(score);
+    renderScoreGrade(score);
+    document.getElementById('score-context-text').textContent =
+      data.score_context || getDefaultScoreContext(score);
+
+    // Revenue leakage
+    const leak = data.revenue_leakage_annual || 0;
+    document.getElementById('rpt-revenue-leak').textContent = formatCurrency(leak);
+    document.getElementById('rpt-revenue-desc').textContent =
+      data.revenue_leakage_description || 'Based on the gaps identified in your diagnostic, this is the estimated annual revenue impact of inaction.';
+
+    // Gaps
+    const gaps = data.top_gaps || [];
+    const gapList = document.getElementById('rpt-gaps-list');
+    if (gaps.length === 0) {
+      gapList.innerHTML = '<p style="color:var(--muted); font-size:14px;">Gap analysis will appear here once your diagnostic is complete.</p>';
+    } else {
+      gapList.innerHTML = gaps.slice(0, 5).map(gap => `
+        <div class="gap-item">
+          <div class="severity-badge sev-${gap.severity || 3}">${gap.severity || 3}</div>
+          <div class="gap-body">
+            <h3>${escHtml(gap.title || 'Gap Identified')}</h3>
+            <p>${escHtml(gap.description || '')}</p>
+            ${gap.category ? `<div class="gap-category">${escHtml(gap.category)}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Quick wins
+    const wins = data.quick_wins || [];
+    const winsEl = document.getElementById('rpt-quick-wins');
+    const winIcons = ['&#9889;', '&#127775;', '&#127919;'];
+    if (wins.length === 0) {
+      winsEl.innerHTML = '<p style="color:var(--muted); font-size:14px;">Quick wins will appear here once your diagnostic is complete.</p>';
+    } else {
+      winsEl.innerHTML = wins.slice(0, 3).map((win, i) => `
+        <div class="win-card">
+          <div class="win-icon">${winIcons[i] || '&#9889;'}</div>
+          <h3>${escHtml(win.title || 'Quick Win')}</h3>
+          <p>${escHtml(win.description || '')}</p>
+          ${win.impact ? `<div class="win-impact">Estimated impact: ${escHtml(win.impact)}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    // 90-day roadmap
+    const roadmap = data.roadmap_90day || [];
+    const roadmapEl = document.getElementById('rpt-roadmap');
+    const dotClasses = ['dot-1', 'dot-2', 'dot-3'];
+    const phaseLabels = ['Days 1–30', 'Days 31–60', 'Days 61–90'];
+    if (roadmap.length === 0) {
+      roadmapEl.innerHTML = '<p style="color:var(--muted); font-size:14px;">Your 90-day roadmap will appear here once your diagnostic is complete.</p>';
+    } else {
+      roadmapEl.innerHTML = roadmap.slice(0, 3).map((phase, i) => `
+        <div class="roadmap-item">
+          <div class="roadmap-dot ${dotClasses[i] || 'dot-1'}">${i + 1}</div>
+          <div class="roadmap-body">
+            <div class="phase">${phaseLabels[i] || 'Phase ' + (i + 1)}</div>
+            <h3>${escHtml(phase.title || 'Phase ' + (i + 1))}</h3>
+            <ul>
+              ${(phase.actions || []).map(a => `<li>${escHtml(a)}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Nexus path / package recommendation
+    if (data.recommended_package) {
+      document.getElementById('rpt-package-title').textContent =
+        'Recommended: ' + data.recommended_package;
+    }
+    if (data.recommended_package_description) {
+      document.getElementById('rpt-package-desc').textContent =
+        data.recommended_package_description;
+    }
+
+    // Calendly link
+    const calLink = data.calendly_link || 'https://calendly.com/zach-nexuszc/30min';
+    document.getElementById('rpt-book-link').href = calLink;
+  }
+
+  // ── GAUGE ──────────────────────────────────────────────────────────────────
+  function renderGauge(score) {
+    const fill = document.getElementById('gauge-fill-path');
+    const scoreText = document.getElementById('gauge-score-text');
+    scoreText.textContent = score;
+
+    // The arc path length for our 220-degree arc (radius 85, center 110,130)
+    // Circumference of full circle = 2*PI*85 = ~534
+    // 220/360 of that = ~326.5
+    const arcLen = 326.5;
+    const pct = Math.min(Math.max(score, 0), 100) / 100;
+    const offset = arcLen - (arcLen * pct);
+    fill.style.strokeDasharray = arcLen;
+    fill.style.strokeDashoffset = offset;
+  }
+
+  function renderScoreGrade(score) {
+    const badge = document.getElementById('score-grade-badge');
+    let label, bg, color;
+    if (score >= 80) { label = 'Strong'; bg = 'rgba(34,197,94,0.12)'; color = '#22c55e'; }
+    else if (score >= 65) { label = 'Above Average'; bg = 'rgba(234,179,8,0.12)'; color = '#eab308'; }
+    else if (score >= 50) { label = 'Average'; bg = 'rgba(249,115,22,0.12)'; color = '#f97316'; }
+    else if (score >= 35) { label = 'Below Average'; bg = 'rgba(239,68,68,0.12)'; color = '#ef4444'; }
+    else { label = 'Critical Gaps Found'; bg = 'rgba(239,68,68,0.15)'; color = '#ef4444'; }
+    badge.textContent = label;
+    badge.style.background = bg;
+    badge.style.color = color;
+    badge.style.border = '1px solid ' + color + '44';
+  }
+
+  function getDefaultScoreContext(score) {
+    if (score >= 80) return 'Your business is performing well across most dimensions. There are targeted improvements that could meaningfully accelerate your growth.';
+    if (score >= 65) return 'Your business has solid foundations with clear opportunities for improvement. Addressing the top gaps could significantly increase revenue.';
+    if (score >= 50) return 'Your business shows promise, but critical gaps are limiting your growth. The 90-day roadmap below addresses the highest-leverage improvements.';
+    if (score >= 35) return 'Your business has significant operational and market gaps. The good news: these are solvable, and fixing them could dramatically change your trajectory.';
+    return 'Your diagnostic revealed critical gaps across multiple dimensions. This is actually a significant opportunity — businesses at this stage have the most to gain from systematic improvement.';
+  }
+
+  function formatCurrency(n) {
+    if (!n || isNaN(n)) return '$0';
+    if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return '$' + Math.round(n / 1000) + 'K';
+    return '$' + n.toLocaleString();
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function showError(msg) {
+    document.getElementById('password-wall').style.display = 'none';
+    document.getElementById('loading-state').style.display = 'none';
+    const errEl = document.getElementById('error-state');
+    errEl.style.display = 'flex';
+    if (msg) errEl.querySelector('p').textContent = msg;
+  }
+</script>
+
+</body>
+</html>
