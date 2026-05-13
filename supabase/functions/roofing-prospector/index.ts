@@ -34,6 +34,29 @@ async function checkHailZones(): Promise<string[]> {
   return [...new Set(cities)].slice(0, 5);
 }
 
+// Try to extract email/phone from the company's actual website
+async function scrapeContactFromWebsite(url: string): Promise<{ email: string | null; phone: string | null }> {
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(6000),
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" }
+    });
+    if (!res.ok) return { email: null, phone: null };
+    const html = await res.text();
+    // Avoid false positives: skip noreply/example addresses, images, scripts
+    const emailMatches = [...html.matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)]
+      .map(m => m[0].toLowerCase())
+      .filter(e => !e.includes("noreply") && !e.includes("example") && !e.includes(".png") && !e.includes(".jpg") && !e.endsWith(".js"));
+    const phoneMatches = [...html.matchAll(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/g)].map(m => m[0]);
+    return {
+      email: emailMatches[0] || null,
+      phone: phoneMatches[0] || null
+    };
+  } catch {
+    return { email: null, phone: null };
+  }
+}
+
 async function extractLeadInfo(result: { title: string; link: string; snippet: string }): Promise<{
   company_name: string;
   website: string;
@@ -41,15 +64,32 @@ async function extractLeadInfo(result: { title: string; link: string; snippet: s
   phone: string | null;
   city: string;
 } | null> {
+  // Skip non-business URLs
+  const skipDomains = ["yelp.com", "bbb.org", "angi.com", "homeadvisor.com", "thumbtack.com",
+    "facebook.com", "google.com", "yellowpages.com", "houzz.com", "nextdoor.com"];
+  if (skipDomains.some(d => result.link.includes(d))) return null;
+
+  // Try snippet first (fast)
   const phoneMatch = result.snippet.match(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/);
-  const phone = phoneMatch ? phoneMatch[0] : null;
   const emailMatch = result.snippet.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-  const email = emailMatch ? emailMatch[0] : null;
+
+  let email = emailMatch ? emailMatch[0].toLowerCase() : null;
+  let phone = phoneMatch ? phoneMatch[0] : null;
+
+  // If no email from snippet, scrape the website
+  if (!email) {
+    const scraped = await scrapeContactFromWebsite(result.link);
+    email = scraped.email;
+    if (!phone) phone = scraped.phone;
+  }
+
   const company_name = result.title
     .replace(/\s*[-|–]\s*.+$/, '')
     .replace(/\s*\|\s*.+$/, '')
-    .trim();
-  return { company_name, website: result.link, email, phone, city: 'Denver' };
+    .trim()
+    .slice(0, 100);
+
+  return { company_name, website: result.link, email, phone, city: "Denver" };
 }
 
 async function scoreLead(lead: { company_name: string; website: string; snippet: string }): Promise<{
@@ -114,6 +154,9 @@ Respond with JSON only (no backticks):
 
 Deno.serve(async (_req) => {
   const newProspects: string[] = [];
+  let skippedNoEmail = 0;
+  let skippedDuplicate = 0;
+  let skippedLowScore = 0;
 
   const denverQueries = [
     "roofing contractor Denver CO residential reviews",
@@ -132,15 +175,28 @@ Deno.serve(async (_req) => {
     for (const result of results) {
       const leadInfo = await extractLeadInfo(result);
       if (!leadInfo) continue;
-      if (!leadInfo.email && !leadInfo.phone) continue;
 
-      const { data: existing } = await supabase
+      // Require email — roofing-outreach is email-only
+      if (!leadInfo.email) {
+        skippedNoEmail++;
+        continue;
+      }
+
+      // Deduplicate by website
+      const { data: existingByWebsite } = await supabase
         .from("roofing_prospects")
         .select("id")
-        .or(`website.eq.${leadInfo.website},company_name.ilike.${leadInfo.company_name}`)
+        .eq("website", leadInfo.website)
         .maybeSingle();
+      if (existingByWebsite) { skippedDuplicate++; continue; }
 
-      if (existing) continue;
+      // Deduplicate by email
+      const { data: existingByEmail } = await supabase
+        .from("roofing_prospects")
+        .select("id")
+        .eq("email", leadInfo.email)
+        .maybeSingle();
+      if (existingByEmail) { skippedDuplicate++; continue; }
 
       const score = await scoreLead({
         company_name: leadInfo.company_name,
@@ -148,9 +204,9 @@ Deno.serve(async (_req) => {
         snippet: result.snippet
       });
 
-      if (score.score < 40) continue;
+      if (score.score < 40) { skippedLowScore++; continue; }
 
-      const isHailZone = hailCities.some(city => query.includes(city.split(',')[0]));
+      const isHailZone = hailCities.some(city => query.includes(city.split(",")[0]));
 
       await supabase.from("roofing_prospects").insert({
         company_name: leadInfo.company_name,
@@ -173,17 +229,23 @@ Deno.serve(async (_req) => {
     }
   }
 
-  if (newProspects.length > 0) {
+  if (newProspects.length > 0 || skippedNoEmail > 5) {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
-        text: `🏠 *Roofing OS Prospector*\n\nFound ${newProspects.length} new prospects:\n${newProspects.slice(0, 10).map(n => `• ${n}`).join('\n')}\n\n_Starting outreach automatically._`,
+        text: `🏠 *Roofing OS Prospector*\n\nFound ${newProspects.length} new prospects with email.\nSkipped: ${skippedNoEmail} no email | ${skippedDuplicate} duplicates | ${skippedLowScore} low score\n\n${newProspects.slice(0, 10).map(n => `• ${n}`).join('\n')}\n\n_Starting outreach automatically._`,
         parse_mode: "Markdown"
       })
     });
   }
 
-  return Response.json({ ok: true, new_prospects: newProspects.length });
+  return Response.json({
+    ok: true,
+    new_prospects: newProspects.length,
+    skipped_no_email: skippedNoEmail,
+    skipped_duplicate: skippedDuplicate,
+    skipped_low_score: skippedLowScore
+  });
 });
