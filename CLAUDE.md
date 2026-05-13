@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 13, 2026 — v11
+# Last updated: May 13, 2026 — v8
 
 ---
 
@@ -117,10 +117,10 @@ Then productized and sold to other multi-business operators.
 | `nexus-self-build` | See function source for details | Internal |
 | `nexus-unsubscribe` | See function source for details | Internal |
 | `nexus-voice` | See function source for details | Internal |
-| `nexus-voice-engine` | Core call orchestration — Retell AI + ElevenLabs + Deepgram | On demand + nexus-core |
-| `nexus-voice-compliance` | Pre-call compliance — consent, DNC, TCPA hours, two-party state | Called by voice engine |
-| `nexus-voice-webhook` | Real-time Retell event handler — transcripts, outcomes, SMS mid-call | Retell webhook |
-| `nexus-voice-learning` | Weekly script optimization and call performance analysis | Weekly cron (job 13) + manual |
+| `nexus-voice-compliance` | See function source for details | Internal |
+| `nexus-voice-engine` | See function source for details | Internal |
+| `nexus-voice-learning` | See function source for details | Internal |
+| `nexus-voice-webhook` | See function source for details | Internal |
 | `process-email-queue` | Batch process email queue | Cron |
 | `provision` | Spin up client subdomain + Claude-generated site | chat provision: command or web UI |
 | `reclassify` | Re-run classification on existing entries | On demand |
@@ -134,6 +134,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-product-monitor` | See function source for details | Internal |
 | `roofing-prospector` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
+| `smoke-test` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
 
@@ -270,24 +271,17 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 13, 2026)
 
 **DONE this session:**
-- Built complete Nexus Voice Engine (Retell AI + ElevenLabs + Deepgram + Twilio)
-- 4 new edge functions: nexus-voice-engine, nexus-voice-compliance, nexus-voice-webhook, nexus-voice-learning
-- 5 new DB tables: voice_calls, voice_scripts, voice_objections, voice_learning, voice_compliance
-- Seeded: 3 openers + 1 voicemail script, 8 objection handlers
-- 8 new Telegram commands: voice stats/calls today/pause/resume/scripts/learning, call:, brief:
-- Wired nexus-core: Starter lead call sequencer (Day 1/3/7/10) + weekly learning loop
-- Weekly cron job (schedule 13): nexus-voice-learning every Sunday 9am UTC
-- Fixed nexus-diagnostic regenerate_reports timeout (EdgeRuntime.waitUntil)
+- (nothing yet this session)
 
 **NEXT:**
-1. **Manual setup required:** Add Supabase secrets — TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER (+17205006668), RETELL_AGENT_ID (after Retell dashboard setup)
-2. **Retell dashboard setup** — import Twilio number, create Nexus Aria agent, configure ElevenLabs voice + Deepgram Nova-2, set webhook URL to nexus-voice-webhook
-3. Optional: ElevenLabs voice clone of Zach (30-60s recording → instant clone → ELEVENLABS_ZACH_VOICE_ID secret)
-4. Fix smoke_test_failed error (PENDING SELF-IMPROVEMENT - simple)
-5. Add memory consolidation ability (PENDING SELF-IMPROVEMENT - medium)
-6. Improve health for Denver Pro Roofing client (health: 50 - needs attention)
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Build complete Roofing OS go-to-market system with public landing page
+1. Fix smoke_test_failed error (simple)
+2. Add memory consolidation ability (medium)
+3. Add Structured Self-Reflection Capability (medium)
+4. Add ability usage analytics and performance tracking (medium)
+5. Add conversation memory persistence (medium)
+6. Draft complete operating agreement for Nexus ZC LLC
+7. Build complete Roofing OS go-to-market system with public landing page
+8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
