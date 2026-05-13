@@ -115,8 +115,11 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
+| `roofing-closer` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
+| `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
+| `roofing-prospector` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
@@ -231,12 +234,12 @@ Then productized and sold to other multi-business operators.
 **NEXT:**
 1. Fix Failing Smoke Tests (simple)
 2. Fix modify_error recurring failure in self-modification system (medium)
-3. Add conversation memory persistence to maintain context across sessions (medium)
-4. Build complete Roofing OS go-to-market system with public landing page
-5. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
-6. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
-7. Add ability usage analytics and performance tracking (medium)
-8. Develop end-to-end autonomous task handling system (A-Z capability)
+3. Add conversation memory persistence (medium)
+4. Build the complete Roofing OS go-to-market system with public landing page
+5. Add ability usage analytics and performance tracking (medium)
+6. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
+7. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+8. Implement A-Z autonomous task handling capability
 
 ---
 
