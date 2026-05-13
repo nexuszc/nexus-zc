@@ -62,7 +62,7 @@ Book a call: ${calendlyLink}
 ANGLE: ${angleInstructions[angle] || "General follow-up"}
 
 RULES:
-- Write from: Zach Curtis, Roofing OS (zach@roofingos.dev)
+- Write from: Zach Curtis, Roofing OS (roofing@nexuszc.com)
 - Keep it SHORT — roofers don't read long emails
 - Plain text feel — no fancy HTML, just clean and readable
 - Never sound salesy or desperate
@@ -106,7 +106,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from: "Zach Curtis <zach@roofingos.dev>",
+      from: "Zach Curtis <roofing@nexuszc.com>",
       to,
       subject,
       html
