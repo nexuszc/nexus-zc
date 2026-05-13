@@ -104,6 +104,27 @@ async function observeProductHealth() {
   return { ...snapshot, product_health_score: score };
 }
 
+async function checkStalledOnboardings(): Promise<{ id: string; name: string; missing: string[] }[]> {
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from("clients")
+    .select("id, name, phone, notification_email, service_area, company_tagline, onboarding_complete, created_at")
+    .eq("status", "active")
+    .or("onboarding_complete.is.null,onboarding_complete.eq.false")
+    .lt("created_at", cutoff);
+
+  return (data || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    missing: [
+      !c.phone && "phone",
+      !c.notification_email && "notification email",
+      !c.service_area && "service area",
+      !c.company_tagline && "tagline/brand",
+    ].filter(Boolean) as string[]
+  }));
+}
+
 async function checkCompetitors() {
   const competitors = [
     "JobNimbus roofing software new features 2026",
@@ -262,6 +283,7 @@ Respond with JSON only (no backticks):
 
 Deno.serve(async (_req) => {
   const snapshot = await observeProductHealth();
+  const stalledOnboardings = await checkStalledOnboardings();
 
   const { data: lastCompCheck } = await supabase
     .from("competitor_intel")
@@ -289,14 +311,16 @@ Deno.serve(async (_req) => {
   const hasIssues = snapshot.portal_errors_24h > 0;
   const hasNewIntel = newCompetitorIntel.length > 0;
   const hasNewProposals = proposals.length > 0;
+  const hasStalledOnboardings = stalledOnboardings.length > 0;
 
-  if (hasIssues || hasNewIntel || hasNewProposals) {
+  if (hasIssues || hasNewIntel || hasNewProposals || hasStalledOnboardings) {
     const msg = `🏠 *Roofing OS Product Monitor*\n\n` +
       `*Health Score:* ${snapshot.product_health_score}/100\n` +
       `*Contractors:* ${snapshot.total_contractors} active | ${snapshot.onboarded_contractors} onboarded\n` +
       `*Jobs:* ${snapshot.total_jobs} total | ${snapshot.jobs_with_portal_sent} with portal sent\n` +
       `*Pipeline:* ${snapshot.total_prospects} prospects | ${snapshot.hot_leads} hot | ${snapshot.closed_won} won\n\n` +
       (hasIssues ? `⚠️ *${snapshot.portal_errors_24h} errors in last 24h*\n\n` : '') +
+      (hasStalledOnboardings ? `⏳ *Stalled onboardings (>48h):*\n${stalledOnboardings.map(c => `• ${c.name} — missing: ${c.missing.join(', ') || 'unknown'}`).join('\n')}\n\n` : '') +
       (hasNewIntel ? `🔍 *Competitor updates:*\n${newCompetitorIntel.map(i => `• ${i}`).join('\n')}\n\n` : '') +
       (hasNewProposals ? `💡 *${proposals.length} new improvements proposed*\n` : '') +
       `📋 Total pending: ${pendingCount}\n\n` +

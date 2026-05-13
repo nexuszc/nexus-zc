@@ -175,6 +175,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (event === "portal_viewed") {
+    await supabase.from("roofing_jobs")
+      .update({ portal_last_viewed_at: new Date().toISOString() })
+      .eq("id", job_id);
+    return Response.json({ ok: true, event: "portal_viewed" });
+  }
+
   await Promise.allSettled(notifications);
   return Response.json({ ok: true, event, notifications_sent: notifications.length });
 });
