@@ -1,197 +1,109 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-interface AuditRequest {
-  operation: 'check_overdue' | 'process_stale' | 'validate_queue';
-  threshold_hours?: number;
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 interface AuditResult {
-  success: boolean;
-  operation: string;
-  items_processed?: number;
-  items_found?: number;
-  errors?: string[];
-  details?: any;
+  total_items: number
+  stale_items: number
+  invalid_statuses: number
+  issues: Array<{
+    id: string
+    issue_type: string
+    details: string
+  }>
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
+  const { method } = req
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  if (method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      {
+        status: 405,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const STALE_THRESHOLD_HOURS = 24
+    const staleTime = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString()
+
+    const { data: queueItems, error: queueError } = await supabase
+      .from('improvement_queue')
+      .select('*')
+
+    if (queueError) throw queueError
+
+    const audit_results: AuditResult = {
+      total_items: queueItems?.length || 0,
+      stale_items: 0,
+      invalid_statuses: 0,
+      issues: []
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
-    );
+    const validStatuses = ['pending', 'in_progress', 'completed', 'failed']
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    const body: AuditRequest = await req.json();
-    
-    if (!body.operation) {
-      return new Response(
-        JSON.stringify({ error: 'Missing operation parameter' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    let result: AuditResult;
-
-    switch (body.operation) {
-      case 'check_overdue': {
-        const thresholdHours = body.threshold_hours || 24;
-        const thresholdDate = new Date(Date.now() - thresholdHours * 60 * 60 * 1000).toISOString();
-        
-        const { data: overdueItems, error } = await supabaseClient
-          .from('improvement_queue')
-          .select('*')
-          .eq('status', 'pending')
-          .lt('created_at', thresholdDate);
-
-        if (error) {
-          throw error;
-        }
-
-        result = {
-          success: true,
-          operation: 'check_overdue',
-          items_found: overdueItems?.length || 0,
-          details: overdueItems,
-        };
-        break;
+    for (const item of queueItems || []) {
+      if (!validStatuses.includes(item.status)) {
+        audit_results.invalid_statuses++
+        audit_results.issues.push({
+          id: item.id,
+          issue_type: 'invalid_status',
+          details: `Invalid status: ${item.status}`
+        })
       }
 
-      case 'process_stale': {
-        const thresholdHours = body.threshold_hours || 72;
-        const thresholdDate = new Date(Date.now() - thresholdHours * 60 * 60 * 1000).toISOString();
-        
-        const { data: staleItems, error: fetchError } = await supabaseClient
-          .from('improvement_queue')
-          .select('id')
-          .eq('status', 'pending')
-          .lt('created_at', thresholdDate);
-
-        if (fetchError) {
-          throw fetchError;
-        }
-
-        if (staleItems && staleItems.length > 0) {
-          const { error: updateError } = await supabaseClient
-            .from('improvement_queue')
-            .update({ status: 'stale', updated_at: new Date().toISOString() })
-            .in('id', staleItems.map(item => item.id));
-
-          if (updateError) {
-            throw updateError;
-          }
-        }
-
-        result = {
-          success: true,
-          operation: 'process_stale',
-          items_processed: staleItems?.length || 0,
-        };
-        break;
+      if (item.status === 'in_progress' && item.updated_at < staleTime) {
+        audit_results.stale_items++
+        audit_results.issues.push({
+          id: item.id,
+          issue_type: 'stale_item',
+          details: `Item stuck in progress since ${item.updated_at}`
+        })
       }
 
-      case 'validate_queue': {
-        const { data: allItems, error } = await supabaseClient
-          .from('improvement_queue')
-          .select('*')
-          .order('created_at', { ascending: false });
+      if (item.task_id) {
+        const { data: task, error: taskError } = await supabase
+          .from('tasks')
+          .select('id, status')
+          .eq('id', item.task_id)
+          .single()
 
-        if (error) {
-          throw error;
+        if (taskError || !task) {
+          audit_results.issues.push({
+            id: item.id,
+            issue_type: 'missing_task',
+            details: `Referenced task ${item.task_id} not found`
+          })
         }
-
-        const errors: string[] = [];
-        const statusCounts: Record<string, number> = {};
-
-        allItems?.forEach(item => {
-          statusCounts[item.status] = (statusCounts[item.status] || 0) + 1;
-          
-          if (!item.improvement_data) {
-            errors.push(`Item ${item.id} missing improvement_data`);
-          }
-          
-          if (!item.priority || !['low', 'medium', 'high', 'critical'].includes(item.priority)) {
-            errors.push(`Item ${item.id} has invalid priority`);
-          }
-        });
-
-        result = {
-          success: true,
-          operation: 'validate_queue',
-          items_found: allItems?.length || 0,
-          errors: errors.length > 0 ? errors : undefined,
-          details: { statusCounts },
-        };
-        break;
       }
-
-      default:
-        return new Response(
-          JSON.stringify({ error: 'Invalid operation' }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        );
     }
 
     return new Response(
-      JSON.stringify(result),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
-
-  } catch (error) {
-    console.error('Audit error:', error);
-    return new Response(
-      JSON.stringify({ 
-        success: false,
-        error: error.message || 'Internal server error' 
+      JSON.stringify({
+        success: true,
+        audit_results,
+        timestamp: new Date().toISOString()
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
       }
-    );
+    )
+  } catch (error) {
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
   }
-});
+})
