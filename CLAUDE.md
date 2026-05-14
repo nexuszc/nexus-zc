@@ -127,7 +127,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-router` | See function source for details | Internal |
 | `nexus-self-build` | See function source for details | Internal |
 | `nexus-unsubscribe` | See function source for details | Internal |
-| `nexus-vertical-router` | Routes vertical-specific tasks (storm scan, prospecting, QA, ROI, churn, intel) per cycle | Every cycle via nexus-core |
+| `nexus-vertical-router` | See function source for details | Internal |
 | `nexus-voice` | See function source for details | Internal |
 | `nexus-voice-compliance` | See function source for details | Internal |
 | `nexus-voice-engine` | See function source for details | Internal |
@@ -142,37 +142,34 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
-| `roofing-analytics` | Rep performance, market penetration, pricing analysis, supplement performance | Internal + nexus-core |
-| `roofing-aria-engine` | Outbound AI voice calls via Retell (5 call types, champion scripts, TCPA gate) | Internal + nexus-core |
-| `roofing-aria-inbound` | Inbound call routing: personalized Retell agent based on caller lookup | Retell inbound |
-| `roofing-aria-learning` | Weekly script performance analysis: promote champion, retire worst | Weekly cron via nexus-core |
-| `roofing-aria-storm-trigger` | Bulk-queue storm alert calls for previous customers in affected zip codes | nexus-core storm detection |
-| `roofing-aria-webhook` | Retell webhook: tracks call events, analyzes transcript, triggers follow-ups | Retell webhook |
-| `roofing-depreciation-tracker` | Daily scan: generate release letters, alert follow-ups for unreleased depreciation | Daily cron via nexus-core |
-| `roofing-supplement-analyzer` | Claude Vision photo analysis: detect missed line items per photo | Internal |
-| `roofing-supplement-generator` | Generate full Xactimate supplement packages with carrier-specific language | Internal |
-| `roofing-supplement-rebuttal` | AI rebuttal letters for denied line items, carrier-specific strategies | Internal |
-| `roofing-supplement-tracker` | Track adjuster responses, record approvals/denials, list pending | Internal |
+| `roofing-analytics` | See function source for details | Internal |
+| `roofing-aria-engine` | See function source for details | Internal |
+| `roofing-aria-inbound` | See function source for details | Internal |
+| `roofing-aria-learning` | See function source for details | Internal |
+| `roofing-aria-storm-trigger` | See function source for details | Internal |
+| `roofing-aria-webhook` | See function source for details | Internal |
 | `roofing-closer` | See function source for details | Internal |
-| `roofing-crew-manager` | Crew scheduling, check-in/out, GPS tracking, weather alerts | Internal |
-| `roofing-financial` | Financial dashboard, cash flow, sub payments, job P&L reports | Internal + nexus-core |
-| `roofing-job-pipeline` | Job status transitions + lifecycle automation (portal, supplements, permits) | Internal |
-| `roofing-material-order` | Create/confirm/report material orders, update job financials | Internal |
+| `roofing-crew-manager` | See function source for details | Internal |
+| `roofing-depreciation-tracker` | See function source for details | Internal |
+| `roofing-financial` | See function source for details | Internal |
+| `roofing-job-pipeline` | See function source for details | Internal |
+| `roofing-material-order` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
-| `roofing-permit-tracker` | Submit/approve permits, scan overdue, portal notifications | Internal + nexus-core |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
+| `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
 | `roofing-prospector` | See function source for details | Internal |
-| `roofing-qa-bot` | Smoke tests all critical functions every 6 hours, alerts on failures | nexus-core |
-| `roofing-self-improve` | Detects patterns in scheduling/supplement/pricing, saves to roofing_patterns | Weekly cron via nexus-core |
-| `roofing-weekly-report` | Monday 7am intelligence briefing: revenue, contracts, supplements, AI calls, insights | Monday cron via nexus-core |
-| `portal-activity-generator` | Generate bilingual portal activity updates (19 activity types) | Internal |
-| `portal-api` | Homeowner portal REST API: overview, messages, sign docs, referrals | Token auth from portal |
-| `portal-magic-link` | Generate 1-year magic link token + SMS/email delivery | Internal |
+| `roofing-qa-bot` | See function source for details | Internal |
+| `roofing-self-improve` | See function source for details | Internal |
+| `roofing-supplement-analyzer` | See function source for details | Internal |
+| `roofing-supplement-generator` | See function source for details | Internal |
+| `roofing-supplement-rebuttal` | See function source for details | Internal |
+| `roofing-supplement-tracker` | See function source for details | Internal |
+| `roofing-weekly-report` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
-| `supplement-audit-engine` | Free public audit: storm search → AI audit → score lead → Aria call → email | Landing page form |
 | `smoke-test` | See function source for details | Internal |
+| `supplement-audit-engine` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
 
