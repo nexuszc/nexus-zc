@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 13, 2026 — v14
+# Last updated: May 13, 2026 — v15
 
 ---
 
@@ -142,7 +142,12 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-rebuttal` | AI rebuttal letters for denied line items, carrier-specific strategies | Internal |
 | `roofing-supplement-tracker` | Track adjuster responses, record approvals/denials, list pending | Internal |
 | `roofing-closer` | See function source for details | Internal |
+| `roofing-crew-manager` | Crew scheduling, check-in/out, GPS tracking, weather alerts | Internal |
+| `roofing-financial` | Financial dashboard, cash flow, sub payments, job P&L reports | Internal + nexus-core |
+| `roofing-job-pipeline` | Job status transitions + lifecycle automation (portal, supplements, permits) | Internal |
+| `roofing-material-order` | Create/confirm/report material orders, update job financials | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
+| `roofing-permit-tracker` | Submit/approve permits, scan overdue, portal notifications | Internal + nexus-core |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
@@ -318,18 +323,20 @@ Then productized and sold to other multi-business operators.
 - Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
 - Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
 - Built Roofing OS Supplement AI (roofing-supplement-analyzer, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-depreciation-tracker)
-- 6 new Supplement DB tables: supplement_packages, supplement_photo_analysis, roofing_codes, carrier_intelligence, supplement_rebuttals, depreciation_tracking
-- Carrier intelligence seeded: State Farm, Allstate, Liberty Mutual, Travelers, USAA, Nationwide
-- Colorado building codes seeded: 8 code types (ice shield, drip edge, underlayment, starter, ridge, ventilation, decking, valley)
-- 12 new Telegram commands: supplement:, review supplement:, approve supplement:, rebuttal:, supplement stats, carrier intel:, codes:, depreciation scan, pending supplements, supplement history:, add carrier intel:, follow up supplement:
-- nexus-core wired: depreciation scan daily, supplement follow-up every cycle
-- All 30 spec tests passed
+- 6 new Supplement DB tables + carrier intelligence seeded (6 carriers) + 8 Colorado codes
+- 12 new Supplement Telegram commands; nexus-core wired for depreciation scan + supplement follow-up
+- Built Roofing OS Operations Layer (roofing-job-pipeline, roofing-crew-manager, roofing-material-order, roofing-permit-tracker, roofing-financial)
+- 8 new Operations DB tables: roofing_crew, crew_schedules, material_orders, roofing_permits, job_financials, roofing_subcontractors, sub_assignments, cash_flow_projections
+- ALTER TABLE roofing_jobs: ~25 new columns (contractor_id, scheduled_start/end, foreman_id, roof_squares, profit_margin, etc.)
+- 12 new Operations Telegram commands: job:, jobs today, pipeline, schedule:, order materials:, permit:, permit approved:, financial dashboard, cash flow, pay sub:, job complete:, job status:
+- nexus-core wired: permit scan + weather check daily, financial dashboard summary weekly
+- All 25 Operations spec tests passed
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
-3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-4. Build Supplement AI dashboard tab in contractor app (React)
+1. Build Spec 6 — Intelligence Layer
+2. Fix smoke_test_failed error (simple)
+3. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
+4. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
 5. Add memory consolidation ability (medium)
 6. Add Structured Self-Reflection Capability (medium)
 7. Draft complete operating agreement for Nexus ZC LLC
