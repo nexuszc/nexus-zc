@@ -1,113 +1,177 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 interface TestResult {
-  success: boolean
-  message: string
-  details?: any
+  name: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration: number;
+  error?: string;
 }
 
-Deno.serve(async (req) => {
+interface TestSuite {
+  name: string;
+  tests: TestResult[];
+}
+
+interface TestRunResult {
+  success: boolean;
+  suites: TestSuite[];
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    duration: number;
+  };
+  timestamp: string;
+}
+
+async function discoverTests(): Promise<string[]> {
+  const testFiles: string[] = [];
+  
+  try {
+    const testDirs = ['./tests', './test'];
+    
+    for (const dir of testDirs) {
+      try {
+        for await (const entry of Deno.readDir(dir)) {
+          if (entry.isFile && (entry.name.endsWith('.test.ts') || entry.name.endsWith('.spec.ts'))) {
+            testFiles.push(`${dir}/${entry.name}`);
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch (error) {
+    console.error('Error discovering tests:', error);
+  }
+  
+  return testFiles;
+}
+
+async function executeTest(testPath: string): Promise<TestSuite> {
+  const suiteName = testPath.split('/').pop() || testPath;
+  const tests: TestResult[] = [];
+  
+  try {
+    const startTime = performance.now();
+    const module = await import(testPath);
+    const duration = performance.now() - startTime;
+    
+    if (typeof module.default === 'function') {
+      try {
+        await module.default();
+        tests.push({
+          name: 'default',
+          status: 'passed',
+          duration
+        });
+      } catch (error) {
+        tests.push({
+          name: 'default',
+          status: 'failed',
+          duration,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    
+    for (const [key, value] of Object.entries(module)) {
+      if (typeof value === 'function' && key !== 'default') {
+        const testStartTime = performance.now();
+        try {
+          await value();
+          tests.push({
+            name: key,
+            status: 'passed',
+            duration: performance.now() - testStartTime
+          });
+        } catch (error) {
+          tests.push({
+            name: key,
+            status: 'failed',
+            duration: performance.now() - testStartTime,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+  } catch (error) {
+    tests.push({
+      name: suiteName,
+      status: 'failed',
+      duration: 0,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  
+  return {
+    name: suiteName,
+    tests
+  };
+}
+
+async function runAllTests(): Promise<TestRunResult> {
+  const startTime = performance.now();
+  const testFiles = await discoverTests();
+  const suites: TestSuite[] = [];
+  
+  for (const testFile of testFiles) {
+    const suite = await executeTest(testFile);
+    suites.push(suite);
+  }
+  
+  const allTests = suites.flatMap(suite => suite.tests);
+  const summary = {
+    total: allTests.length,
+    passed: allTests.filter(t => t.status === 'passed').length,
+    failed: allTests.filter(t => t.status === 'failed').length,
+    skipped: allTests.filter(t => t.status === 'skipped').length,
+    duration: performance.now() - startTime
+  };
+  
+  return {
+    success: summary.failed === 0,
+    suites,
+    summary,
+    timestamp: new Date().toISOString()
+  };
+}
+
+Deno.serve(async (req: Request) => {
   try {
     if (req.method !== 'POST') {
       return new Response(
-        JSON.stringify({ success: false, message: 'Method not allowed' }),
-        { status: 405, headers: { 'Content-Type': 'application/json' } }
-      )
+        JSON.stringify({ error: 'Method not allowed' }),
+        { 
+          status: 405,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration')
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    const { testType, testData } = await req.json()
-
-    let result: TestResult
-
-    switch (testType) {
-      case 'connection':
-        const { data: connectionData, error: connectionError } = await supabase
-          .from('nexus_connections')
-          .select('*')
-          .limit(1)
-        
-        result = {
-          success: !connectionError,
-          message: connectionError ? 'Connection test failed' : 'Connection test passed',
-          details: connectionError || connectionData
-        }
-        break
-
-      case 'query':
-        const { query, params } = testData || {}
-        const { data: queryData, error: queryError } = await supabase.rpc(query, params)
-        
-        result = {
-          success: !queryError,
-          message: queryError ? 'Query test failed' : 'Query test passed',
-          details: queryError || queryData
-        }
-        break
-
-      case 'integration':
-        const integrationTests = []
-        
-        const { data: nodesData, error: nodesError } = await supabase
-          .from('nexus_nodes')
-          .select('*')
-          .limit(5)
-        integrationTests.push({ test: 'nodes', success: !nodesError, error: nodesError })
-
-        const { data: edgesData, error: edgesError } = await supabase
-          .from('nexus_edges')
-          .select('*')
-          .limit(5)
-        integrationTests.push({ test: 'edges', success: !edgesError, error: edgesError })
-
-        const { data: connectionsData, error: connectionsError } = await supabase
-          .from('nexus_connections')
-          .select('*')
-          .limit(5)
-        integrationTests.push({ test: 'connections', success: !connectionsError, error: connectionsError })
-
-        const allPassed = integrationTests.every(t => t.success)
-        result = {
-          success: allPassed,
-          message: allPassed ? 'All integration tests passed' : 'Some integration tests failed',
-          details: integrationTests
-        }
-        break
-
-      default:
-        result = {
-          success: false,
-          message: `Unknown test type: ${testType}`
-        }
-    }
-
+    
+    const result = await runAllTests();
+    
     return new Response(
       JSON.stringify(result),
-      { 
-        status: result.success ? 200 : 400,
-        headers: { 'Content-Type': 'application/json' } 
+      {
+        status: result.success ? 200 : 500,
+        headers: { 'Content-Type': 'application/json' }
       }
-    )
-
+    );
   } catch (error) {
+    console.error('Test runner error:', error);
+    
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        message: 'Test runner error',
-        details: error.message 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
       }),
-      { 
+      {
         status: 500,
-        headers: { 'Content-Type': 'application/json' } 
+        headers: { 'Content-Type': 'application/json' }
       }
-    )
+    );
   }
-})
+});
