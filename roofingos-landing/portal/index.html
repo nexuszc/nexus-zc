@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Your Project Portal</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--bg2:#111118;--card:#16161f;--border:#1e1e2e;
+  --blue:#3b82f6;--blue-l:#60a5fa;--orange:#f97316;--green:#22c55e;
+  --red:#ef4444;--yellow:#eab308;
+  --t1:#f8fafc;--t2:#94a3b8;--t3:#475569;
+  --font:'Inter',system-ui,sans-serif;
+  --radius:12px;--safe-bottom:env(safe-area-inset-bottom,0px)
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-family:var(--font)}
+#app{height:100%;display:flex;flex-direction:column;overflow:hidden}
+
+/* LOADING */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:20px}
+.spinner{width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:var(--t2);font-size:14px;letter-spacing:0.05em}
+
+/* HERO */
+#hero{position:relative;width:100%;height:260px;flex-shrink:0;overflow:hidden;background:var(--bg2)}
+#hero-img{width:100%;height:100%;object-fit:cover;display:block}
+#hero-fallback{width:100%;height:100%;background:linear-gradient(135deg,#1e1e2e 0%,#0f172a 100%);display:flex;align-items:center;justify-content:center}
+#hero-fallback svg{opacity:0.3}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(10,10,15,.4) 0%,rgba(10,10,15,.95) 100%)}
+.hero-top{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center}
+.contractor-logo{font-size:13px;font-weight:700;color:white;letter-spacing:.05em;text-transform:uppercase;opacity:.9}
+.homeowner-name{font-size:13px;color:rgba(255,255,255,.7)}
+.hero-bottom{position:absolute;bottom:0;left:0;right:0;padding:16px;display:flex;align-items:flex-end;gap:20px}
+.hero-address{flex:1}
+.hero-address h1{font-size:17px;font-weight:700;color:white;line-height:1.3;margin-bottom:4px}
+.hero-address p{font-size:13px;color:rgba(255,255,255,.6)}
+.progress-ring-wrap{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px}
+.progress-ring-wrap svg{transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:rgba(255,255,255,.15);stroke-width:6}
+.ring-fill{fill:none;stroke:var(--blue);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .8s ease}
+.ring-label{fill:white;font-size:18px;font-weight:700;text-anchor:middle;dominant-baseline:middle;transform:rotate(90deg);transform-origin:40px 40px}
+.ring-sublabel{font-size:10px;color:rgba(255,255,255,.6);text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+
+/* STATUS BAR */
+#status-bar{background:var(--card);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;box-shadow:0 0 6px var(--green)}
+.status-dot.orange{background:var(--orange);box-shadow:0 0 6px var(--orange)}
+.status-dot.blue{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+#status-text{font-size:13px;color:var(--t1);font-weight:600}
+
+/* CONTENT */
+#content{flex:1;overflow:hidden;position:relative}
+.tab-pane{display:none;height:100%;overflow-y:auto;padding:16px;padding-bottom:calc(70px + var(--safe-bottom));-webkit-overflow-scrolling:touch}
+.tab-pane.active{display:block}
+
+/* BOTTOM NAV */
+#bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  height:calc(60px + var(--safe-bottom));
+  background:var(--card);
+  border-top:1px solid var(--border);
+  display:flex;
+  padding-bottom:var(--safe-bottom);
+  z-index:50;
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px)
+}
+.nav-tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;cursor:pointer;position:relative;padding-top:8px
+}
+.nav-tab svg{width:22px;height:22px;stroke:var(--t3);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke .2s}
+.nav-tab span{font-size:10px;color:var(--t3);font-weight:500;transition:color .2s}
+.nav-tab.active svg{stroke:var(--blue)}
+.nav-tab.active span{color:var(--blue)}
+.nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--orange);color:white;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px;display:none}
+.nav-badge.show{display:flex}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.card-title{font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+h2.section-title{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:12px}
+
+/* CREW CARD */
+.crew-card{display:flex;align-items:center;gap:14px}
+.crew-avatar{width:56px;height:56px;border-radius:50%;background:var(--border);object-fit:cover;flex-shrink:0;border:2px solid var(--blue)}
+.crew-avatar-placeholder{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--blue) 0%,#1d4ed8 100%);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.crew-info h3{font-size:15px;font-weight:700;color:var(--t1)}
+.crew-info p{font-size:13px;color:var(--t2);margin-top:2px}
+.crew-arrive{font-size:12px;color:var(--orange);font-weight:600;margin-top:4px}
+
+/* WEATHER */
+.weather-widget{display:flex;align-items:center;gap:14px}
+.weather-icon{font-size:36px}
+.weather-info h3{font-size:20px;font-weight:700;color:var(--t1)}
+.weather-info p{font-size:13px;color:var(--t2)}
+.weather-alert{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:13px;color:var(--yellow);display:flex;align-items:center;gap:8px}
+
+/* ACTIVITY FEED */
+.activity-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.activity-item:last-child{border-bottom:none}
+.activity-icon{font-size:20px;flex-shrink:0;width:32px;text-align:center}
+.activity-body{flex:1}
+.activity-title{font-size:14px;font-weight:600;color:var(--t1);margin-bottom:3px}
+.activity-desc{font-size:13px;color:var(--t2);line-height:1.5}
+.activity-time{font-size:11px;color:var(--t3);margin-top:4px}
+
+/* PHOTOS */
+.phase-tabs{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
+.phase-tab{padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;background:var(--card);border:1px solid var(--border);color:var(--t2);transition:all .2s}
+.phase-tab.active{background:var(--blue);border-color:var(--blue);color:white}
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.photo-thumb{aspect-ratio:1;object-fit:cover;border-radius:4px;cursor:pointer;width:100%;display:block;background:var(--border)}
+.photo-fullscreen{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.photo-fullscreen img{max-width:100%;max-height:80vh;object-fit:contain}
+.photo-fullscreen .caption{color:var(--t2);font-size:14px;padding:16px;text-align:center}
+.photo-fullscreen .close-btn{position:absolute;top:20px;right:20px;background:rgba(255,255,255,.1);border:none;color:white;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* BEFORE/AFTER SLIDER */
+.ba-container{position:relative;width:100%;border-radius:var(--radius);overflow:hidden;margin-bottom:14px;touch-action:none}
+.ba-after{width:100%;display:block}
+.ba-before-wrap{position:absolute;top:0;left:0;height:100%;overflow:hidden;border-right:2px solid white}
+.ba-before{display:block;height:100%;object-fit:cover}
+.ba-handle{position:absolute;top:0;bottom:0;width:2px;background:white;cursor:ew-resize;display:flex;align-items:center;justify-content:center}
+.ba-handle-circle{width:36px;height:36px;background:white;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);margin-left:-17px}
+.ba-label{position:absolute;top:10px;background:rgba(0,0,0,.6);color:white;font-size:11px;font-weight:700;padding:4px 8px;border-radius:4px;letter-spacing:.05em}
+.ba-label.before{left:10px}
+.ba-label.after{right:10px}
+
+/* INSURANCE */
+.claim-status-card{text-align:center;padding:20px}
+.claim-carrier{font-size:13px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.claim-status-text{font-size:20px;font-weight:700;color:var(--t1);margin-bottom:6px}
+.claim-sub{font-size:14px;color:var(--t2)}
+.steps-list{list-style:none}
+.step-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.step-item:last-child{border-bottom:none}
+.step-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.step-label{font-size:14px;font-weight:600;color:var(--t1)}
+.step-sub{font-size:12px;color:var(--t2);margin-top:2px}
+.step-item.pending .step-label{color:var(--t3)}
+.amounts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.amount-item{background:var(--bg2);border-radius:8px;padding:12px}
+.amount-label{font-size:11px;color:var(--t3);font-weight:600;text-transform:uppercase;margin-bottom:4px}
+.amount-value{font-size:17px;font-weight:700;color:var(--t1)}
+.amount-value.pending{color:var(--t3);font-size:14px}
+.amount-value.green{color:var(--green)}
+
+/* DOCUMENTS */
+.doc-item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.doc-item:last-child{border-bottom:none}
+.doc-icon{font-size:22px;flex-shrink:0}
+.doc-info{flex:1}
+.doc-title{font-size:14px;font-weight:600;color:var(--t1)}
+.doc-desc{font-size:12px;color:var(--t2);margin-top:2px}
+.badge{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px}
+.badge-signed{background:rgba(34,197,94,.1);color:var(--green)}
+.badge-pending{background:rgba(249,115,22,.15);color:var(--orange)}
+.badge-complete{background:rgba(59,130,246,.1);color:var(--blue-l)}
+.sig-overlay{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column}
+.sig-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.sig-header h2{font-size:16px;font-weight:700;flex:1}
+.sig-doc-body{flex:1;overflow-y:auto;padding:16px;font-size:14px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
+.sig-footer{padding:16px;border-top:1px solid var(--border)}
+.sig-canvas-wrap{margin-bottom:12px}
+.sig-canvas-wrap p{font-size:13px;color:var(--t2);margin-bottom:8px}
+canvas#sig-canvas{width:100%;height:160px;background:rgba(255,255,255,.05);border:2px dashed var(--border);border-radius:8px;touch-action:none;cursor:crosshair}
+.btn{display:block;width:100%;padding:14px;border-radius:10px;font-size:15px;font-weight:700;border:none;cursor:pointer;text-align:center;letter-spacing:.02em}
+.btn-primary{background:var(--blue);color:white}
+.btn-secondary{background:var(--card);color:var(--t1);border:1px solid var(--border)}
+.btn-danger{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.btn+.btn{margin-top:10px}
+
+/* PAYMENTS */
+.payment-timeline{margin-bottom:16px}
+.payment-item{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)}
+.payment-item:last-child{border-bottom:none}
+.payment-icon{font-size:20px;flex-shrink:0}
+.payment-info{flex:1}
+.payment-desc{font-size:14px;font-weight:600;color:var(--t1)}
+.payment-due{font-size:12px;color:var(--t2);margin-top:2px}
+.payment-amt{font-size:16px;font-weight:700;color:var(--t1);text-align:right}
+.payment-amt.paid{color:var(--green)}
+.payment-amt.due{color:var(--orange)}
+.pay-form{margin-top:16px}
+.input-group{margin-bottom:12px}
+.input-group label{font-size:12px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
+.input-group input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--t1);font-size:16px;outline:none}
+.input-group input:focus{border-color:var(--blue)}
+.input-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pay-total{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid var(--border);margin-top:4px}
+.pay-total span{font-size:14px;color:var(--t2)}
+.pay-total strong{font-size:22px;font-weight:800;color:var(--t1)}
+
+/* ARIA CHAT */
+#aria-bubble{position:fixed;bottom:calc(72px + var(--safe-bottom));right:16px;width:52px;height:52px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:60;box-shadow:0 4px 20px rgba(59,130,246,.5);transition:transform .2s}
+#aria-bubble:active{transform:scale(.92)}
+#aria-bubble svg{width:24px;height:24px;stroke:white;fill:none;stroke-width:2}
+#aria-panel{position:fixed;inset:0;background:var(--bg);z-index:80;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .35s cubic-bezier(.32,.72,0,1)}
+#aria-panel.open{transform:translateY(0)}
+.aria-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.aria-avatar{width:36px;height:36px;background:var(--blue);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.aria-header h2{font-size:15px;font-weight:700;flex:1}
+.aria-header p{font-size:12px;color:var(--green)}
+.aria-close{background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;padding:4px}
+.aria-suggestions{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;border-bottom:1px solid var(--border)}
+.aria-suggest{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:13px;color:var(--blue-l);white-space:nowrap;cursor:pointer;transition:all .15s}
+.aria-suggest:active{background:var(--blue);color:white}
+#chat-messages{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.chat-msg{margin-bottom:14px;display:flex;gap:8px}
+.chat-msg.user{flex-direction:row-reverse}
+.chat-bubble{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5}
+.chat-msg.aria .chat-bubble{background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-msg.user .chat-bubble{background:var(--blue);color:white;border-bottom-right-radius:4px}
+.chat-msg-name{font-size:11px;color:var(--t3);margin-bottom:3px}
+.typing{display:flex;gap:4px;align-items:center;padding:10px 14px}
+.typing span{width:6px;height:6px;background:var(--t3);border-radius:50%;animation:bounce .9s ease infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.aria-input-row{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;padding-bottom:calc(12px + var(--safe-bottom))}
+#chat-input{flex:1;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:10px 16px;color:var(--t1);font-size:15px;outline:none;resize:none;max-height:100px;font-family:var(--font);line-height:1.4}
+#chat-input:focus{border-color:var(--blue)}
+.aria-send{width:40px;height:40px;background:var(--blue);border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aria-send svg{width:18px;height:18px;stroke:white;fill:none;stroke-width:2}
+.aria-voice{width:40px;height:40px;background:var(--card);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.aria-voice.recording{background:var(--red);border-color:var(--red);animation:pulse-red 1s ease infinite}
+.aria-voice svg{width:18px;height:18px;stroke:var(--t2);fill:none;stroke-width:2}
+.aria-voice.recording svg{stroke:white}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+
+/* MONITORING */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:16px 0}
+.gauge-score{font-size:56px;font-weight:800;color:var(--green);line-height:1}
+.gauge-label{font-size:14px;color:var(--t2);margin-top:4px}
+.gauge-sub{font-size:12px;color:var(--t3)}
+.monitor-stat{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}
+.monitor-stat:last-child{border-bottom:none}
+.monitor-stat-label{font-size:14px;color:var(--t2)}
+.monitor-stat-value{font-size:14px;font-weight:700;color:var(--t1)}
+
+/* REFERRAL */
+.referral-code{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;margin-bottom:16px}
+.referral-code h3{font-size:12px;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.referral-code .code{font-size:28px;font-weight:800;color:var(--blue);letter-spacing:.15em}
+.referral-reward{font-size:13px;color:var(--t2);margin-top:6px}
+
+/* EMPTY STATES */
+.empty-state{text-align:center;padding:48px 24px}
+.empty-state .icon{font-size:48px;margin-bottom:16px}
+.empty-state h3{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:8px}
+.empty-state p{font-size:14px;color:var(--t2);line-height:1.6}
+
+/* LANGUAGE TOGGLE */
+.lang-toggle{display:flex;gap:4px;background:var(--bg2);border-radius:8px;padding:3px;width:fit-content}
+.lang-btn{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--t3);transition:all .2s}
+.lang-btn.active{background:var(--card);color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+@media(min-width:480px){
+  #app{max-width:480px;margin:0 auto}
+  #bottom-nav{max-width:480px;left:50%;transform:translateX(-50%)}
+  #aria-bubble{right:calc(50% - 240px + 16px)}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading your project...</p>
+  </div>
+
+  <div id="hero" style="display:none">
+    <div id="hero-fallback" style="display:none">
+      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+    </div>
+    <img id="hero-img" src="" alt="" style="display:none" onerror="this.style.display='none';document.getElementById('hero-fallback').style.display='flex'">
+    <div class="hero-overlay"></div>
+    <div class="hero-top">
+      <span class="contractor-logo" id="contractor-name">Roofing OS</span>
+      <span class="homeowner-name" id="hero-homeowner"></span>
+    </div>
+    <div class="hero-bottom">
+      <div class="hero-address">
+        <h1 id="hero-address"></h1>
+        <p id="hero-status-label"></p>
+      </div>
+      <div class="progress-ring-wrap">
+        <svg width="80" height="80" viewBox="0 0 80 80">
+          <circle class="ring-bg" cx="40" cy="40" r="34"/>
+          <circle id="ring-fill" class="ring-fill" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="213.6"/>
+          <text id="ring-pct" class="ring-label" x="40" y="40">0%</text>
+        </svg>
+        <span class="ring-sublabel" id="ring-phase">Starting</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-bar" style="display:none">
+    <div class="status-dot blue" id="status-dot"></div>
+    <span id="status-text">Your project is active</span>
+    <div style="margin-left:auto">
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" onclick="setLang('es')">ES</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="content" style="display:none">
+    <!-- OVERVIEW TAB -->
+    <div id="tab-overview" class="tab-pane active">
+      <div id="crew-section" style="display:none" class="card">
+        <div class="card-title">Your Crew</div>
+        <div class="crew-card">
+          <div class="crew-avatar-placeholder" id="crew-avatar">👷</div>
+          <div class="crew-info">
+            <h3 id="crew-name">Your Foreman</h3>
+            <p id="crew-bio">Experienced roofing specialist</p>
+            <p class="crew-arrive" id="crew-arrive"></p>
+          </div>
+        </div>
+      </div>
+
+      <div id="weather-section" class="card" style="display:none">
+        <div class="card-title">Weather at Your Property</div>
+        <div class="weather-widget">
+          <div class="weather-icon" id="wx-icon">⛅</div>
+          <div class="weather-info">
+            <h3 id="wx-temp">--°F</h3>
+            <p id="wx-desc">Loading weather...</p>
+          </div>
+        </div>
+        <div class="weather-alert" id="wx-alert" style="display:none">
+          ⚠️ <span id="wx-alert-text"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Recent Activity</div>
+        <div id="activity-list">
+          <div class="empty-state">
+            <div class="icon">📋</div>
+            <h3>No activity yet</h3>
+            <p>Updates will appear here as your project progresses.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHOTOS TAB -->
+    <div id="tab-photos" class="tab-pane">
+      <div id="ba-section" style="display:none;margin-bottom:16px">
+        <h2 class="section-title">Before &amp; After</h2>
+        <div class="ba-container" id="ba-container">
+          <img id="ba-after-img" class="ba-after" src="" alt="After">
+          <div class="ba-before-wrap" id="ba-before-wrap">
+            <img id="ba-before-img" class="ba-before" src="" alt="Before">
+          </div>
+          <div class="ba-handle" id="ba-handle">
+            <div class="ba-handle-circle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/><polyline points="9,18 3,12 9,6"/></svg>
+            </div>
+          </div>
+          <div class="ba-label before">BEFORE</div>
+          <div class="ba-label after">AFTER</div>
+        </div>
+      </div>
+
+      <div class="phase-tabs" id="phase-tabs">
+        <div class="phase-tab active" onclick="filterPhotos('all')">All</div>
+        <div class="phase-tab" onclick="filterPhotos('pre_installation')">Before</div>
+        <div class="phase-tab" onclick="filterPhotos('during_installation')">During</div>
+        <div class="phase-tab" onclick="filterPhotos('post_installation')">After</div>
+        <div class="phase-tab" onclick="filterPhotos('damage_documentation')">Damage</div>
+      </div>
+
+      <div id="photo-grid" class="photo-grid"></div>
+
+      <div id="photos-empty" class="empty-state" style="display:none">
+        <div class="icon">📷</div>
+        <h3>No photos yet</h3>
+        <p>Your crew will add photos as work progresses. Check back soon.</p>
+      </div>
+    </div>
+
+    <!-- INSURANCE TAB -->
+    <div id="tab-insurance" class="tab-pane">
+      <div id="insurance-content">
+        <div class="empty-state">
+          <div class="icon">🏛️</div>
+          <h3>No insurance claim on file</h3>
+          <p>If your project involves an insurance claim, your contractor will add the details here.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOCUMENTS TAB -->
+    <div id="tab-documents" class="tab-pane">
+      <div id="documents-list">
+        <div class="empty-state">
+          <div class="icon">📄</div>
+          <h3>No documents yet</h3>
+          <p>Your contract and other documents will appear here.</p>
+        </div>
+      </div>
+      <div class="sig-overlay" id="sig-overlay" style="display:none">
+        <div class="sig-header">
+          <button class="aria-close" onclick="closeSig()">←</button>
+          <h2 id="sig-doc-title">Document</h2>
+        </div>
+        <div class="sig-doc-body" id="sig-doc-body">Loading...</div>
+        <div class="sig-footer">
+          <div class="sig-canvas-wrap">
+            <p>Sign below with your finger</p>
+            <canvas id="sig-canvas"></canvas>
+            <button class="btn btn-danger" onclick="clearSig()" style="margin-top:8px">Clear signature</button>
+          </div>
+          <button class="btn btn-primary" onclick="submitSig()">Sign Document</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAY TAB -->
+    <div id="tab-pay" class="tab-pane">
+      <div id="payments-content">
+        <div class="empty-state">
+          <div class="icon">💳</div>
+          <h3>No payments due</h3>
+          <p>Your payment schedule will appear here.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav id="bottom-nav" style="display:none">
+    <div class="nav-tab active" onclick="switchTab('overview')" id="nav-overview">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      <span>Overview</span>
+    </div>
+    <div class="nav-tab" onclick="switchTab('photos')" id="nav-photos">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+      <span>Photos</span>
+      <div class="nav-badge" id="badge-photos"></div>
+    </div>
+    <div class="nav-tab" onclick="switchTab('insurance')" id="nav-insurance">
+      <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>Insurance</span>
+      <div class="nav-badge" id="badge-insurance"></div>
+    </div>
+    <div class="nav-tab" onclick="switchTab('documents')" id="nav-documents">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Documents</span>
+      <div class="nav-badge" id="badge-docs"></div>
+    </div>
+    <div class="nav-tab" onclick="switchTab('pay')" id="nav-pay">
+      <svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      <span>Pay</span>
+      <div class="nav-badge" id="badge-pay"></div>
+    </div>
+  </nav>
+</div>
+
+<!-- Aria chat bubble -->
+<div id="aria-bubble" style="display:none" onclick="openAria()">
+  <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</div>
+
+<!-- Aria panel -->
+<div id="aria-panel">
+  <div class="aria-header">
+    <div class="aria-avatar">🤖</div>
+    <div>
+      <h2>Aria</h2>
+      <p>AI Assistant · Online</p>
+    </div>
+    <button class="aria-close" onclick="closeAria()">✕</button>
+  </div>
+  <div class="aria-suggestions" id="aria-suggestions">
+    <div class="aria-suggest" onclick="askAria(this.textContent)">When does my installation start?</div>
+    <div class="aria-suggest" onclick="askAria(this.textContent)">What's my insurance status?</div>
+    <div class="aria-suggest" onclick="askAria(this.textContent)">What do I need to do next?</div>
+  </div>
+  <div id="chat-messages"></div>
+  <div class="aria-input-row">
+    <textarea id="chat-input" rows="1" placeholder="Ask anything about your project..." onkeydown="chatKeydown(event)"></textarea>
+    <button class="aria-voice" id="voice-btn" onclick="toggleVoice()">
+      <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </button>
+    <button class="aria-send" onclick="sendChat()">
+      <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- Photo fullscreen -->
+<div class="photo-fullscreen" id="photo-fs" style="display:none" onclick="closePhotoFs()">
+  <button class="close-btn" onclick="closePhotoFs()">✕</button>
+  <img id="photo-fs-img" src="" alt="">
+  <div class="caption" id="photo-fs-caption"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
+const API = `${SUPABASE_URL}/functions/v1/portal-api`;
+
+let token = '';
+let portalData = null;
+let lang = 'en';
+let allPhotos = [];
+let sigCanvas, sigCtx, sigDrawing = false;
+let sigDocId = '', sigDocTitle = '';
+let mediaRecognition = null;
+
+function getToken() {
+  const parts = window.location.pathname.split('/');
+  const last = parts[parts.length - 1];
+  if (last && last.length > 20) return last;
+  return new URLSearchParams(window.location.search).get('token') || window.location.hash.slice(1);
+}
+
+async function api(action, body = null) {
+  const method = body ? 'POST' : 'GET';
+  const url = body ? `${API}?action=${action}` : `${API}?token=${token}&action=${action}`;
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${ANON_KEY}`, 'Content-Type': 'application/json' },
+    ...(body ? { body: JSON.stringify({ token, action, ...body }) } : {})
+  };
+  const res = await fetch(url, opts);
+  return res.json();
+}
+
+async function load() {
+  token = getToken();
+  if (!token) {
+    document.getElementById('loading').innerHTML = '<div style="text-align:center;padding:40px"><div style="font-size:48px">🔒</div><h2 style="color:#f8fafc;margin-top:16px">Invalid link</h2><p style="color:#94a3b8;margin-top:8px">This portal link appears to be invalid or expired.</p></div>';
+    return;
+  }
+
+  try {
+    const data = await api('overview');
+    if (!data.ok || data.error) {
+      document.getElementById('loading').innerHTML = `<div style="text-align:center;padding:40px"><div style="font-size:48px">⚠️</div><h2 style="color:#f8fafc;margin-top:16px">Access denied</h2><p style="color:#94a3b8;margin-top:8px">${data.error || 'Link expired or invalid.'}</p></div>`;
+      return;
+    }
+
+    portalData = data;
+    lang = data.session?.language || 'en';
+    allPhotos = data.photos || [];
+
+    document.getElementById('loading').style.display = 'none';
+    renderHero();
+    renderStatusBar();
+    renderContent();
+    document.getElementById('hero').style.display = 'block';
+    document.getElementById('status-bar').style.display = 'flex';
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('bottom-nav').style.display = 'flex';
+    document.getElementById('aria-bubble').style.display = 'flex';
+
+    updateBadges();
+    loadWeather();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/portal/sw.js').catch(() => {});
+    }
+  } catch (e) {
+    document.getElementById('loading').innerHTML = `<div style="text-align:center;padding:40px"><div style="font-size:48px">📡</div><h2 style="color:#f8fafc;margin-top:16px">Connection error</h2><p style="color:#94a3b8;margin-top:8px">Check your internet connection and try again.</p></div>`;
+  }
+}
+
+function renderHero() {
+  const job = portalData.job;
+  const session = portalData.session;
+
+  document.getElementById('hero-homeowner').textContent = session.homeowner_name || '';
+  document.getElementById('hero-address').textContent = job?.property_address || 'Your Property';
+
+  const statusLabels = {
+    lead: 'Getting Started', assessment_scheduled: 'Assessment Scheduled',
+    assessed: 'Assessed', estimate_sent: 'Estimate Sent', contracted: 'Contracted',
+    insurance_submitted: 'Insurance Submitted', materials_ordered: 'Materials Ordered',
+    scheduled: 'Crew Scheduled', in_progress: 'Installation In Progress',
+    complete: 'Installation Complete', paid: 'Project Complete'
+  };
+  const statusLabel = statusLabels[job?.status] || 'In Progress';
+  document.getElementById('hero-status-label').textContent = statusLabel;
+  document.getElementById('ring-phase').textContent = statusLabel;
+
+  const progress = job?.progress || 0;
+  document.getElementById('ring-pct').textContent = `${progress}%`;
+  const circumference = 213.6;
+  const offset = circumference - (progress / 100) * circumference;
+  setTimeout(() => {
+    document.getElementById('ring-fill').style.strokeDashoffset = offset;
+  }, 100);
+
+  if (job?.satellite_url) {
+    const img = document.getElementById('hero-img');
+    img.src = job.satellite_url;
+    img.style.display = 'block';
+    document.getElementById('hero-fallback').style.display = 'none';
+  } else {
+    document.getElementById('hero-fallback').style.display = 'flex';
+  }
+}
+
+function renderStatusBar() {
+  const job = portalData.job;
+  const activeStatuses = ['in_progress', 'installation_started'];
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+
+  if (activeStatuses.includes(job?.status)) {
+    dot.className = 'status-dot green';
+    txt.textContent = 'Crew is working on your roof right now';
+  } else if (['contracted', 'materials_ordered', 'scheduled'].includes(job?.status)) {
+    dot.className = 'status-dot blue';
+    txt.textContent = 'Your project is on schedule';
+  } else if (['complete', 'paid'].includes(job?.status)) {
+    dot.className = 'status-dot';
+    txt.textContent = 'Project complete — monitoring active';
+  } else {
+    dot.className = 'status-dot orange';
+    txt.textContent = 'Project in progress';
+  }
+}
+
+function renderContent() {
+  renderOverview();
+  renderPhotos();
+  renderInsurance();
+  renderDocuments();
+  renderPayments();
+}
+
+function renderOverview() {
+  const activities = portalData.activities || [];
+  const list = document.getElementById('activity-list');
+
+  if (!activities.length) return;
+
+  list.innerHTML = activities.map(a => `
+    <div class="activity-item">
+      <div class="activity-icon">${a.icon}</div>
+      <div class="activity-body">
+        <div class="activity-title">${esc(a.title)}</div>
+        <div class="activity-desc">${esc(lang === 'es' && a.description_es ? a.description_es : a.description)}</div>
+        <div class="activity-time">${relTime(a.created_at)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPhotos() {
+  const before = allPhotos.find(p => p.is_before);
+  const after = allPhotos.find(p => p.is_after);
+
+  if (before && after) {
+    const section = document.getElementById('ba-section');
+    section.style.display = 'block';
+    document.getElementById('ba-before-img').src = before.url;
+    document.getElementById('ba-after-img').src = after.url;
+    initSlider();
+  }
+
+  filterPhotos('all');
+}
+
+function filterPhotos(phase) {
+  document.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+  event?.target?.classList.add('active');
+
+  const filtered = phase === 'all' ? allPhotos : allPhotos.filter(p => p.phase === phase);
+  const grid = document.getElementById('photo-grid');
+  const empty = document.getElementById('photos-empty');
+
+  if (!filtered.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = filtered.map(p => `
+    <img class="photo-thumb" src="${esc(p.thumbnail_url || p.url)}" alt="${esc(p.caption || '')}"
+      onclick="openPhotoFs('${esc(p.url)}','${esc(p.caption || '')}')" loading="lazy">
+  `).join('');
+}
+
+function openPhotoFs(url, caption) {
+  document.getElementById('photo-fs-img').src = url;
+  document.getElementById('photo-fs-caption').textContent = caption;
+  document.getElementById('photo-fs').style.display = 'flex';
+}
+function closePhotoFs() { document.getElementById('photo-fs').style.display = 'none'; }
+
+function initSlider() {
+  const container = document.getElementById('ba-container');
+  const handle = document.getElementById('ba-handle');
+  const wrap = document.getElementById('ba-before-wrap');
+  let dragging = false;
+
+  const setPos = (x) => {
+    const rect = container.getBoundingClientRect();
+    const pct = Math.min(Math.max((x - rect.left) / rect.width, 0.05), 0.95);
+    const pctPx = pct * 100;
+    handle.style.left = `${pctPx}%`;
+    wrap.style.width = `${pctPx}%`;
+  };
+
+  handle.addEventListener('mousedown', e => { dragging = true; e.preventDefault(); });
+  handle.addEventListener('touchstart', e => { dragging = true; }, { passive: true });
+  document.addEventListener('mousemove', e => dragging && setPos(e.clientX));
+  document.addEventListener('touchmove', e => dragging && setPos(e.touches[0].clientX), { passive: true });
+  document.addEventListener('mouseup', () => dragging = false);
+  document.addEventListener('touchend', () => dragging = false);
+  setPos(container.getBoundingClientRect().left + container.offsetWidth / 2);
+}
+
+function renderInsurance() {
+  const claim = portalData.claim;
+  const supplements = portalData.supplements || [];
+  const container = document.getElementById('insurance-content');
+
+  if (!claim) return;
+
+  const statusSteps = [
+    { key: 'submitted', label: 'Claim submitted', sub: 'We notified your insurance company' },
+    { key: 'adjuster_assigned', label: 'Adjuster assigned', sub: claim.adjuster_name ? `Adjuster: ${claim.adjuster_name}` : 'Waiting for assignment' },
+    { key: 'inspection_complete', label: 'Inspection complete', sub: 'Adjuster reviewed your damage' },
+    { key: 'supplement_submitted', label: 'Additional coverage requested', sub: supplements.length ? `$${(supplements[0]?.amount_requested / 100).toLocaleString()} requested` : '' },
+    { key: 'approved', label: 'Claim approved', sub: claim.total_approved ? `$${(claim.total_approved / 100).toLocaleString()} total` : 'Pending' },
+    { key: 'complete', label: 'Funds received', sub: 'All insurance payments collected' }
+  ];
+
+  const statusOrder = ['submitted', 'adjuster_assigned', 'inspection_scheduled', 'inspection_complete', 'estimate_received', 'supplement_submitted', 'supplement_approved', 'approved', 'payment_issued', 'complete'];
+  const currentIdx = statusOrder.indexOf(claim.status);
+
+  const stepsHtml = statusSteps.map((s, i) => {
+    const stepIdx = statusOrder.indexOf(s.key);
+    const done = currentIdx >= stepIdx;
+    const active = currentIdx === stepIdx;
+    return `
+      <li class="step-item ${done ? '' : 'pending'}">
+        <div class="step-icon">${done ? '✅' : active ? '🔄' : '⏳'}</div>
+        <div>
+          <div class="step-label">${s.label}</div>
+          ${s.sub ? `<div class="step-sub">${s.sub}</div>` : ''}
+        </div>
+      </li>
+    `;
+  }).join('');
+
+  const supplementHtml = supplements.length ? `
+    <div class="card">
+      <div class="card-title">Additional Coverage</div>
+      ${supplements.map(s => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:14px;font-weight:600;color:var(--t1)">${s.supplement_type.replace(/_/g,' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+            <span class="badge ${s.status === 'approved' ? 'badge-signed' : s.status === 'denied' ? 'badge-pending' : 'badge-complete'}">${s.status}</span>
+          </div>
+          <div style="font-size:13px;color:var(--t2);margin-top:4px">${esc(lang === 'es' && s.homeowner_summary_es ? s.homeowner_summary_es : (s.homeowner_summary || `${s.items_submitted} items, $${(s.amount_requested/100).toLocaleString()} requested`))}</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  container.innerHTML = `
+    <div class="card claim-status-card">
+      <div class="claim-carrier">${esc(claim.carrier_name)}</div>
+      ${claim.claim_number ? `<div style="font-size:12px;color:var(--t3);margin-bottom:8px">Claim #${esc(claim.claim_number)}</div>` : ''}
+      <div class="claim-status-text">${esc(lang === 'es' && claim.homeowner_status_message_es ? claim.homeowner_status_message_es : (claim.homeowner_status_message || statusLabel(claim.status)))}</div>
+      ${claim.adjuster_name ? `<div class="claim-sub">Adjuster: ${esc(claim.adjuster_name)}</div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-title">Claim Progress</div>
+      <ul class="steps-list">${stepsHtml}</ul>
+    </div>
+    <div class="card">
+      <div class="card-title">Amounts</div>
+      <div class="amounts-grid">
+        <div class="amount-item">
+          <div class="amount-label">Original Estimate</div>
+          <div class="amount-value">${claim.original_estimate ? '$' + (claim.original_estimate/100).toLocaleString() : '—'}</div>
+        </div>
+        <div class="amount-item">
+          <div class="amount-label">Additional Requested</div>
+          <div class="amount-value ${claim.supplement_requested ? '' : 'pending'}">${claim.supplement_requested ? '$' + (claim.supplement_requested/100).toLocaleString() : 'None yet'}</div>
+        </div>
+        <div class="amount-item">
+          <div class="amount-label">Total Approved</div>
+          <div class="amount-value ${claim.total_approved ? 'green' : 'pending'}">${claim.total_approved ? '$' + (claim.total_approved/100).toLocaleString() : 'Pending'}</div>
+        </div>
+        <div class="amount-item">
+          <div class="amount-label">Your Deductible</div>
+          <div class="amount-value">${claim.deductible ? '$' + (claim.deductible/100).toLocaleString() : '—'}</div>
+        </div>
+      </div>
+    </div>
+    ${supplementHtml}
+    ${claim.mortgage_company_on_check ? `
+      <div class="card">
+        <div class="card-title">Mortgage Company Check</div>
+        <div style="font-size:14px;color:var(--t2);line-height:1.7">
+          Your check will be made out to both you and <strong style="color:var(--t1)">${esc(claim.mortgage_company || 'your mortgage company')}</strong>. Steps:<br><br>
+          1. Deposit the check into your bank account<br>
+          2. Contact your mortgage company's loss draft department<br>
+          3. They'll inspect the completed work, then release funds<br>
+          4. We'll help you through every step
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function statusLabel(status) {
+  const labels = {
+    submitted: 'Claim submitted', adjuster_assigned: 'Adjuster assigned',
+    inspection_scheduled: 'Inspection scheduled', inspection_complete: 'Inspection complete',
+    estimate_received: 'Estimate received', supplement_submitted: 'Supplement submitted',
+    supplement_approved: 'Supplement approved', approved: 'Claim approved',
+    payment_issued: 'Payment issued', complete: 'Complete'
+  };
+  return labels[status] || status?.replace(/_/g, ' ') || 'In progress';
+}
+
+function renderDocuments() {
+  const docs = portalData.documents || [];
+  const container = document.getElementById('documents-list');
+
+  if (!docs.length) return;
+
+  const pending = docs.filter(d => d.requires_homeowner_action && d.status !== 'signed');
+
+  container.innerHTML = docs.map(d => `
+    <div class="doc-item" onclick="openDoc('${d.id}','${esc(d.title)}','${esc(d.description || '')}','${d.status}')">
+      <div class="doc-icon">📄</div>
+      <div class="doc-info">
+        <div class="doc-title">${esc(lang === 'es' && d.title_es ? d.title_es : d.title)}</div>
+        ${d.description ? `<div class="doc-desc">${esc(d.description)}</div>` : ''}
+      </div>
+      <span class="badge ${d.status === 'signed' ? 'badge-signed' : d.requires_homeowner_action ? 'badge-pending' : 'badge-complete'}">
+        ${d.status === 'signed' ? 'Signed' : d.requires_homeowner_action ? 'Sign required' : d.status}
+      </span>
+    </div>
+  `).join('');
+}
+
+function openDoc(id, title, body, status) {
+  sigDocId = id;
+  sigDocTitle = title;
+  document.getElementById('sig-doc-title').textContent = title;
+  document.getElementById('sig-doc-body').textContent = body || '(Document content will appear here)';
+  document.getElementById('sig-overlay').style.display = 'flex';
+
+  if (status !== 'signed') {
+    initSigCanvas();
+  }
+}
+
+function closeSig() { document.getElementById('sig-overlay').style.display = 'none'; }
+
+function initSigCanvas() {
+  sigCanvas = document.getElementById('sig-canvas');
+  sigCanvas.width = sigCanvas.offsetWidth * window.devicePixelRatio;
+  sigCanvas.height = sigCanvas.offsetHeight * window.devicePixelRatio;
+  sigCtx = sigCanvas.getContext('2d');
+  sigCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  sigCtx.strokeStyle = '#60a5fa';
+  sigCtx.lineWidth = 2.5;
+  sigCtx.lineCap = 'round';
+
+  const getPos = (e) => {
+    const rect = sigCanvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  };
+
+  sigCanvas.addEventListener('mousedown', e => { sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); });
+  sigCanvas.addEventListener('mousemove', e => { if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); });
+  sigCanvas.addEventListener('mouseup', () => sigDrawing = false);
+  sigCanvas.addEventListener('touchstart', e => { sigDrawing = true; const p = getPos(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); e.preventDefault(); }, { passive: false });
+  sigCanvas.addEventListener('touchmove', e => { if (!sigDrawing) return; const p = getPos(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); e.preventDefault(); }, { passive: false });
+  sigCanvas.addEventListener('touchend', () => sigDrawing = false);
+}
+
+function clearSig() { if (sigCtx) sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height); }
+
+async function submitSig() {
+  if (!sigCanvas) { alert('Please sign first'); return; }
+  const sigData = sigCanvas.toDataURL();
+  if (sigData === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==') {
+    alert('Please sign the document first'); return;
+  }
+  try {
+    await api('sign_document', { document_id: sigDocId, document_title: sigDocTitle, signature_data: sigData });
+    closeSig();
+    const d = portalData.documents.find(d => d.id === sigDocId);
+    if (d) d.status = 'signed';
+    renderDocuments();
+    updateBadges();
+    alert('Document signed successfully!');
+  } catch (e) {
+    alert('Error signing document. Please try again.');
+  }
+}
+
+function renderPayments() {
+  const payments = portalData.payments || [];
+  const container = document.getElementById('payments-content');
+
+  if (!payments.length) return;
+
+  const due = payments.filter(p => p.status === 'due' || (p.status === 'pending' && p.due_date && new Date(p.due_date) <= new Date()));
+
+  container.innerHTML = `
+    <div class="card payment-timeline">
+      <div class="card-title">Payment Schedule</div>
+      ${payments.map(p => `
+        <div class="payment-item">
+          <div class="payment-icon">${p.status === 'paid' ? '✅' : p.status === 'due' ? '🔴' : '⏳'}</div>
+          <div class="payment-info">
+            <div class="payment-desc">${esc(lang === 'es' && p.description_es ? p.description_es : p.description)}</div>
+            <div class="payment-due">${p.paid_at ? `Paid ${fmtDate(p.paid_at)}` : p.due_date ? `Due ${fmtDate(p.due_date)}` : 'Pending insurance'}</div>
+          </div>
+          <div class="payment-amt ${p.status === 'paid' ? 'paid' : p.status === 'due' ? 'due' : ''}">
+            $${(p.amount / 100).toLocaleString()}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    ${due.length ? `
+      <div class="card">
+        <div class="card-title">Pay Now</div>
+        <div class="pay-form" id="pay-form-section">
+          <p style="font-size:14px;color:var(--t2);margin-bottom:16px">Pay your ${esc(due[0].description)} of <strong style="color:var(--t1)">$${(due[0].amount/100).toLocaleString()}</strong></p>
+          <div class="input-group">
+            <label>Card Number</label>
+            <input type="tel" inputmode="numeric" placeholder="1234 5678 9012 3456" maxlength="19" oninput="fmtCard(this)">
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label>Expiry</label>
+              <input type="tel" inputmode="numeric" placeholder="MM/YY" maxlength="5" oninput="fmtExpiry(this)">
+            </div>
+            <div class="input-group">
+              <label>CVV</label>
+              <input type="tel" inputmode="numeric" placeholder="123" maxlength="4">
+            </div>
+          </div>
+          <div class="pay-total">
+            <span>Total due</span>
+            <strong>$${(due[0].amount/100).toLocaleString()}</strong>
+          </div>
+          <button class="btn btn-primary" onclick="submitPayment('${due[0].id}',${due[0].amount})">Pay $${(due[0].amount/100).toLocaleString()}</button>
+        </div>
+      </div>
+    ` : ''}
+    <div class="card">
+      <div class="card-title">Insurance Check Instructions</div>
+      <div style="font-size:14px;color:var(--t2);line-height:1.7">
+        When your insurance check arrives:<br><br>
+        <strong style="color:var(--t1)">1.</strong> Do not cash or deposit until we coordinate<br>
+        <strong style="color:var(--t1)">2.</strong> Call us and we'll walk you through the process<br>
+        <strong style="color:var(--t1)">3.</strong> We'll ensure all funds are applied correctly
+      </div>
+    </div>
+    <div class="card" id="referral-card">
+      <div class="card-title">Give $250, Get $250</div>
+      <p style="font-size:14px;color:var(--t2);margin-bottom:16px">Know a neighbor who needs a roof? Refer them and earn $250 when their project is contracted.</p>
+      <div class="input-group"><label>Their Name</label><input type="text" id="ref-name" placeholder="Neighbor name"></div>
+      <div class="input-group"><label>Their Address</label><input type="text" id="ref-addr" placeholder="123 Main St"></div>
+      <div class="input-group"><label>Their Phone</label><input type="tel" id="ref-phone" placeholder="(303) 555-0000"></div>
+      <button class="btn btn-primary" onclick="submitReferral()">Submit Referral</button>
+    </div>
+  `;
+}
+
+function fmtCard(el) {
+  el.value = el.value.replace(/\D/g,'').replace(/(.{4})/g,'$1 ').trim().slice(0,19);
+}
+function fmtExpiry(el) {
+  let v = el.value.replace(/\D/g,'');
+  if (v.length > 2) v = v.slice(0,2) + '/' + v.slice(2,4);
+  el.value = v;
+}
+
+async function submitPayment(paymentId, amount) {
+  alert(`Payment processing would connect to Stripe here. Amount: $${(amount/100).toLocaleString()}`);
+}
+
+async function submitReferral() {
+  const name = document.getElementById('ref-name').value.trim();
+  const addr = document.getElementById('ref-addr').value.trim();
+  const phone = document.getElementById('ref-phone').value.trim();
+  if (!name || !phone) { alert('Please fill in name and phone'); return; }
+  try {
+    const res = await api('submit_referral', { name, address: addr, phone });
+    if (res.ok) {
+      document.getElementById('referral-card').innerHTML = `
+        <div class="card-title">Referral Submitted!</div>
+        <div class="referral-code">
+          <h3>Your Referral Code</h3>
+          <div class="code">${res.referral_code}</div>
+          <div class="referral-reward">You'll receive $250 when their project is contracted.</div>
+        </div>
+        <p style="font-size:13px;color:var(--t2)">We'll reach out to ${name} shortly. Thank you!</p>
+      `;
+    }
+  } catch (e) {
+    alert('Error submitting referral. Please try again.');
+  }
+}
+
+function updateBadges() {
+  const docs = portalData.documents || [];
+  const payments = portalData.payments || [];
+  const claim = portalData.claim;
+
+  const pendingDocs = docs.filter(d => d.requires_homeowner_action && d.status !== 'signed').length;
+  const duePay = payments.filter(p => p.status === 'due').length;
+  const hasInsurance = !!claim;
+
+  setBadge('badge-docs', pendingDocs);
+  setBadge('badge-pay', duePay);
+  setBadge('badge-insurance', hasInsurance && claim?.status !== 'complete' ? 0 : 0);
+  setBadge('badge-photos', 0);
+}
+
+function setBadge(id, count) {
+  const el = document.getElementById(id);
+  if (el) {
+    if (count > 0) { el.textContent = count; el.classList.add('show'); }
+    else el.classList.remove('show');
+  }
+}
+
+async function loadWeather() {
+  const address = portalData.job?.property_address;
+  if (!address) return;
+  try {
+    const q = address.split(',').pop()?.trim() || address;
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(q)}?format=j1`);
+    const wx = await res.json();
+    const cur = wx.current_condition?.[0];
+    if (!cur) return;
+    const temp = Math.round((parseInt(cur.temp_F) * 9/5 + 32 - 32) * 5/9 + 32);
+    const desc = cur.weatherDesc?.[0]?.value || '';
+    const icons = { rain: '🌧', snow: '❄️', sun: '☀️', clear: '☀️', cloud: '⛅', storm: '⛈', fog: '🌫', wind: '💨' };
+    const icon = Object.entries(icons).find(([k]) => desc.toLowerCase().includes(k))?.[1] || '⛅';
+    document.getElementById('wx-temp').textContent = `${Math.round(parseInt(cur.temp_F))}°F`;
+    document.getElementById('wx-desc').textContent = desc;
+    document.getElementById('wx-icon').textContent = icon;
+    document.getElementById('weather-section').style.display = 'block';
+    const rainChance = parseInt(cur.chanceofrain || '0');
+    if (rainChance > 60 || desc.toLowerCase().includes('storm')) {
+      document.getElementById('wx-alert').style.display = 'flex';
+      document.getElementById('wx-alert-text').textContent = `${rainChance}% chance of rain. Your crew will adjust the schedule if needed and keep you informed.`;
+    }
+  } catch {}
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(n => n.classList.remove('active'));
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`nav-${tab}`).classList.add('active');
+}
+
+function setLang(l) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === l));
+  renderContent();
+}
+
+function openAria() { document.getElementById('aria-panel').classList.add('open'); }
+function closeAria() { document.getElementById('aria-panel').classList.remove('open'); }
+
+function askAria(q) { document.getElementById('chat-input').value = q; sendChat(); }
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.style.height = '';
+
+  appendMsg('user', 'You', msg);
+  const typing = appendTyping();
+
+  try {
+    const res = await api('send_message', { message: msg });
+    typing.remove();
+    if (res.aria_response) {
+      appendMsg('aria', 'Aria', res.aria_response);
+    } else {
+      appendMsg('aria', 'Aria', "Let me get that confirmed for you — your rep will follow up shortly.");
+    }
+  } catch (e) {
+    typing.remove();
+    appendMsg('aria', 'Aria', "I'm having trouble connecting right now. Please try again.");
+  }
+}
+
+function appendMsg(type, name, text) {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${type}`;
+  div.innerHTML = `<div><div class="chat-msg-name">${esc(name)}</div><div class="chat-bubble">${esc(text)}</div></div>`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+function appendTyping() {
+  const wrap = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg aria';
+  div.innerHTML = '<div><div class="chat-msg-name">Aria</div><div class="chat-bubble"><div class="typing"><span></span><span></span><span></span></div></div></div>';
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+function toggleVoice() {
+  const btn = document.getElementById('voice-btn');
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input not supported on this browser. Try Chrome.');
+    return;
+  }
+  if (mediaRecognition) {
+    mediaRecognition.stop();
+    mediaRecognition = null;
+    btn.classList.remove('recording');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  mediaRecognition = new SR();
+  mediaRecognition.lang = lang === 'es' ? 'es-US' : 'en-US';
+  mediaRecognition.onresult = e => {
+    document.getElementById('chat-input').value = e.results[0][0].transcript;
+    btn.classList.remove('recording');
+    mediaRecognition = null;
+    sendChat();
+  };
+  mediaRecognition.onerror = () => { btn.classList.remove('recording'); mediaRecognition = null; };
+  mediaRecognition.onend = () => { btn.classList.remove('recording'); mediaRecognition = null; };
+  mediaRecognition.start();
+  btn.classList.add('recording');
+}
+
+function relTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m || 1}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+window.addEventListener('load', load);
+</script>
+</body>
+</html>

@@ -2838,6 +2838,130 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // HOMEOWNER PORTAL COMMANDS
+    // ================================================================
+
+    if (msgLower.startsWith("portal:") || msgLower.startsWith("portal ")) {
+      const sub = msgLower.replace(/^portal:?\s*/, "").trim();
+
+      // portal stats
+      if (sub === "stats" || sub === "analytics") {
+        const start = Date.now();
+        try {
+          const { data: sessions } = await supabase.from("homeowner_sessions").select("last_accessed_at, access_count, homeowner_name, job_id");
+          const { data: messages } = await supabase.from("portal_messages").select("sender_type, created_at").eq("sender_type", "homeowner");
+          const { data: sigs } = await supabase.from("portal_documents").select("status").eq("status", "signed");
+          const { data: refs } = await supabase.from("portal_referrals").select("status");
+          const active = (sessions || []).filter((s: any) => s.last_accessed_at && new Date(s.last_accessed_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).length;
+          const totalAccess = (sessions || []).reduce((s: number, p: any) => s + (p.access_count || 0), 0);
+          await logUsage(supabase, "portal_stats", true, Date.now() - start, channel);
+          return earlyReturn(
+            `🏠 *Portal Stats*\n\n` +
+            `Active portals: ${(sessions || []).length}\n` +
+            `Active last 7d: ${active}\n` +
+            `Total views: ${totalAccess}\n` +
+            `Homeowner messages: ${(messages || []).length}\n` +
+            `Documents signed: ${(sigs || []).length}\n` +
+            `Referrals submitted: ${(refs || []).length}`
+          );
+        } catch (err: any) {
+          await logUsage(supabase, "portal_stats", false, Date.now() - start, channel);
+          return earlyReturn(` -  Failed: ${err.message}`);
+        }
+      }
+
+      // portal activity: [job_id] [activity_type]
+      if (sub.startsWith("activity:")) {
+        const start = Date.now();
+        try {
+          const parts = sub.replace("activity:", "").trim().split(" ");
+          const activityType = parts.pop() || "";
+          const jobSearch = parts.join(" ").trim();
+          if (!activityType || !jobSearch) {
+            return earlyReturn("Format: `portal activity: [job id or homeowner name] [activity_type]`\n\nActivity types: `contract_signed` `materials_ordered` `permit_approved` `installation_started` `installation_complete` `supplement_submitted` `project_complete`");
+          }
+          const { data: jobs } = await supabase.from("roofing_jobs").select("id, homeowner_name, property_address").or(`id.eq.${jobSearch},homeowner_name.ilike.%${jobSearch}%,property_address.ilike.%${jobSearch}%`).limit(1);
+          const job = jobs?.[0];
+          if (!job) return earlyReturn(`No job found for: ${jobSearch}`);
+          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/portal-activity-generator`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: job.id, activity_type: activityType })
+          });
+          const result = await res.json();
+          if (!result.ok) return earlyReturn(` -  Activity failed: ${result.error}`);
+          await logUsage(supabase, "portal_activity", true, Date.now() - start, channel);
+          return earlyReturn(`✅ Activity \`${activityType}\` sent to ${job.homeowner_name}'s portal. Notification dispatched.`);
+        } catch (err: any) {
+          await logUsage(supabase, "portal_activity", false, Date.now() - start, channel);
+          return earlyReturn(` -  Failed: ${err.message}`);
+        }
+      }
+
+      // portal view: [token]
+      if (sub.startsWith("view:")) {
+        const start = Date.now();
+        try {
+          const tok = sub.replace("view:", "").trim();
+          const { data: session } = await supabase.from("homeowner_sessions").select("*, roofing_jobs(homeowner_name,property_address,status)").eq("magic_link_token", tok).maybeSingle();
+          if (!session) return earlyReturn("No portal found for that token.");
+          const job = (session.roofing_jobs as any);
+          const { data: activities } = await supabase.from("portal_activities").select("title,created_at").eq("job_id", session.job_id).order("created_at", { ascending: false }).limit(3);
+          await logUsage(supabase, "portal_view", true, Date.now() - start, channel);
+          return earlyReturn(
+            `🏠 *Portal: ${job?.homeowner_name || "Unknown"}*\n` +
+            `Address: ${job?.property_address || "Unknown"}\n` +
+            `Status: ${job?.status || "unknown"}\n` +
+            `Last viewed: ${session.last_accessed_at ? new Date(session.last_accessed_at).toLocaleString() : "Never"}\n` +
+            `Total views: ${session.access_count || 0}\n` +
+            `Language: ${session.preferred_language || "en"}\n\n` +
+            `*Recent activity:*\n${(activities || []).map((a: any) => `• ${a.title}`).join("\n") || "None yet"}\n\n` +
+            `Portal: https://roofingos.dev/portal/${tok}`
+          );
+        } catch (err: any) {
+          await logUsage(supabase, "portal_view", false, Date.now() - start, channel);
+          return earlyReturn(` -  Failed: ${err.message}`);
+        }
+      }
+
+      // portal: [job_id or homeowner name] — send/get portal link
+      {
+        const start = Date.now();
+        try {
+          const { data: jobs } = await supabase.from("roofing_jobs").select("id, homeowner_name, homeowner_email, homeowner_phone, property_address").or(`id.eq.${sub},homeowner_name.ilike.%${sub}%,property_address.ilike.%${sub}%`).limit(1);
+          const job = jobs?.[0];
+          if (!job) return earlyReturn(`No job found for: ${sub}\n\nFormat: \`portal: [homeowner name or job ID]\``);
+          const { data: existing } = await supabase.from("homeowner_sessions").select("magic_link_token, last_accessed_at, access_count").eq("job_id", job.id).maybeSingle();
+          if (existing) {
+            await logUsage(supabase, "portal_link", true, Date.now() - start, channel);
+            return earlyReturn(
+              `🔗 *Portal exists for ${job.homeowner_name}*\n\n` +
+              `https://roofingos.dev/portal/${existing.magic_link_token}\n\n` +
+              `Last accessed: ${existing.last_accessed_at ? new Date(existing.last_accessed_at).toLocaleString() : "Never"}\n` +
+              `Views: ${existing.access_count || 0}`
+            );
+          }
+          const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/portal-magic-link`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: job.id, homeowner_email: job.homeowner_email, homeowner_name: job.homeowner_name, homeowner_phone: job.homeowner_phone, contractor_name: "Roofing OS" })
+          });
+          const result = await res.json();
+          if (!result.ok) return earlyReturn(` -  Portal creation failed: ${result.error}`);
+          await logUsage(supabase, "portal_create", true, Date.now() - start, channel);
+          return earlyReturn(
+            `✅ *Portal created for ${job.homeowner_name}*\n\n` +
+            `https://roofingos.dev/portal/${result.token}\n\n` +
+            `Link sent via SMS${job.homeowner_phone ? ` to ${job.homeowner_phone}` : " (no phone on file)"} and email.`
+          );
+        } catch (err: any) {
+          await logUsage(supabase, "portal_create", false, Date.now() - start, channel);
+          return earlyReturn(` -  Failed: ${err.message}`);
+        }
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase
