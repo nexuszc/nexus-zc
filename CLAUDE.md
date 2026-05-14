@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 14, 2026 — v16
+# Last updated: May 14, 2026 — v17
 
 ---
 
@@ -99,6 +99,10 @@ Then productized and sold to other multi-business operators.
 | `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
 | `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
+| `contractor-churn-predictor` | Daily churn scoring + Aria save calls for high-risk contractors | Daily via nexus-core |
+| `contractor-competitive-engine` | Weekly competitive intel emails per contractor zip | Weekly via nexus-vertical-router |
+| `contractor-roi-engine` | Monthly ROI reports: supplement revenue vs subscription cost | Monthly via nexus-vertical-router |
+| `contractor-signup` | Contractor account creation + Stripe trial + Aria welcome call + Resend email | Landing page signup |
 | `email-webhook` | Inbound email handling | Resend webhook |
 | `generate-queue` | Generate lead call queue | On demand |
 | `generate-va-tasks` | Generate daily VA task lists | Cron / on demand |
@@ -117,6 +121,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-router` | See function source for details | Internal |
 | `nexus-self-build` | See function source for details | Internal |
 | `nexus-unsubscribe` | See function source for details | Internal |
+| `nexus-vertical-router` | Routes vertical-specific tasks (storm scan, prospecting, QA, ROI, churn, intel) per cycle | Every cycle via nexus-core |
 | `nexus-voice` | See function source for details | Internal |
 | `nexus-voice-compliance` | See function source for details | Internal |
 | `nexus-voice-engine` | See function source for details | Internal |
@@ -160,6 +165,7 @@ Then productized and sold to other multi-business operators.
 | `portal-api` | Homeowner portal REST API: overview, messages, sign docs, referrals | Token auth from portal |
 | `portal-magic-link` | Generate 1-year magic link token + SMS/email delivery | Internal |
 | `send-email` | Send email via Resend | Internal |
+| `supplement-audit-engine` | Free public audit: storm search → AI audit → score lead → Aria call → email | Landing page form |
 | `smoke-test` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
@@ -213,6 +219,14 @@ Then productized and sold to other multi-business operators.
 - `roofing_improvements` -- Roofing OS product improvement proposals (AI-generated, approved by Zach)
 - `roofing_health_snapshots` -- daily product health metrics (contractors, jobs, errors, pipeline)
 - `competitor_intel` -- competitor feature tracking (JobNimbus, Roofr, AccuLynx, CompanyCam, Jobber)
+
+### Roofing OS Auto-Marketing (added May 14, 2026):
+- `contractor_accounts` -- paid contractor subscribers (plan, Stripe, trial, churn_risk_score, subdomain, referral_code)
+- `supplement_audit_leads` -- free audit form submissions (score, aria_call_queued, converted_to_contractor)
+- `contractor_competitive_intel` -- weekly competitive intel records per contractor (competitors JSON, email_sent_at)
+- `contractor_roi_reports` -- monthly ROI reports (supplement_revenue_cents, roi_multiple, net_gain_cents)
+- `contractor_referrals` -- referral tracking (referring_contractor_id, referred_contractor_id, status)
+- `nexus_verticals` -- vertical router config (slug, name, status, storm_detection_enabled, etc.) — seeded: roofing, mortgage
 
 ### V4 Autonomous Engine additions:
 - `nexus_audit_log` -- permanent log of every autonomous action ever taken
@@ -327,29 +341,25 @@ Then productized and sold to other multi-business operators.
 - Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
 - Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
 - Built Roofing OS Supplement AI (roofing-supplement-analyzer, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-depreciation-tracker)
-- 6 new Supplement DB tables + carrier intelligence seeded (6 carriers) + 8 Colorado codes
-- 12 new Supplement Telegram commands; nexus-core wired for depreciation scan + supplement follow-up
 - Built Roofing OS Operations Layer (roofing-job-pipeline, roofing-crew-manager, roofing-material-order, roofing-permit-tracker, roofing-financial)
-- 8 new Operations DB tables: roofing_crew, crew_schedules, material_orders, roofing_permits, job_financials, roofing_subcontractors, sub_assignments, cash_flow_projections
-- ALTER TABLE roofing_jobs: ~25 new columns (contractor_id, scheduled_start/end, foreman_id, roof_squares, profit_margin, etc.)
-- 12 new Operations Telegram commands: job:, jobs today, pipeline, schedule:, order materials:, permit:, permit approved:, financial dashboard, cash flow, pay sub:, job complete:, job status:
-- nexus-core wired: permit scan + weather check daily, financial dashboard summary weekly
-- All 25 Operations spec tests passed
 - Built Roofing OS Intelligence Layer (roofing-analytics, roofing-weekly-report, roofing-self-improve, roofing-qa-bot)
-- 5 new Intelligence DB tables: rep_analytics, market_intelligence, weekly_intelligence_reports, roofing_patterns, roofing_qa_results
-- 10 new Intelligence Telegram commands: rep performance, rep:, market:, patterns, apply patterns, weekly report, qa run, supplement performance, pricing analysis, self improve
-- nexus-core wired: weekly report (Mon 7am), self-improve (weekly), QA bot (6h), rep analytics (daily), market penetration (weekly)
-- QA bot 10/10 smoke tests pass (tests all critical functions automatically)
-- All 25 Intelligence spec tests passed
+- **Built Nexus Platform Unified Architecture + Roofing OS Auto-Marketing v1 (60/60 tests)**
+  - 7 new DB tables: contractor_accounts, supplement_audit_leads, contractor_competitive_intel, contractor_roi_reports, nexus_verticals, contractor_referrals + more
+  - 6 new edge functions: nexus-vertical-router, supplement-audit-engine, contractor-signup, contractor-roi-engine, contractor-churn-predictor, contractor-competitive-engine
+  - Rebuilt roofingos-landing/index.html (dark theme, audit form, ROI calculator, pricing, FAQ, Aria chat)
+  - Seeded 3 Aria scripts: supplement_audit_followup, contractor_welcome, contractor_save
+  - nexus-core: vertical router (every cycle), audit lead followup (every 2 cycles), trial expiry alerts (daily)
+  - chat: 6 new commands — audit leads, contractors, contractor:, roi report:, churn risk, audit stats
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
 2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
 3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-4. Add memory consolidation ability (medium)
-5. Add Structured Self-Reflection Capability (medium)
-6. Draft complete operating agreement for Nexus ZC LLC
-7. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
+4. Wire contractor signup form on landing page to contractor-signup edge function
+5. Add memory consolidation ability (medium)
+6. Add Structured Self-Reflection Capability (medium)
+7. Draft complete operating agreement for Nexus ZC LLC
+8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
