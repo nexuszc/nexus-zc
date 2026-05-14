@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 14, 2026 — v17
+# Last updated: May 14, 2026 — v18
 
 ---
 
@@ -100,6 +100,12 @@ Then productized and sold to other multi-business operators.
 | `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
 | `contractor-churn-predictor` | Daily churn scoring + Aria save calls for high-risk contractors | Daily via nexus-core |
+| `job-intake` | 2-field job creation: tier gate → create job → portal + Aria + supplement + permit chain | Frontend / chat |
+| `morning-digest` | Daily 5-line SMS digest per contractor: jobs, supplements, storms, action | Daily 6:30am MT via nexus-core |
+| `monthly-truth` | Monthly ROI report (SMS + email) with AI insight per contractor | 1st of month 8am MT via nexus-core |
+| `stripe-webhook` | Stripe event handler: subscription.updated, invoice events, trial_will_end, cancellation | Stripe webhook |
+| `tier-enforcement` | Job/supplement/permit gate per tier; fires upgrade SMS at taste limit | Called by job-intake |
+| `upgrade-engine` | Processes UPGRADE SMS replies, self-serve upgrades, unlocks pending jobs | SMS router / Stripe |
 | `contractor-competitive-engine` | Weekly competitive intel emails per contractor zip | Weekly via nexus-vertical-router |
 | `contractor-roi-engine` | Monthly ROI reports: supplement revenue vs subscription cost | Monthly via nexus-vertical-router |
 | `contractor-signup` | Contractor account creation + Stripe trial + Aria welcome call + Resend email | Landing page signup |
@@ -350,10 +356,20 @@ Then productized and sold to other multi-business operators.
   - Seeded 3 Aria scripts: supplement_audit_followup, contractor_welcome, contractor_save
   - nexus-core: vertical router (every cycle), audit lead followup (every 2 cycles), trial expiry alerts (daily)
   - chat: 6 new commands — audit leads, contractors, contractor:, roi report:, churn risk, audit stats
+- **Built Nexus Platform — Tier System + Upgrade Engine v1 (50/50 tests)**
+  - DB migration: platform_tiers (seeded: door $49, taste $799, revenue $2499, command $4999), contractor_monthly_usage, contractor_upgrade_events, drone_orders, background_revenue, maintenance_contracts
+  - roofing_jobs: added contractor_id, fully_handled, handling_tier, supplement_included, permit_included, created_month
+  - contractor_accounts: added total_subscription_paid_cents, service_zips
+  - 6 new edge functions: tier-enforcement, upgrade-engine, job-intake, morning-digest, monthly-truth, stripe-webhook
+  - Landing page pricing replaced: 4-tier system ($49/$799/$2499/$4999), calculator updated to Revenue tier
+  - nexus-core: morning-digest fires daily 6:30am MT, monthly-truth fires 1st of month 8am MT
+  - chat: 11 total roofing commands (added tier stats, upgrade triggers, digest:, truth:, job: create)
+  - Seeded 3 Aria scripts: homeowner_intake, contractor_exit_interview, sms_upgrade_confirm
+  - Fixed: all auto-marketing chat commands (lower → msgLower), correct actual DB column names throughout
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
+1. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) for SMS to work
+2. Set STRIPE_WEBHOOK_SECRET in Supabase secrets → point Stripe dashboard to stripe-webhook function
 3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
 4. Wire contractor signup form on landing page to contractor-signup edge function
 5. Add memory consolidation ability (medium)

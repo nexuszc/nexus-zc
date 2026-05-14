@@ -4071,7 +4071,7 @@ Be specific. Reference actual numbers.` }],
     // ================================================================
 
     // audit leads — list recent supplement audit leads
-    if (lower === "audit leads") {
+    if (msgLower === "audit leads") {
       const { data: leads } = await supabase
         .from("supplement_audit_leads")
         .select("company_name, name, email, score, aria_call_queued, created_at")
@@ -4085,7 +4085,7 @@ Be specific. Reference actual numbers.` }],
     }
 
     // contractors — list all contractor accounts
-    if (lower === "contractors") {
+    if (msgLower === "contractors") {
       const { data: contractors } = await supabase
         .from("contractor_accounts")
         .select("company_name, owner_name, plan, subscription_status, churn_risk_score, created_at")
@@ -4098,7 +4098,7 @@ Be specific. Reference actual numbers.` }],
     }
 
     // contractor: [search] — lookup contractor by email or company name
-    if (lower.startsWith("contractor: ")) {
+    if (msgLower.startsWith("contractor: ")) {
       const search = message.slice(12).trim();
       const { data: contractors } = await supabase
         .from("contractor_accounts")
@@ -4110,7 +4110,7 @@ Be specific. Reference actual numbers.` }],
       const info = [
         `*${c.company_name}*`,
         `Owner: ${c.owner_name} | ${c.owner_email} | ${c.owner_phone || "no phone"}`,
-        `Plan: ${c.plan} ($${((c.plan_price_cents || 0) / 100).toFixed(0)}/mo) | Status: ${c.subscription_status}`,
+        `Plan: ${c.plan} | Status: ${c.subscription_status}`,
         `Churn risk: ${c.churn_risk_score || 0}/100`,
         `Trial ends: ${c.trial_ends_at ? new Date(c.trial_ends_at).toLocaleDateString() : "n/a"}`,
         `Zip: ${c.primary_zip || "not set"}`,
@@ -4120,7 +4120,7 @@ Be specific. Reference actual numbers.` }],
     }
 
     // roi report: [email] — trigger ROI engine for specific contractor
-    if (lower.startsWith("roi report: ")) {
+    if (msgLower.startsWith("roi report: ")) {
       const email = message.slice(12).trim();
       const { data: contractor } = await supabase
         .from("contractor_accounts")
@@ -4137,7 +4137,7 @@ Be specific. Reference actual numbers.` }],
     }
 
     // churn risk — list contractors with high churn score
-    if (lower === "churn risk") {
+    if (msgLower === "churn risk") {
       const { data: contractors } = await supabase
         .from("contractor_accounts")
         .select("company_name, owner_name, owner_phone, churn_risk_score, subscription_status")
@@ -4151,7 +4151,7 @@ Be specific. Reference actual numbers.` }],
     }
 
     // audit stats — aggregate stats from supplement_audit_leads
-    if (lower === "audit stats") {
+    if (msgLower === "audit stats") {
       const { data: leads } = await supabase.from("supplement_audit_leads").select("score, aria_call_queued, converted_to_contractor");
       if (!leads || leads.length === 0) return earlyReturn("No audit leads yet.");
       const total = leads.length;
@@ -4167,6 +4167,96 @@ Be specific. Reference actual numbers.` }],
         `Aria called: ${called}\n` +
         `Converted to contractor: ${converted}\n` +
         `Conversion rate: ${total > 0 ? ((converted / total) * 100).toFixed(1) : 0}%`
+      );
+    }
+
+    // tier stats — show tier distribution of active contractors
+    if (msgLower === "tier stats") {
+      const { data: contractors } = await supabase
+        .from("contractor_accounts")
+        .select("plan, status")
+        .eq("status", "active");
+      if (!contractors || contractors.length === 0) return earlyReturn("No active contractors.");
+      const counts: Record<string, number> = { door: 0, taste: 0, revenue: 0, command: 0 };
+      for (const c of contractors) counts[c.plan || "door"] = (counts[c.plan || "door"] || 0) + 1;
+      const total = contractors.length;
+      return earlyReturn(
+        `📊 *Tier Distribution (${total} active)*\n` +
+        `Door ($49): ${counts.door}\n` +
+        `Taste ($799): ${counts.taste}\n` +
+        `Revenue ($2,499): ${counts.revenue}\n` +
+        `Command ($4,999): ${counts.command}`
+      );
+    }
+
+    // upgrade triggers — show pending upgrade events
+    if (msgLower === "upgrade triggers") {
+      const { data: events } = await supabase
+        .from("contractor_upgrade_events")
+        .select("contractor_id, from_tier, to_tier, trigger_type, upgrade_initiated_at")
+        .is("upgrade_confirmed_at", null)
+        .order("upgrade_initiated_at", { ascending: false })
+        .limit(10);
+      if (!events || events.length === 0) return earlyReturn("No pending upgrade triggers.");
+      const lines = events.map((e: any) =>
+        `• ${e.from_tier} → ${e.to_tier} | trigger: ${e.trigger_type} | ${new Date(e.upgrade_initiated_at).toLocaleDateString()}`
+      ).join("\n");
+      return earlyReturn(`⬆️ *Pending Upgrade Events (${events.length})*\n${lines}`);
+    }
+
+    // digest: [identifier] — fire morning digest for a specific contractor
+    if (msgLower.startsWith("digest: ")) {
+      const identifier = message.slice(8).trim();
+      const { data: contractor } = await supabase
+        .from("contractor_accounts")
+        .select("id, company_name, owner_name")
+        .or(`owner_email.ilike.%${identifier}%,owner_phone.ilike.%${identifier}%,company_name.ilike.%${identifier}%`)
+        .single();
+      if (!contractor) return earlyReturn(`No contractor found matching "${identifier}".`);
+      fetch(`${SUPABASE_URL}/functions/v1/morning-digest`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contractor_id: contractor.id })
+      }).catch(() => {});
+      return earlyReturn(`📲 Morning digest queued for ${contractor.company_name} (${contractor.owner_name}).`);
+    }
+
+    // truth: [identifier] — fire monthly truth report for a specific contractor
+    if (msgLower.startsWith("truth: ")) {
+      const identifier = message.slice(7).trim();
+      const { data: contractor } = await supabase
+        .from("contractor_accounts")
+        .select("id, company_name, owner_name")
+        .or(`owner_email.ilike.%${identifier}%,owner_phone.ilike.%${identifier}%,company_name.ilike.%${identifier}%`)
+        .single();
+      if (!contractor) return earlyReturn(`No contractor found matching "${identifier}".`);
+      fetch(`${SUPABASE_URL}/functions/v1/monthly-truth`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contractor_id: contractor.id })
+      }).catch(() => {});
+      return earlyReturn(`📊 Monthly truth report queued for ${contractor.company_name} (${contractor.owner_name}).`);
+    }
+
+    // job: create [contractor_id] [address] — intake a job for a contractor
+    if (msgLower.startsWith("job: create ")) {
+      const parts = message.trim().slice(12).split(" ");
+      const contractorId = parts[0];
+      const address = parts.slice(1).join(" ");
+      if (!contractorId || !address) return earlyReturn("Usage: job: create [contractor_id] [address]");
+      const intakeRes = await fetch(`${SUPABASE_URL}/functions/v1/job-intake`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contractor_id: contractorId, address })
+      }).then(r => r.json()).catch(() => ({ ok: false, error: "intake failed" }));
+      if (!intakeRes.ok) {
+        return earlyReturn(`Job intake failed: ${intakeRes.reason || intakeRes.error || "unknown error"}`);
+      }
+      return earlyReturn(
+        `✅ *Job Created*\n` +
+        `ID: ${intakeRes.job_id}\n` +
+        `Address: ${address}\n` +
+        `Supplement: ${intakeRes.supplement_included ? "✅" : "❌"} | Permit: ${intakeRes.permit_included ? "✅" : "❌"} | Fully handled: ${intakeRes.fully_handled ? "✅" : "❌"}`
       );
     }
 

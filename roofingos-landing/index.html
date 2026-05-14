@@ -279,9 +279,9 @@
     </div>
     <div class="calc-row"><span class="calc-label">Avg supplement recovered per job</span><span class="calc-value">$4,200</span></div>
     <div class="calc-row"><span class="calc-label">Monthly supplement revenue</span><span class="calc-value positive" id="calc-supplement">$63,000</span></div>
-    <div class="calc-row"><span class="calc-label">Roofing OS subscription</span><span class="calc-value negative">−$299</span></div>
-    <div class="calc-row" style="padding-top:20px;"><span style="font-weight:700;">Monthly net gain</span><span class="calc-value big" id="calc-net">$62,701</span></div>
-    <div class="calc-row"><span class="calc-label">ROI</span><span class="calc-value positive" id="calc-roi" style="font-size:20px;font-weight:800;">210x</span></div>
+    <div class="calc-row"><span class="calc-label">Revenue tier subscription</span><span class="calc-value negative">−$2,499</span></div>
+    <div class="calc-row" style="padding-top:20px;"><span style="font-weight:700;">Monthly net gain</span><span class="calc-value big" id="calc-net">$60,501</span></div>
+    <div class="calc-row"><span class="calc-label">ROI</span><span class="calc-value positive" id="calc-roi" style="font-size:20px;font-weight:800;">24x</span></div>
     <button class="submit-btn" style="margin-top:24px;" onclick="window.location='#audit'">See what you're missing on a real job →</button>
   </div>
 </section>
@@ -300,32 +300,77 @@
 
 <section class="pricing-section" id="pricing">
   <div class="section-label">Pricing</div>
-  <h2 class="section-title">One job pays for a year</h2>
-  <p style="color:var(--muted);font-size:18px;max-width:500px;margin:0 auto 48px;">14-day free trial. No credit card required. Cancel any time.</p>
-  <div class="pricing-grid">
+  <h2 class="section-title">Start free. Scale when you're ready.</h2>
+  <p style="color:var(--muted);font-size:18px;max-width:560px;margin:0 auto 48px;">Every tier starts with a 14-day free trial. No credit card required. The system pays for itself — or we'll refund you.</p>
+  <div class="pricing-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px;">
+
     <div class="pricing-card">
-      <div class="plan-name">Starter</div>
-      <div class="plan-price">$299<span>/mo</span></div>
-      <div class="plan-desc">Perfect for contractors doing 5-15 jobs per month.</div>
-      <ul class="plan-features"><li>Homeowner portal (unlimited)</li><li>Supplement AI (5 jobs/mo)</li><li>Aria chat support</li><li>Storm alerts</li><li>Job pipeline tracking</li><li>Email and SMS notifications</li></ul>
-      <button class="plan-btn secondary" onclick="startTrial('starter')">Start Free Trial</button>
+      <div class="plan-name">Door</div>
+      <div class="plan-price">$49<span>/mo</span></div>
+      <div class="plan-desc">Digital tools to run your office. No AI handling — just infrastructure.</div>
+      <ul class="plan-features">
+        <li>Homeowner portal (unlimited jobs)</li>
+        <li>Job pipeline tracking</li>
+        <li>Aria AI chat (text only)</li>
+        <li>Storm detection alerts</li>
+        <li>Competitor monitoring</li>
+        <li>Weekly intelligence briefing</li>
+      </ul>
+      <button class="plan-btn secondary" onclick="startTrial('door')">Start Free Trial</button>
     </div>
+
+    <div class="pricing-card">
+      <div class="plan-name">Taste</div>
+      <div class="plan-price">$799<span>/mo</span></div>
+      <div class="plan-desc">2 fully AI-handled jobs per month. We manage intake to close — you watch.</div>
+      <ul class="plan-features">
+        <li>Everything in Door</li>
+        <li>2 fully handled jobs/mo</li>
+        <li>Supplement AI included</li>
+        <li>Homeowner Aria voice calls</li>
+        <li>Permit tracking</li>
+        <li>Upgrade SMS when limit hit</li>
+      </ul>
+      <button class="plan-btn secondary" onclick="startTrial('taste')">Start Free Trial</button>
+    </div>
+
     <div class="pricing-card featured">
       <div class="featured-badge">Most Popular</div>
-      <div class="plan-name">Growth</div>
-      <div class="plan-price">$499<span>/mo</span></div>
-      <div class="plan-desc">For storm restoration companies doing 15-40 jobs per month.</div>
-      <ul class="plan-features"><li>Everything in Starter</li><li>Supplement AI (unlimited)</li><li>Aria voice calls</li><li>Storm chase automation</li><li>Door knocker app</li><li>Weekly intelligence report</li><li>Competitor monitoring</li><li>Financial dashboard</li></ul>
-      <button class="plan-btn primary" onclick="startTrial('growth')">Start Free Trial</button>
+      <div class="plan-name">Revenue</div>
+      <div class="plan-price">$2,499<span>/mo</span></div>
+      <div class="plan-desc">Unlimited AI-handled jobs. Supplements, permits, Aria — fully automatic.</div>
+      <ul class="plan-features">
+        <li>Everything in Taste</li>
+        <li>Unlimited fully handled jobs</li>
+        <li>Supplement AI (all carriers)</li>
+        <li>Permit submission + tracking</li>
+        <li>Aria outbound storm calls</li>
+        <li>Financial dashboard + P&amp;L</li>
+        <li>Monthly ROI report</li>
+        <li>Churn risk monitoring</li>
+      </ul>
+      <button class="plan-btn primary" onclick="startTrial('revenue')">Start Free Trial</button>
     </div>
+
     <div class="pricing-card">
-      <div class="plan-name">Professional</div>
-      <div class="plan-price">$999<span>/mo</span></div>
-      <div class="plan-desc">For high-volume operations and multi-crew companies.</div>
-      <ul class="plan-features"><li>Everything in Growth</li><li>VA supplement review</li><li>Multi-crew management</li><li>Custom Aria persona</li><li>White label portal</li><li>API access</li><li>Dedicated account manager</li><li>Priority support</li></ul>
-      <button class="plan-btn secondary" onclick="startTrial('professional')">Start Free Trial</button>
+      <div class="plan-name">Command</div>
+      <div class="plan-price">$4,999<span>/mo</span></div>
+      <div class="plan-desc">Full autonomy. Drone surveys, background revenue, maintenance contracts.</div>
+      <ul class="plan-features">
+        <li>Everything in Revenue</li>
+        <li>Drone order credits (10/mo)</li>
+        <li>Background revenue engine</li>
+        <li>Maintenance contract system</li>
+        <li>White-label portal</li>
+        <li>Custom Aria persona + voice</li>
+        <li>Dedicated account manager</li>
+        <li>API access</li>
+      </ul>
+      <button class="plan-btn secondary" onclick="startTrial('command')">Start Free Trial</button>
     </div>
+
   </div>
+  <p style="color:var(--muted);font-size:14px;margin-top:24px;">One recovered supplement on Revenue pays for 7 months of the platform. At 15 jobs/month: $63,000 in supplement recovery vs $2,499 subscription. <strong style="color:var(--text);">25x ROI.</strong></p>
 </section>
 
 <section class="faq-section">
@@ -418,8 +463,8 @@ function updateCalc() {
   const jobs = parseInt(document.getElementById('jobs-slider').value);
   document.getElementById('jobs-display').textContent = jobs;
   const supplement = jobs * 4200;
-  const net = supplement - 299;
-  const roi = Math.round(net / 299);
+  const net = supplement - 2499;
+  const roi = Math.round(net / 2499);
   document.getElementById('calc-supplement').textContent = '$' + supplement.toLocaleString();
   document.getElementById('calc-net').textContent = '$' + net.toLocaleString();
   document.getElementById('calc-roi').textContent = roi + 'x';
@@ -448,7 +493,7 @@ function sendAriaMessage() {
     supplement: "Roofing OS's AI reads your adjuster estimate, analyzes your job photos, and identifies every line item they missed — then generates a complete supplement package in carrier-specific language. Most contractors recover $3,000-6,000 per job.",
     portal: "The homeowner portal is a magic-link web app — no app download needed. Your homeowner gets a text with a link, taps it, and sees their house, job progress, insurance status, and can chat with Aria. It dramatically increases referrals and 5-star reviews.",
     aria: "I'm Aria — an AI assistant built for roofing contractors. I make outbound calls, answer inbound calls 24/7, communicate with adjusters, and follow up with homeowners. I'm always disclosed as AI and I get smarter every week.",
-    price: "Roofing OS starts at $299/month with a 14-day free trial — no credit card required. One recovered supplement typically pays for the entire year. Most contractors see 10-20x ROI in their first 30 days.",
+    price: "Roofing OS starts at $49/month (Door — digital tools) up to $2,499/month (Revenue — unlimited AI-handled jobs). The Revenue tier pays for itself: at 15 jobs/month, supplement recovery averages $63,000 vs a $2,499 subscription. 14-day free trial, no credit card.",
     default: "The fastest way to see what Roofing OS can do for your business is the free supplement audit — enter any recent job address and we'll show you exactly what your insurance estimate missed. Want to try one now?"
   };
   const lower = msg.toLowerCase();

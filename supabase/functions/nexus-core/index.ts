@@ -1292,6 +1292,27 @@ Deno.serve(async (_req) => {
       }
     }
 
+    // MORNING DIGEST — daily 6:30am MT (12:30-13:00 UTC)
+    const _utcNow = new Date();
+    const _utcH = _utcNow.getUTCHours();
+    const _utcM = _utcNow.getUTCMinutes();
+    if (_utcH === 12 && _utcM >= 30) {
+      fetch(`${SUPABASE_URL}/functions/v1/morning-digest`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    // MONTHLY TRUTH — 1st of month, 8am MT (14:00-14:30 UTC)
+    if (_utcNow.getUTCDate() === 1 && _utcH === 14 && _utcM < 30) {
+      fetch(`${SUPABASE_URL}/functions/v1/monthly-truth`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 
