@@ -1119,6 +1119,39 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // DEPRECIATION SCAN — every 48 cycles (~24 hours)
+    if (cycleNumber % 48 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-depreciation-tracker`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "scan" })
+      }).catch(() => {});
+    }
+
+    // SUPPLEMENT FOLLOW-UP — check for unanswered submissions (every cycle)
+    try {
+      const { data: pendingSupplements } = await supabase
+        .from("supplement_packages")
+        .select("id, carrier_name, adjuster_name, supplement_requested_amount, submitted_to_adjuster_at")
+        .eq("status", "submitted")
+        .lt("submitted_to_adjuster_at", new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString());
+      for (const pkg of pendingSupplements || []) {
+        const daysPending = Math.round(
+          (Date.now() - new Date(pkg.submitted_to_adjuster_at).getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysPending > 5 && daysPending % 5 === 0) {
+          await tg(
+            `⏰ *Supplement Follow-up Needed*\n` +
+            `Carrier: ${pkg.carrier_name}\n` +
+            `Submitted ${daysPending} days ago.\n` +
+            `Amount: $${((pkg.supplement_requested_amount || 0) / 100).toLocaleString()}\n` +
+            `Adjuster: ${pkg.adjuster_name || "Unknown"}\n` +
+            `Reply \`follow up supplement: ${pkg.id?.slice(0, 8)}\``
+          );
+        }
+      }
+    } catch {}
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

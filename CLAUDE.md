@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 13, 2026 — v12
+# Last updated: May 13, 2026 — v14
 
 ---
 
@@ -136,6 +136,11 @@ Then productized and sold to other multi-business operators.
 | `roofing-aria-learning` | Weekly script performance analysis: promote champion, retire worst | Weekly cron via nexus-core |
 | `roofing-aria-storm-trigger` | Bulk-queue storm alert calls for previous customers in affected zip codes | nexus-core storm detection |
 | `roofing-aria-webhook` | Retell webhook: tracks call events, analyzes transcript, triggers follow-ups | Retell webhook |
+| `roofing-depreciation-tracker` | Daily scan: generate release letters, alert follow-ups for unreleased depreciation | Daily cron via nexus-core |
+| `roofing-supplement-analyzer` | Claude Vision photo analysis: detect missed line items per photo | Internal |
+| `roofing-supplement-generator` | Generate full Xactimate supplement packages with carrier-specific language | Internal |
+| `roofing-supplement-rebuttal` | AI rebuttal letters for denied line items, carrier-specific strategies | Internal |
+| `roofing-supplement-tracker` | Track adjuster responses, record approvals/denials, list pending | Internal |
 | `roofing-closer` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-outreach` | See function source for details | Internal |
@@ -247,6 +252,14 @@ Then productized and sold to other multi-business operators.
 - `roofing_aria_learning` -- weekly learning reports per call type (best/worst script, rates)
 - `roofing_inbound_calls` -- inbound call routing records (caller lookup, contact_type)
 
+### Roofing OS Supplement AI (added May 13, 2026):
+- `supplement_packages` -- full supplement packages (line items, amounts, carrier info, status pipeline)
+- `supplement_photo_analysis` -- per-photo AI analysis (damage types, severity, suggested Xactimate codes)
+- `roofing_codes` -- building code database (CO seeded: 8 code types with Xactimate line items)
+- `carrier_intelligence` -- carrier behavior patterns + tips (6 carriers seeded with approval rates)
+- `supplement_rebuttals` -- AI-generated denial rebuttal letters (strategy, evidence, outcome tracking)
+- `depreciation_tracking` -- depreciation held/released tracking with auto follow-up alerts
+
 ### Project categories:
 - `platform` -- core businesses (Nexus, VA Company)
 - `vertical` -- GTM channels (Roofing OS, Cash Out Refinances)
@@ -304,18 +317,21 @@ Then productized and sold to other multi-business operators.
 **DONE this session:**
 - Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
 - Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
-- 4 new Aria DB tables: roofing_aria_calls, roofing_aria_scripts, roofing_aria_learning, roofing_inbound_calls
-- 8 new Telegram commands: aria storm, aria call, aria stats, aria calls today, aria learning, aria pause, aria resume, aria scripts
-- nexus-core wired for storm detection (~8h), lead followup (every cycle), aria learning (weekly)
-- All 25 spec tests passed
+- Built Roofing OS Supplement AI (roofing-supplement-analyzer, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-depreciation-tracker)
+- 6 new Supplement DB tables: supplement_packages, supplement_photo_analysis, roofing_codes, carrier_intelligence, supplement_rebuttals, depreciation_tracking
+- Carrier intelligence seeded: State Farm, Allstate, Liberty Mutual, Travelers, USAA, Nationwide
+- Colorado building codes seeded: 8 code types (ice shield, drip edge, underlayment, starter, ridge, ventilation, decking, valley)
+- 12 new Telegram commands: supplement:, review supplement:, approve supplement:, rebuttal:, supplement stats, carrier intel:, codes:, depreciation scan, pending supplements, supplement history:, add carrier intel:, follow up supplement:
+- nexus-core wired: depreciation scan daily, supplement follow-up every cycle
+- All 30 spec tests passed
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
 2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
 3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-4. Add memory consolidation ability (medium)
-5. Add Structured Self-Reflection Capability (medium)
-6. Add conversation memory persistence (medium)
+4. Build Supplement AI dashboard tab in contractor app (React)
+5. Add memory consolidation ability (medium)
+6. Add Structured Self-Reflection Capability (medium)
 7. Draft complete operating agreement for Nexus ZC LLC
 8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 

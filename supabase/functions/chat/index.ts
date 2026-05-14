@@ -3113,6 +3113,355 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING SUPPLEMENT COMMANDS
+    // ================================================================
+
+    if (msgLower.startsWith("supplement:")) {
+      const start = Date.now();
+      try {
+        const jobRef = msg.slice("supplement:".length).trim();
+        if (!jobRef) return earlyReturn("Format: `supplement: [job address or ID]`");
+        // Look up job by address or id
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address, status").eq("id", jobRef)
+          : await supabase.from("roofing_jobs").select("id, property_address, status").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "supplement_generate", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-supplement-generator`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: job.id })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "supplement_generate", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📋 *Supplement Package Generating*\n` +
+          `Job: ${job.property_address}\n` +
+          (data.ok ? `Package ID: \`${(data.package_id || "").slice(0, 8)}\`\nItems found: ${data.line_items}\nRequested: $${(data.total_requested || 0).toLocaleString()}\nStatus: VA review` : `Error: ${data.error || "Failed"}`)
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "supplement_generate", false, Date.now() - start, channel);
+        return earlyReturn(`Supplement generation failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("review supplement:")) {
+      const start = Date.now();
+      try {
+        const pkgRef = msg.slice("review supplement:".length).trim();
+        const { data: pkgs } = await supabase
+          .from("supplement_packages")
+          .select("id, carrier_name, status, supplement_requested_amount, line_items, adjuster_name, claim_number, created_at")
+          .or(`id.eq.${pkgRef},id.ilike.${pkgRef}%`)
+          .limit(1);
+        const pkg = pkgs?.[0];
+        if (!pkg) {
+          await logUsage(supabase, "review_supplement", false, Date.now() - start, channel);
+          return earlyReturn(`No supplement package found with ID starting with "${pkgRef}"`);
+        }
+        const lineItems = (pkg.line_items as any[]) || [];
+        const topItems = lineItems.slice(0, 8).map((i: any) =>
+          `• *${i.xactimate_code || ""}* ${i.description}: $${(i.total || 0).toLocaleString()} (${i.category})`
+        ).join("\n");
+        await logUsage(supabase, "review_supplement", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📋 *Supplement Package Review*\n` +
+          `ID: \`${pkg.id.slice(0, 8)}\`\n` +
+          `Carrier: ${pkg.carrier_name}\n` +
+          `Claim: ${pkg.claim_number || "TBD"}\n` +
+          `Adjuster: ${pkg.adjuster_name || "TBD"}\n` +
+          `Status: ${pkg.status}\n` +
+          `Requested: $${((pkg.supplement_requested_amount || 0) / 100).toLocaleString()}\n` +
+          `Items: ${lineItems.length}\n\n` +
+          `*Top line items:*\n${topItems || "None"}\n\n` +
+          `Reply \`approve supplement: ${pkg.id.slice(0, 8)}\` to mark ready for submission.`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "review_supplement", false, Date.now() - start, channel);
+        return earlyReturn(`Review failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("approve supplement:")) {
+      const start = Date.now();
+      try {
+        const pkgRef = msg.slice("approve supplement:".length).trim();
+        const { data: pkgs } = await supabase.from("supplement_packages").select("id, carrier_name, supplement_requested_amount").or(`id.eq.${pkgRef},id.ilike.${pkgRef}%`).limit(1);
+        const pkg = pkgs?.[0];
+        if (!pkg) {
+          await logUsage(supabase, "approve_supplement", false, Date.now() - start, channel);
+          return earlyReturn(`No package found with ID starting with "${pkgRef}"`);
+        }
+        await supabase.from("supplement_packages").update({ status: "submitted", submitted_to_adjuster_at: new Date().toISOString(), va_reviewed_at: new Date().toISOString() }).eq("id", pkg.id);
+        await logUsage(supabase, "approve_supplement", true, Date.now() - start, channel);
+        return earlyReturn(
+          `✅ *Supplement Approved*\n` +
+          `Package \`${pkg.id.slice(0, 8)}\` marked as submitted.\n` +
+          `Carrier: ${pkg.carrier_name}\n` +
+          `Amount: $${((pkg.supplement_requested_amount || 0) / 100).toLocaleString()}\n` +
+          `Status: Submitted — awaiting adjuster response.`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "approve_supplement", false, Date.now() - start, channel);
+        return earlyReturn(`Approve failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("rebuttal:")) {
+      const start = Date.now();
+      try {
+        const parts = msg.slice("rebuttal:".length).trim().split(/\s+/);
+        const pkgRef = parts[0];
+        const deniedItem = parts.slice(1).join(" ");
+        if (!pkgRef || !deniedItem) return earlyReturn("Format: `rebuttal: [package-id] [denied line item]`\nExample: `rebuttal: abc123 overhead and profit`");
+        const { data: pkgs } = await supabase.from("supplement_packages").select("id, carrier_name").or(`id.eq.${pkgRef},id.ilike.${pkgRef}%`).limit(1);
+        const pkg = pkgs?.[0];
+        if (!pkg) {
+          await logUsage(supabase, "rebuttal_generate", false, Date.now() - start, channel);
+          return earlyReturn(`No package found with ID starting with "${pkgRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-supplement-rebuttal`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ supplement_package_id: pkg.id, denied_items: [{ line_item: deniedItem, reason: "Carrier denial", amount: 0 }] })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "rebuttal_generate", true, Date.now() - start, channel);
+        return earlyReturn(data.ok ? `⚖️ Rebuttal generated for "${deniedItem}" — ${data.rebuttals_generated} document(s) ready for VA review.` : `Rebuttal failed: ${data.error}`);
+      } catch (err: any) {
+        await logUsage(supabase, "rebuttal_generate", false, Date.now() - start, channel);
+        return earlyReturn(`Rebuttal failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "supplement stats") {
+      const start = Date.now();
+      try {
+        const [{ data: all }, { data: byCarrier }, { data: released }] = await Promise.all([
+          supabase.from("supplement_packages").select("status, supplement_requested_amount, supplement_approved_amount"),
+          supabase.from("supplement_packages").select("carrier_name, status, supplement_approved_amount").order("carrier_name"),
+          supabase.from("depreciation_tracking").select("total_depreciation_held, depreciation_released, status")
+        ]);
+        const total = all?.length || 0;
+        const approved = all?.filter(p => ["approved","partial_approved"].includes(p.status)).length || 0;
+        const totalRequested = (all || []).reduce((s, p) => s + (p.supplement_requested_amount || 0), 0);
+        const totalApproved = (all || []).reduce((s, p) => s + (p.supplement_approved_amount || 0), 0);
+        const totalDepr = (released || []).reduce((s, p) => s + (p.total_depreciation_held || 0), 0);
+        const releasedDepr = (released || []).reduce((s, p) => s + (p.depreciation_released || 0), 0);
+        // Carrier breakdown
+        const carrierMap: Record<string, {total:number;approved:number}> = {};
+        for (const p of byCarrier || []) {
+          if (!carrierMap[p.carrier_name]) carrierMap[p.carrier_name] = {total:0,approved:0};
+          carrierMap[p.carrier_name].total++;
+          if (["approved","partial_approved"].includes(p.status)) carrierMap[p.carrier_name].approved++;
+        }
+        const carrierLines = Object.entries(carrierMap).map(([name, s]) =>
+          `  ${name}: ${s.approved}/${s.total} (${s.total > 0 ? Math.round(s.approved/s.total*100) : 0}%)`
+        ).join("\n");
+        await logUsage(supabase, "supplement_stats", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📊 *Supplement Stats*\n\n` +
+          `Total packages: ${total}\n` +
+          `Approval rate: ${total > 0 ? Math.round(approved/total*100) : 0}%\n` +
+          `Requested: $${(totalRequested/100).toLocaleString()}\n` +
+          `Approved: $${(totalApproved/100).toLocaleString()}\n\n` +
+          `*By Carrier:*\n${carrierLines || "None yet"}\n\n` +
+          `*Depreciation:*\n` +
+          `Held: $${(totalDepr/100).toLocaleString()}\n` +
+          `Released: $${(releasedDepr/100).toLocaleString()}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "supplement_stats", false, Date.now() - start, channel);
+        return earlyReturn(`Stats failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("carrier intel:")) {
+      const start = Date.now();
+      try {
+        const carrierInput = msg.slice("carrier intel:".length).trim().toLowerCase();
+        const { data: carriers } = await supabase.from("carrier_intelligence").select("*").ilike("carrier_name", `%${carrierInput}%`).limit(1);
+        const carrier = carriers?.[0];
+        if (!carrier) {
+          await logUsage(supabase, "carrier_intel", false, Date.now() - start, channel);
+          return earlyReturn(`No carrier found matching "${carrierInput}"`);
+        }
+        const tips = (carrier.tips as string[] || []).slice(0, 5).map((t: string) => `• ${t}`).join("\n");
+        const denials = (carrier.common_denials as string[] || []).join(", ");
+        const easy = (carrier.easy_approvals as string[] || []).join(", ");
+        await logUsage(supabase, "carrier_intel", true, Date.now() - start, channel);
+        return earlyReturn(
+          `🏢 *${carrier.carrier_name} Intelligence*\n\n` +
+          `Approval rate: ${Math.round((carrier.supplement_approval_rate || 0) * 100)}%\n` +
+          `O&P rate: ${Math.round((carrier.op_approval_rate || 0) * 100)}%\n` +
+          `Avg approval time: ${carrier.typical_approval_time_days} days\n\n` +
+          `✅ Easy approvals: ${easy || "N/A"}\n` +
+          `❌ Common denials: ${denials || "N/A"}\n\n` +
+          `*Tips:*\n${tips || "No tips recorded yet"}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "carrier_intel", false, Date.now() - start, channel);
+        return earlyReturn(`Carrier intel failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("codes:")) {
+      const start = Date.now();
+      try {
+        const zipOrState = msg.slice("codes:".length).trim() || "CO";
+        const { data: codes } = await supabase
+          .from("roofing_codes")
+          .select("code_type, code_section, requirement, xactimate_line_item")
+          .or(`state.eq.CO,zip_code.eq.${zipOrState}`)
+          .order("code_type");
+        if (!codes?.length) {
+          await logUsage(supabase, "codes_lookup", false, Date.now() - start, channel);
+          return earlyReturn(`No codes found for "${zipOrState}"`);
+        }
+        const codeLines = codes.map(c =>
+          `• *${c.code_type}* (${c.xactimate_line_item || ""})\n  ${c.requirement.slice(0, 100)}\n  _${c.code_section}_`
+        ).join("\n\n");
+        await logUsage(supabase, "codes_lookup", true, Date.now() - start, channel);
+        return earlyReturn(`🏗️ *Building Codes — Colorado*\n\n${codeLines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "codes_lookup", false, Date.now() - start, channel);
+        return earlyReturn(`Codes lookup failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "depreciation scan") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-depreciation-tracker`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "scan" })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "depreciation_scan", true, Date.now() - start, channel);
+        return earlyReturn(`💵 Depreciation scan complete. Actions triggered: ${data.actions_triggered ?? 0}`);
+      } catch (err: any) {
+        await logUsage(supabase, "depreciation_scan", false, Date.now() - start, channel);
+        return earlyReturn(`Depreciation scan failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "pending supplements") {
+      const start = Date.now();
+      try {
+        const { data: pending } = await supabase
+          .from("supplement_packages")
+          .select("id, carrier_name, status, supplement_requested_amount, submitted_to_adjuster_at, adjuster_name, roofing_jobs(property_address)")
+          .in("status", ["va_review", "submitted", "partial_approved"])
+          .order("created_at", { ascending: false })
+          .limit(15);
+        if (!pending?.length) {
+          await logUsage(supabase, "pending_supplements", true, Date.now() - start, channel);
+          return earlyReturn("No pending supplements. All caught up! ✅");
+        }
+        const lines = pending.map(p => {
+          const addr = (p.roofing_jobs as any)?.property_address || "Unknown";
+          const days = p.submitted_to_adjuster_at
+            ? Math.round((Date.now() - new Date(p.submitted_to_adjuster_at).getTime()) / 86400000)
+            : null;
+          return `• \`${p.id.slice(0, 8)}\` ${addr} — ${p.carrier_name} — $${((p.supplement_requested_amount||0)/100).toLocaleString()} — *${p.status}*${days !== null ? ` (${days}d ago)` : ""}`;
+        }).join("\n");
+        await logUsage(supabase, "pending_supplements", true, Date.now() - start, channel);
+        return earlyReturn(`📋 *Pending Supplements (${pending.length})*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "pending_supplements", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("supplement history:")) {
+      const start = Date.now();
+      try {
+        const carrierInput = msg.slice("supplement history:".length).trim();
+        const { data: history } = await supabase
+          .from("supplement_packages")
+          .select("id, status, supplement_requested_amount, supplement_approved_amount, created_at, claim_number")
+          .ilike("carrier_name", `%${carrierInput}%`)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (!history?.length) {
+          await logUsage(supabase, "supplement_history", false, Date.now() - start, channel);
+          return earlyReturn(`No supplement history found for "${carrierInput}"`);
+        }
+        const lines = history.map(h => {
+          const date = new Date(h.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          return `• ${date} — $${((h.supplement_requested_amount||0)/100).toLocaleString()} req / $${((h.supplement_approved_amount||0)/100).toLocaleString()} appvd — *${h.status}*`;
+        }).join("\n");
+        const approved = history.filter(h => ["approved","partial_approved"].includes(h.status)).length;
+        await logUsage(supabase, "supplement_history", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📊 *${carrierInput} Supplement History*\n` +
+          `${history.length} packages — ${Math.round(approved/history.length*100)}% approval rate\n\n${lines}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "supplement_history", false, Date.now() - start, channel);
+        return earlyReturn(`History failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("add carrier intel:")) {
+      const start = Date.now();
+      try {
+        const rest = msg.slice("add carrier intel:".length).trim();
+        const spaceIdx = rest.indexOf(" ");
+        if (spaceIdx === -1) return earlyReturn("Format: `add carrier intel: [carrier name] [tip or insight]`");
+        const carrierName = rest.slice(0, spaceIdx).replace(/_/g, " ");
+        const tip = rest.slice(spaceIdx + 1).trim();
+        const { data: carrier } = await supabase.from("carrier_intelligence").select("id, tips, carrier_name").ilike("carrier_name", `%${carrierName}%`).maybeSingle();
+        if (!carrier) {
+          await logUsage(supabase, "add_carrier_intel", false, Date.now() - start, channel);
+          return earlyReturn(`Carrier "${carrierName}" not found. Known carriers: State Farm, Allstate, Liberty Mutual, Travelers, USAA, Nationwide`);
+        }
+        const existingTips = (carrier.tips as string[]) || [];
+        await supabase.from("carrier_intelligence").update({ tips: [...existingTips, tip], last_updated: new Date().toISOString() }).eq("id", carrier.id);
+        await logUsage(supabase, "add_carrier_intel", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Tip added to ${carrier.carrier_name} intelligence:\n"${tip}"`);
+      } catch (err: any) {
+        await logUsage(supabase, "add_carrier_intel", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("follow up supplement:")) {
+      const start = Date.now();
+      try {
+        const pkgRef = msg.slice("follow up supplement:".length).trim();
+        const { data: pkgs } = await supabase.from("supplement_packages").select("id, carrier_name, adjuster_name, adjuster_email, supplement_requested_amount, claim_number, submitted_to_adjuster_at").or(`id.eq.${pkgRef},id.ilike.${pkgRef}%`).limit(1);
+        const pkg = pkgs?.[0];
+        if (!pkg) {
+          await logUsage(supabase, "follow_up_supplement", false, Date.now() - start, channel);
+          return earlyReturn(`No package found with ID starting with "${pkgRef}"`);
+        }
+        const daysPending = pkg.submitted_to_adjuster_at
+          ? Math.round((Date.now() - new Date(pkg.submitted_to_adjuster_at).getTime()) / 86400000)
+          : 0;
+        await logUsage(supabase, "follow_up_supplement", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📞 *Supplement Follow-up*\n\n` +
+          `Carrier: ${pkg.carrier_name}\n` +
+          `Adjuster: ${pkg.adjuster_name || "Unknown"}\n` +
+          `Email: ${pkg.adjuster_email || "Not on file"}\n` +
+          `Claim #: ${pkg.claim_number || "TBD"}\n` +
+          `Amount: $${((pkg.supplement_requested_amount||0)/100).toLocaleString()}\n` +
+          `Days pending: ${daysPending}\n\n` +
+          `_Script:_ "Hi ${pkg.adjuster_name || "there"}, this is [your name] following up on supplement package for claim ${pkg.claim_number || "on file"}. We submitted ${daysPending} days ago and wanted to check on status. Can you give me an ETA?"`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "follow_up_supplement", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase
