@@ -3845,6 +3845,56 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING DEMO COMMANDS
+    // ================================================================
+
+    // demo portal
+    if (msgLower === "demo portal") {
+      const url = "https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS";
+      return earlyReturn(
+        `🏠 *Demo Portal*\n` +
+        `Homeowner: Sarah Johnson\n` +
+        `Property: 4821 Timberline Dr, Aurora\n` +
+        `Status: Installation in progress\n\n` +
+        `${url}\n\n` +
+        `Show this to your roofer prospect.\n` +
+        `This is what THEIR homeowners will see.`
+      );
+    }
+
+    // demo stats
+    if (msgLower === "demo stats") {
+      return earlyReturn(
+        `📊 *Roofing OS Demo Stats*\n\n` +
+        `Storm detected: May 8, 2026\n` +
+        `Hail size: 1.75 inches\n` +
+        `Properties scored: 847\n` +
+        `Previous customers called: 23\n` +
+        `Territories assigned: 3 reps\n\n` +
+        `*Sarah Johnson Job:*\n` +
+        `Contract: $18,475\n` +
+        `Supplement requested: $3,847\n` +
+        `Status: Installation in progress\n` +
+        `Portal: Active ✅`
+      );
+    }
+
+    // demo reset
+    if (msgLower === "demo reset") {
+      try {
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const _sb = createClient(SUPABASE_URL, SERVICE_KEY);
+        await _sb.from("portal_activities")
+          .delete()
+          .eq("job_id", "d0000000-0000-0000-0000-000000000001")
+          .gt("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+        return earlyReturn("✅ Demo reset — portal activities cleared to baseline.");
+      } catch (err: any) {
+        return earlyReturn(`Demo reset failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // ROOFING INTELLIGENCE COMMANDS
     // ================================================================
 
