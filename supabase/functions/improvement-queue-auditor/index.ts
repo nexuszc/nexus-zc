@@ -1,95 +1,106 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-interface ImprovementQueueEntry {
-  id: string
-  created_at: string
-  status: string
-  priority: number
-  title: string
-  description: string
+interface AuditResult {
+  timestamp: string
+  totalEntries: number
+  staleEntries: number
+  invalidEntries: number
+  queueHealth: string
+  issues: string[]
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error('Missing environment variables')
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    const { data: pendingEntries, error: fetchError } = await supabase
+    if (!supabaseUrl || !supabaseKey) {
+      return new Response(
+        JSON.stringify({ error: 'Missing environment configuration' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const { data: queueEntries, error: fetchError } = await supabase
       .from('improvement_queue')
       .select('*')
-      .eq('status', 'pending')
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
 
     if (fetchError) {
-      throw fetchError
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch queue entries', details: fetchError.message }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
-    const auditResults = {
-      timestamp: new Date().toISOString(),
-      total_pending: pendingEntries?.length || 0,
-      entries_audited: 0,
-      entries_processed: 0,
-      errors: [] as string[],
-    }
+    const now = new Date()
+    const staleThresholdHours = 24
+    const staleThreshold = new Date(now.getTime() - staleThresholdHours * 60 * 60 * 1000)
 
-    if (pendingEntries && pendingEntries.length > 0) {
-      for (const entry of pendingEntries) {
-        auditResults.entries_audited++
+    let staleCount = 0
+    let invalidCount = 0
+    const issues: string[] = []
 
-        try {
-          const shouldProcess = entry.priority >= 5
-
-          if (shouldProcess) {
-            const { error: updateError } = await supabase
-              .from('improvement_queue')
-              .update({ 
-                status: 'processing',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', entry.id)
-
-            if (updateError) {
-              auditResults.errors.push(`Failed to update entry ${entry.id}: ${updateError.message}`)
-            } else {
-              auditResults.entries_processed++
-            }
-          }
-        } catch (error) {
-          auditResults.errors.push(`Error processing entry ${entry.id}: ${error.message}`)
-        }
+    queueEntries?.forEach((entry) => {
+      const createdAt = new Date(entry.created_at)
+      
+      if (entry.status === 'pending' && createdAt < staleThreshold) {
+        staleCount++
+        issues.push(`Stale entry: ${entry.id} (created ${createdAt.toISOString()})`)
       }
+
+      if (!entry.improvement_type || !entry.content_id) {
+        invalidCount++
+        issues.push(`Invalid entry: ${entry.id} (missing required fields)`)
+      }
+
+      if (!['pending', 'processing', 'completed', 'failed'].includes(entry.status)) {
+        invalidCount++
+        issues.push(`Invalid status: ${entry.id} (status: ${entry.status})`)
+      }
+    })
+
+    const totalEntries = queueEntries?.length || 0
+    let queueHealth = 'healthy'
+    
+    if (invalidCount > 0) {
+      queueHealth = 'critical'
+    } else if (staleCount > totalEntries * 0.2) {
+      queueHealth = 'degraded'
+    } else if (staleCount > 0) {
+      queueHealth = 'warning'
+    }
+
+    const auditResult: AuditResult = {
+      timestamp: now.toISOString(),
+      totalEntries,
+      staleEntries: staleCount,
+      invalidEntries: invalidCount,
+      queueHealth,
+      issues: issues.slice(0, 50)
     }
 
     return new Response(
-      JSON.stringify(auditResults),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify(auditResult),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
 })
