@@ -1,152 +1,113 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-
-interface TestRequest {
-  testSuite?: string;
-  testName?: string;
-  environment?: string;
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 interface TestResult {
-  success: boolean;
-  results: Array<{
-    name: string;
-    passed: boolean;
-    duration: number;
-    error?: string;
-  }>;
-  summary: {
-    total: number;
-    passed: number;
-    failed: number;
-    duration: number;
-  };
+  success: boolean
+  message: string
+  details?: any
 }
 
 Deno.serve(async (req) => {
   try {
-    if (req.method !== "POST") {
+    if (req.method !== 'POST') {
       return new Response(
-        JSON.stringify({ error: "Method not allowed" }),
-        { 
-          status: 405,
-          headers: { "Content-Type": "application/json" }
+        JSON.stringify({ success: false, message: 'Method not allowed' }),
+        { status: 405, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase configuration')
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const { testType, testData } = await req.json()
+
+    let result: TestResult
+
+    switch (testType) {
+      case 'connection':
+        const { data: connectionData, error: connectionError } = await supabase
+          .from('nexus_connections')
+          .select('*')
+          .limit(1)
+        
+        result = {
+          success: !connectionError,
+          message: connectionError ? 'Connection test failed' : 'Connection test passed',
+          details: connectionError || connectionData
         }
-      );
-    }
+        break
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Missing authorization header" }),
-        { 
-          status: 401,
-          headers: { "Content-Type": "application/json" }
+      case 'query':
+        const { query, params } = testData || {}
+        const { data: queryData, error: queryError } = await supabase.rpc(query, params)
+        
+        result = {
+          success: !queryError,
+          message: queryError ? 'Query test failed' : 'Query test passed',
+          details: queryError || queryData
         }
-      );
-    }
+        break
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      case 'integration':
+        const integrationTests = []
+        
+        const { data: nodesData, error: nodesError } = await supabase
+          .from('nexus_nodes')
+          .select('*')
+          .limit(5)
+        integrationTests.push({ test: 'nodes', success: !nodesError, error: nodesError })
 
-    if (!supabaseUrl || !supabaseKey) {
-      return new Response(
-        JSON.stringify({ error: "Server configuration error" }),
-        { 
-          status: 500,
-          headers: { "Content-Type": "application/json" }
+        const { data: edgesData, error: edgesError } = await supabase
+          .from('nexus_edges')
+          .select('*')
+          .limit(5)
+        integrationTests.push({ test: 'edges', success: !edgesError, error: edgesError })
+
+        const { data: connectionsData, error: connectionsError } = await supabase
+          .from('nexus_connections')
+          .select('*')
+          .limit(5)
+        integrationTests.push({ test: 'connections', success: !connectionsError, error: connectionsError })
+
+        const allPassed = integrationTests.every(t => t.success)
+        result = {
+          success: allPassed,
+          message: allPassed ? 'All integration tests passed' : 'Some integration tests failed',
+          details: integrationTests
         }
-      );
+        break
+
+      default:
+        result = {
+          success: false,
+          message: `Unknown test type: ${testType}`
+        }
     }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const requestBody: TestRequest = await req.json();
-    const { testSuite, testName, environment = "production" } = requestBody;
-
-    const startTime = Date.now();
-    const testResults: TestResult["results"] = [];
-
-    const runTest = async (name: string, testFn: () => Promise<void>) => {
-      const testStart = Date.now();
-      try {
-        await testFn();
-        testResults.push({
-          name,
-          passed: true,
-          duration: Date.now() - testStart
-        });
-      } catch (error) {
-        testResults.push({
-          name,
-          passed: false,
-          duration: Date.now() - testStart,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
-    };
-
-    const healthCheckTest = async () => {
-      const { data, error } = await supabase.from("health_check").select("*").limit(1);
-      if (error && error.code !== "42P01") throw error;
-    };
-
-    const authTest = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) throw error;
-    };
-
-    const databaseConnectionTest = async () => {
-      const { data, error } = await supabase.rpc("pg_backend_pid");
-      if (error) throw error;
-    };
-
-    if (!testName || testName === "health_check") {
-      await runTest("health_check", healthCheckTest);
-    }
-
-    if (!testName || testName === "auth") {
-      await runTest("auth", authTest);
-    }
-
-    if (!testName || testName === "database_connection") {
-      await runTest("database_connection", databaseConnectionTest);
-    }
-
-    const totalDuration = Date.now() - startTime;
-    const passed = testResults.filter(r => r.passed).length;
-    const failed = testResults.filter(r => !r.passed).length;
-
-    const result: TestResult = {
-      success: failed === 0,
-      results: testResults,
-      summary: {
-        total: testResults.length,
-        passed,
-        failed,
-        duration: totalDuration
-      }
-    };
 
     return new Response(
       JSON.stringify(result),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
+      { 
+        status: result.success ? 200 : 400,
+        headers: { 'Content-Type': 'application/json' } 
       }
-    );
+    )
 
   } catch (error) {
-    console.error("Test runner error:", error);
     return new Response(
-      JSON.stringify({
-        error: "Test execution failed",
-        message: error instanceof Error ? error.message : String(error)
+      JSON.stringify({ 
+        success: false, 
+        message: 'Test runner error',
+        details: error.message 
       }),
-      {
+      { 
         status: 500,
-        headers: { "Content-Type": "application/json" }
+        headers: { 'Content-Type': 'application/json' } 
       }
-    );
+    )
   }
-});
+})
