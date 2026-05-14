@@ -122,6 +122,9 @@ Then productized and sold to other multi-business operators.
 | `nexus-voice-engine` | See function source for details | Internal |
 | `nexus-voice-learning` | See function source for details | Internal |
 | `nexus-voice-webhook` | See function source for details | Internal |
+| `portal-activity-generator` | See function source for details | Internal |
+| `portal-api` | See function source for details | Internal |
+| `portal-magic-link` | See function source for details | Internal |
 | `process-email-queue` | Batch process email queue | Cron |
 | `provision` | Spin up client subdomain + Claude-generated site | chat provision: command or web UI |
 | `reclassify` | Re-run classification on existing entries | On demand |
@@ -280,9 +283,9 @@ Then productized and sold to other multi-business operators.
 3. Add Structured Self-Reflection Capability (medium)
 4. Add ability usage analytics and performance tracking (medium)
 5. Add conversation memory persistence (medium)
-6. Build the complete Roofing OS go-to-market system
-7. Draft a complete operating agreement for Nexus ZC LLC
-8. Review and improve client health scores for Brian and Denver Pro Roofing
+6. Draft complete operating agreement for Nexus ZC LLC
+7. Build complete Roofing OS go-to-market system with public landing page
+8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
