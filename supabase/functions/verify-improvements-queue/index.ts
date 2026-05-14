@@ -1,147 +1,77 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { corsHeaders } from '../_shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-interface VerificationRequest {
-  improvement_id?: string
-  batch_size?: number
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-interface ImprovementRecord {
-  id: string
-  original_text: string
-  improved_text: string
-  improvement_type: string
-  status: string
-}
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-
-async function verifyImprovement(improvement: ImprovementRecord): Promise<boolean> {
-  if (!improvement.improved_text || improvement.improved_text.trim().length === 0) {
-    return false
-  }
-
-  if (improvement.improved_text === improvement.original_text) {
-    return false
-  }
-
-  if (improvement.improved_text.length < 10) {
-    return false
-  }
-
-  return true
-}
-
-async function handler(request: Request): Promise<Response> {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    
-    let improvementId: string | undefined
-    let batchSize = 10
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (request.method === 'POST') {
-      const body: VerificationRequest = await request.json()
-      improvementId = body.improvement_id
-      batchSize = body.batch_size ?? 10
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing environment variables');
     }
 
-    let query = supabase
-      .from('improvements')
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: queueEntries, error: queueError } = await supabase
+      .from('improvements_queue')
       .select('*')
-      .eq('status', 'pending')
-      .limit(batchSize)
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-    if (improvementId) {
-      query = query.eq('id', improvementId)
+    if (queueError) {
+      throw queueError;
     }
 
-    const { data: improvements, error: fetchError } = await query
+    const validEntries = [];
+    const invalidEntries = [];
 
-    if (fetchError) {
-      throw new Error(`Failed to fetch improvements: ${fetchError.message}`)
-    }
+    for (const entry of queueEntries || []) {
+      const isValid = 
+        entry.improvement_id &&
+        entry.status &&
+        ['pending', 'processing', 'completed', 'failed'].includes(entry.status);
 
-    if (!improvements || improvements.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'No pending improvements to verify',
-          processed: 0 
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      )
-    }
-
-    const verificationResults = []
-
-    for (const improvement of improvements) {
-      const isValid = await verifyImprovement(improvement)
-      
-      const newStatus = isValid ? 'verified' : 'failed'
-      
-      const { error: updateError } = await supabase
-        .from('improvements')
-        .update({ 
-          status: newStatus,
-          verified_at: new Date().toISOString()
-        })
-        .eq('id', improvement.id)
-
-      if (updateError) {
-        console.error(`Failed to update improvement ${improvement.id}:`, updateError)
-        verificationResults.push({
-          id: improvement.id,
-          success: false,
-          error: updateError.message
-        })
+      if (isValid) {
+        validEntries.push(entry);
       } else {
-        verificationResults.push({
-          id: improvement.id,
-          success: true,
-          status: newStatus
-        })
+        invalidEntries.push({
+          id: entry.id,
+          reason: 'Missing required fields or invalid status',
+        });
       }
     }
 
-    const successCount = verificationResults.filter(r => r.success).length
+    const result = {
+      total: (queueEntries || []).length,
+      valid: validEntries.length,
+      invalid: invalidEntries.length,
+      validEntries,
+      invalidEntries,
+      timestamp: new Date().toISOString(),
+    };
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        processed: verificationResults.length,
-        verified: successCount,
-        results: verificationResults
-      }),
+      JSON.stringify(result),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+        status: 200,
       }
-    )
-
+    );
   } catch (error) {
-    console.error('Error in verify-improvements-queue:', error)
-    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      }),
+      JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status: 500,
       }
-    )
+    );
   }
-}
-
-Deno.serve(async (req) => {
-  return handler(req)
-})
+});
