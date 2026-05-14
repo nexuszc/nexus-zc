@@ -1,124 +1,116 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-interface ImprovementQueueItem {
-  id: string
-  type: string
-  status: string
-  priority: number
-  created_at: string
-  updated_at: string
-  metadata: Record<string, any>
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 interface AuditResult {
-  total_items: number
-  by_status: Record<string, number>
-  by_type: Record<string, number>
-  avg_age_hours: number
-  stale_items: number
-  high_priority_pending: number
-  patterns: string[]
+  totalItems: number
+  duplicates: number
+  invalidPriorities: number
+  invalidStatuses: number
+  issues: Array<{
+    type: string
+    message: string
+    itemId?: string
+  }>
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   try {
-    if (req.method !== 'GET') {
-      return new Response(
-        JSON.stringify({ error: 'Method not allowed' }),
-        { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
-
-    const { data: items, error } = await supabaseClient
+    const { data: items, error: fetchError } = await supabase
       .from('improvement_queue')
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (error) {
-      throw error
+    if (fetchError) {
+      throw new Error(`Failed to fetch improvement queue: ${fetchError.message}`)
     }
-
-    const queueItems = (items || []) as ImprovementQueueItem[]
-    const now = new Date()
-
-    const byStatus: Record<string, number> = {}
-    const byType: Record<string, number> = {}
-    let totalAgeHours = 0
-    let staleItems = 0
-    let highPriorityPending = 0
-
-    queueItems.forEach(item => {
-      byStatus[item.status] = (byStatus[item.status] || 0) + 1
-      byType[item.type] = (byType[item.type] || 0) + 1
-
-      const createdAt = new Date(item.created_at)
-      const ageHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60)
-      totalAgeHours += ageHours
-
-      if (ageHours > 72 && item.status === 'pending') {
-        staleItems++
-      }
-
-      if (item.priority >= 8 && item.status === 'pending') {
-        highPriorityPending++
-      }
-    })
-
-    const patterns: string[] = []
-
-    if (staleItems > 5) {
-      patterns.push(`${staleItems} items pending for over 72 hours`)
-    }
-
-    if (highPriorityPending > 0) {
-      patterns.push(`${highPriorityPending} high-priority items awaiting processing`)
-    }
-
-    const pendingCount = byStatus['pending'] || 0
-    const completedCount = byStatus['completed'] || 0
-    if (pendingCount > completedCount * 2) {
-      patterns.push('Pending items significantly outnumber completed items')
-    }
-
-    const avgAgeHours = queueItems.length > 0 ? totalAgeHours / queueItems.length : 0
 
     const result: AuditResult = {
-      total_items: queueItems.length,
-      by_status: byStatus,
-      by_type: byType,
-      avg_age_hours: Math.round(avgAgeHours * 100) / 100,
-      stale_items: staleItems,
-      high_priority_pending: highPriorityPending,
-      patterns: patterns,
+      totalItems: items?.length || 0,
+      duplicates: 0,
+      invalidPriorities: 0,
+      invalidStatuses: 0,
+      issues: [],
     }
 
-    return new Response(
-      JSON.stringify(result),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    if (!items || items.length === 0) {
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const validPriorities = ['low', 'medium', 'high', 'critical']
+    const validStatuses = ['pending', 'in_progress', 'completed', 'rejected']
+    const contentMap = new Map<string, string[]>()
+
+    for (const item of items) {
+      if (item.priority && !validPriorities.includes(item.priority)) {
+        result.invalidPriorities++
+        result.issues.push({
+          type: 'invalid_priority',
+          message: `Invalid priority: ${item.priority}`,
+          itemId: item.id,
+        })
+      }
+
+      if (item.status && !validStatuses.includes(item.status)) {
+        result.invalidStatuses++
+        result.issues.push({
+          type: 'invalid_status',
+          message: `Invalid status: ${item.status}`,
+          itemId: item.id,
+        })
+      }
+
+      if (item.content) {
+        const normalized = item.content.trim().toLowerCase()
+        if (contentMap.has(normalized)) {
+          result.duplicates++
+          result.issues.push({
+            type: 'duplicate',
+            message: `Duplicate content found`,
+            itemId: item.id,
+          })
+          contentMap.get(normalized)!.push(item.id)
+        } else {
+          contentMap.set(normalized, [item.id])
+        }
+      }
+    }
+
+    console.log('Audit completed:', {
+      total: result.totalItems,
+      duplicates: result.duplicates,
+      invalidPriorities: result.invalidPriorities,
+      invalidStatuses: result.invalidStatuses,
+      issueCount: result.issues.length,
+    })
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   } catch (error) {
+    console.error('Audit error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
     )
   }
 })
