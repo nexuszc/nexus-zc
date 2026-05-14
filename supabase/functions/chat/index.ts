@@ -3462,6 +3462,389 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING OPERATIONS COMMANDS
+    // ================================================================
+
+    if (msgLower.startsWith("job:")) {
+      const start = Date.now();
+      try {
+        const jobRef = msg.slice("job:".length).trim();
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("*, insurance_claims(carrier_name, claim_number, status), roofing_permits(status, permit_number, municipality), job_financials(contract_amount, gross_margin, total_collected, amount_outstanding)").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("*, insurance_claims(carrier_name, claim_number, status), roofing_permits(status, permit_number, municipality), job_financials(contract_amount, gross_margin, total_collected, amount_outstanding)").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "job_lookup", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const fin = Array.isArray(job.job_financials) ? job.job_financials[0] : job.job_financials;
+        const permit = Array.isArray(job.roofing_permits) ? job.roofing_permits[0] : job.roofing_permits;
+        await logUsage(supabase, "job_lookup", true, Date.now() - start, channel);
+        return earlyReturn(
+          `🏠 *${job.property_address}*\n` +
+          `Status: *${job.status}*\n` +
+          `Type: ${job.job_type || "insurance"}\n` +
+          `Homeowner: ${job.homeowner_name || "Unknown"} ${job.homeowner_phone ? `— ${job.homeowner_phone}` : ""}\n` +
+          `Material: ${job.material_type || "TBD"}\n` +
+          (job.insurance_carrier || job.claim_number ? `Carrier: ${job.insurance_carrier || ""} | Claim: ${job.claim_number || "TBD"}\n` : "") +
+          (permit ? `Permit: ${permit.status} ${permit.permit_number ? `(#${permit.permit_number})` : ""}\n` : "") +
+          (fin ? `Contract: $${((fin.contract_amount || 0) / 100).toLocaleString()} | Margin: ${Math.round((fin.gross_margin || 0) * 100)}%\n` : "") +
+          (fin?.amount_outstanding ? `Outstanding: $${((fin.amount_outstanding || 0) / 100).toLocaleString()}\n` : "") +
+          `Created: ${new Date(job.created_at).toLocaleDateString()}\n` +
+          `ID: \`${job.id.slice(0, 8)}\``
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "job_lookup", false, Date.now() - start, channel);
+        return earlyReturn(`Job lookup failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "jobs today") {
+      const start = Date.now();
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const { data: schedules } = await supabase
+          .from("crew_schedules")
+          .select("job_id, scheduled_date, status, roofing_jobs(property_address, status), roofing_crew(name, role)")
+          .eq("scheduled_date", today)
+          .order("start_time");
+        if (!schedules?.length) {
+          await logUsage(supabase, "jobs_today", true, Date.now() - start, channel);
+          return earlyReturn("No jobs scheduled for today.");
+        }
+        const seen = new Map<string, string[]>();
+        for (const s of schedules) {
+          const addr = (s.roofing_jobs as any)?.property_address || s.job_id;
+          if (!seen.has(addr)) seen.set(addr, []);
+          const crew = s.roofing_crew as any;
+          if (crew?.name) seen.get(addr)!.push(crew.name);
+        }
+        const lines = Array.from(seen.entries()).map(([addr, crew]) =>
+          `• *${addr}*\n  Crew: ${crew.join(", ") || "TBD"}`
+        ).join("\n\n");
+        await logUsage(supabase, "jobs_today", true, Date.now() - start, channel);
+        return earlyReturn(`📅 *Jobs Today (${seen.size})*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "jobs_today", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "pipeline" || msgLower === "roofing pipeline") {
+      const start = Date.now();
+      try {
+        const { data: jobs } = await supabase
+          .from("roofing_jobs")
+          .select("status, property_address, contract_amount, scheduled_start")
+          .not("status", "in", '("cancelled","paid")')
+          .order("created_at", { ascending: false });
+        if (!jobs?.length) {
+          await logUsage(supabase, "pipeline", true, Date.now() - start, channel);
+          return earlyReturn("No active jobs in pipeline.");
+        }
+        const byStatus: Record<string, any[]> = {};
+        for (const j of jobs) {
+          if (!byStatus[j.status]) byStatus[j.status] = [];
+          byStatus[j.status].push(j);
+        }
+        const statusOrder = ["lead","assessed","contracted","materials_ordered","permit_pending","permit_approved","scheduled","in_progress","complete","invoiced"];
+        const lines = statusOrder.filter(s => byStatus[s]?.length).map(s => {
+          const items = byStatus[s];
+          const total = items.reduce((sum: number, j: any) => sum + Math.round((j.contract_amount || 0) * 100), 0);
+          return `*${s}* (${items.length}) — $${(total/100).toLocaleString()}\n` +
+            items.slice(0, 3).map((j: any) => `  • ${j.property_address}`).join("\n") +
+            (items.length > 3 ? `\n  _+${items.length - 3} more_` : "");
+        }).join("\n\n");
+        await logUsage(supabase, "pipeline", true, Date.now() - start, channel);
+        return earlyReturn(`🏗️ *Roofing Pipeline (${jobs.length} jobs)*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "pipeline", false, Date.now() - start, channel);
+        return earlyReturn(`Pipeline failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("schedule:")) {
+      const start = Date.now();
+      try {
+        const rest = msg.slice("schedule:".length).trim();
+        // Format: schedule: [job-ref] [date YYYY-MM-DD] [crew ids...]
+        const parts = rest.split(/\s+/);
+        if (parts.length < 2) return earlyReturn("Format: `schedule: [job address/ID] [YYYY-MM-DD] [crew member IDs...]`");
+        const jobRef = parts[0];
+        const scheduledDate = parts[1];
+        const crewIds = parts.slice(2);
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("id, property_address").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "schedule_crew", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        if (!crewIds.length) {
+          // Just update job scheduled date
+          await supabase.from("roofing_jobs").update({ scheduled_start: scheduledDate, status: "scheduled" }).eq("id", job.id);
+          await logUsage(supabase, "schedule_crew", true, Date.now() - start, channel);
+          return earlyReturn(`✅ ${job.property_address} scheduled for ${scheduledDate}`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-crew-manager`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "schedule", job_id: job.id, crew_member_ids: crewIds, scheduled_date: scheduledDate })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "schedule_crew", true, Date.now() - start, channel);
+        return earlyReturn(`✅ Scheduled: ${job.property_address}\nDate: ${scheduledDate}\nCrew notified: ${data.scheduled || 0}`);
+      } catch (err: any) {
+        await logUsage(supabase, "schedule_crew", false, Date.now() - start, channel);
+        return earlyReturn(`Schedule failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("order materials:")) {
+      const start = Date.now();
+      try {
+        const jobRef = msg.slice("order materials:".length).trim();
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address, material_type, roof_squares, roof_size_squares").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("id, property_address, material_type, roof_squares, roof_size_squares").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "order_materials", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const squares = job.roof_squares || job.roof_size_squares || 0;
+        await logUsage(supabase, "order_materials", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📦 *Material Order — ${job.property_address}*\n\n` +
+          `Job ID: \`${job.id.slice(0, 8)}\`\n` +
+          `Material: ${job.material_type || "TBD"}\n` +
+          `Squares: ${squares || "TBD"}\n\n` +
+          `To create order, call the API:\n` +
+          `POST roofing-material-order\n` +
+          `{\n  "action": "create_order",\n  "job_id": "${job.id}",\n  "supplier": "abc_supply",\n  "items": [...],\n  "delivery_date": "YYYY-MM-DD"\n}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "order_materials", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("permit:")) {
+      const start = Date.now();
+      try {
+        const jobRef = msg.slice("permit:".length).trim();
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("id, property_address").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "permit_lookup", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const { data: permits } = await supabase.from("roofing_permits").select("*").eq("job_id", job.id);
+        if (!permits?.length) {
+          await logUsage(supabase, "permit_lookup", true, Date.now() - start, channel);
+          return earlyReturn(`No permit records for ${job.property_address}. Contract not yet signed?`);
+        }
+        const p = permits[0];
+        const days = p.application_submitted_at
+          ? Math.round((Date.now() - new Date(p.application_submitted_at).getTime()) / 86400000)
+          : null;
+        await logUsage(supabase, "permit_lookup", true, Date.now() - start, channel);
+        return earlyReturn(
+          `🏗️ *Permit — ${job.property_address}*\n\n` +
+          `Municipality: ${p.municipality}\n` +
+          `Status: *${p.status}*\n` +
+          (p.permit_number ? `Permit #: ${p.permit_number}\n` : "") +
+          (p.application_submitted_at ? `Submitted: ${new Date(p.application_submitted_at).toLocaleDateString()} (${days}d ago)\n` : "") +
+          (p.approved_at ? `Approved: ${new Date(p.approved_at).toLocaleDateString()}\n` : "") +
+          `\nPermit ID: \`${p.id.slice(0, 8)}\``
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "permit_lookup", false, Date.now() - start, channel);
+        return earlyReturn(`Permit lookup failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("permit approved:")) {
+      const start = Date.now();
+      try {
+        const rest = msg.slice("permit approved:".length).trim().split(/\s+/);
+        const permitRef = rest[0];
+        const permitNumber = rest.slice(1).join(" ");
+        if (!permitRef) return earlyReturn("Format: `permit approved: [permit-id] [permit number]`");
+        const { data: permits } = await supabase.from("roofing_permits").select("id").or(`id.eq.${permitRef},id.ilike.${permitRef}%`).limit(1);
+        const permit = permits?.[0];
+        if (!permit) {
+          await logUsage(supabase, "permit_approved", false, Date.now() - start, channel);
+          return earlyReturn(`No permit found with ID starting with "${permitRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-permit-tracker`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "approved", permit_id: permit.id, permit_number: permitNumber || null })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "permit_approved", true, Date.now() - start, channel);
+        return earlyReturn(data.ok ? `✅ Permit approved! ${permitNumber ? `#${permitNumber}` : ""}\nJob status updated to permit_approved.` : `Failed: ${data.error}`);
+      } catch (err: any) {
+        await logUsage(supabase, "permit_approved", false, Date.now() - start, channel);
+        return earlyReturn(`Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "financial dashboard" || msgLower === "financials") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-financial`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "dashboard" })
+        });
+        const d = await res.json();
+        await logUsage(supabase, "financial_dashboard", true, Date.now() - start, channel);
+        return earlyReturn(
+          `💰 *Financial Dashboard (30 days)*\n\n` +
+          `Revenue: $${((d.revenue || 0) / 100).toLocaleString()}\n` +
+          `Profit: $${((d.profit || 0) / 100).toLocaleString()}\n` +
+          `Avg margin: ${d.avg_margin || 0}%\n` +
+          `Collected: $${((d.collected || 0) / 100).toLocaleString()}\n` +
+          `Outstanding: $${((d.outstanding || 0) / 100).toLocaleString()}\n` +
+          `Supplement revenue: $${((d.supplement_revenue || 0) / 100).toLocaleString()}\n` +
+          `Pipeline value: $${((d.pipeline || 0) / 100).toLocaleString()}\n` +
+          `Active jobs: ${d.active_jobs || 0} | Paid: ${d.paid_jobs || 0}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "financial_dashboard", false, Date.now() - start, channel);
+        return earlyReturn(`Financial dashboard failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "cash flow") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-financial`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "cash_flow" })
+        });
+        const d = await res.json();
+        const proj = d.projection as Record<string, number> || {};
+        const lines = Object.entries(proj).sort().map(([month, amt]) =>
+          `${month}: $${(amt / 100).toLocaleString()}`
+        ).join("\n");
+        await logUsage(supabase, "cash_flow", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📈 *Cash Flow Projection*\n\n` +
+          (lines || "No active jobs in pipeline") +
+          `\n\n*Total projected:* $${((d.total_projected || 0) / 100).toLocaleString()}\n` +
+          `Jobs in pipeline: ${d.jobs_in_pipeline || 0}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "cash_flow", false, Date.now() - start, channel);
+        return earlyReturn(`Cash flow failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("pay sub:")) {
+      const start = Date.now();
+      try {
+        const parts = msg.slice("pay sub:".length).trim().split(/\s+/);
+        const assignmentRef = parts[0];
+        const amountStr = parts[1];
+        if (!assignmentRef || !amountStr) return earlyReturn("Format: `pay sub: [assignment-id] [amount in dollars]`\nExample: `pay sub: abc12345 2500`");
+        const amount = Math.round(parseFloat(amountStr) * 100);
+        if (isNaN(amount)) return earlyReturn("Invalid amount. Use dollars: `pay sub: abc12345 2500`");
+        const { data: assignments } = await supabase.from("sub_assignments").select("id").or(`id.eq.${assignmentRef},id.ilike.${assignmentRef}%`).limit(1);
+        const assignment = assignments?.[0];
+        if (!assignment) {
+          await logUsage(supabase, "pay_sub", false, Date.now() - start, channel);
+          return earlyReturn(`No sub assignment found with ID starting with "${assignmentRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-financial`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "pay_sub", sub_assignment_id: assignment.id, amount })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "pay_sub", true, Date.now() - start, channel);
+        return earlyReturn(data.ok ? `✅ Sub payment recorded: $${(amount / 100).toLocaleString()}` : `Failed: ${data.error}`);
+      } catch (err: any) {
+        await logUsage(supabase, "pay_sub", false, Date.now() - start, channel);
+        return earlyReturn(`Pay sub failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("job complete:")) {
+      const start = Date.now();
+      try {
+        const jobRef = msg.slice("job complete:".length).trim();
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("id, property_address").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "job_complete", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-job-pipeline`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: job.id, new_status: "complete" })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "job_complete", true, Date.now() - start, channel);
+        return earlyReturn(
+          data.ok
+            ? `🏠 *Job marked complete:* ${job.property_address}\n` +
+              `Post-install supplement generating.\n` +
+              `Review request scheduled for tomorrow.\n` +
+              `Depreciation release processing.`
+            : `Failed: ${data.error}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "job_complete", false, Date.now() - start, channel);
+        return earlyReturn(`Job complete failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("job status:")) {
+      const start = Date.now();
+      try {
+        const rest = msg.slice("job status:".length).trim().split(/\s+/);
+        const jobRef = rest[0];
+        const newStatus = rest.slice(1).join("_").toLowerCase();
+        if (!jobRef || !newStatus) return earlyReturn("Format: `job status: [job address/ID] [new status]`");
+        const isUuid = /^[0-9a-f-]{36}$/i.test(jobRef);
+        const { data: jobs } = isUuid
+          ? await supabase.from("roofing_jobs").select("id, property_address").eq("id", jobRef).limit(1)
+          : await supabase.from("roofing_jobs").select("id, property_address").ilike("property_address", `%${jobRef}%`).limit(1);
+        const job = jobs?.[0];
+        if (!job) {
+          await logUsage(supabase, "job_status", false, Date.now() - start, channel);
+          return earlyReturn(`No job found matching "${jobRef}"`);
+        }
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-job-pipeline`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: job.id, new_status: newStatus })
+        });
+        const data = await res.json();
+        await logUsage(supabase, "job_status", true, Date.now() - start, channel);
+        return earlyReturn(data.ok ? `✅ ${job.property_address}: ${data.previous_status} → ${data.new_status}` : `Failed: ${data.error}`);
+      } catch (err: any) {
+        await logUsage(supabase, "job_status", false, Date.now() - start, channel);
+        return earlyReturn(`Job status failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase

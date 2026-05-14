@@ -1152,6 +1152,41 @@ Deno.serve(async (_req) => {
       }
     } catch {}
 
+    // PERMIT SCAN + WEATHER CHECK — every 48 cycles (~24 hours)
+    if (cycleNumber % 48 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-permit-tracker`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "scan_pending" })
+      }).catch(() => {});
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-crew-manager`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "weather_check" })
+      }).catch(() => {});
+    }
+
+    // FINANCIAL DASHBOARD — weekly Monday morning (cycle 336 offset 0)
+    if (cycleNumber % 336 === 0) {
+      (async () => {
+        const finRes = await fetch(`${SUPABASE_URL}/functions/v1/roofing-financial`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "dashboard" })
+        });
+        const finData = await finRes.json();
+        await tg(
+          `💰 *Weekly Roofing Financial Summary*\n\n` +
+          `Revenue (30d): $${((finData.revenue || 0) / 100).toLocaleString()}\n` +
+          `Profit (30d): $${((finData.profit || 0) / 100).toLocaleString()}\n` +
+          `Avg margin: ${finData.avg_margin || 0}%\n` +
+          `Supplement revenue: $${((finData.supplement_revenue || 0) / 100).toLocaleString()}\n` +
+          `Outstanding: $${((finData.outstanding || 0) / 100).toLocaleString()}\n` +
+          `Pipeline: $${((finData.pipeline || 0) / 100).toLocaleString()}`
+        );
+      })().catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 
