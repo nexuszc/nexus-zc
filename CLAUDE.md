@@ -112,6 +112,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-diagnostic` | See function source for details | Internal |
 | `nexus-follow-up` | See function source for details | Internal |
 | `nexus-intake` | See function source for details | Internal |
+| `nexus-prospector` | See function source for details | Internal |
 | `nexus-quick-scan` | See function source for details | Internal |
 | `nexus-router` | See function source for details | Internal |
 | `nexus-self-build` | See function source for details | Internal |
@@ -274,14 +275,14 @@ Then productized and sold to other multi-business operators.
 - (nothing yet this session)
 
 **NEXT:**
-1. Fix smoke_test_failed error
-2. Add memory consolidation ability
-3. Add Structured Self-Reflection Capability
-4. Add conversation memory persistence
-5. Add ability usage analytics and performance tracking
+1. Fix smoke_test_failed error (simple)
+2. Add memory consolidation ability (medium)
+3. Add Structured Self-Reflection Capability (medium)
+4. Add ability usage analytics and performance tracking (medium)
+5. Add conversation memory persistence (medium)
 6. Build the complete Roofing OS go-to-market system
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
+7. Draft a complete operating agreement for Nexus ZC LLC
+8. Review and improve client health scores for Brian and Denver Pro Roofing
 
 ---
 
