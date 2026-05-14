@@ -2,114 +2,96 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
 interface AuditResult {
   totalItems: number
-  duplicates: number
+  staleItems: number
   invalidPriorities: number
-  invalidStatuses: number
-  issues: Array<{
-    type: string
-    message: string
-    itemId?: string
-  }>
+  statusDistribution: Record<string, number>
+  issues: string[]
 }
 
-Deno.serve(async (req) => {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
     })
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
 
-    const { data: items, error: fetchError } = await supabase
+    const { data: items, error: fetchError } = await supabaseClient
       .from('improvement_queue')
       .select('*')
-      .order('created_at', { ascending: false })
 
     if (fetchError) {
-      throw new Error(`Failed to fetch improvement queue: ${fetchError.message}`)
+      throw fetchError
     }
 
-    const result: AuditResult = {
+    const now = new Date()
+    const staleThresholdDays = 30
+    const staleThreshold = new Date(now.getTime() - staleThresholdDays * 24 * 60 * 60 * 1000)
+
+    const auditResult: AuditResult = {
       totalItems: items?.length || 0,
-      duplicates: 0,
+      staleItems: 0,
       invalidPriorities: 0,
-      invalidStatuses: 0,
+      statusDistribution: {},
       issues: [],
     }
 
-    if (!items || items.length === 0) {
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
-
+    const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled']
     const validPriorities = ['low', 'medium', 'high', 'critical']
-    const validStatuses = ['pending', 'in_progress', 'completed', 'rejected']
-    const contentMap = new Map<string, string[]>()
 
-    for (const item of items) {
+    items?.forEach((item) => {
+      const status = item.status || 'unknown'
+      auditResult.statusDistribution[status] = (auditResult.statusDistribution[status] || 0) + 1
+
+      if (!validStatuses.includes(status)) {
+        auditResult.issues.push(`Invalid status "${status}" for item ${item.id}`)
+      }
+
       if (item.priority && !validPriorities.includes(item.priority)) {
-        result.invalidPriorities++
-        result.issues.push({
-          type: 'invalid_priority',
-          message: `Invalid priority: ${item.priority}`,
-          itemId: item.id,
-        })
+        auditResult.invalidPriorities++
+        auditResult.issues.push(`Invalid priority "${item.priority}" for item ${item.id}`)
       }
 
-      if (item.status && !validStatuses.includes(item.status)) {
-        result.invalidStatuses++
-        result.issues.push({
-          type: 'invalid_status',
-          message: `Invalid status: ${item.status}`,
-          itemId: item.id,
-        })
+      const createdAt = new Date(item.created_at)
+      if (createdAt < staleThreshold && status === 'pending') {
+        auditResult.staleItems++
+        auditResult.issues.push(`Stale item ${item.id} pending since ${item.created_at}`)
       }
-
-      if (item.content) {
-        const normalized = item.content.trim().toLowerCase()
-        if (contentMap.has(normalized)) {
-          result.duplicates++
-          result.issues.push({
-            type: 'duplicate',
-            message: `Duplicate content found`,
-            itemId: item.id,
-          })
-          contentMap.get(normalized)!.push(item.id)
-        } else {
-          contentMap.set(normalized, [item.id])
-        }
-      }
-    }
-
-    console.log('Audit completed:', {
-      total: result.totalItems,
-      duplicates: result.duplicates,
-      invalidPriorities: result.invalidPriorities,
-      invalidStatuses: result.invalidStatuses,
-      issueCount: result.issues.length,
     })
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify(auditResult), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
     })
   } catch (error) {
-    console.error('Audit error:', error)
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      JSON.stringify({
+        error: error.message,
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       }
     )
   }
