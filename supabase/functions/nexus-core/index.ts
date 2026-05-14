@@ -1233,6 +1233,65 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // VERTICAL ROUTER — every cycle
+    fetch(`${SUPABASE_URL}/functions/v1/nexus-vertical-router`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ cycle_number: cycleNumber })
+    }).catch(() => {});
+
+    // SUPPLEMENT AUDIT LEAD FOLLOWUP — every 2 cycles
+    if (cycleNumber % 2 === 1) {
+      const cutoffOld = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const cutoffNew = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const { data: auditLeads } = await supabase
+        .from("supplement_audit_leads")
+        .select("id, name, phone, company_name, score")
+        .eq("aria_call_queued", false)
+        .gte("score", 40)
+        .not("phone", "is", null)
+        .gte("created_at", cutoffOld)
+        .lte("created_at", cutoffNew);
+      for (const lead of auditLeads || []) {
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            call_type: "supplement_audit_followup",
+            contact_phone: lead.phone,
+            contact_name: lead.name,
+            contact_type: "audit_lead",
+            metadata: { company_name: lead.company_name, score: lead.score, contractor_name: "Roofing OS" }
+          })
+        }).catch(() => {});
+        await supabase.from("supplement_audit_leads").update({ aria_call_queued: true }).eq("id", lead.id);
+      }
+    }
+
+    // CONTRACTOR TRIAL EXPIRY ALERT — daily
+    if (cycleNumber % 48 === 0) {
+      const in3Days = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: expiringTrials } = await supabase
+        .from("contractor_accounts")
+        .select("company_name, owner_name, owner_email, owner_phone, trial_ends_at")
+        .eq("subscription_status", "trialing")
+        .lte("trial_ends_at", in3Days)
+        .is("stripe_subscription_id", null);
+      for (const c of expiringTrials || []) {
+        const daysLeft = Math.max(0, Math.round(
+          (new Date(c.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        ));
+        await tg(
+          `⏰ *Trial Expiring Soon*\n` +
+          `${c.company_name} — ${c.owner_name}\n` +
+          `Email: ${c.owner_email}\n` +
+          `Phone: ${c.owner_phone || "none"}\n` +
+          `Trial ends in: ${daysLeft} day(s)\n` +
+          `Action: Call to convert to paid`
+        );
+      }
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

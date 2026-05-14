@@ -4067,6 +4067,110 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING OS AUTO-MARKETING COMMANDS
+    // ================================================================
+
+    // audit leads — list recent supplement audit leads
+    if (lower === "audit leads") {
+      const { data: leads } = await supabase
+        .from("supplement_audit_leads")
+        .select("company_name, name, email, score, aria_call_queued, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (!leads || leads.length === 0) return earlyReturn("No audit leads yet.");
+      const lines = leads.map((l: any) =>
+        `• *${l.company_name}* (${l.name}) — Score: ${l.score} | Call queued: ${l.aria_call_queued ? "✅" : "❌"} | ${new Date(l.created_at).toLocaleDateString()}`
+      );
+      return earlyReturn(`*Recent Audit Leads (${leads.length})*\n${lines.join("\n")}`);
+    }
+
+    // contractors — list all contractor accounts
+    if (lower === "contractors") {
+      const { data: contractors } = await supabase
+        .from("contractor_accounts")
+        .select("company_name, owner_name, plan, subscription_status, churn_risk_score, created_at")
+        .order("created_at", { ascending: false });
+      if (!contractors || contractors.length === 0) return earlyReturn("No contractors yet.");
+      const lines = contractors.map((c: any) =>
+        `• *${c.company_name}* — ${c.plan} | ${c.subscription_status} | Churn: ${c.churn_risk_score || 0}`
+      );
+      return earlyReturn(`*All Contractors (${contractors.length})*\n${lines.join("\n")}`);
+    }
+
+    // contractor: [search] — lookup contractor by email or company name
+    if (lower.startsWith("contractor: ")) {
+      const search = message.slice(12).trim();
+      const { data: contractors } = await supabase
+        .from("contractor_accounts")
+        .select("*")
+        .or(`owner_email.ilike.%${search}%,company_name.ilike.%${search}%`)
+        .limit(5);
+      if (!contractors || contractors.length === 0) return earlyReturn(`No contractor found matching "${search}".`);
+      const c = contractors[0];
+      const info = [
+        `*${c.company_name}*`,
+        `Owner: ${c.owner_name} | ${c.owner_email} | ${c.owner_phone || "no phone"}`,
+        `Plan: ${c.plan} ($${((c.plan_price_cents || 0) / 100).toFixed(0)}/mo) | Status: ${c.subscription_status}`,
+        `Churn risk: ${c.churn_risk_score || 0}/100`,
+        `Trial ends: ${c.trial_ends_at ? new Date(c.trial_ends_at).toLocaleDateString() : "n/a"}`,
+        `Zip: ${c.primary_zip || "not set"}`,
+        `Dashboard: https://roofingos.dev/contractor/${c.id}`
+      ];
+      return earlyReturn(info.join("\n"));
+    }
+
+    // roi report: [email] — trigger ROI engine for specific contractor
+    if (lower.startsWith("roi report: ")) {
+      const email = message.slice(12).trim();
+      const { data: contractor } = await supabase
+        .from("contractor_accounts")
+        .select("id, company_name")
+        .eq("owner_email", email)
+        .maybeSingle();
+      if (!contractor) return earlyReturn(`No contractor found with email "${email}".`);
+      fetch(`${SUPABASE_URL}/functions/v1/contractor-roi-engine`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ contractor_id: contractor.id })
+      }).catch(() => {});
+      return earlyReturn(`ROI report triggered for *${contractor.company_name}*. They'll receive the email shortly.`);
+    }
+
+    // churn risk — list contractors with high churn score
+    if (lower === "churn risk") {
+      const { data: contractors } = await supabase
+        .from("contractor_accounts")
+        .select("company_name, owner_name, owner_phone, churn_risk_score, subscription_status")
+        .gte("churn_risk_score", 50)
+        .order("churn_risk_score", { ascending: false });
+      if (!contractors || contractors.length === 0) return earlyReturn("No contractors at high churn risk right now. 🎉");
+      const lines = contractors.map((c: any) =>
+        `• *${c.company_name}* (${c.owner_name}) — Score: ${c.churn_risk_score}/100 | ${c.owner_phone || "no phone"}`
+      );
+      return earlyReturn(`*High Churn Risk Contractors*\n${lines.join("\n")}`);
+    }
+
+    // audit stats — aggregate stats from supplement_audit_leads
+    if (lower === "audit stats") {
+      const { data: leads } = await supabase.from("supplement_audit_leads").select("score, aria_call_queued, converted_to_contractor");
+      if (!leads || leads.length === 0) return earlyReturn("No audit leads yet.");
+      const total = leads.length;
+      const called = leads.filter((l: any) => l.aria_call_queued).length;
+      const converted = leads.filter((l: any) => l.converted_to_contractor).length;
+      const avgScore = Math.round(leads.reduce((s: number, l: any) => s + (l.score || 0), 0) / total);
+      const highScore = leads.filter((l: any) => l.score >= 70).length;
+      return earlyReturn(
+        `*Supplement Audit Stats*\n` +
+        `Total leads: ${total}\n` +
+        `High score (70+): ${highScore}\n` +
+        `Avg score: ${avgScore}\n` +
+        `Aria called: ${called}\n` +
+        `Converted to contractor: ${converted}\n` +
+        `Conversion rate: ${total > 0 ? ((converted / total) * 100).toFixed(1) : 0}%`
+      );
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase
