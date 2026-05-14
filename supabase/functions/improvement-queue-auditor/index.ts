@@ -1,84 +1,70 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { corsHeaders } from '../_shared/cors.ts'
-
-interface ImprovementQueueItem {
-  id: string
-  status: string
-  priority: number
-  created_at: string
-  updated_at: string
-  entity_type: string
-  entity_id: string
-}
 
 interface AuditResult {
-  total_items: number
-  by_status: Record<string, number>
-  by_priority: Record<string, number>
-  stale_items: number
-  high_priority_pending: number
-  audit_timestamp: string
+  total_pending: number
+  oldest_pending_age_minutes: number | null
+  validation_errors: string[]
+  timestamp: string
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
+Deno.serve(async (req: Request): Promise<Response> => {
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    const { data: items, error } = await supabaseClient
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({ error: 'Missing environment configuration' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const { data: pendingImprovements, error: queryError } = await supabase
       .from('improvement_queue')
       .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
 
-    if (error) {
-      throw error
+    if (queryError) {
+      return new Response(
+        JSON.stringify({ error: 'Database query failed', details: queryError.message }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
     }
 
-    const queueItems = items as ImprovementQueueItem[]
-    
+    const validationErrors: string[] = []
+    const now = new Date()
+
+    let oldestPendingAgeMinutes: number | null = null
+    if (pendingImprovements && pendingImprovements.length > 0) {
+      const oldestCreatedAt = new Date(pendingImprovements[0].created_at)
+      oldestPendingAgeMinutes = Math.floor((now.getTime() - oldestCreatedAt.getTime()) / 1000 / 60)
+
+      for (const improvement of pendingImprovements) {
+        if (!improvement.task_id) {
+          validationErrors.push(`Improvement ${improvement.id} missing task_id`)
+        }
+        if (!improvement.improvement_type) {
+          validationErrors.push(`Improvement ${improvement.id} missing improvement_type`)
+        }
+      }
+    }
+
     const auditResult: AuditResult = {
-      total_items: queueItems.length,
-      by_status: {},
-      by_priority: {},
-      stale_items: 0,
-      high_priority_pending: 0,
-      audit_timestamp: new Date().toISOString(),
+      total_pending: pendingImprovements?.length || 0,
+      oldest_pending_age_minutes: oldestPendingAgeMinutes,
+      validation_errors: validationErrors,
+      timestamp: now.toISOString()
     }
 
-    const staleThresholdDays = 7
-    const staleDate = new Date()
-    staleDate.setDate(staleDate.getDate() - staleThresholdDays)
-
-    for (const item of queueItems) {
-      auditResult.by_status[item.status] = (auditResult.by_status[item.status] || 0) + 1
-      auditResult.by_priority[item.priority] = (auditResult.by_priority[item.priority] || 0) + 1
-
-      const itemDate = new Date(item.updated_at || item.created_at)
-      if (item.status === 'pending' && itemDate < staleDate) {
-        auditResult.stale_items++
-      }
-
-      if (item.status === 'pending' && item.priority >= 8) {
-        auditResult.high_priority_pending++
-      }
-    }
-
-    const { error: logError } = await supabaseClient
+    const { error: logError } = await supabase
       .from('audit_logs')
       .insert({
         audit_type: 'improvement_queue',
-        audit_data: auditResult,
-        created_at: new Date().toISOString(),
+        result: auditResult,
+        created_at: now.toISOString()
       })
 
     if (logError) {
@@ -86,18 +72,26 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify(auditResult),
+      JSON.stringify({
+        success: true,
+        audit: auditResult
+      }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
+        headers: { 'Content-Type': 'application/json' }
       }
     )
+
   } catch (error) {
+    console.error('Improvement queue audit error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
       }
     )
   }
