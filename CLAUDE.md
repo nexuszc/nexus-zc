@@ -351,7 +351,7 @@ Then productized and sold to other multi-business operators.
 5. Add conversation memory persistence (medium)
 6. Draft complete operating agreement for Nexus ZC LLC
 7. Build complete Roofing OS go-to-market system with public landing page
-8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
+8. Review and strengthen client relationships (Brian health: 65, Denver Pro Roofing health: 50)
 
 ---
 
