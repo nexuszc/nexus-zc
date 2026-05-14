@@ -1,69 +1,86 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
-interface AuditResult {
-  total_items: number
-  pending_items: number
-  in_progress_items: number
-  completed_items: number
-  failed_items: number
-  stale_items: number
-  audit_timestamp: string
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-Deno.serve(async (req: Request) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+interface ImprovementQueueEntry {
+  id: string
+  created_at: string
+  status: string
+  priority: number
+  title: string
+  description: string
+}
 
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error('Missing environment variables')
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey)
 
-    const { data: allItems, error: fetchError } = await supabase
+    const { data: pendingEntries, error: fetchError } = await supabase
       .from('improvement_queue')
       .select('*')
+      .eq('status', 'pending')
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: true })
 
     if (fetchError) {
       throw fetchError
     }
 
-    const items = allItems || []
-    const now = new Date()
-    const staleThresholdHours = 24
+    const auditResults = {
+      timestamp: new Date().toISOString(),
+      total_pending: pendingEntries?.length || 0,
+      entries_audited: 0,
+      entries_processed: 0,
+      errors: [] as string[],
+    }
 
-    const auditResult: AuditResult = {
-      total_items: items.length,
-      pending_items: items.filter(item => item.status === 'pending').length,
-      in_progress_items: items.filter(item => item.status === 'in_progress').length,
-      completed_items: items.filter(item => item.status === 'completed').length,
-      failed_items: items.filter(item => item.status === 'failed').length,
-      stale_items: items.filter(item => {
-        if (item.status === 'completed' || item.status === 'failed') {
-          return false
+    if (pendingEntries && pendingEntries.length > 0) {
+      for (const entry of pendingEntries) {
+        auditResults.entries_audited++
+
+        try {
+          const shouldProcess = entry.priority >= 5
+
+          if (shouldProcess) {
+            const { error: updateError } = await supabase
+              .from('improvement_queue')
+              .update({ 
+                status: 'processing',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', entry.id)
+
+            if (updateError) {
+              auditResults.errors.push(`Failed to update entry ${entry.id}: ${updateError.message}`)
+            } else {
+              auditResults.entries_processed++
+            }
+          }
+        } catch (error) {
+          auditResults.errors.push(`Error processing entry ${entry.id}: ${error.message}`)
         }
-        const updatedAt = new Date(item.updated_at)
-        const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60)
-        return hoursSinceUpdate > staleThresholdHours
-      }).length,
-      audit_timestamp: now.toISOString()
+      }
     }
 
     return new Response(
-      JSON.stringify(auditResult),
+      JSON.stringify(auditResults),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+        status: 200,
       }
     )
   } catch (error) {
@@ -71,7 +88,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status: 500,
       }
     )
   }
