@@ -1,23 +1,28 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { corsHeaders } from '../_shared/cors.ts'
 
-interface AuditResult {
-  totalItems: number
-  staleItems: number
-  invalidPriorities: number
-  statusDistribution: Record<string, number>
-  issues: string[]
+interface ImprovementQueueItem {
+  id: string
+  status: string
+  priority: number
+  created_at: string
+  updated_at: string
+  entity_type: string
+  entity_id: string
 }
 
-Deno.serve(async (req: Request) => {
+interface AuditResult {
+  total_items: number
+  by_status: Record<string, number>
+  by_priority: Record<string, number>
+  stale_items: number
+  high_priority_pending: number
+  audit_timestamp: string
+}
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
@@ -31,67 +36,68 @@ Deno.serve(async (req: Request) => {
       }
     )
 
-    const { data: items, error: fetchError } = await supabaseClient
+    const { data: items, error } = await supabaseClient
       .from('improvement_queue')
       .select('*')
 
-    if (fetchError) {
-      throw fetchError
+    if (error) {
+      throw error
     }
 
-    const now = new Date()
-    const staleThresholdDays = 30
-    const staleThreshold = new Date(now.getTime() - staleThresholdDays * 24 * 60 * 60 * 1000)
-
+    const queueItems = items as ImprovementQueueItem[]
+    
     const auditResult: AuditResult = {
-      totalItems: items?.length || 0,
-      staleItems: 0,
-      invalidPriorities: 0,
-      statusDistribution: {},
-      issues: [],
+      total_items: queueItems.length,
+      by_status: {},
+      by_priority: {},
+      stale_items: 0,
+      high_priority_pending: 0,
+      audit_timestamp: new Date().toISOString(),
     }
 
-    const validStatuses = ['pending', 'in_progress', 'completed', 'cancelled']
-    const validPriorities = ['low', 'medium', 'high', 'critical']
+    const staleThresholdDays = 7
+    const staleDate = new Date()
+    staleDate.setDate(staleDate.getDate() - staleThresholdDays)
 
-    items?.forEach((item) => {
-      const status = item.status || 'unknown'
-      auditResult.statusDistribution[status] = (auditResult.statusDistribution[status] || 0) + 1
+    for (const item of queueItems) {
+      auditResult.by_status[item.status] = (auditResult.by_status[item.status] || 0) + 1
+      auditResult.by_priority[item.priority] = (auditResult.by_priority[item.priority] || 0) + 1
 
-      if (!validStatuses.includes(status)) {
-        auditResult.issues.push(`Invalid status "${status}" for item ${item.id}`)
+      const itemDate = new Date(item.updated_at || item.created_at)
+      if (item.status === 'pending' && itemDate < staleDate) {
+        auditResult.stale_items++
       }
 
-      if (item.priority && !validPriorities.includes(item.priority)) {
-        auditResult.invalidPriorities++
-        auditResult.issues.push(`Invalid priority "${item.priority}" for item ${item.id}`)
+      if (item.status === 'pending' && item.priority >= 8) {
+        auditResult.high_priority_pending++
       }
+    }
 
-      const createdAt = new Date(item.created_at)
-      if (createdAt < staleThreshold && status === 'pending') {
-        auditResult.staleItems++
-        auditResult.issues.push(`Stale item ${item.id} pending since ${item.created_at}`)
+    const { error: logError } = await supabaseClient
+      .from('audit_logs')
+      .insert({
+        audit_type: 'improvement_queue',
+        audit_data: auditResult,
+        created_at: new Date().toISOString(),
+      })
+
+    if (logError) {
+      console.error('Failed to log audit result:', logError)
+    }
+
+    return new Response(
+      JSON.stringify(auditResult),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       }
-    })
-
-    return new Response(JSON.stringify(auditResult), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    })
+    )
   } catch (error) {
     return new Response(
-      JSON.stringify({
-        error: error.message,
-      }),
+      JSON.stringify({ error: error.message }),
       {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
       }
     )
   }
