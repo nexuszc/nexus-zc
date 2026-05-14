@@ -345,13 +345,13 @@ Then productized and sold to other multi-business operators.
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
-2. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
-3. Build complete Roofing OS go-to-market system with public landing page
+2. Fix Recurring Smoke Test Failures (medium)
+3. Add Self-Learning Pattern Recognition (medium)
 4. Add memory consolidation ability (medium)
-5. Add Self-Learning Pattern Recognition (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Improve client health for Denver Pro Roofing (currently 50)
-8. Add ability usage analytics and performance tracking (medium)
+5. Add Structured Self-Reflection Capability (medium)
+6. Improve client health for Denver Pro Roofing (health: 50)
+7. Improve client health for Brian (health: 65)
+8. Draft complete operating agreement for Nexus ZC LLC
 
 ---
 
