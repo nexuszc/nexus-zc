@@ -40,6 +40,69 @@ async function bubbleInsights(supabase: any, clientSummaries: any[]) {
   }
 }
 
+// AUTO-FIX: Added ability recommendation analysis function
+async function analyzeAbilityRecommendations(supabase: any, openTasks: any[], clientSummaries: any[], minus7d: string) {
+  const recommendations: string[] = [];
+
+  // Check for pending follow-ups (tasks older than 3 days)
+  const oldTasks = (openTasks || []).filter((t: any) => {
+    const ageMs = Date.now() - new Date(t.created_at).getTime();
+    return ageMs > 3 * 24 * 60 * 60 * 1000;
+  });
+  if (oldTasks.length > 0) {
+    recommendations.push(`💡 You have ${oldTasks.length} pending follow-up(s). Try: "follow up: [task]"`);
+  }
+
+  // Check for weekly digest availability
+  const { data: last7dEntries } = await supabase
+    .from("entries")
+    .select("id")
+    .gt("created_at", minus7d)
+    .eq("role", "user")
+    .is("client_id", null);
+  
+  if ((last7dEntries || []).length > 10) {
+    recommendations.push(`💡 Weekly digest available for last 7 days (${last7dEntries.length} entries). Try: "weekly digest"`);
+  }
+
+  // Check for reminders opportunity (if tasks exist but no reminders set)
+  if (openTasks.length > 0) {
+    const { data: existingReminders } = await supabase
+      .from("entries")
+      .select("id")
+      .eq("entry_type", "reminder")
+      .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+    
+    if (!existingReminders || existingReminders.length === 0) {
+      recommendations.push(`💡 Set reminders for important tasks. Try: "remind me: [task] in [timeframe]"`);
+    }
+  }
+
+  // Check for knowledge base opportunity
+  const { data: recentKnowledge } = await supabase
+    .from("knowledge_base")
+    .select("id")
+    .gte("created_at", minus7d);
+  
+  if (!recentKnowledge || recentKnowledge.length === 0) {
+    recommendations.push(`💡 Capture learnings to knowledge base. Try: "save knowledge: [topic] - [insight]"`);
+  }
+
+  // Check for client context opportunities
+  const clientsWithoutContext = clientSummaries.filter(c => c.goals === "not set");
+  if (clientsWithoutContext.length > 0) {
+    recommendations.push(`💡 ${clientsWithoutContext.length} client(s) missing context. Try: "client context: [client name]"`);
+  }
+
+  // Check for stale clients needing status updates
+  const staleClients = clientSummaries.filter(c => c.hoursSilent !== null && c.hoursSilent > 120);
+  if (staleClients.length > 0) {
+    recommendations.push(`💡 ${staleClients.length} client(s) silent >5 days. Try: "status update: [client]"`);
+  }
+
+  return recommendations;
+}
+
 Deno.serve(async (_req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -158,6 +221,14 @@ Deno.serve(async (_req) => {
       };
     }));
 
+    // AUTO-FIX: Generate ability recommendations based on usage patterns
+    const abilityRecommendations = await analyzeAbilityRecommendations(
+      supabase,
+      openTasks.data || [],
+      clientSummaries,
+      minus7d
+    );
+
     // ----- 4. Pull Nexus health + improvements + knowledge base -----
     const { data: recentKnowledge } = await supabase
       .from("knowledge_base")
@@ -242,6 +313,11 @@ Deno.serve(async (_req) => {
       }
     }
 
+    // AUTO-FIX: Add ability recommendations to context
+    const abilityRecommendationsContext = abilityRecommendations.length
+      ? "ABILITY RECOMMENDATIONS:\n" + abilityRecommendations.join("\n")
+      : "";
+
     const contextBlock = [
       fmt(recent48.data || [], "LAST 48 HOURS (personal brain)"),
       fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
@@ -255,6 +331,7 @@ Deno.serve(async (_req) => {
       improvementsSummary,
       knowledgeContext,
       weeklySummary,
+      abilityRecommendationsContext,
     ].filter(Boolean).join("\n\n");
 
     // ----- 6. Generate briefing via Claude (with fallback) -----
@@ -270,6 +347,7 @@ Recent entries (last 48hrs): ${JSON.stringify((recent48.data || []).slice(0, 15)
 Pending improvements: ${JSON.stringify((pendingImprovements.data || []).slice(0, 5))}
 Active projects: ${JSON.stringify(activeProjects.data || [])}
 Stale clients (no activity 5+ days): ${JSON.stringify(staleClients.data || [])}
+Ability recommendations: ${JSON.stringify(abilityRecommendations)}
 ${weeklySummary ? `Last week: ${weeklySummary}` : ""}
 
 Generate a briefing in this EXACT format:
@@ -288,10 +366,10 @@ Generate a briefing in this EXACT format:
 *🏢 Client pulse:*
 [One line per active client: name, status, last activity, what's needed]
 
-*🔧 System:*
+*🧠 System:*
 [Pending auto-fix approvals, function health issues, improvements queued]
 
-*💡 Zach, one thing:*
+${abilityRecommendations.length > 0 ? '*💡 Underutilized abilities:*\n[Include the ability recommendations provided, formatted naturally]\n\n' : ''}*💡 Zach, one thing:*
 [One strategic observation or nudge based on patterns you see. This is where you act like a real COO — notice what he's avoiding, what's slipping, what opportunity he should grab.]
 
 Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an assistant. Keep under 700 words.`;
