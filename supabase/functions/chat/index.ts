@@ -2962,6 +2962,157 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING ARIA COMMANDS
+    // ================================================================
+
+    if (msgLower.startsWith("aria storm:")) {
+      const start = Date.now();
+      try {
+        const parts = message.slice(11).trim().split(" ");
+        const hailSize = parseFloat(parts.pop() || "1.5") || 1.5;
+        const zipCodes = parts.filter(p => /^\d{5}$/.test(p));
+        if (!zipCodes.length) return earlyReturn("Format: `aria storm: [zip codes] [hail size in inches]`\nExample: `aria storm: 80202 80204 1.75`");
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-aria-storm-trigger`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ zip_codes: zipCodes, hail_size: hailSize, storm_date: new Date().toISOString() })
+        });
+        const result = await res.json();
+        await logUsage(supabase, "aria_storm", true, Date.now() - start, channel);
+        return earlyReturn(`⛈️ Storm alert fired!\nZip codes: ${zipCodes.join(", ")}\nHail size: ${hailSize}"\nCalls queued: ${result.calls_queued || 0} of ${result.total_found || 0} previous customers`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_storm", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower.startsWith("aria call:")) {
+      const start = Date.now();
+      try {
+        const parts = message.slice(10).trim().split(" ");
+        const callType = parts.pop() || "lead_followup";
+        const phone = parts[0];
+        if (!phone) return earlyReturn("Format: `aria call: [phone] [call_type]`\nCall types: `storm_alert` `lead_followup` `review_request` `adjuster`");
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-aria-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ call_type: callType, contact_phone: phone, contact_type: "unknown", metadata: { contractor_name: "Roofing OS" } })
+        });
+        const result = await res.json();
+        await logUsage(supabase, "aria_call", true, Date.now() - start, channel);
+        if (!result.ok) return earlyReturn(` -  Call blocked: ${result.reason || result.error}`);
+        return earlyReturn(`📞 Aria call initiated\nPhone: ${phone}\nType: ${callType}\nCall ID: ${result.call_id}`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_call", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria stats" || msgLower === "roofing aria stats") {
+      const start = Date.now();
+      try {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: calls } = await supabase.from("roofing_aria_calls").select("call_type, outcome, answered, revenue_generated").gt("created_at", sevenDaysAgo);
+        if (!calls?.length) {
+          await logUsage(supabase, "aria_stats", true, Date.now() - start, channel);
+          return earlyReturn("No Roofing Aria calls in the last 7 days.");
+        }
+        const answered = calls.filter((c: any) => c.answered).length;
+        const booked = calls.filter((c: any) => c.outcome === "appointment_booked").length;
+        const byType: Record<string, number> = {};
+        for (const c of calls) byType[c.call_type] = (byType[c.call_type] || 0) + 1;
+        const typeBreakdown = Object.entries(byType).map(([t, n]) => `  ${t}: ${n}`).join("\n");
+        await logUsage(supabase, "aria_stats", true, Date.now() - start, channel);
+        return earlyReturn(
+          `📞 *Roofing Aria — Last 7 Days*\n\n` +
+          `Total calls: ${calls.length}\nAnswered: ${answered} (${Math.round(answered / calls.length * 100)}%)\nAppointments booked: ${booked}\n\n*By type:*\n${typeBreakdown}`
+        );
+      } catch (err: any) {
+        await logUsage(supabase, "aria_stats", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria calls today") {
+      const start = Date.now();
+      try {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const { data: calls } = await supabase.from("roofing_aria_calls").select("contact_name, contact_phone, call_type, outcome, duration_seconds, created_at").gt("created_at", today.toISOString()).order("created_at", { ascending: false });
+        if (!calls?.length) {
+          await logUsage(supabase, "aria_calls_today", true, Date.now() - start, channel);
+          return earlyReturn("No Roofing Aria calls today yet.");
+        }
+        const list = calls.map((c: any) => `• ${c.contact_name || c.contact_phone} (${c.call_type}): ${c.outcome || "in progress"}`).join("\n");
+        await logUsage(supabase, "aria_calls_today", true, Date.now() - start, channel);
+        return earlyReturn(`📞 *Roofing Aria Calls Today (${calls.length}):*\n\n${list}`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_calls_today", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria learning") {
+      const start = Date.now();
+      try {
+        const { data: reports } = await supabase.from("roofing_aria_learning").select("*").order("created_at", { ascending: false }).limit(5);
+        if (!reports?.length) {
+          await logUsage(supabase, "aria_learning", true, Date.now() - start, channel);
+          return earlyReturn("No Roofing Aria learning reports yet. Runs weekly.");
+        }
+        const latest = reports[0];
+        const list = reports.map((r: any) => `• *${r.call_type}*: ${r.calls_made} calls, ${Math.round((r.conversion_rate || 0) * 100)}% conversion`).join("\n");
+        await logUsage(supabase, "aria_learning", true, Date.now() - start, channel);
+        return earlyReturn(`📊 *Roofing Aria Learning*\nWeek of ${latest.week_start}\n\n${list}`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_learning", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria pause") {
+      const start = Date.now();
+      try {
+        await supabase.from("nexus_preferences").upsert({ key: "roofing_aria_paused", value: "true" });
+        await logUsage(supabase, "aria_pause", true, Date.now() - start, channel);
+        return earlyReturn("⏸ Roofing Aria calls paused. Send `aria resume` to restart.");
+      } catch (err: any) {
+        await logUsage(supabase, "aria_pause", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria resume") {
+      const start = Date.now();
+      try {
+        await supabase.from("nexus_preferences").upsert({ key: "roofing_aria_paused", value: "false" });
+        await logUsage(supabase, "aria_resume", true, Date.now() - start, channel);
+        return earlyReturn("▶️ Roofing Aria calls resumed.");
+      } catch (err: any) {
+        await logUsage(supabase, "aria_resume", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    if (msgLower === "aria scripts") {
+      const start = Date.now();
+      try {
+        const { data: scripts } = await supabase.from("roofing_aria_scripts").select("name, call_type, language, conversion_rate, times_used, is_champion, status").eq("status", "active").order("conversion_rate", { ascending: false });
+        if (!scripts?.length) {
+          await logUsage(supabase, "aria_scripts", true, Date.now() - start, channel);
+          return earlyReturn("No active Roofing Aria scripts found.");
+        }
+        const list = scripts.map((s: any) =>
+          `${s.is_champion ? "👑" : "•"} *${s.name}* [${s.call_type}/${s.language}]\n  ${Math.round((s.conversion_rate || 0) * 100)}% conversion | ${s.times_used} uses`
+        ).join("\n\n");
+        await logUsage(supabase, "aria_scripts", true, Date.now() - start, channel);
+        return earlyReturn(`📋 *Roofing Aria Scripts:*\n\n${list}`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_scripts", false, Date.now() - start, channel);
+        return earlyReturn(` -  Failed: ${err.message}`);
+      }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase

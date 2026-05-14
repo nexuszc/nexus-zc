@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 13, 2026 — v8
+# Last updated: May 13, 2026 — v12
 
 ---
 
@@ -131,12 +131,20 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
+| `roofing-aria-engine` | Outbound AI voice calls via Retell (5 call types, champion scripts, TCPA gate) | Internal + nexus-core |
+| `roofing-aria-inbound` | Inbound call routing: personalized Retell agent based on caller lookup | Retell inbound |
+| `roofing-aria-learning` | Weekly script performance analysis: promote champion, retire worst | Weekly cron via nexus-core |
+| `roofing-aria-storm-trigger` | Bulk-queue storm alert calls for previous customers in affected zip codes | nexus-core storm detection |
+| `roofing-aria-webhook` | Retell webhook: tracks call events, analyzes transcript, triggers follow-ups | Retell webhook |
 | `roofing-closer` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
 | `roofing-prospector` | See function source for details | Internal |
+| `portal-activity-generator` | Generate bilingual portal activity updates (19 activity types) | Internal |
+| `portal-api` | Homeowner portal REST API: overview, messages, sign docs, referrals | Token auth from portal |
+| `portal-magic-link` | Generate 1-year magic link token + SMS/email delivery | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
@@ -220,6 +228,25 @@ Then productized and sold to other multi-business operators.
 - `voice_learning` -- weekly learning reports (best opener, best time, improvements)
 - `voice_compliance` -- pre-call compliance check log (TCPA, consent, DNC, two-party)
 
+### Roofing OS Homeowner Portal (added May 13, 2026):
+- `homeowner_sessions` -- magic link tokens, 1-year expiry, maps to roofing_jobs
+- `portal_activities` -- bilingual activity feed (English + Spanish titles/descriptions)
+- `portal_photos` -- before/after job photos with stage tagging
+- `portal_messages` -- homeowner ↔ contractor chat thread
+- `insurance_claims` -- claim number, adjuster info, status tracking
+- `supplement_tracker` -- supplement items with status and amounts
+- `portal_documents` -- contracts, permits, warranty docs with e-signature
+- `portal_payments` -- payment records (deposit, progress, final)
+- `roof_monitoring` -- post-job monitoring events (storm, aging, damage detected)
+- `portal_referrals` -- homeowner referrals with unique codes
+- `aria_portal_conversations` -- Aria chat history within portal
+
+### Roofing OS Aria Voice System (added May 13, 2026):
+- `roofing_aria_calls` -- every outbound/inbound call (transcript, outcome, buy_signals, script_used, duration)
+- `roofing_aria_scripts` -- champion scripts per call_type + language with conversion tracking
+- `roofing_aria_learning` -- weekly learning reports per call type (best/worst script, rates)
+- `roofing_inbound_calls` -- inbound call routing records (caller lookup, contact_type)
+
 ### Project categories:
 - `platform` -- core businesses (Nexus, VA Company)
 - `vertical` -- GTM channels (Roofing OS, Cash Out Refinances)
@@ -275,17 +302,22 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 13, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
+- Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
+- 4 new Aria DB tables: roofing_aria_calls, roofing_aria_scripts, roofing_aria_learning, roofing_inbound_calls
+- 8 new Telegram commands: aria storm, aria call, aria stats, aria calls today, aria learning, aria pause, aria resume, aria scripts
+- nexus-core wired for storm detection (~8h), lead followup (every cycle), aria learning (weekly)
+- All 25 spec tests passed
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
-2. Add memory consolidation ability (medium)
-3. Add Structured Self-Reflection Capability (medium)
-4. Add ability usage analytics and performance tracking (medium)
-5. Add conversation memory persistence (medium)
-6. Draft complete operating agreement for Nexus ZC LLC
-7. Build complete Roofing OS go-to-market system with public landing page
-8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
+2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
+3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
+4. Add memory consolidation ability (medium)
+5. Add Structured Self-Reflection Capability (medium)
+6. Add conversation memory persistence (medium)
+7. Draft complete operating agreement for Nexus ZC LLC
+8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 

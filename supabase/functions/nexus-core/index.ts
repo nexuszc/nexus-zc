@@ -1030,6 +1030,95 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // ROOFING ARIA — STORM DETECTION every 16 cycles (~8 hours)
+    if (cycleNumber % 16 === 4) {
+      try {
+        const serperKey = Deno.env.get("SERPER_API_KEY");
+        if (serperKey) {
+          const searchRes = await fetch("https://google.serper.dev/search", {
+            method: "POST",
+            headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+            body: JSON.stringify({ q: `hail storm Colorado ${new Date().toLocaleDateString()} 2026`, num: 3 })
+          });
+          const searchData = await searchRes.json();
+          const results = searchData.organic || [];
+          for (const result of results.slice(0, 3)) {
+            const snippet = (result.snippet || "").toLowerCase();
+            if (snippet.includes("hail") && (snippet.includes("inch") || snippet.includes('"'))) {
+              const sizeMatch = snippet.match(/(\d+\.?\d*)["\s]*inch/i);
+              const hailSize = sizeMatch ? parseFloat(sizeMatch[1]) : 1.0;
+              if (hailSize >= 1.0) {
+                const zipMatch = snippet.match(/\b8\d{4}\b/g);
+                const zipCodes = zipMatch || ["80202"];
+                fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-storm-trigger`, {
+                  method: "POST",
+                  headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ zip_codes: zipCodes, hail_size: hailSize, storm_date: new Date().toISOString() })
+                }).catch(() => {});
+                await tg(`⛈️ *Storm detected by Nexus*\nHail: ${hailSize}"\nArea: ${zipCodes.join(", ")}\nStorm alerts firing to previous customers.`);
+                break;
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // ROOFING ARIA — LEAD FOLLOWUP SEQUENCE every cycle
+    try {
+      const { data: pendingLeads } = await supabase
+        .from("roofing_prospects")
+        .select("id, phone, owner_name, company_name, address")
+        .eq("status", "researched")
+        .not("phone", "is", null)
+        .limit(5);
+
+      for (const lead of pendingLeads || []) {
+        const { data: calls } = await supabase
+          .from("roofing_aria_calls")
+          .select("created_at, outcome")
+          .eq("contact_phone", lead.phone)
+          .eq("call_type", "lead_followup")
+          .order("created_at", { ascending: false });
+
+        const callCount = (calls || []).length;
+        const lastCall = calls?.[0];
+        const daysSince = lastCall
+          ? (Date.now() - new Date(lastCall.created_at).getTime()) / (1000 * 60 * 60 * 24)
+          : 999;
+        const schedule = [1, 3, 7];
+        const nextDay = schedule[callCount];
+
+        if (nextDay && daysSince >= nextDay && callCount < 3) {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              call_type: "lead_followup",
+              contact_phone: lead.phone,
+              contact_name: lead.owner_name || lead.company_name,
+              contact_type: "new_lead",
+              metadata: {
+                property_address: lead.address || "your location",
+                rep_name: "our team",
+                days_ago: `${Math.round(daysSince)} days ago`,
+                contractor_name: "Colorado Roofing Pros"
+              }
+            })
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+
+    // ROOFING ARIA LEARNING — weekly (offset from voice learning)
+    if (cycleNumber % 336 === 168) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-learning`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 
