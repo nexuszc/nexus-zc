@@ -1187,6 +1187,52 @@ Deno.serve(async (_req) => {
       })().catch(() => {});
     }
 
+    // INTELLIGENCE LAYER — WEEKLY REPORT (Monday 7am MT = 14:00 UTC)
+    const _intelNow = new Date();
+    if (_intelNow.getUTCDay() === 1 && _intelNow.getUTCHours() === 14 && cycleNumber % 2 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-weekly-report`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    // SELF-IMPROVE — weekly (offset 252 cycles from financial)
+    if (cycleNumber % 336 === 252) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-self-improve`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    // QA BOT — every 6 hours (offset from product-monitor at === 0)
+    if (cycleNumber % 12 === 6) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-qa-bot`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    // REP ANALYTICS — daily (offset 24 from depreciation)
+    if (cycleNumber % 48 === 24) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-analytics`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rep_performance" })
+      }).catch(() => {});
+    }
+
+    // MARKET PENETRATION — weekly (offset 84 cycles)
+    if (cycleNumber % 336 === 84) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-analytics`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "market_penetration" })
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

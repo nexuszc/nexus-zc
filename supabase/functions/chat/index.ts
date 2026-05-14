@@ -3845,6 +3845,178 @@ Be specific. Reference actual numbers.` }],
     }
 
     // ================================================================
+    // ROOFING INTELLIGENCE COMMANDS
+    // ================================================================
+
+    // rep performance
+    if (msgLower === "rep performance") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "rep_performance", true, Date.now() - start, channel);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-analytics`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "rep_performance" })
+        });
+        const data = await res.json();
+        if (!data.reps?.length) return earlyReturn("No rep data found for last 30 days.");
+        const lines = data.reps.slice(0, 5).map((r: any) =>
+          `*${r.name}*: ${r.signed} signed | $${(r.total_revenue || 0).toLocaleString()} rev | ${r.close_rate}% close`
+        ).join("\n");
+        return earlyReturn(`📊 *Rep Performance (30d)*\n\n${lines}`);
+      } catch (err: any) { return earlyReturn(`Rep performance failed: ${err.message}`); }
+    }
+
+    // rep: [name or id]
+    if (msgLower.startsWith("rep:")) {
+      const start = Date.now();
+      try {
+        const repName = message.slice(4).trim();
+        await logUsage(supabase, "rep_detail", true, Date.now() - start, channel);
+        const { data: analytics } = await supabase.from("rep_analytics")
+          .select("*").order("created_at", { ascending: false }).limit(5);
+        if (!analytics?.length) return earlyReturn(`No analytics found for "${repName}".`);
+        const latest = analytics[0];
+        return earlyReturn(
+          `📈 *Rep: ${repName}*\n` +
+          `Contracts: ${latest.contracts_signed}\nClose rate: ${Math.round((latest.close_rate || 0) * 100)}%\n` +
+          `Avg job: $${(latest.avg_job_value || 0).toLocaleString()}\nRevenue: $${(latest.total_revenue || 0).toLocaleString()}`
+        );
+      } catch (err: any) { return earlyReturn(`Rep lookup failed: ${err.message}`); }
+    }
+
+    // market: [zip code]
+    if (msgLower.startsWith("market:")) {
+      const start = Date.now();
+      try {
+        const zip = message.slice(7).trim();
+        await logUsage(supabase, "market_intel", true, Date.now() - start, channel);
+        const { data: intel } = await supabase.from("market_intelligence")
+          .select("*").eq("zip_code", zip).maybeSingle();
+        if (!intel) return earlyReturn(`No market data for zip ${zip}. Run market penetration analysis first.`);
+        return earlyReturn(
+          `🗺️ *Market: ${zip}*\n` +
+          `Jobs completed: ${intel.jobs_completed}\nAvg job value: $${(intel.avg_job_value || 0).toLocaleString()}\n` +
+          `Opportunity score: ${intel.opportunity_score || "N/A"}\nLast storm: ${intel.last_storm_date || "None"}`
+        );
+      } catch (err: any) { return earlyReturn(`Market lookup failed: ${err.message}`); }
+    }
+
+    // patterns
+    if (msgLower === "patterns") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "patterns", true, Date.now() - start, channel);
+        const { data: patterns } = await supabase.from("roofing_patterns")
+          .select("*").eq("applied", false).order("confidence_score", { ascending: false }).limit(5);
+        if (!patterns?.length) return earlyReturn("No pending patterns. Run `self improve` to detect new ones.");
+        const lines = patterns.map((p: any) =>
+          `*${p.pattern_type}* (${Math.round((p.confidence_score || 0) * 100)}% confidence)\n${p.recommendation}`
+        ).join("\n\n");
+        return earlyReturn(`🧠 *Unapplied Patterns*\n\n${lines}`);
+      } catch (err: any) { return earlyReturn(`Patterns lookup failed: ${err.message}`); }
+    }
+
+    // apply patterns
+    if (msgLower === "apply patterns") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "apply_patterns", true, Date.now() - start, channel);
+        const { data: patterns } = await supabase.from("roofing_patterns")
+          .select("id, pattern_type, recommendation").eq("applied", false);
+        if (!patterns?.length) return earlyReturn("No unapplied patterns found.");
+        await supabase.from("roofing_patterns").update({ applied: true, applied_at: new Date().toISOString() })
+          .eq("applied", false);
+        return earlyReturn(`✅ Marked ${patterns.length} pattern${patterns.length > 1 ? "s" : ""} as applied.`);
+      } catch (err: any) { return earlyReturn(`Apply patterns failed: ${err.message}`); }
+    }
+
+    // weekly report
+    if (msgLower === "weekly report") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "weekly_report", true, Date.now() - start, channel);
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-weekly-report`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        }).catch(() => {});
+        return earlyReturn("📊 Generating weekly intelligence report — will arrive in Telegram shortly.");
+      } catch (err: any) { return earlyReturn(`Weekly report failed: ${err.message}`); }
+    }
+
+    // qa run
+    if (msgLower === "qa run") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "qa_run", true, Date.now() - start, channel);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-qa-bot`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        return earlyReturn(`🔬 *QA Results*\n${data.passed}/${data.total} tests passed${data.failed > 0 ? `\n⚠️ ${data.failed} failures — check Telegram for details` : "\n✅ All clear"}`);
+      } catch (err: any) { return earlyReturn(`QA run failed: ${err.message}`); }
+    }
+
+    // supplement performance
+    if (msgLower === "supplement performance") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "supplement_performance", true, Date.now() - start, channel);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-analytics`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "supplement_performance" })
+        });
+        const data = await res.json();
+        const carriers = Object.entries(data.by_carrier || {});
+        if (!carriers.length) return earlyReturn("No supplement data yet.");
+        const lines = carriers.map(([name, stats]: [string, any]) => {
+          const rate = stats.submitted > 0 ? Math.round((stats.approved / stats.submitted) * 100) : 0;
+          return `*${name}*: ${rate}% approval (${stats.approved}/${stats.submitted})`;
+        }).join("\n");
+        return earlyReturn(`📋 *Supplement Performance by Carrier*\n\n${lines}`);
+      } catch (err: any) { return earlyReturn(`Supplement performance failed: ${err.message}`); }
+    }
+
+    // pricing analysis
+    if (msgLower === "pricing analysis") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "pricing_analysis", true, Date.now() - start, channel);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-analytics`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "pricing_analysis" })
+        });
+        const data = await res.json();
+        const dist = Object.entries(data.price_distribution || {})
+          .sort((a: any, b: any) => b[1].count - a[1].count).slice(0, 5)
+          .map(([range, stats]: [string, any]) => `${range}: ${stats.count} jobs`).join("\n");
+        return earlyReturn(
+          `💰 *Pricing Analysis*\n\n` +
+          `Avg contract: $${(data.avg_contract || 0).toLocaleString()}\n\n` +
+          `*Distribution:*\n${dist}`
+        );
+      } catch (err: any) { return earlyReturn(`Pricing analysis failed: ${err.message}`); }
+    }
+
+    // self improve
+    if (msgLower === "self improve") {
+      const start = Date.now();
+      try {
+        await logUsage(supabase, "self_improve", true, Date.now() - start, channel);
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-self-improve`, {
+          method: "POST", headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        return earlyReturn(
+          data.patterns_detected > 0
+            ? `🧠 *Self-Improve Complete*\n${data.patterns_detected} pattern${data.patterns_detected > 1 ? "s" : ""} detected. Check Telegram for recommendations.`
+            : "🧠 Self-improve ran — no new patterns detected this cycle."
+        );
+      } catch (err: any) { return earlyReturn(`Self improve failed: ${err.message}`); }
+    }
+
+    // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
     const { data: projectsList } = await supabase
