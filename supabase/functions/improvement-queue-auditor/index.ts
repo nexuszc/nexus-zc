@@ -1,98 +1,86 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-interface AuditResult {
-  total_pending: number
-  oldest_pending_age_minutes: number | null
-  validation_errors: string[]
-  timestamp: string
-}
-
-Deno.serve(async (req: Request): Promise<Response> => {
+Deno.serve(async (req) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing environment configuration' }),
+        JSON.stringify({ error: 'Missing environment variables' }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: pendingImprovements, error: queryError } = await supabase
+    const now = new Date();
+    const staleThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const { data: queueItems, error: fetchError } = await supabase
       .from('improvement_queue')
       .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true });
 
-    if (queryError) {
+    if (fetchError) {
       return new Response(
-        JSON.stringify({ error: 'Database query failed', details: queryError.message }),
+        JSON.stringify({ error: 'Failed to fetch queue items', details: fetchError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
+      );
     }
 
-    const validationErrors: string[] = []
-    const now = new Date()
+    const staleItems = queueItems?.filter(
+      item => item.status === 'pending' && new Date(item.created_at) < staleThreshold
+    ) || [];
 
-    let oldestPendingAgeMinutes: number | null = null
-    if (pendingImprovements && pendingImprovements.length > 0) {
-      const oldestCreatedAt = new Date(pendingImprovements[0].created_at)
-      oldestPendingAgeMinutes = Math.floor((now.getTime() - oldestCreatedAt.getTime()) / 1000 / 60)
+    const pendingItems = queueItems?.filter(item => item.status === 'pending') || [];
+    const processingItems = queueItems?.filter(item => item.status === 'processing') || [];
+    const completedItems = queueItems?.filter(item => item.status === 'completed') || [];
+    const failedItems = queueItems?.filter(item => item.status === 'failed') || [];
 
-      for (const improvement of pendingImprovements) {
-        if (!improvement.task_id) {
-          validationErrors.push(`Improvement ${improvement.id} missing task_id`)
-        }
-        if (!improvement.improvement_type) {
-          validationErrors.push(`Improvement ${improvement.id} missing improvement_type`)
-        }
+    const auditReport = {
+      timestamp: now.toISOString(),
+      totalItems: queueItems?.length || 0,
+      statusBreakdown: {
+        pending: pendingItems.length,
+        processing: processingItems.length,
+        completed: completedItems.length,
+        failed: failedItems.length
+      },
+      staleItems: {
+        count: staleItems.length,
+        items: staleItems.map(item => ({
+          id: item.id,
+          component_path: item.component_path,
+          created_at: item.created_at,
+          age_hours: Math.floor((now.getTime() - new Date(item.created_at).getTime()) / (1000 * 60 * 60))
+        }))
+      },
+      healthStatus: staleItems.length === 0 ? 'healthy' : 'degraded'
+    };
+
+    if (staleItems.length > 0) {
+      const { error: updateError } = await supabase
+        .from('improvement_queue')
+        .update({ status: 'failed', error: 'Item became stale - exceeded 24 hour threshold' })
+        .in('id', staleItems.map(item => item.id));
+
+      if (updateError) {
+        auditReport.warning = `Failed to update stale items: ${updateError.message}`;
+      } else {
+        auditReport.staleItems.updated = true;
       }
-    }
-
-    const auditResult: AuditResult = {
-      total_pending: pendingImprovements?.length || 0,
-      oldest_pending_age_minutes: oldestPendingAgeMinutes,
-      validation_errors: validationErrors,
-      timestamp: now.toISOString()
-    }
-
-    const { error: logError } = await supabase
-      .from('audit_logs')
-      .insert({
-        audit_type: 'improvement_queue',
-        result: auditResult,
-        created_at: now.toISOString()
-      })
-
-    if (logError) {
-      console.error('Failed to log audit result:', logError)
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        audit: auditResult
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+      JSON.stringify(auditReport),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
-    console.error('Improvement queue audit error:', error)
     return new Response(
-      JSON.stringify({
-        error: 'Internal server error',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    )
+      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
   }
-})
+});
