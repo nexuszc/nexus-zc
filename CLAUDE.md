@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 13, 2026 — v15
+# Last updated: May 14, 2026 — v16
 
 ---
 
@@ -131,6 +131,7 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
+| `roofing-analytics` | Rep performance, market penetration, pricing analysis, supplement performance | Internal + nexus-core |
 | `roofing-aria-engine` | Outbound AI voice calls via Retell (5 call types, champion scripts, TCPA gate) | Internal + nexus-core |
 | `roofing-aria-inbound` | Inbound call routing: personalized Retell agent based on caller lookup | Retell inbound |
 | `roofing-aria-learning` | Weekly script performance analysis: promote champion, retire worst | Weekly cron via nexus-core |
@@ -152,6 +153,9 @@ Then productized and sold to other multi-business operators.
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
 | `roofing-prospector` | See function source for details | Internal |
+| `roofing-qa-bot` | Smoke tests all critical functions every 6 hours, alerts on failures | nexus-core |
+| `roofing-self-improve` | Detects patterns in scheduling/supplement/pricing, saves to roofing_patterns | Weekly cron via nexus-core |
+| `roofing-weekly-report` | Monday 7am intelligence briefing: revenue, contracts, supplements, AI calls, insights | Monday cron via nexus-core |
 | `portal-activity-generator` | Generate bilingual portal activity updates (19 activity types) | Internal |
 | `portal-api` | Homeowner portal REST API: overview, messages, sign docs, referrals | Token auth from portal |
 | `portal-magic-link` | Generate 1-year magic link token + SMS/email delivery | Internal |
@@ -317,7 +321,7 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 13, 2026)
+## CURRENT BUILD PRIORITIES (as of May 14, 2026)
 
 **DONE this session:**
 - Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
@@ -331,16 +335,21 @@ Then productized and sold to other multi-business operators.
 - 12 new Operations Telegram commands: job:, jobs today, pipeline, schedule:, order materials:, permit:, permit approved:, financial dashboard, cash flow, pay sub:, job complete:, job status:
 - nexus-core wired: permit scan + weather check daily, financial dashboard summary weekly
 - All 25 Operations spec tests passed
+- Built Roofing OS Intelligence Layer (roofing-analytics, roofing-weekly-report, roofing-self-improve, roofing-qa-bot)
+- 5 new Intelligence DB tables: rep_analytics, market_intelligence, weekly_intelligence_reports, roofing_patterns, roofing_qa_results
+- 10 new Intelligence Telegram commands: rep performance, rep:, market:, patterns, apply patterns, weekly report, qa run, supplement performance, pricing analysis, self improve
+- nexus-core wired: weekly report (Mon 7am), self-improve (weekly), QA bot (6h), rep analytics (daily), market penetration (weekly)
+- QA bot 10/10 smoke tests pass (tests all critical functions automatically)
+- All 25 Intelligence spec tests passed
 
 **NEXT:**
-1. Build Spec 6 — Intelligence Layer
-2. Fix smoke_test_failed error (simple)
-3. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
-4. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
+1. Fix smoke_test_failed error (simple)
+2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
+3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
+4. Add memory consolidation ability (medium)
+5. Add Structured Self-Reflection Capability (medium)
+6. Draft complete operating agreement for Nexus ZC LLC
+7. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
