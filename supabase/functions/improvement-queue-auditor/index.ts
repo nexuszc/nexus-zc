@@ -1,116 +1,108 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 interface AuditResult {
-  itemId: string
-  status: string
+  total_improvements: number
+  pending_count: number
+  in_progress_count: number
+  completed_count: number
+  failed_count: number
+  stale_improvements: number
+  avg_processing_time_minutes: number
   issues: string[]
 }
 
 Deno.serve(async (req) => {
-  try {
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
 
+  try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
     )
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid authorization token' }),
-        { status: 401, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
-    const { data: queueItems, error: fetchError } = await supabaseAdmin
+    const { data: improvements, error: fetchError } = await supabaseClient
       .from('improvement_queue')
       .select('*')
-      .in('status', ['pending', 'in_progress'])
-      .order('created_at', { ascending: true })
 
     if (fetchError) {
-      throw new Error(`Failed to fetch queue items: ${fetchError.message}`)
+      throw fetchError
     }
 
-    const auditResults: AuditResult[] = []
     const now = new Date()
+    const issues: string[] = []
 
-    for (const item of queueItems || []) {
-      const issues: string[] = []
-      
-      if (item.status === 'in_progress') {
-        const startedAt = new Date(item.started_at)
-        const hoursSinceStart = (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60)
-        
-        if (hoursSinceStart > 24) {
-          issues.push('Item stuck in progress for over 24 hours')
-        }
-      }
+    const pending_count = improvements?.filter(i => i.status === 'pending').length || 0
+    const in_progress_count = improvements?.filter(i => i.status === 'in_progress').length || 0
+    const completed_count = improvements?.filter(i => i.status === 'completed').length || 0
+    const failed_count = improvements?.filter(i => i.status === 'failed').length || 0
 
-      if (item.status === 'pending') {
-        const createdAt = new Date(item.created_at)
-        const daysSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
-        
-        if (daysSinceCreation > 7) {
-          issues.push('Item pending for over 7 days')
-        }
-      }
+    const staleThresholdMinutes = 30
+    const stale_improvements = improvements?.filter(i => {
+      if (i.status !== 'in_progress') return false
+      const updatedAt = new Date(i.updated_at)
+      const minutesDiff = (now.getTime() - updatedAt.getTime()) / (1000 * 60)
+      return minutesDiff > staleThresholdMinutes
+    }).length || 0
 
-      if (!item.prompt || item.prompt.trim().length === 0) {
-        issues.push('Missing or empty prompt')
-      }
+    if (stale_improvements > 0) {
+      issues.push(`${stale_improvements} improvements in progress for over ${staleThresholdMinutes} minutes`)
+    }
 
-      if (!item.target_file_path) {
-        issues.push('Missing target file path')
-      }
+    if (failed_count > 0) {
+      issues.push(`${failed_count} failed improvements require attention`)
+    }
 
-      if (issues.length > 0) {
-        auditResults.push({
-          itemId: item.id,
-          status: item.status,
-          issues
-        })
+    const completedImprovements = improvements?.filter(i => 
+      i.status === 'completed' && i.created_at && i.updated_at
+    ) || []
 
-        await supabaseAdmin
-          .from('improvement_queue_audit_log')
-          .insert({
-            queue_item_id: item.id,
-            audit_timestamp: now.toISOString(),
-            issues: issues,
-            audited_by: user.id
-          })
-      }
+    let avg_processing_time_minutes = 0
+    if (completedImprovements.length > 0) {
+      const totalMinutes = completedImprovements.reduce((sum, i) => {
+        const created = new Date(i.created_at).getTime()
+        const updated = new Date(i.updated_at).getTime()
+        return sum + ((updated - created) / (1000 * 60))
+      }, 0)
+      avg_processing_time_minutes = totalMinutes / completedImprovements.length
+    }
+
+    const result: AuditResult = {
+      total_improvements: improvements?.length || 0,
+      pending_count,
+      in_progress_count,
+      completed_count,
+      failed_count,
+      stale_improvements,
+      avg_processing_time_minutes: Math.round(avg_processing_time_minutes * 100) / 100,
+      issues
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Audit completed',
-        audited_items: queueItems?.length || 0,
-        issues_found: auditResults.length,
-        results: auditResults
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify(result),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
     )
-
   } catch (error) {
-    console.error('Audit error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
     )
   }
 })
