@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 14, 2026 — v17
+# Last updated: May 14, 2026 — v8
 
 ---
 
@@ -99,10 +99,10 @@ Then productized and sold to other multi-business operators.
 | `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
 | `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
 | `contractor-auth` | Contractor magic link invite + session lookup | Internal |
-| `contractor-churn-predictor` | Daily churn scoring + Aria save calls for high-risk contractors | Daily via nexus-core |
-| `contractor-competitive-engine` | Weekly competitive intel emails per contractor zip | Weekly via nexus-vertical-router |
-| `contractor-roi-engine` | Monthly ROI reports: supplement revenue vs subscription cost | Monthly via nexus-vertical-router |
-| `contractor-signup` | Contractor account creation + Stripe trial + Aria welcome call + Resend email | Landing page signup |
+| `contractor-churn-predictor` | See function source for details | Internal |
+| `contractor-competitive-engine` | See function source for details | Internal |
+| `contractor-roi-engine` | See function source for details | Internal |
+| `contractor-signup` | See function source for details | Internal |
 | `email-webhook` | Inbound email handling | Resend webhook |
 | `generate-queue` | Generate lead call queue | On demand |
 | `generate-va-tasks` | Generate daily VA task lists | Cron / on demand |
@@ -121,7 +121,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-router` | See function source for details | Internal |
 | `nexus-self-build` | See function source for details | Internal |
 | `nexus-unsubscribe` | See function source for details | Internal |
-| `nexus-vertical-router` | Routes vertical-specific tasks (storm scan, prospecting, QA, ROI, churn, intel) per cycle | Every cycle via nexus-core |
+| `nexus-vertical-router` | See function source for details | Internal |
 | `nexus-voice` | See function source for details | Internal |
 | `nexus-voice-compliance` | See function source for details | Internal |
 | `nexus-voice-engine` | See function source for details | Internal |
@@ -136,37 +136,34 @@ Then productized and sold to other multi-business operators.
 | `refresh-assessments` | Refresh project assessment scores | On demand |
 | `reminders` | See function source for details | Internal |
 | `roofing-ai` | Roofing AI actions: estimate, contract, invoice, timeline, supplement_request | Internal |
-| `roofing-analytics` | Rep performance, market penetration, pricing analysis, supplement performance | Internal + nexus-core |
-| `roofing-aria-engine` | Outbound AI voice calls via Retell (5 call types, champion scripts, TCPA gate) | Internal + nexus-core |
-| `roofing-aria-inbound` | Inbound call routing: personalized Retell agent based on caller lookup | Retell inbound |
-| `roofing-aria-learning` | Weekly script performance analysis: promote champion, retire worst | Weekly cron via nexus-core |
-| `roofing-aria-storm-trigger` | Bulk-queue storm alert calls for previous customers in affected zip codes | nexus-core storm detection |
-| `roofing-aria-webhook` | Retell webhook: tracks call events, analyzes transcript, triggers follow-ups | Retell webhook |
-| `roofing-depreciation-tracker` | Daily scan: generate release letters, alert follow-ups for unreleased depreciation | Daily cron via nexus-core |
-| `roofing-supplement-analyzer` | Claude Vision photo analysis: detect missed line items per photo | Internal |
-| `roofing-supplement-generator` | Generate full Xactimate supplement packages with carrier-specific language | Internal |
-| `roofing-supplement-rebuttal` | AI rebuttal letters for denied line items, carrier-specific strategies | Internal |
-| `roofing-supplement-tracker` | Track adjuster responses, record approvals/denials, list pending | Internal |
+| `roofing-analytics` | See function source for details | Internal |
+| `roofing-aria-engine` | See function source for details | Internal |
+| `roofing-aria-inbound` | See function source for details | Internal |
+| `roofing-aria-learning` | See function source for details | Internal |
+| `roofing-aria-storm-trigger` | See function source for details | Internal |
+| `roofing-aria-webhook` | See function source for details | Internal |
 | `roofing-closer` | See function source for details | Internal |
-| `roofing-crew-manager` | Crew scheduling, check-in/out, GPS tracking, weather alerts | Internal |
-| `roofing-financial` | Financial dashboard, cash flow, sub payments, job P&L reports | Internal + nexus-core |
-| `roofing-job-pipeline` | Job status transitions + lifecycle automation (portal, supplements, permits) | Internal |
-| `roofing-material-order` | Create/confirm/report material orders, update job financials | Internal |
+| `roofing-crew-manager` | See function source for details | Internal |
+| `roofing-depreciation-tracker` | See function source for details | Internal |
+| `roofing-financial` | See function source for details | Internal |
+| `roofing-job-pipeline` | See function source for details | Internal |
+| `roofing-material-order` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
-| `roofing-permit-tracker` | Submit/approve permits, scan overdue, portal notifications | Internal + nexus-core |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
+| `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
 | `roofing-prospector` | See function source for details | Internal |
-| `roofing-qa-bot` | Smoke tests all critical functions every 6 hours, alerts on failures | nexus-core |
-| `roofing-self-improve` | Detects patterns in scheduling/supplement/pricing, saves to roofing_patterns | Weekly cron via nexus-core |
-| `roofing-weekly-report` | Monday 7am intelligence briefing: revenue, contracts, supplements, AI calls, insights | Monday cron via nexus-core |
-| `portal-activity-generator` | Generate bilingual portal activity updates (19 activity types) | Internal |
-| `portal-api` | Homeowner portal REST API: overview, messages, sign docs, referrals | Token auth from portal |
-| `portal-magic-link` | Generate 1-year magic link token + SMS/email delivery | Internal |
+| `roofing-qa-bot` | See function source for details | Internal |
+| `roofing-self-improve` | See function source for details | Internal |
+| `roofing-supplement-analyzer` | See function source for details | Internal |
+| `roofing-supplement-generator` | See function source for details | Internal |
+| `roofing-supplement-rebuttal` | See function source for details | Internal |
+| `roofing-supplement-tracker` | See function source for details | Internal |
+| `roofing-weekly-report` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
-| `supplement-audit-engine` | Free public audit: storm search → AI audit → score lead → Aria call → email | Landing page form |
 | `smoke-test` | See function source for details | Internal |
+| `supplement-audit-engine` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
 
@@ -338,28 +335,17 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 14, 2026)
 
 **DONE this session:**
-- Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
-- Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
-- Built Roofing OS Supplement AI (roofing-supplement-analyzer, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-depreciation-tracker)
-- Built Roofing OS Operations Layer (roofing-job-pipeline, roofing-crew-manager, roofing-material-order, roofing-permit-tracker, roofing-financial)
-- Built Roofing OS Intelligence Layer (roofing-analytics, roofing-weekly-report, roofing-self-improve, roofing-qa-bot)
-- **Built Nexus Platform Unified Architecture + Roofing OS Auto-Marketing v1 (60/60 tests)**
-  - 7 new DB tables: contractor_accounts, supplement_audit_leads, contractor_competitive_intel, contractor_roi_reports, nexus_verticals, contractor_referrals + more
-  - 6 new edge functions: nexus-vertical-router, supplement-audit-engine, contractor-signup, contractor-roi-engine, contractor-churn-predictor, contractor-competitive-engine
-  - Rebuilt roofingos-landing/index.html (dark theme, audit form, ROI calculator, pricing, FAQ, Aria chat)
-  - Seeded 3 Aria scripts: supplement_audit_followup, contractor_welcome, contractor_save
-  - nexus-core: vertical router (every cycle), audit lead followup (every 2 cycles), trial expiry alerts (daily)
-  - chat: 6 new commands — audit leads, contractors, contractor:, roi report:, churn risk, audit stats
+- (nothing yet this session)
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) for SMS to work
-3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-4. Wire contractor signup form on landing page to contractor-signup edge function
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
+1. Fix smoke_test_failed error
+2. Add memory consolidation ability
+3. Add Structured Self-Reflection Capability
+4. Add ability usage analytics and performance tracking
+5. Add conversation memory persistence
+6. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
+7. Build complete Roofing OS go-to-market system with public landing page
+8. Review and address client health issues for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
