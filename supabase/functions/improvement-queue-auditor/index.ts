@@ -1,75 +1,117 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
+interface AuditResult {
+  total_items: number
+  stale_items: number
+  failed_items: number
+  stuck_items: number
+  audited_at: string
+}
+
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
-
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    const { data: queueItems, error: queueError } = await supabaseClient
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing environment variables')
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+    const now = new Date()
+    const staleThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const stuckThreshold = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+
+    const { data: allItems, error: fetchError } = await supabase
       .from('improvement_queue')
       .select('*')
-      .order('created_at', { ascending: false })
 
-    if (queueError) throw queueError
-
-    const analysis = {
-      total_items: queueItems?.length || 0,
-      pending_items: queueItems?.filter(item => item.status === 'pending').length || 0,
-      in_progress_items: queueItems?.filter(item => item.status === 'in_progress').length || 0,
-      completed_items: queueItems?.filter(item => item.status === 'completed').length || 0,
-      failed_items: queueItems?.filter(item => item.status === 'failed').length || 0,
-      priority_distribution: {
-        high: queueItems?.filter(item => item.priority === 'high').length || 0,
-        medium: queueItems?.filter(item => item.priority === 'medium').length || 0,
-        low: queueItems?.filter(item => item.priority === 'low').length || 0,
-      },
-      oldest_pending: queueItems
-        ?.filter(item => item.status === 'pending')
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0] || null,
-      recent_failures: queueItems
-        ?.filter(item => item.status === 'failed')
-        .slice(0, 5) || [],
+    if (fetchError) {
+      throw fetchError
     }
 
-    const result = {
-      audit_timestamp: new Date().toISOString(),
-      analysis,
-      items: queueItems,
+    const totalItems = allItems?.length || 0
+
+    const { data: staleItems, error: staleError } = await supabase
+      .from('improvement_queue')
+      .select('*')
+      .eq('status', 'pending')
+      .lt('created_at', staleThreshold.toISOString())
+
+    if (staleError) {
+      throw staleError
     }
 
-    return new Response(JSON.stringify(result), {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
+    const staleCount = staleItems?.length || 0
+
+    const { data: failedItems, error: failedError } = await supabase
+      .from('improvement_queue')
+      .select('*')
+      .eq('status', 'failed')
+
+    if (failedError) {
+      throw failedError
+    }
+
+    const failedCount = failedItems?.length || 0
+
+    const { data: stuckItems, error: stuckError } = await supabase
+      .from('improvement_queue')
+      .select('*')
+      .eq('status', 'processing')
+      .lt('updated_at', stuckThreshold.toISOString())
+
+    if (stuckError) {
+      throw stuckError
+    }
+
+    const stuckCount = stuckItems?.length || 0
+
+    const auditResult: AuditResult = {
+      total_items: totalItems,
+      stale_items: staleCount,
+      failed_items: failedCount,
+      stuck_items: stuckCount,
+      audited_at: now.toISOString(),
+    }
+
+    const { error: logError } = await supabase
+      .from('system_logs')
+      .insert({
+        event_type: 'improvement_queue_audit',
+        severity: staleCount > 0 || stuckCount > 0 ? 'warning' : 'info',
+        message: `Improvement queue audit completed: ${totalItems} total, ${staleCount} stale, ${failedCount} failed, ${stuckCount} stuck`,
+        metadata: auditResult,
+      })
+
+    if (logError) {
+      console.error('Failed to log audit result:', logError)
+    }
+
+    if (stuckCount > 0) {
+      const { error: resetError } = await supabase
+        .from('improvement_queue')
+        .update({ status: 'pending', updated_at: now.toISOString() })
+        .eq('status', 'processing')
+        .lt('updated_at', stuckThreshold.toISOString())
+
+      if (resetError) {
+        console.error('Failed to reset stuck items:', resetError)
+      } else {
+        console.log(`Reset ${stuckCount} stuck items to pending`)
+      }
+    }
+
+    return new Response(JSON.stringify(auditResult), {
       status: 200,
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
-    )
+    console.error('Audit error:', error)
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 })
