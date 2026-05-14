@@ -1,135 +1,111 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 
-interface AuditAction {
-  type: 'stale' | 'duplicate'
-  item_id: string
-  reason: string
-}
-
-interface AuditReport {
-  stale_count: number
-  duplicate_count: number
-  actions_taken: AuditAction[]
-  timestamp: string
+interface AuditResult {
+  total_items: number
+  stale_items: number
+  priority_distribution: Record<string, number>
+  status_distribution: Record<string, number>
+  old_pending_items: number
+  recommendations: string[]
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    })
+  }
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-
-    const { data: staleItems, error: staleError } = await supabase
+    const { data: queueItems, error } = await supabaseClient
       .from('improvement_queue')
       .select('*')
-      .eq('status', 'pending')
-      .lt('created_at', sevenDaysAgo.toISOString())
 
-    if (staleError) {
-      throw new Error(`Failed to query stale items: ${staleError.message}`)
+    if (error) {
+      throw error
     }
 
-    const actions: AuditAction[] = []
+    const now = new Date()
+    const staleThresholdDays = 30
+    const oldPendingThresholdDays = 7
 
-    if (staleItems && staleItems.length > 0) {
-      const staleIds = staleItems.map(item => item.id)
+    const auditResult: AuditResult = {
+      total_items: queueItems?.length || 0,
+      stale_items: 0,
+      priority_distribution: {},
+      status_distribution: {},
+      old_pending_items: 0,
+      recommendations: [],
+    }
+
+    queueItems?.forEach((item) => {
+      const priority = item.priority || 'none'
+      const status = item.status || 'unknown'
+
+      auditResult.priority_distribution[priority] = 
+        (auditResult.priority_distribution[priority] || 0) + 1
       
-      const { error: updateError } = await supabase
-        .from('improvement_queue')
-        .update({ status: 'expired' })
-        .in('id', staleIds)
+      auditResult.status_distribution[status] = 
+        (auditResult.status_distribution[status] || 0) + 1
 
-      if (updateError) {
-        throw new Error(`Failed to update stale items: ${updateError.message}`)
+      const createdAt = new Date(item.created_at)
+      const daysSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
+
+      if (daysSinceCreation > staleThresholdDays) {
+        auditResult.stale_items++
       }
 
-      staleItems.forEach(item => {
-        actions.push({
-          type: 'stale',
-          item_id: item.id,
-          reason: `Item older than 7 days (created: ${item.created_at})`
-        })
-      })
-    }
-
-    const { data: pendingItems, error: pendingError } = await supabase
-      .from('improvement_queue')
-      .select('*')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-
-    if (pendingError) {
-      throw new Error(`Failed to query pending items: ${pendingError.message}`)
-    }
-
-    const duplicateMap = new Map<string, any[]>()
-
-    if (pendingItems) {
-      pendingItems.forEach(item => {
-        const key = `${item.task_description}::${item.context || ''}`
-        if (!duplicateMap.has(key)) {
-          duplicateMap.set(key, [])
-        }
-        duplicateMap.get(key)!.push(item)
-      })
-
-      for (const [key, items] of duplicateMap.entries()) {
-        if (items.length > 1) {
-          const duplicateIds = items.slice(1).map(item => item.id)
-          
-          const { error: dupUpdateError } = await supabase
-            .from('improvement_queue')
-            .update({ status: 'duplicate' })
-            .in('id', duplicateIds)
-
-          if (dupUpdateError) {
-            throw new Error(`Failed to mark duplicates: ${dupUpdateError.message}`)
-          }
-
-          items.slice(1).forEach(item => {
-            actions.push({
-              type: 'duplicate',
-              item_id: item.id,
-              reason: `Duplicate of ${items[0].id}`
-            })
-          })
-        }
+      if (status === 'pending' && daysSinceCreation > oldPendingThresholdDays) {
+        auditResult.old_pending_items++
       }
+    })
+
+    if (auditResult.stale_items > 0) {
+      auditResult.recommendations.push(
+        `${auditResult.stale_items} items are older than ${staleThresholdDays} days. Consider reviewing or archiving.`
+      )
     }
 
-    const staleCount = staleItems?.length || 0
-    const duplicateCount = Array.from(duplicateMap.values())
-      .filter(items => items.length > 1)
-      .reduce((sum, items) => sum + items.length - 1, 0)
-
-    const report: AuditReport = {
-      stale_count: staleCount,
-      duplicate_count: duplicateCount,
-      actions_taken: actions,
-      timestamp: new Date().toISOString()
+    if (auditResult.old_pending_items > 0) {
+      auditResult.recommendations.push(
+        `${auditResult.old_pending_items} pending items are older than ${oldPendingThresholdDays} days. Consider prioritizing or updating status.`
+      )
     }
 
-    return new Response(
-      JSON.stringify(report),
-      {
-        headers: { 'Content-Type': 'application/json' },
-        status: 200
-      }
-    )
+    const highPriorityCount = auditResult.priority_distribution['high'] || 0
+    if (highPriorityCount > auditResult.total_items * 0.5) {
+      auditResult.recommendations.push(
+        'Over 50% of items are marked high priority. Consider re-evaluating priorities.'
+      )
+    }
+
+    return new Response(JSON.stringify(auditResult), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    })
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: error.message,
-        timestamp: new Date().toISOString()
-      }),
-      {
-        headers: { 'Content-Type': 'application/json' },
-        status: 500
-      }
-    )
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    })
   }
 })
