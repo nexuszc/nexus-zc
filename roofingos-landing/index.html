@@ -156,6 +156,45 @@
   .signup-success h3 { font-size: 24px; font-weight: 800; margin-bottom: 8px; color: var(--green); }
   .signup-success p { color: var(--muted); font-size: 15px; line-height: 1.6; }
 
+  /* PRICING */
+  .pricing-header { text-align: center; margin-bottom: 48px; }
+  .pricing-header h2 { font-size: clamp(28px, 4.5vw, 48px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 12px; }
+  .pricing-header p { color: var(--muted); font-size: 16px; line-height: 1.6; max-width: 480px; margin: 0 auto; }
+  .pricing-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 24px; max-width: 900px; margin: 0 auto; align-items: start; }
+  @media (max-width: 720px) { .pricing-grid { grid-template-columns: 1fr; } }
+  .pricing-card { border-radius: 20px; padding: 36px 32px; position: relative; }
+  .pricing-card.featured { background: var(--surface); border: 1.5px solid var(--blue); box-shadow: 0 0 40px rgba(59,130,246,0.1); }
+  .pricing-card.secondary { background: var(--card); border: 1px solid var(--border); }
+  @media (max-width: 720px) { .pricing-card.secondary { order: 2; } .pricing-card.featured { order: 1; } }
+  .pricing-badge { display: inline-block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 20px; }
+  .pricing-badge.popular { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: var(--blue-light); }
+  .pricing-badge.enterprise { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); color: var(--muted); }
+  .pricing-price { font-size: 52px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
+  .pricing-card.secondary .pricing-price { font-size: 40px; }
+  .pricing-price sub { font-size: 18px; font-weight: 500; color: var(--muted); vertical-align: baseline; }
+  .pricing-headline { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 16px 0 6px; }
+  .pricing-card.secondary .pricing-headline { font-size: 17px; }
+  .pricing-subhead { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 24px; }
+  .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; border-top: 1px solid var(--border); padding-top: 20px; }
+  .pricing-features li { font-size: 14px; color: var(--text); display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
+  .pricing-card.secondary .pricing-features li { font-size: 13px; color: var(--muted); }
+  .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+  .pricing-cta { display: block; text-align: center; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; text-decoration: none; border: none; font-family: inherit; transition: all 0.15s; width: 100%; }
+  .pricing-cta.primary { background: var(--blue); color: white; box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
+  .pricing-cta.primary:hover { background: #2563eb; transform: translateY(-1px); }
+  .pricing-cta.secondary-btn { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .pricing-cta.secondary-btn:hover { border-color: var(--muted); }
+  .pricing-footnote { text-align: center; font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+
+  /* CONTACT MODAL */
+  .contact-modal { display: none; position: fixed; inset: 0; z-index: 200; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); padding: 24px; }
+  .contact-modal.open { display: flex; }
+  .contact-modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; width: 100%; max-width: 440px; padding: 36px 32px; position: relative; }
+  .contact-modal-card h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .contact-modal-card p { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+  .contact-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px; }
+  .contact-close:hover { color: var(--text); }
+
   /* FAQ */
   .faq-wrap { max-width: 680px; margin: 0 auto; }
   details { border-bottom: 1px solid var(--border); }
@@ -358,6 +397,93 @@
   </div>
 </section>
 
+<!-- PRICING -->
+<section id="pricing" style="background: var(--bg);">
+  <div class="section-inner">
+    <div class="pricing-header">
+      <h2>Start with the portal.<br>Add everything else when you're ready.</h2>
+      <p>Most contractors start at $49. The portal pays for itself on the first job when your homeowners stop calling.</p>
+    </div>
+    <div class="pricing-grid">
+
+      <!-- OPTION 1: THE PORTAL -->
+      <div class="pricing-card featured">
+        <div class="pricing-badge popular">Most Popular</div>
+        <div class="pricing-price">$49<sub>/mo</sub></div>
+        <div class="pricing-headline">Let roofers roof again</div>
+        <div class="pricing-subhead">Your homeowners stop calling.<br>Everything is handled.</div>
+        <ul class="pricing-features">
+          <li>Branded homeowner portal on every job</li>
+          <li>Real-time photo updates during installation</li>
+          <li>Insurance status in plain English</li>
+          <li>Aria answers homeowner questions 24/7</li>
+          <li>Automatic review request after completion</li>
+          <li>Referral program built in</li>
+          <li>Your whole team with role-based access</li>
+          <li>Morning digest — 5 lines, everything you need</li>
+        </ul>
+        <a href="#signup" class="pricing-cta primary">Get your portal — $49/month →</a>
+        <div class="pricing-footnote">No contract. Cancel anytime.<br>Setup takes 4 minutes.</div>
+      </div>
+
+      <!-- OPTION 2: FULL ROOFING OS -->
+      <div class="pricing-card secondary">
+        <div class="pricing-badge enterprise">Enterprise</div>
+        <div class="pricing-price">Custom<sub></sub></div>
+        <div class="pricing-headline">The complete operating system</div>
+        <div class="pricing-subhead">For contractors ready to let Nexus run everything.</div>
+        <ul class="pricing-features">
+          <li>Everything in the portal</li>
+          <li>AI supplement recovery on every job</li>
+          <li>Permit tracking and filing</li>
+          <li>Storm detection and rapid deployment</li>
+          <li>Crew and material coordination</li>
+          <li>Adjuster communication and follow-up</li>
+          <li>Depreciation release tracking</li>
+          <li>Weekly intelligence briefing</li>
+          <li>Competitor monitoring</li>
+          <li>YouTube and SEO content engine</li>
+          <li>Full Aria outbound calling system</li>
+          <li>Custom integrations — CompanyCam, AccuLynx, JobNimbus, Xactimate</li>
+        </ul>
+        <button class="pricing-cta secondary-btn" onclick="openContactModal()">Contact Sales</button>
+        <div class="pricing-footnote">We build around your existing workflow.<br>No rip and replace.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT MODAL -->
+<div class="contact-modal" id="contact-modal" onclick="if(event.target===this)closeContactModal()">
+  <div class="contact-modal-card">
+    <button class="contact-close" onclick="closeContactModal()">✕</button>
+    <h3>Let's talk</h3>
+    <p>Tell us about your operation and we'll build a custom package around it. No generic demos — just a conversation about your workflow.</p>
+    <div class="field-group">
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="c-name" placeholder="John Smith" autocomplete="name">
+      </div>
+      <div class="field">
+        <label>Company</label>
+        <input type="text" id="c-company" placeholder="ABC Roofing LLC" autocomplete="organization">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="c-email" placeholder="john@abcroofing.com" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input type="tel" id="c-phone" placeholder="(720) 555-0100" autocomplete="tel">
+      </div>
+    </div>
+    <div class="signup-error" id="c-error"></div>
+    <button class="signup-btn" id="c-btn" onclick="submitContact()" style="margin-top:4px;">Send →</button>
+    <div class="pricing-footnote" style="margin-top:12px;">Or email directly: <a href="mailto:zach@roofingos.dev" style="color:var(--blue-light);">zach@roofingos.dev</a></div>
+  </div>
+</div>
+
 <!-- SIGNUP -->
 <section id="signup">
   <div class="signup-card">
@@ -442,6 +568,52 @@ const SUPABASE_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
 
 let stripe, cardElement;
+
+function openContactModal() {
+  document.getElementById('contact-modal').classList.add('open');
+  document.getElementById('c-name').focus();
+}
+function closeContactModal() {
+  document.getElementById('contact-modal').classList.remove('open');
+}
+
+async function submitContact() {
+  const name    = document.getElementById('c-name').value.trim();
+  const company = document.getElementById('c-company').value.trim();
+  const email   = document.getElementById('c-email').value.trim();
+  const phone   = document.getElementById('c-phone').value.trim();
+  const errEl   = document.getElementById('c-error');
+  const btn     = document.getElementById('c-btn');
+
+  errEl.textContent = '';
+  if (!name || !email) { errEl.textContent = 'Name and email are required.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/contractor-signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner_name:   name,
+        company_name: company || name,
+        owner_email:  email,
+        owner_phone:  phone,
+        plan:         'enterprise'
+      })
+    });
+  } catch { /* best effort */ }
+
+  document.querySelector('.contact-modal-card').innerHTML = `
+    <div style="text-align:center;padding:20px 0;">
+      <div style="font-size:40px;margin-bottom:16px;">✓</div>
+      <h3 style="margin-bottom:8px;">Got it.</h3>
+      <p style="color:var(--muted);font-size:15px;line-height:1.6;">Zach will be in touch within a few hours.<br>Check your email — or just call: <a href="tel:+17203339999" style="color:var(--blue-light);">text or call directly</a>.</p>
+      <button onclick="closeContactModal()" style="margin-top:24px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 24px;cursor:pointer;font-size:14px;font-weight:600;">Close</button>
+    </div>
+  `;
+}
 
 async function initStripe() {
   try {
