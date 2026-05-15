@@ -506,12 +506,114 @@ function sendAriaMessage() {
   messages.scrollTop = messages.scrollHeight;
 }
 
+// ── SIGNUP MODAL ────────────────────────────────────────────────────────────
+let _signupPlan = '';
+
 function startTrial(plan) {
-  const email = document.getElementById('audit-email')?.value || '';
-  window.location.href = `/signup?plan=${plan}&email=${encodeURIComponent(email)}`;
+  _signupPlan = plan;
+
+  // Pre-fill from audit form if available
+  const prefillName  = document.getElementById('audit-name')?.value.trim() || '';
+  const prefillEmail = document.getElementById('audit-email')?.value.trim() || '';
+  const prefillPhone = document.getElementById('audit-phone')?.value.trim() || '';
+
+  document.getElementById('signup-name').value    = prefillName;
+  document.getElementById('signup-email').value   = prefillEmail;
+  document.getElementById('signup-phone').value   = prefillPhone;
+  document.getElementById('signup-plan-label').textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+  document.getElementById('signup-error').textContent = '';
+  document.getElementById('signup-btn').disabled  = false;
+  document.getElementById('signup-btn').textContent = 'Start Free Trial →';
+  document.getElementById('signup-modal').style.display = 'flex';
+  // Focus first empty required field
+  if (!prefillName)  document.getElementById('signup-name').focus();
+  else if (!prefillPhone) document.getElementById('signup-phone').focus();
+}
+
+function closeSignupModal() {
+  document.getElementById('signup-modal').style.display = 'none';
+}
+
+async function submitSignup() {
+  const name    = document.getElementById('signup-name').value.trim();
+  const email   = document.getElementById('signup-email').value.trim();
+  const phone   = document.getElementById('signup-phone').value.trim();
+  const company = document.getElementById('signup-company').value.trim();
+  const errEl   = document.getElementById('signup-error');
+  const btn     = document.getElementById('signup-btn');
+
+  errEl.textContent = '';
+  if (!name)  { errEl.textContent = 'Name is required.'; return; }
+  if (!email) { errEl.textContent = 'Email is required.'; return; }
+  if (!phone) { errEl.textContent = 'Phone is required — we use it to send your login link.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating your account…';
+
+  try {
+    const res = await fetch('https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/contractor-signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner_name:    name,
+        owner_email:   email,
+        owner_phone:   phone,
+        company_name:  company || name,
+        plan:          _signupPlan,
+        vertical_slug: 'roofing'
+      })
+    });
+    const data = await res.json();
+    if (data.ok && data.session_token) {
+      window.location.href = `/dashboard/?token=${data.session_token}`;
+    } else if (data.ok) {
+      // Signed up but no token returned — redirect to dashboard login
+      closeSignupModal();
+      window.location.href = '/dashboard/';
+    } else {
+      errEl.textContent = data.error || 'Something went wrong. Please try again.';
+      btn.disabled = false;
+      btn.textContent = 'Start Free Trial →';
+    }
+  } catch {
+    errEl.textContent = 'Network error. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Start Free Trial →';
+  }
 }
 
 updateCalc();
 </script>
+
+<!-- Signup Modal -->
+<div id="signup-modal" style="display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);padding:1rem;">
+  <div style="background:#1a1a2e;border:1px solid #334155;border-radius:1rem;width:100%;max-width:440px;padding:2rem;position:relative;">
+    <button onclick="closeSignupModal()" style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:#94a3b8;font-size:1.5rem;cursor:pointer;line-height:1;">×</button>
+    <h2 style="color:#fff;font-size:1.4rem;font-weight:700;margin:0 0 0.25rem;">Start Your Free Trial</h2>
+    <p style="color:#94a3b8;font-size:0.9rem;margin:0 0 1.5rem;">Plan: <strong id="signup-plan-label" style="color:#22c55e;"></strong></p>
+    <div style="display:flex;flex-direction:column;gap:0.75rem;">
+      <div>
+        <label style="color:#94a3b8;font-size:0.8rem;display:block;margin-bottom:0.3rem;">Your Name *</label>
+        <input id="signup-name" type="text" placeholder="John Smith" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;color:#fff;padding:0.65rem 0.85rem;font-size:1rem;box-sizing:border-box;" />
+      </div>
+      <div>
+        <label style="color:#94a3b8;font-size:0.8rem;display:block;margin-bottom:0.3rem;">Company Name</label>
+        <input id="signup-company" type="text" placeholder="ABC Roofing LLC" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;color:#fff;padding:0.65rem 0.85rem;font-size:1rem;box-sizing:border-box;" />
+      </div>
+      <div>
+        <label style="color:#94a3b8;font-size:0.8rem;display:block;margin-bottom:0.3rem;">Mobile Phone *</label>
+        <input id="signup-phone" type="tel" placeholder="(555) 000-0000" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;color:#fff;padding:0.65rem 0.85rem;font-size:1rem;box-sizing:border-box;" />
+      </div>
+      <div>
+        <label style="color:#94a3b8;font-size:0.8rem;display:block;margin-bottom:0.3rem;">Email *</label>
+        <input id="signup-email" type="email" placeholder="john@abcroofing.com" style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:0.5rem;color:#fff;padding:0.65rem 0.85rem;font-size:1rem;box-sizing:border-box;" />
+      </div>
+    </div>
+    <p id="signup-error" style="color:#f87171;font-size:0.85rem;margin:0.75rem 0 0;min-height:1.2em;"></p>
+    <button id="signup-btn" onclick="submitSignup()" style="margin-top:1rem;width:100%;background:linear-gradient(135deg,#22c55e,#16a34a);border:none;border-radius:0.5rem;color:#fff;font-size:1rem;font-weight:700;padding:0.85rem;cursor:pointer;">Start Free Trial →</button>
+    <p style="color:#64748b;font-size:0.75rem;text-align:center;margin:0.75rem 0 0;">No credit card required · 14-day free trial</p>
+  </div>
+</div>
+
 </body>
 </html>
