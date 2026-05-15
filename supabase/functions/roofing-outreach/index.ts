@@ -132,6 +132,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-outreach ready" });
 
+  const outreachStart = Date.now();
   try {
   const now = new Date().toISOString();
 
@@ -140,11 +141,19 @@ Deno.serve(async (req) => {
     .select("*")
     .in("status", ["researched", "outreach_active"])
     .not("email", "is", null)
-    .lte("next_touch_at", now)
+    .or(`next_touch_at.is.null,next_touch_at.lte.${now}`)
     .order("lead_score", { ascending: false })
     .limit(20);
 
   if (!prospects || prospects.length === 0) {
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-outreach",
+      status: "ok",
+      response_ms: Date.now() - outreachStart,
+      error_message: null,
+      metadata: { sent: 0, reason: "no_prospects_due" },
+      recorded_at: new Date().toISOString()
+    }).catch(() => {});
     return Response.json({ ok: true, sent: 0 });
   }
 
@@ -206,9 +215,26 @@ Deno.serve(async (req) => {
     });
   }
 
+  await supabase.from("system_heartbeats").insert({
+    function_name: "roofing-outreach",
+    status: "ok",
+    response_ms: Date.now() - outreachStart,
+    error_message: null,
+    metadata: { sent },
+    recorded_at: new Date().toISOString()
+  }).catch(() => {});
+
   return Response.json({ ok: true, sent });
 
   } catch (err) {
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-outreach",
+      status: "error",
+      response_ms: Date.now() - outreachStart,
+      error_message: String(err).slice(0, 500),
+      metadata: {},
+      recorded_at: new Date().toISOString()
+    }).catch(() => {});
     return Response.json({ error: String(err) }, { status: 500 });
   }
 });

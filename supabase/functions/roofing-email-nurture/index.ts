@@ -16,26 +16,29 @@ const EMAIL_SEQUENCE = [
   {
     step: 1,
     delay_days: 0,
-    subject_formula: "Hail season in [MARKET] — what we're seeing",
+    subject_formula: "Quick question about your supplements",
     template_angle: "Storm intelligence for their market — you have data they don't. No pitch. Pure value.",
     portal_tease: null,
-    cta: null
+    cta: null,
+    pre_written_body: `Hey {first_name} — Zach Curtis here, founder of Roofing OS. Quick question: on your last State Farm job, did you get paid for starter strip as a separate line item? Most contractors in Colorado are not. We find an average of $4,200 per job that adjusters miss. I built a tool that catches it automatically. Worth a 10-minute look? roofingos.dev`
   },
   {
     step: 2,
-    delay_days: 4,
-    subject_formula: "The supplement most [MARKET] contractors miss",
+    delay_days: 2,
+    subject_formula: "The State Farm starter strip issue",
     template_angle: "Specific dollar amount left on table. One Xactimate code. Actionable immediately.",
     portal_tease: "Our system auto-generates this line item — contractors ask us how",
-    cta: "portal_demo"
+    cta: "portal_demo",
+    pre_written_body: `Hey {first_name} — following up. State Farm has been bundling starter strip into shingle costs on Colorado claims. That is $200-400 per job you are not getting. Here is the Xactimate code to add it back: RFG STRTR. Takes 2 minutes. Our system adds it automatically on every job. roofingos.dev`
   },
   {
     step: 3,
-    delay_days: 8,
-    subject_formula: "How [CONTRACTOR_NAME] is running their jobs right now",
+    delay_days: 4,
+    subject_formula: "Free supplement audit for your last job",
     template_angle: "Paint a picture of a contractor using modern tools — homeowner updates, supplement tracking, crew management. Not a pitch. A story.",
     portal_tease: "This is what the homeowner portal looks like on a real job",
-    cta: "portal_demo"
+    cta: "portal_demo",
+    pre_written_body: `Hey {first_name} — enter any job address at roofingos.dev and we will show you exactly what your adjuster missed. Free. 90 seconds. No credit card. Most contractors find $2,000-6,000 on jobs they already closed.`
   },
   {
     step: 4,
@@ -125,6 +128,12 @@ async function generateEmailBody(
     .replace("[CONTRACTOR_NAME]", prospect.company || "one contractor")
     .replace("[MONTH]", month);
 
+  if ((step as any).pre_written_body) {
+    const firstName = prospect.name?.split(" ")[0] || "there";
+    const body = (step as any).pre_written_body.replace(/\{first_name\}/g, firstName);
+    return { subject, body };
+  }
+
   const prompt = `Write a short, direct email for a roofing contractor prospect. No fluff, no filler.
 
 RECIPIENT: ${prospect.name} at ${prospect.company} in ${prospect.market || "their market"}
@@ -169,7 +178,7 @@ Deno.serve(async (req) => {
       // Fetch prospect details
       const { data: prospect } = await supabase
         .from("roofing_prospects")
-        .select("id, contact_name, company_name, email, city, state")
+        .select("id, owner_name, company_name, email, city, state")
         .eq("id", p.id)
         .maybeSingle();
 
@@ -192,7 +201,7 @@ Deno.serve(async (req) => {
       await supabase.from("email_sequences").insert({
         prospect_id: prospect.id,
         prospect_email: prospect.email,
-        prospect_name: prospect.contact_name,
+        prospect_name: prospect.owner_name,
         market,
         current_step: 1,
         next_send_at: nextSendAt.toISOString(),
@@ -203,6 +212,53 @@ Deno.serve(async (req) => {
     }
 
     return Response.json({ ok: true, action: "enrolled", enrolled });
+  }
+
+  // Enroll all uncontacted prospects with email
+  if (action === "enroll_all") {
+    const { data: prospects } = await supabase
+      .from("roofing_prospects")
+      .select("id, owner_name, company_name, email, city, state")
+      .not("email", "is", null)
+      .eq("status", "researched");
+
+    let enrolled = 0;
+    for (const prospect of prospects || []) {
+      const { data: existing } = await supabase
+        .from("email_sequences")
+        .select("id")
+        .eq("prospect_id", prospect.id)
+        .eq("completed", false)
+        .maybeSingle();
+      if (existing) continue;
+
+      const market = [prospect.city, prospect.state].filter(Boolean).join(", ") || "Colorado";
+      const nextSendAt = new Date();
+      nextSendAt.setUTCHours(15, 0, 0, 0);
+      if (nextSendAt < new Date()) nextSendAt.setDate(nextSendAt.getDate() + 1);
+
+      await supabase.from("email_sequences").insert({
+        prospect_id: prospect.id,
+        prospect_email: prospect.email,
+        prospect_name: prospect.owner_name,
+        market,
+        current_step: 1,
+        next_send_at: nextSendAt.toISOString(),
+        completed: false,
+        unsubscribed: false
+      });
+
+      await supabase.from("roofing_prospects")
+        .update({ status: "email_enrolled" })
+        .eq("id", prospect.id);
+
+      enrolled++;
+    }
+
+    if (enrolled > 0) {
+      await tg(`✉️ *Prospects Enrolled*\n${enrolled} prospects added to 7-touch email nurture.\nFirst emails fire tomorrow at 9am MT.`);
+    }
+    return Response.json({ ok: true, action: "enroll_all", enrolled });
   }
 
   // Send all due emails

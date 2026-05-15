@@ -266,7 +266,8 @@ async function processOne(
       function_name: "roofing-voiceover-engine",
       status: "ok",
       response_ms: 0,
-      checked_at: new Date().toISOString(),
+      metadata: {},
+      recorded_at: new Date().toISOString(),
     });
   } catch { /* non-fatal */ }
 

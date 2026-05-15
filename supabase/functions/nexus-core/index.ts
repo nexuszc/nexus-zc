@@ -61,7 +61,8 @@ async function logHeartbeat(fnName: string, status: "ok" | "error", ms: number, 
       status,
       response_ms: ms,
       error_message: errorMsg || null,
-      metadata: {}
+      metadata: {},
+      recorded_at: new Date().toISOString()
     });
   } catch { /* ignore */ }
 }
@@ -1346,15 +1347,15 @@ Deno.serve(async (_req) => {
 
     // ARIA QUEUE PROCESSOR — fire queued calls whose window has arrived
     {
-      const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      const queueNow = new Date().toISOString();
       const { data: readyToFire } = await supabase
         .from("aria_call_queue")
         .select("*")
         .eq("status", "queued")
-        .lte("fire_at", fiveMinutesFromNow)
+        .lte("fire_at", queueNow)
         .lt("attempt_count", 3)
         .order("fire_at", { ascending: true })
-        .limit(20);
+        .limit(5);
 
       let queueFired = 0;
       for (const queuedCall of readyToFire || []) {
@@ -1373,11 +1374,6 @@ Deno.serve(async (_req) => {
             })
             .eq("id", queuedCall.id);
           continue;
-        }
-
-        // Stagger calls by 3 minutes each to avoid rate limiting
-        if (queueFired > 0) {
-          await new Promise(r => setTimeout(r, queueFired * 3 * 60 * 1000));
         }
 
         await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {

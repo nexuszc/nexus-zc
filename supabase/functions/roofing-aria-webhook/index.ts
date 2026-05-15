@@ -239,6 +239,19 @@ Deno.serve(async (req) => {
       break;
     }
 
+    case "call_analyzed": {
+      const analysisData = (event.call?.call_analysis?.custom_analysis_data || {}) as Record<string, unknown>;
+      const updatePayload: Record<string, unknown> = {};
+      if (analysisData.call_outcome) updatePayload.outcome = analysisData.call_outcome;
+      if (typeof analysisData.sentiment_score === "number") updatePayload.sentiment_score = analysisData.sentiment_score;
+      if (analysisData.primary_objection) updatePayload.primary_objection = analysisData.primary_objection;
+      if (analysisData.appointment_time) updatePayload.appointment_time = analysisData.appointment_time;
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from("roofing_aria_calls").update(updatePayload).eq("id", callRecord.id);
+      }
+      break;
+    }
+
     case "call_failed":
       await supabase.from("roofing_aria_calls").update({ outcome: "failed", ended_at: new Date().toISOString() }).eq("id", callRecord.id);
       break;

@@ -254,5 +254,14 @@ Deno.serve(async (req) => {
     })());
   }
 
+  await supabase.from("system_heartbeats").insert({
+    function_name: "roofing-aria-engine",
+    status: "ok",
+    response_ms: 0,
+    error_message: null,
+    metadata: { call_type, contact_phone },
+    recorded_at: new Date().toISOString()
+  }).catch(() => {});
+
   return Response.json({ ok: true, call_id: callRecord.id, retell_call_id: retellData.call_id });
 });
