@@ -80,13 +80,15 @@ Deno.serve(async (req) => {
   const gate = await gateRes.json().catch(() => ({ allowed: true }));
 
   if (!gate.allowed) {
-    supabase.from("system_heartbeats").insert({
-      function_name: "aria-call-gate",
-      status: gate.permanent ? "error" : "ok",
-      response_ms: 0,
-      error_message: `blocked:${gate.reason} phone:${contact_phone} type:${call_type}`,
-      metadata: { reason: gate.reason, local_time: gate.local_time, timezone: gate.recipient_timezone }
-    }).catch(() => {});
+    try {
+      await supabase.from("system_heartbeats").insert({
+        function_name: "aria-call-gate",
+        status: gate.permanent ? "error" : "ok",
+        response_ms: 0,
+        error_message: `blocked:${gate.reason} phone:${contact_phone} type:${call_type}`,
+        metadata: { reason: gate.reason, local_time: gate.local_time, timezone: gate.recipient_timezone }
+      });
+    } catch { /* ignore */ }
 
     if (!gate.permanent && gate.next_allowed_at) {
       await supabase.from("aria_call_queue").insert({
