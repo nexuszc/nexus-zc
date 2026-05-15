@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 14, 2026 — v18
+# Last updated: May 15, 2026 — v19
 
 ---
 
@@ -98,8 +98,9 @@ Then productized and sold to other multi-business operators.
 | `brain-api` | REST API for brain browser access | GET/POST from nexus-brain.html |
 | `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
 | `chat` | Core brain: classify → retrieve → Claude → respond | POST from Telegram webhook or web |
-| `contractor-auth` | Contractor magic link invite + session lookup | Internal |
+| `contractor-auth` | Phone-primary magic link auth + session management for contractors | Frontend / dashboard |
 | `contractor-churn-predictor` | Daily churn scoring + Aria save calls for high-risk contractors | Daily via nexus-core |
+| `contractor-dashboard-api` | Token-gated dashboard data: overview, jobs, supplements, team, config | Contractor dashboard |
 | `job-intake` | 2-field job creation: tier gate → create job → portal + Aria + supplement + permit chain | Frontend / chat |
 | `morning-digest` | Daily 5-line SMS digest per contractor: jobs, supplements, storms, action | Daily 6:30am MT via nexus-core |
 | `monthly-truth` | Monthly ROI report (SMS + email) with AI insight per contractor | 1st of month 8am MT via nexus-core |
@@ -168,6 +169,8 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-tracker` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
+| `system-heartbeat` | Probes 14 key functions, writes heartbeat records + hourly health snapshots | On demand / scheduled |
+| `nexus-admin-api` | Admin-key-gated: platform overview, contractor list/detail, proposals, system health | Internal admin |
 | `smoke-test` | See function source for details | Internal |
 | `supplement-audit-engine` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
@@ -222,6 +225,14 @@ Then productized and sold to other multi-business operators.
 - `roofing_improvements` -- Roofing OS product improvement proposals (AI-generated, approved by Zach)
 - `roofing_health_snapshots` -- daily product health metrics (contractors, jobs, errors, pipeline)
 - `competitor_intel` -- competitor feature tracking (JobNimbus, Roofr, AccuLynx, CompanyCam, Jobber)
+
+### Roofing OS Dashboard + Admin (added May 15, 2026):
+- `contractor_employees` -- contractor team members (role, phone, PIN, is_owner, active)
+- `contractor_sessions` -- magic link + PIN sessions (token, expires_at, 7-day rolling)
+- `system_heartbeats` -- per-function probe results (status, response_ms, error_message)
+- `system_health_snapshots` -- hourly rollup (ok_calls, error_calls, avg_ms, p95_ms)
+- `nexus_roofing_proposals` -- AI-generated Roofing OS improvement proposals (approve/reject flow)
+- `contractor_dashboard_config` -- per-contractor widget/notification preferences
 
 ### Roofing OS Auto-Marketing (added May 14, 2026):
 - `contractor_accounts` -- paid contractor subscribers (plan, Stripe, trial, churn_risk_score, subdomain, referral_code)
@@ -364,13 +375,26 @@ Then productized and sold to other multi-business operators.
   - Seeded 3 Aria scripts: homeowner_intake, contractor_exit_interview, sms_upgrade_confirm
   - Fixed: all auto-marketing chat commands (lower → msgLower), correct actual DB column names throughout
 
+**DONE this session (v19):**
+- Phase 0: Cleanup audit — no orphaned files found, CLEANUP_LOG.md written
+- Phase 1: DB migration — 6 new tables (contractor_employees, contractor_sessions, system_heartbeats, system_health_snapshots, nexus_roofing_proposals, contractor_dashboard_config) + create_owner_employee() trigger (verified working)
+- Phase 2: 4 new edge functions deployed
+  - contractor-auth: phone-primary magic link auth (send_magic_link, verify_token, ping, add_employee)
+  - contractor-dashboard-api: token-gated dashboard data (overview, jobs, job_detail, supplements, usage, employees, get_config, set_config)
+  - system-heartbeat: probes 14 key functions, writes to system_heartbeats + system_health_snapshots
+  - nexus-admin-api: admin-key-gated platform overview (roofing_overview, contractors, contractor_detail, system_health, proposals, approve/reject_proposal, storm_events, manual_upgrade)
+- Phase 3: roofingos-landing/dashboard/index.html — mobile-first PWA (login, home, jobs, new job, supplements, team)
+- Phase 4: src/components/RoofingOSSection.jsx — Roofing OS admin panel on Dashboard; contractor KPIs, tier breakdown, churn risk, upgrades, recent jobs
+- Phase 5: nexus-core — logHeartbeat() helper added, wraps observe/think/act/reflect/resilience
+- 50/50 tests passed
+
 **NEXT:**
-1. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) for SMS to work
-2. Set STRIPE_WEBHOOK_SECRET in Supabase secrets → point Stripe dashboard to stripe-webhook function
-3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-4. Wire contractor signup form on landing page to contractor-signup edge function
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
+1. Set NEXUS_ADMIN_KEY secret in Supabase (required for nexus-admin-api to accept requests)
+2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) for SMS to work
+3. Set STRIPE_WEBHOOK_SECRET in Supabase secrets → point Stripe dashboard to stripe-webhook function
+4. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
+5. Wire contractor signup form on landing page to contractor-signup edge function
+6. Add memory consolidation ability (medium)
 7. Draft complete operating agreement for Nexus ZC LLC
 8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 

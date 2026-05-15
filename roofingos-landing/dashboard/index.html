@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Roofing OS — Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--bg2:#111118;--card:#16161f;--border:#1e1e2e;
+  --blue:#3b82f6;--blue-d:#1d4ed8;--green:#22c55e;--red:#ef4444;
+  --yellow:#eab308;--orange:#f97316;--purple:#a78bfa;
+  --t1:#f8fafc;--t2:#94a3b8;--t3:#475569;
+  --font:'Inter',system-ui,sans-serif;
+  --radius:12px;--safe-bottom:env(safe-area-inset-bottom,0px)
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-family:var(--font)}
+#app{height:100%;display:flex;flex-direction:column;overflow:hidden}
+
+/* LOADING */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:var(--t2);font-size:13px}
+
+/* LOGIN SCREEN */
+#login-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;z-index:50}
+.login-logo{font-size:22px;font-weight:800;letter-spacing:-0.03em;color:var(--t1);margin-bottom:8px}
+.login-logo span{color:var(--blue)}
+.login-sub{font-size:14px;color:var(--t2);margin-bottom:40px;text-align:center}
+.login-card{width:100%;max-width:360px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.login-card h2{font-size:17px;font-weight:700;margin-bottom:6px}
+.login-card p{font-size:13px;color:var(--t2);margin-bottom:20px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.form-group input{width:100%;background:#0d0d14;border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:15px;color:var(--t1);outline:none;transition:border-color .15s}
+.form-group input:focus{border-color:var(--blue)}
+.btn{width:100%;padding:13px;background:var(--blue);color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn:hover{background:var(--blue-d)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--t2)}
+.btn-ghost:hover{background:var(--card);color:var(--t1)}
+.sent-msg{text-align:center;padding:16px;background:#0f2a1a;border:1px solid #166534;border-radius:8px;color:#4ade80;font-size:14px;margin-top:12px}
+.err-msg{text-align:center;padding:12px;background:#1f0a0a;border:1px solid #7f1d1d;border-radius:8px;color:#f87171;font-size:13px;margin-top:12px}
+
+/* TOP NAV */
+#topnav{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.nav-brand{font-size:15px;font-weight:700;letter-spacing:-0.02em}
+.nav-brand span{color:var(--blue)}
+.nav-right{display:flex;align-items:center;gap:10px}
+.plan-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em}
+.plan-door{background:#1e293b;color:var(--t2)}
+.plan-taste{background:#1a2e1a;color:#4ade80}
+.plan-revenue{background:#1a1f3a;color:var(--blue)}
+.plan-command{background:#2e1a3a;color:var(--purple)}
+.nav-company{font-size:13px;color:var(--t2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* SCROLL AREA */
+#scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#scroll::-webkit-scrollbar{display:none}
+.content{padding:16px;padding-bottom:calc(80px + var(--safe-bottom))}
+
+/* BANNER */
+.banner{border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;display:flex;align-items:flex-start;gap:12px}
+.banner-upgrade{background:#1a1f3a;border:1px solid #2563eb44}
+.banner-trial{background:#1a2a1a;border:1px solid #16a34a44}
+.banner-icon{font-size:20px;flex-shrink:0;margin-top:1px}
+.banner-body h4{font-size:14px;font-weight:700;margin-bottom:3px}
+.banner-body p{font-size:12px;color:var(--t2);line-height:1.5}
+.banner-btn{margin-top:10px;display:inline-block;padding:7px 14px;background:var(--blue);color:white;border-radius:6px;font-size:12px;font-weight:600;border:none;cursor:pointer}
+
+/* STATS GRID */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.stat-label{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.stat-value{font-size:26px;font-weight:800;line-height:1;letter-spacing:-0.03em}
+.stat-sub{font-size:11px;color:var(--t3);margin-top:4px}
+.stat-blue{color:var(--blue)}
+.stat-green{color:var(--green)}
+.stat-yellow{color:var(--yellow)}
+.stat-red{color:var(--red)}
+
+/* SECTION */
+.section{margin-bottom:20px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.section-title{font-size:13px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.06em}
+.section-action{font-size:12px;color:var(--blue);font-weight:600;cursor:pointer;background:none;border:none}
+
+/* JOB CARDS */
+.job-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .15s}
+.job-card:hover{border-color:#2e3650}
+.job-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-new{background:var(--blue)}
+.dot-in_progress{background:var(--yellow)}
+.dot-completed{background:var(--green)}
+.dot-pending_upgrade{background:var(--orange)}
+.dot-cancelled{background:var(--t3)}
+.job-address{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job-meta{font-size:11px;color:var(--t2);margin-top:2px}
+.job-badges{display:flex;gap:4px;flex-shrink:0}
+.badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase}
+.badge-handled{background:#1a1f3a;color:var(--blue)}
+.badge-supp{background:#1a2e1a;color:#4ade80}
+.badge-permit{background:#2e1a3a;color:var(--purple)}
+
+/* NEW JOB FORM */
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.form-card h3{font-size:15px;font-weight:700;margin-bottom:14px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-field{margin-bottom:12px}
+.form-field label{display:block;font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.form-field input,.form-field select{width:100%;background:#0d0d14;border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:14px;color:var(--t1);outline:none;transition:border-color .15s}
+.form-field input:focus,.form-field select:focus{border-color:var(--blue)}
+.form-field select option{background:var(--bg2)}
+.btn-create{width:100%;padding:12px;background:var(--green);color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s}
+.btn-create:disabled{opacity:.5;cursor:not-allowed}
+
+/* SUPPLEMENT LIST */
+.supp-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px 14px;margin-bottom:8px}
+.supp-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase}
+.supp-pending{background:#2e1a05;color:var(--orange)}
+.supp-submitted{background:#1a1f3a;color:var(--blue)}
+.supp-approved{background:#0f2a1a;color:var(--green)}
+.supp-denied{background:#1f0a0a;color:var(--red)}
+
+/* BOTTOM NAV */
+#bottomnav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--border);display:flex;padding-bottom:var(--safe-bottom);z-index:40}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 4px;cursor:pointer;border:none;background:none;color:var(--t3);transition:color .15s;gap:3px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.nav-tab.active{color:var(--blue)}
+.nav-tab svg{width:22px;height:22px}
+
+/* TOAST */
+#toast{position:fixed;bottom:calc(80px + var(--safe-bottom) + 8px);left:50%;transform:translateX(-50%) translateY(20px);background:#1e293b;border:1px solid var(--border);color:var(--t1);padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;transition:all .25s;z-index:200;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.success{border-color:#166534;background:#0f2a1a;color:#4ade80}
+#toast.error{border-color:#7f1d1d;background:#1f0a0a;color:#f87171}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:40px 20px;color:var(--t3)}
+.empty h3{font-size:15px;font-weight:600;color:var(--t2);margin-bottom:6px}
+.empty p{font-size:13px}
+
+/* MODAL OVERLAY */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:150;display:flex;align-items:flex-end}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;padding:20px;max-height:80vh;overflow-y:auto}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:14px}
+.modal-close{float:right;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;line-height:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- LOADING -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading dashboard...</p>
+  </div>
+
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen" style="display:none">
+    <div class="login-logo">Roofing <span>OS</span></div>
+    <div class="login-sub">Contractor Dashboard</div>
+    <div class="login-card">
+      <h2>Sign in</h2>
+      <p>Enter your phone number and we'll text you a login link.</p>
+      <div id="login-form">
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="phone-input" placeholder="+1 (555) 000-0000" autocomplete="tel">
+        </div>
+        <button class="btn" id="send-link-btn" onclick="sendMagicLink()">Send Login Link</button>
+      </div>
+      <div id="link-sent" style="display:none">
+        <div class="sent-msg">✓ Login link sent! Check your texts.</div>
+        <div style="margin-top:12px;text-align:center">
+          <button class="btn btn-ghost" onclick="resetLogin()">Try a different number</button>
+        </div>
+      </div>
+      <div id="login-error" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- MAIN APP (hidden until auth) -->
+  <div id="main-app" style="display:none;height:100%;flex-direction:column;display:none">
+    <!-- TOP NAV -->
+    <div id="topnav">
+      <div class="nav-brand">Roofing <span>OS</span></div>
+      <div class="nav-right">
+        <span class="nav-company" id="nav-company"></span>
+        <span class="plan-badge" id="nav-plan-badge"></span>
+      </div>
+    </div>
+
+    <!-- SCROLL CONTENT -->
+    <div id="scroll">
+      <div class="content" id="tab-home">
+
+        <!-- BANNERS -->
+        <div id="banners"></div>
+
+        <!-- STATS -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card"><div class="stat-label">Jobs Today</div><div class="stat-value stat-blue" id="stat-today">—</div></div>
+          <div class="stat-card"><div class="stat-label">This Month</div><div class="stat-value" id="stat-month">—</div></div>
+          <div class="stat-card"><div class="stat-label">Open Supps</div><div class="stat-value stat-yellow" id="stat-supps">—</div></div>
+          <div class="stat-card"><div class="stat-label">Handled</div><div class="stat-value stat-green" id="stat-handled">—</div><div class="stat-sub" id="stat-handled-limit"></div></div>
+        </div>
+
+        <!-- RECENT JOBS -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Recent Jobs</span>
+            <button class="section-action" onclick="switchTab('jobs')">See All</button>
+          </div>
+          <div id="recent-jobs-list"></div>
+        </div>
+
+      </div>
+
+      <!-- JOBS TAB -->
+      <div class="content" id="tab-jobs" style="display:none">
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">All Jobs</span>
+            <button class="section-action" onclick="switchTab('new-job')">+ New Job</button>
+          </div>
+          <div id="jobs-list"></div>
+        </div>
+      </div>
+
+      <!-- NEW JOB TAB -->
+      <div class="content" id="tab-new-job" style="display:none">
+        <div class="form-card">
+          <h3>Create New Job</h3>
+          <div class="form-field">
+            <label>Property Address</label>
+            <input type="text" id="job-address" placeholder="123 Main St, Denver CO 80203">
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Homeowner Name</label>
+              <input type="text" id="job-owner" placeholder="John Smith">
+            </div>
+            <div class="form-field">
+              <label>Homeowner Phone</label>
+              <input type="tel" id="job-phone" placeholder="+1 555 000 0000">
+            </div>
+          </div>
+          <div class="form-field">
+            <label>Insurance Carrier</label>
+            <input type="text" id="job-carrier" placeholder="State Farm, Allstate...">
+          </div>
+          <div class="form-field">
+            <label>Damage Type</label>
+            <select id="job-damage">
+              <option value="">Select damage type</option>
+              <option value="hail">Hail</option>
+              <option value="wind">Wind</option>
+              <option value="storm">Storm (Hail + Wind)</option>
+              <option value="fire">Fire</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Notes</label>
+            <input type="text" id="job-notes" placeholder="Adjuster scheduled, deductible amount, etc.">
+          </div>
+          <button class="btn-create" id="create-job-btn" onclick="createJob()">Create Job</button>
+        </div>
+        <div id="create-job-result"></div>
+      </div>
+
+      <!-- SUPPLEMENTS TAB -->
+      <div class="content" id="tab-supps" style="display:none">
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Supplement Packages</span>
+          </div>
+          <div id="supps-list"></div>
+        </div>
+      </div>
+
+      <!-- TEAM TAB -->
+      <div class="content" id="tab-team" style="display:none">
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Team</span>
+            <button class="section-action" onclick="showAddEmployee()">+ Add</button>
+          </div>
+          <div id="team-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM NAV -->
+    <div id="bottomnav">
+      <button class="nav-tab active" id="tab-btn-home" onclick="switchTab('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Home
+      </button>
+      <button class="nav-tab" id="tab-btn-jobs" onclick="switchTab('jobs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+        Jobs
+      </button>
+      <button class="nav-tab" id="tab-btn-new-job" onclick="switchTab('new-job')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        New Job
+      </button>
+      <button class="nav-tab" id="tab-btn-supps" onclick="switchTab('supps')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Supplements
+      </button>
+      <button class="nav-tab" id="tab-btn-team" onclick="switchTab('team')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Team
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1';
+let SESSION_TOKEN = null;
+let CONTRACTOR = null;
+let TIER = null;
+let currentTab = 'home';
+
+// --- INIT ---
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token') || localStorage.getItem('ros_token');
+
+  if (token) {
+    try {
+      const res = await api('contractor-auth', { action: 'verify_token', token });
+      if (res.ok && res.authenticated) {
+        SESSION_TOKEN = token;
+        CONTRACTOR = res.contractor;
+        TIER = res.tier;
+        localStorage.setItem('ros_token', token);
+        // Clean token from URL without reload
+        history.replaceState({}, '', location.pathname);
+        showDashboard();
+        loadOverview();
+        return;
+      }
+    } catch {}
+    localStorage.removeItem('ros_token');
+  }
+
+  showLogin();
+}
+
+function showLogin() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function showDashboard() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'none';
+  const mainApp = document.getElementById('main-app');
+  mainApp.style.display = 'flex';
+  mainApp.style.flexDirection = 'column';
+
+  // Set nav info
+  document.getElementById('nav-company').textContent = CONTRACTOR?.company_name || '';
+  const plan = CONTRACTOR?.plan || 'door';
+  const badge = document.getElementById('nav-plan-badge');
+  badge.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+  badge.className = `plan-badge plan-${plan}`;
+}
+
+// --- AUTH ---
+async function sendMagicLink() {
+  const phone = document.getElementById('phone-input').value.trim();
+  if (!phone) return;
+
+  const btn = document.getElementById('send-link-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  document.getElementById('login-error').style.display = 'none';
+
+  try {
+    const res = await api('contractor-auth', { action: 'send_magic_link', phone });
+    if (res.ok) {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('link-sent').style.display = 'block';
+    } else {
+      showLoginError(res.error || 'Phone number not found. Contact your account owner.');
+    }
+  } catch {
+    showLoginError('Network error. Please try again.');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Send Login Link';
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.innerHTML = `<div class="err-msg">${msg}</div>`;
+  el.style.display = 'block';
+}
+
+function resetLogin() {
+  document.getElementById('login-form').style.display = 'block';
+  document.getElementById('link-sent').style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('phone-input').value = '';
+}
+
+// --- OVERVIEW ---
+async function loadOverview() {
+  try {
+    const res = await api('contractor-dashboard-api', { action: 'overview', token: SESSION_TOKEN });
+    if (!res.ok) return;
+
+    CONTRACTOR = res.contractor;
+    TIER = res.tier;
+    const s = res.stats;
+
+    document.getElementById('stat-today').textContent = s.jobs_today;
+    document.getElementById('stat-month').textContent = s.jobs_this_month;
+    document.getElementById('stat-supps').textContent = s.open_supplements;
+    document.getElementById('stat-handled').textContent = `${s.fully_handled_used}/${s.fully_handled_limit || '∞'}`;
+    document.getElementById('stat-handled-limit').textContent = TIER?.name || '';
+
+    renderBanners(res.contractor, s);
+    renderRecentJobs(res.recent_jobs || []);
+  } catch {}
+}
+
+function renderBanners(contractor, stats) {
+  const el = document.getElementById('banners');
+  let html = '';
+
+  if (stats.pending_upgrade > 0) {
+    html += `<div class="banner banner-upgrade">
+      <div class="banner-icon">⚡</div>
+      <div class="banner-body">
+        <h4>${stats.pending_upgrade} job${stats.pending_upgrade !== 1 ? 's' : ''} waiting on upgrade</h4>
+        <p>Upgrade to Revenue tier to unlock AI handling and supplements on these jobs.</p>
+        <button class="banner-btn" onclick="showUpgradeInfo()">Upgrade to Revenue →</button>
+      </div>
+    </div>`;
+  }
+
+  const plan = contractor?.plan;
+  if (plan === 'taste' && stats.fully_handled_used >= stats.fully_handled_limit) {
+    html += `<div class="banner banner-upgrade">
+      <div class="banner-icon">🔒</div>
+      <div class="banner-body">
+        <h4>Fully-handled job limit reached</h4>
+        <p>You've used both fully-handled jobs this month. Upgrade to Revenue for unlimited AI handling.</p>
+        <button class="banner-btn" onclick="showUpgradeInfo()">Upgrade — $2,499/mo</button>
+      </div>
+    </div>`;
+  }
+
+  if (contractor?.subscription_status === 'trialing' && contractor?.trial_ends_at) {
+    const daysLeft = Math.ceil((new Date(contractor.trial_ends_at) - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft <= 7) {
+      html += `<div class="banner banner-trial">
+        <div class="banner-icon">⏰</div>
+        <div class="banner-body">
+          <h4>Trial ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}</h4>
+          <p>Your card on file will be charged automatically. Reply HELP to your last SMS with any questions.</p>
+        </div>
+      </div>`;
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+function renderRecentJobs(jobs) {
+  const el = document.getElementById('recent-jobs-list');
+  if (!jobs.length) {
+    el.innerHTML = '<div class="empty"><h3>No jobs yet</h3><p>Create your first job to get started.</p></div>';
+    return;
+  }
+  el.innerHTML = jobs.map(j => jobCardHTML(j)).join('');
+}
+
+function jobCardHTML(j) {
+  const statusDot = `<div class="job-status-dot dot-${j.status || 'new'}"></div>`;
+  const date = j.created_at ? new Date(j.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  const badges = [
+    j.fully_handled ? '<span class="badge badge-handled">AI Handled</span>' : '',
+    j.supplement_included ? '<span class="badge badge-supp">Supp</span>' : '',
+    j.permit_included ? '<span class="badge badge-permit">Permit</span>' : ''
+  ].filter(Boolean).join('');
+
+  return `<div class="job-card" onclick="openJobDetail('${j.id}')">
+    ${statusDot}
+    <div style="flex:1;min-width:0">
+      <div class="job-address">${j.property_address || 'Address unknown'}</div>
+      <div class="job-meta">${j.status?.replace(/_/g,' ')} · ${date}</div>
+    </div>
+    <div class="job-badges">${badges}</div>
+  </div>`;
+}
+
+// --- JOBS TAB ---
+async function loadJobs() {
+  const el = document.getElementById('jobs-list');
+  el.innerHTML = '<div class="empty"><p>Loading...</p></div>';
+  try {
+    const res = await api('contractor-dashboard-api', { action: 'jobs', token: SESSION_TOKEN, limit: 50 });
+    if (!res.ok || !res.jobs.length) {
+      el.innerHTML = '<div class="empty"><h3>No jobs yet</h3><p>Tap New Job to create one.</p></div>';
+      return;
+    }
+    el.innerHTML = res.jobs.map(j => jobCardHTML(j)).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><p>Failed to load jobs.</p></div>';
+  }
+}
+
+// --- SUPPLEMENTS TAB ---
+async function loadSupplements() {
+  const el = document.getElementById('supps-list');
+  el.innerHTML = '<div class="empty"><p>Loading...</p></div>';
+  try {
+    const res = await api('contractor-dashboard-api', { action: 'supplements', token: SESSION_TOKEN });
+    if (!res.ok || !res.supplements.length) {
+      el.innerHTML = '<div class="empty"><h3>No open supplements</h3><p>Supplements appear here when created for a job.</p></div>';
+      return;
+    }
+    el.innerHTML = res.supplements.map(s => {
+      const amount = s.total_amount ? `$${Math.round(s.total_amount).toLocaleString()}` : '—';
+      const date = s.created_at ? new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+      return `<div class="supp-card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span class="supp-status supp-${s.status || 'pending'}">${s.status || 'pending'}</span>
+          <span style="font-size:13px;color:var(--t2)">${date}</span>
+        </div>
+        <div style="font-size:15px;font-weight:700">${amount}</div>
+        ${s.carrier_name ? `<div style="font-size:12px;color:var(--t2);margin-top:3px">${s.carrier_name}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><p>Failed to load supplements.</p></div>';
+  }
+}
+
+// --- TEAM TAB ---
+async function loadTeam() {
+  const el = document.getElementById('team-list');
+  el.innerHTML = '<div class="empty"><p>Loading...</p></div>';
+  try {
+    const res = await api('contractor-dashboard-api', { action: 'employees', token: SESSION_TOKEN });
+    if (!res.ok || !res.employees.length) {
+      el.innerHTML = '<div class="empty"><h3>No team members</h3><p>Add employees to give them dashboard access.</p></div>';
+      return;
+    }
+    el.innerHTML = res.employees.map(e => `
+      <div class="job-card" style="cursor:default">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">
+          ${(e.name || '?').charAt(0).toUpperCase()}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600">${e.name}${e.is_owner ? ' <span style="font-size:11px;color:var(--t2)">(Owner)</span>' : ''}</div>
+          <div style="font-size:12px;color:var(--t2)">${e.role} ${e.phone ? '· ' + e.phone : ''}</div>
+        </div>
+        ${!e.active ? '<span class="badge" style="background:#1f0a0a;color:var(--red)">Inactive</span>' : ''}
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<div class="empty"><p>Failed to load team.</p></div>';
+  }
+}
+
+function showAddEmployee() {
+  toast('Contact support to add team members', 'info');
+}
+
+// --- CREATE JOB ---
+async function createJob() {
+  const address = document.getElementById('job-address').value.trim();
+  const ownerName = document.getElementById('job-owner').value.trim();
+  const ownerPhone = document.getElementById('job-phone').value.trim();
+  const carrier = document.getElementById('job-carrier').value.trim();
+  const damage = document.getElementById('job-damage').value;
+  const notes = document.getElementById('job-notes').value.trim();
+
+  if (!address) { toast('Address is required', 'error'); return; }
+
+  const btn = document.getElementById('create-job-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  try {
+    const res = await api('job-intake', {
+      contractor_id: CONTRACTOR?.id,
+      property_address: address,
+      homeowner_name: ownerName || null,
+      homeowner_phone: ownerPhone || null,
+      insurance_carrier: carrier || null,
+      damage_type: damage || null,
+      notes: notes || null
+    });
+
+    if (res.ok) {
+      const result = document.getElementById('create-job-result');
+      if (res.allowed === false) {
+        result.innerHTML = `<div class="err-msg">
+          <strong>Job limit reached</strong><br>${res.reason}<br>
+          <button class="banner-btn" style="margin-top:8px" onclick="showUpgradeInfo()">Upgrade to continue</button>
+        </div>`;
+      } else {
+        result.innerHTML = `<div class="sent-msg">✓ Job created! ${res.fully_handled ? 'AI handling is active on this job.' : ''}</div>`;
+        // Clear form
+        ['job-address','job-owner','job-phone','job-carrier','job-notes'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('job-damage').value = '';
+        toast('Job created successfully', 'success');
+        loadOverview();
+      }
+    } else {
+      document.getElementById('create-job-result').innerHTML = `<div class="err-msg">${res.error || 'Failed to create job'}</div>`;
+    }
+  } catch {
+    document.getElementById('create-job-result').innerHTML = `<div class="err-msg">Network error. Please try again.</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Create Job';
+}
+
+function openJobDetail(jobId) {
+  toast('Job detail coming soon', 'info');
+}
+
+function showUpgradeInfo() {
+  toast('Reply UPGRADE to your last Roofing OS SMS to upgrade', 'info');
+}
+
+// --- TAB SWITCHING ---
+function switchTab(tab) {
+  const tabs = ['home','jobs','new-job','supps','team'];
+  tabs.forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
+    const btn = document.getElementById('tab-btn-' + t);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  currentTab = tab;
+  document.getElementById('scroll').scrollTop = 0;
+
+  if (tab === 'jobs') loadJobs();
+  if (tab === 'supps') loadSupplements();
+  if (tab === 'team') loadTeam();
+  if (tab === 'home') loadOverview();
+}
+
+// --- API HELPER ---
+async function api(fn, payload) {
+  const res = await fetch(`${API}/${fn}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+// --- TOAST ---
+let toastTimer;
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type === 'success' ? 'success' : type === 'error' ? 'error' : ''}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// Enter on phone input
+document.getElementById('phone-input')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMagicLink();
+});
+
+// Start
+init();
+</script>
+</body>
+</html>

@@ -54,6 +54,16 @@ async function log(type: string, detail: string, outcome = "success", data?: Rec
   });
 }
 
+async function logHeartbeat(fnName: string, status: "ok" | "error", ms: number, errorMsg?: string) {
+  await supabase.from("system_heartbeats").insert({
+    function_name: fnName,
+    status,
+    response_ms: ms,
+    error_message: errorMsg || null,
+    metadata: {}
+  }).catch(() => {});
+}
+
 async function readGitHub(path: string): Promise<string> {
   const res = await fetch(
     `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}?ref=main`,
@@ -878,14 +888,29 @@ Deno.serve(async (_req) => {
     // Build self model first — before observe/think/act (Phase 2B)
     const selfModel = await buildSelfModel(cycleNumber);
 
-    const state = await observe();
-    const decisions = await think(state, selfModel, cycleNumber);
-    const actionsExecuted = await act(decisions, state);
-    await reflect(decisions, cycleNumber, actionsExecuted);
+    let _t: number;
+
+    _t = Date.now();
+    const state = await observe().then(r => { logHeartbeat("nexus-core:observe", "ok", Date.now() - _t); return r; })
+      .catch(e => { logHeartbeat("nexus-core:observe", "error", Date.now() - _t, String(e)); throw e; });
+
+    _t = Date.now();
+    const decisions = await think(state, selfModel, cycleNumber).then(r => { logHeartbeat("nexus-core:think", "ok", Date.now() - _t); return r; })
+      .catch(e => { logHeartbeat("nexus-core:think", "error", Date.now() - _t, String(e)); throw e; });
+
+    _t = Date.now();
+    const actionsExecuted = await act(decisions, state).then(r => { logHeartbeat("nexus-core:act", "ok", Date.now() - _t); return r; })
+      .catch(e => { logHeartbeat("nexus-core:act", "error", Date.now() - _t, String(e)); throw e; });
+
+    _t = Date.now();
+    await reflect(decisions, cycleNumber, actionsExecuted).then(() => logHeartbeat("nexus-core:reflect", "ok", Date.now() - _t))
+      .catch(e => logHeartbeat("nexus-core:reflect", "error", Date.now() - _t, String(e)));
 
     // Resilience check every 5 cycles (Phase 5)
     if (cycleNumber % 5 === 0) {
-      await checkResilience();
+      _t = Date.now();
+      await checkResilience().then(() => logHeartbeat("nexus-core:resilience", "ok", Date.now() - _t))
+        .catch(e => logHeartbeat("nexus-core:resilience", "error", Date.now() - _t, String(e)));
     }
 
     // Every 12th cycle (~6 hours at 30-min intervals), run roofing product monitor

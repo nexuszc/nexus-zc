@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { Link, useNavigate } from 'react-router-dom'
+import RoofingOSSection from '../components/RoofingOSSection'
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
 const SB_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -386,6 +387,10 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Roofing OS section */}
+        <RoofingOSSection />
+
       </div>
     </div>
   )
