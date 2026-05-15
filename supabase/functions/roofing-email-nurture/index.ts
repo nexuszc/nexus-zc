@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x7E]/g, "").trim();
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
@@ -108,7 +108,7 @@ async function sendEmail(to: string, name: string, subject: string, body: string
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from: "Zach Curtis <zach@roofingos.dev>",
+      from: "Zach Curtis <zach@nexuszc.com>",
       to: [to],
       subject,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; line-height: 1.6; color: #333;">${body.replace(/\n/g, "<br>")}</div>`
