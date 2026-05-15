@@ -2324,6 +2324,83 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+    // ── VOICEOVER COMMANDS ────────────────────────────────────────────────────────
+
+    // generate voiceover [id] — on-demand voiceover for a specific content_id
+    if (msgLower.startsWith("generate voiceover ")) {
+      const start = Date.now();
+      try {
+        const contentId = message.slice("generate voiceover ".length).trim();
+        if (!contentId.match(/^[a-f0-9-]{36}$/i)) {
+          return earlyReturn("Format: `generate voiceover [content-id]`");
+        }
+        fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-voiceover-engine`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({ content_id: contentId })
+        });
+        await logUsage(supabase, "generate_voiceover", true, Date.now() - start, channel);
+        return earlyReturn(`🎙️ Generating voiceover for \`${contentId}\`... I'll send the MP3 and upload checklist when ready.`);
+      } catch (err: any) {
+        await logUsage(supabase, "generate_voiceover", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // voiceover queue — approved scripts waiting for voiceover
+    if (msgLower === "voiceover queue") {
+      const start = Date.now();
+      try {
+        const { data: items } = await supabase
+          .from("roofing_content")
+          .select("id, title, type, approved_at")
+          .eq("type", "youtube_script")
+          .eq("status", "approved")
+          .is("mp3_url", null)
+          .order("approved_at", { ascending: true })
+          .limit(15);
+
+        if (!items?.length) {
+          await logUsage(supabase, "voiceover_queue", true, Date.now() - start, channel);
+          return earlyReturn("✅ No scripts waiting for voiceover.");
+        }
+        const lines = items.map((item: any) =>
+          `• ${(item.title || "Untitled").slice(0, 55)}\n  \`generate voiceover ${item.id}\``
+        ).join("\n\n");
+        await logUsage(supabase, "voiceover_queue", true, Date.now() - start, channel);
+        return earlyReturn(`🎙️ *Voiceover Queue (${items.length} pending)*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "voiceover_queue", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // content queue — all pending approvals across types
+    if (msgLower === "content queue") {
+      const start = Date.now();
+      try {
+        const { data: items } = await supabase
+          .from("roofing_content")
+          .select("id, type, title, created_at")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(15);
+
+        if (!items?.length) {
+          await logUsage(supabase, "content_queue", true, Date.now() - start, channel);
+          return earlyReturn("✅ No pending content in queue.");
+        }
+        const lines = items.map((item: any) =>
+          `• [${item.type}] ${(item.title || "Untitled").slice(0, 50)}\n  \`approve content ${item.id}\``
+        ).join("\n\n");
+        await logUsage(supabase, "content_queue", true, Date.now() - start, channel);
+        return earlyReturn(`📋 *Content Queue (${items.length} pending)*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "content_queue", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
     // ── ROOFING HEALTH ────────────────────────────────────────────────────────────
     if (msgLower === 'roofing health' || msgLower === 'product health') {
       const start = Date.now();

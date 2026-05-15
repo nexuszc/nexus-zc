@@ -1437,6 +1437,24 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // CONTENT MACHINE — Voiceover: belt-and-suspenders catch for any approved scripts missing MP3
+    {
+      const { data: pendingVoiceovers } = await supabase
+        .from("roofing_content")
+        .select("id")
+        .eq("type", "youtube_script")
+        .eq("status", "approved")
+        .is("mp3_url", null)
+        .limit(1);
+      if (pendingVoiceovers?.length) {
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-voiceover-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        }).catch(() => {});
+      }
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

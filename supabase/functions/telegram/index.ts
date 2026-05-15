@@ -188,6 +188,15 @@ Deno.serve(async (req) => {
               body: JSON.stringify({ status: "approved", approved_at: new Date().toISOString() })
             });
             await sendTelegramMessage(chatId, `✅ Content approved.`);
+
+            // Auto-fire voiceover for youtube scripts
+            if (row.type === "youtube_script") {
+              fetch(`${SUPABASE_URL}/functions/v1/roofing-voiceover-engine`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ content_id: contentId })
+              }).catch(() => {});
+            }
           }
         } catch (e) {
           await sendTelegramMessage(chatId, `❌ Approve content failed: ${e}`);
@@ -389,6 +398,29 @@ Deno.serve(async (req) => {
           });
         } catch (e) {
           await sendTelegramMessage(chatId, `❌ Community scan failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // uploaded [content_id] — mark script as published after YouTube Studio upload
+    const uploadedMatch = text.match(/^uploaded ([a-f0-9-]{36})$/i);
+    if (uploadedMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        const contentId = uploadedMatch[1];
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/roofing_content?id=eq.${contentId}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ status: "published", published_at: new Date().toISOString() })
+          });
+          await sendTelegramMessage(chatId, `✅ Marked as published.\nGreat content live on YouTube.`);
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Failed to mark published: ${e}`);
         }
       })());
       return new Response("ok");
