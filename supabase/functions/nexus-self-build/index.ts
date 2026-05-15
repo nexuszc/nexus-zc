@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -9,13 +9,64 @@ const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 async function claude(prompt: string, maxTokens = 800): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] })
-  });
-  const data = await res.json();
-  return data.content?.[0]?.text || "";
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!res.ok) {
+      console.error(`[claude] HTTP ${res.status}: ${res.statusText}`);
+      const errorText = await res.text().catch(() => "");
+      console.error(`[claude] Error body (${errorText.length} chars): ${errorText.slice(0, 500)}`);
+      return "";
+    }
+    
+    const responseText = await res.text();
+    console.log(`[claude] Response received: ${responseText.length} chars, status ${res.status}, content-type: ${res.headers.get("content-type")}`);
+    
+    if (!responseText || responseText.length === 0) {
+      console.error("[claude] Empty response body");
+      return "";
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error(`[claude] JSON parse error: ${parseError.message}`);
+      console.error(`[claude] Raw response (first 1000 chars): ${responseText.slice(0, 1000)}`);
+      console.error(`[claude] Raw response (last 500 chars): ${responseText.slice(-500)}`);
+      return "";
+    }
+    
+    if (!data.content || !Array.isArray(data.content) || data.content.length === 0) {
+      console.error(`[claude] Invalid response structure: ${JSON.stringify(data).slice(0, 500)}`);
+      return "";
+    }
+    
+    if (!data.content[0]?.text) {
+      console.error(`[claude] Missing text in content[0]: ${JSON.stringify(data.content[0])}`);
+      return "";
+    }
+    
+    return data.content[0].text;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === "AbortError") {
+      console.error("[claude] Request timeout after 30s");
+    } else {
+      console.error(`[claude] Fetch error: ${error.message}`);
+    }
+    return "";
+  }
 }
 
 async function tg(text: string) {
@@ -64,8 +115,43 @@ What would it include?
 
 Respond in JSON: { consistent: boolean, common_gaps: string[], os_features: string[], market_size_estimate: number, build_recommendation: string }`, 600);
 
+      if (!commonGaps || commonGaps.trim().length === 0) {
+        console.error(`[detectVerticalOpportunities] Empty Claude response for industry: ${industry}`);
+        continue;
+      }
+
       try {
-        const parsed = JSON.parse(commonGaps.replace(/```json|```/g, "").trim());
+        const cleanedResponse = commonGaps.replace(/```json|```/g, "").trim();
+        console.log(`[detectVerticalOpportunities] Parsing Claude response for ${industry}: ${cleanedResponse.length} chars`);
+        
+        if (!cleanedResponse.startsWith("{") && !cleanedResponse.startsWith("[")) {
+          console.error(`[detectVerticalOpportunities] Response does not look like JSON for ${industry}: ${cleanedResponse.slice(0, 200)}`);
+          continue;
+        }
+        
+        let parsed;
+        try {
+          parsed = JSON.parse(cleanedResponse);
+        } catch (parseError) {
+          console.error(`[detectVerticalOpportunities] JSON parse failed for ${industry}: ${parseError.message}`);
+          console.error(`[detectVerticalOpportunities] Attempted to parse: ${cleanedResponse.slice(0, 500)}`);
+          continue;
+        }
+        
+        if (!parsed || typeof parsed !== "object") {
+          console.error(`[detectVerticalOpportunities] Parsed result is not an object for ${industry}: ${typeof parsed}`);
+          continue;
+        }
+        
+        if (!Array.isArray(parsed.common_gaps)) {
+          console.warn(`[detectVerticalOpportunities] common_gaps missing or not array for ${industry}, defaulting to []`);
+          parsed.common_gaps = [];
+        }
+        
+        if (typeof parsed.market_size_estimate !== "number") {
+          console.warn(`[detectVerticalOpportunities] market_size_estimate not a number for ${industry}, defaulting to 0`);
+          parsed.market_size_estimate = 0;
+        }
 
         if (existingProposal) {
           await supabase.from("nexus_vertical_proposals").update({ evidence_count: industryDiags.length, status: "threshold_met", proposed_at: new Date().toISOString(), common_gaps: parsed.common_gaps }).eq("id", existingProposal.id);
@@ -73,8 +159,11 @@ Respond in JSON: { consistent: boolean, common_gaps: string[], os_features: stri
           await supabase.from("nexus_vertical_proposals").insert({ vertical_name: `${industry} OS`, industry, evidence_count: industryDiags.length, common_gaps: parsed.common_gaps, estimated_market_size: parsed.market_size_estimate || 0, estimated_monthly_revenue: estimatedMonthly, status: "threshold_met", proposed_at: new Date().toISOString() });
         }
 
-        alerts.push(`🚀 *Vertical OS Opportunity: ${industry}*\n${industryDiags.length} diagnostics run | Est. $${estimatedMonthly.toLocaleString()}/mo\nGaps: ${(parsed.common_gaps || []).slice(0, 3).join(", ")}\n\nReply \`approve vertical: ${industry}\` to build.`);
-      } catch { /* ignore parse error */ }
+        alerts.push(`🎯 *Vertical OS Opportunity: ${industry}*\n${industryDiags.length} diagnostics run | Est. $${estimatedMonthly.toLocaleString()}/mo\nGaps: ${(parsed.common_gaps || []).slice(0, 3).join(", ")}\n\nReply \`approve vertical: ${industry}\` to build.`);
+      } catch (error) {
+        console.error(`[detectVerticalOpportunities] Unexpected error processing ${industry}: ${error.message}`);
+        console.error(`[detectVerticalOpportunities] Stack: ${error.stack}`);
+      }
     } else {
       // Update or create detecting proposal
       if (existingProposal) {
@@ -104,7 +193,28 @@ async function updateBenchmarks() {
 }
 
 Deno.serve(async (req) => {
-  const body = await req.json().catch(() => ({}));
+  let body;
+  try {
+    const rawBody = await req.text();
+    console.log(`[serve] Request body received: ${rawBody.length} chars`);
+    
+    if (!rawBody || rawBody.trim().length === 0) {
+      console.log("[serve] Empty request body, using empty object");
+      body = {};
+    } else {
+      try {
+        body = JSON.parse(rawBody);
+      } catch (parseError) {
+        console.error(`[serve] Request JSON parse error: ${parseError.message}`);
+        console.error(`[serve] Raw body (first 500 chars): ${rawBody.slice(0, 500)}`);
+        body = {};
+      }
+    }
+  } catch (error) {
+    console.error(`[serve] Error reading request: ${error.message}`);
+    body = {};
+  }
+  
   if (body.test) return Response.json({ ok: true, test: true });
 
   const action = body.action || "detect_verticals";
