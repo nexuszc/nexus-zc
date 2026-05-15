@@ -3170,6 +3170,32 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+    if (msgLower === "aria test call") {
+      const start = Date.now();
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            call_type: "cold_outbound_contractor",
+            contact_phone: "+17203948574",
+            contact_name: "Zach",
+            contact_type: "test",
+            metadata: { contractor_name: "Roofing OS", bypass_gate: true }
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        await logUsage(supabase, "aria_test_call", true, Date.now() - start, channel);
+        if (data.ok) {
+          return earlyReturn(`📞 Test call firing to +17203948574\nCall ID: \`${data.retell_call_id || data.call_id || "initiated"}\``);
+        }
+        return earlyReturn(`❌ Test call failed: ${data.error || data.reason || JSON.stringify(data)}`);
+      } catch (err: any) {
+        await logUsage(supabase, "aria_test_call", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
     if (msgLower === "aria scripts") {
       const start = Date.now();
       try {

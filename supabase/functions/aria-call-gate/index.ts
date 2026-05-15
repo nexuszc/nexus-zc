@@ -238,6 +238,12 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'contact_phone required' }, { status: 400 });
   }
 
+  // TEST NUMBER BYPASS — always allowed, no time or day restrictions
+  const cleanedPhone = contact_phone.replace(/\D/g, '');
+  if (cleanedPhone === '17203948574' || cleanedPhone === '7203948574') {
+    return Response.json({ allowed: true, bypass: 'test_number', recipient_timezone: 'America/Denver', call_type });
+  }
+
   const now = check_time ? new Date(check_time) : new Date();
   const timezone = getTimezone(contact_phone);
   const local = getLocalTimeParts(now, timezone);
