@@ -521,7 +521,7 @@ let mediaRecognition = null;
 function getToken() {
   const parts = window.location.pathname.split('/');
   const last = parts[parts.length - 1];
-  if (last && last.length > 20) return last;
+  if (last && last.length > 5) return last;
   return new URLSearchParams(window.location.search).get('token') || window.location.hash.slice(1);
 }
 
