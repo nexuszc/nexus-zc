@@ -15,8 +15,7 @@ const TELEGRAM_MAX_BYTES = 50 * 1024 * 1024;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// Look up the primary Telegram chat_id from channel_conversations.
-// Falls back to env var, then to the known Zach Curtis chat.
+// Resolve Telegram chat_id: env var first, then DB lookup.
 async function getChatId(): Promise<string> {
   const envId = Deno.env.get("TELEGRAM_CHAT_ID");
   if (envId) return envId;
@@ -27,7 +26,8 @@ async function getChatId(): Promise<string> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  return data?.external_id ?? "6545306511";
+  if (!data?.external_id) throw new Error("TELEGRAM_CHAT_ID not set and not found in DB");
+  return data.external_id;
 }
 
 // ── TEXT CLEANING ───────────────────────────────────────────────────────────────
