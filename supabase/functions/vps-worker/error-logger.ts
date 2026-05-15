@@ -1,144 +1,200 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-interface ErrorLogEntry {
-  timestamp: string;
-  raw_input: string;
-  input_length: number;
-  first_100_chars: string;
-  last_100_chars: string;
-  error_message: string;
-  stack_trace: string | null;
-  cycle_id: string | null;
-  recovery_action: string;
+interface ErrorLogContext {
+  functionName: string;
+  endpoint?: string;
+  method?: string;
+  headers?: Record<string, string>;
+  userId?: string;
+  requestId?: string;
 }
 
-export async function logJSONParseError(
-  rawInput: string | unknown,
+interface JsonParseErrorDetails {
+  rawInput: string;
+  inputSnippet: string;
+  errorMessage: string;
+  errorPosition?: number;
+  stackTrace: string;
+  context: ErrorLogContext;
+  attemptedOperation: string;
+  inputLength: number;
+  inputType: string;
+}
+
+const MAX_SNIPPET_LENGTH = 500;
+const MAX_RAW_INPUT_LENGTH = 10000;
+
+function sanitizeInput(input: unknown): string {
+  if (typeof input === 'string') {
+    return input;
+  }
+  try {
+    return JSON.stringify(input);
+  } catch {
+    return String(input);
+  }
+}
+
+function extractErrorPosition(error: Error): number | undefined {
+  const match = error.message.match(/position (\d+)/i);
+  return match ? parseInt(match[1], 10) : undefined;
+}
+
+function createInputSnippet(input: string, errorPosition?: number): string {
+  if (errorPosition !== undefined && errorPosition > 0) {
+    const start = Math.max(0, errorPosition - 100);
+    const end = Math.min(input.length, errorPosition + 100);
+    const snippet = input.substring(start, end);
+    return `...${snippet}... [Error near position ${errorPosition}]`;
+  }
+  
+  if (input.length <= MAX_SNIPPET_LENGTH) {
+    return input;
+  }
+  
+  return input.substring(0, MAX_SNIPPET_LENGTH) + '... [truncated]';
+}
+
+function categorizeError(error: Error, input: string): string {
+  const message = error.message.toLowerCase();
+  
+  if (message.includes('unexpected token')) {
+    return 'unexpected_token';
+  }
+  if (message.includes('unexpected end')) {
+    return 'unexpected_end';
+  }
+  if (message.includes('unterminated string')) {
+    return 'unterminated_string';
+  }
+  if (input.trim() === '') {
+    return 'empty_input';
+  }
+  if (!input.trim().startsWith('{') && !input.trim().startsWith('[')) {
+    return 'invalid_json_start';
+  }
+  
+  return 'unknown_parse_error';
+}
+
+export async function logJsonParseError(
   error: Error,
-  cycleId: string | null = null,
-  recoveryAction: string = 'skipped'
+  rawInput: unknown,
+  context: ErrorLogContext,
+  attemptedOperation: string
 ): Promise<void> {
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    const inputStr = typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput);
-    const inputLength = inputStr.length;
-    const truncatedInput = inputStr.substring(0, 10240);
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Supabase credentials not configured for error logging');
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const first100 = inputStr.substring(0, 100);
-    const last100 = inputLength > 100 ? inputStr.substring(inputLength - 100) : inputStr;
+    const inputString = sanitizeInput(rawInput);
+    const errorPosition = extractErrorPosition(error);
+    const inputSnippet = createInputSnippet(inputString, errorPosition);
+    const errorCategory = categorizeError(error, inputString);
     
-    const logEntry: ErrorLogEntry = {
-      timestamp: new Date().toISOString(),
-      raw_input: truncatedInput,
-      input_length: inputLength,
-      first_100_chars: first100,
-      last_100_chars: last100,
-      error_message: error.message,
-      stack_trace: error.stack || null,
-      cycle_id: cycleId,
-      recovery_action: recoveryAction,
+    const truncatedInput = inputString.length > MAX_RAW_INPUT_LENGTH
+      ? inputString.substring(0, MAX_RAW_INPUT_LENGTH) + '... [truncated]'
+      : inputString;
+
+    const errorDetails: JsonParseErrorDetails = {
+      rawInput: truncatedInput,
+      inputSnippet,
+      errorMessage: error.message,
+      errorPosition,
+      stackTrace: error.stack || 'No stack trace available',
+      context,
+      attemptedOperation,
+      inputLength: inputString.length,
+      inputType: typeof rawInput,
     };
 
     const { error: insertError } = await supabase
-      .from('vps_cycle_errors')
-      .insert(logEntry);
+      .from('json_parse_errors')
+      .insert({
+        error_category: errorCategory,
+        error_message: error.message,
+        error_position: errorPosition,
+        input_snippet: inputSnippet,
+        raw_input: truncatedInput,
+        input_length: inputString.length,
+        input_type: typeof rawInput,
+        stack_trace: error.stack,
+        function_name: context.functionName,
+        endpoint: context.endpoint,
+        method: context.method,
+        headers: context.headers,
+        user_id: context.userId,
+        request_id: context.requestId,
+        attempted_operation: attemptedOperation,
+        created_at: new Date().toISOString(),
+      });
 
     if (insertError) {
-      console.error('Failed to log error to database:', insertError);
-      console.error('Original error:', logEntry);
+      console.error('Failed to insert error log:', insertError);
     }
-  } catch (loggingError) {
-    console.error('Critical: Error logger failed:', loggingError);
-    console.error('Original error details:', {
+
+    console.error('JSON Parse Error Details:', {
+      category: errorCategory,
       message: error.message,
-      inputLength: typeof rawInput === 'string' ? rawInput.length : 'unknown',
-      cycleId,
+      snippet: inputSnippet,
+      operation: attemptedOperation,
+      context,
     });
+  } catch (loggingError) {
+    console.error('Error in error logging:', loggingError);
+    console.error('Original error:', error);
   }
 }
 
-export function safeJSONParse<T = unknown>(
+export function safeJsonParse<T = unknown>(
   input: string,
-  cycleId: string | null = null,
-  fallbackValue: T | null = null
+  context: ErrorLogContext,
+  operation: string,
+  fallback?: T
 ): T | null {
-  if (!input || typeof input !== 'string') {
-    console.warn('Invalid input for JSON parse: not a string');
-    return fallbackValue;
-  }
-
-  const trimmed = input.trim();
-  if (trimmed.length === 0) {
-    console.warn('Empty string provided to JSON parse');
-    return fallbackValue;
-  }
-
   try {
+    if (!input || typeof input !== 'string') {
+      throw new Error(`Invalid input type: expected string, got ${typeof input}`);
+    }
+    
+    const trimmed = input.trim();
+    if (trimmed === '') {
+      throw new Error('Empty input string');
+    }
+    
     return JSON.parse(trimmed) as T;
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    
-    logJSONParseError(input, err, cycleId, 'returned_fallback').catch(console.error);
-    
-    console.error('JSON parse failed:', {
-      errorMessage: err.message,
-      inputLength: input.length,
-      firstChars: input.substring(0, 50),
-      lastChars: input.length > 50 ? input.substring(input.length - 50) : '',
-    });
-    
-    return fallbackValue;
+    logJsonParseError(error as Error, input, context, operation);
+    return fallback !== undefined ? fallback : null;
   }
 }
 
-export async function validateJSONInput(
+export async function safeJsonParseAsync<T = unknown>(
   input: string,
-  cycleId: string | null = null
-): Promise<{ valid: boolean; data: unknown | null; error: string | null }> {
-  if (!input || typeof input !== 'string') {
-    return {
-      valid: false,
-      data: null,
-      error: 'Input is not a string',
-    };
-  }
-
-  const trimmed = input.trim();
-  if (trimmed.length === 0) {
-    return {
-      valid: false,
-      data: null,
-      error: 'Input is empty',
-    };
-  }
-
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-    return {
-      valid: false,
-      data: null,
-      error: 'Input does not start with valid JSON character',
-    };
-  }
-
+  context: ErrorLogContext,
+  operation: string,
+  fallback?: T
+): Promise<T | null> {
   try {
-    const parsed = JSON.parse(trimmed);
-    return {
-      valid: true,
-      data: parsed,
-      error: null,
-    };
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    await logJSONParseError(input, err, cycleId, 'validation_failed');
+    if (!input || typeof input !== 'string') {
+      throw new Error(`Invalid input type: expected string, got ${typeof input}`);
+    }
     
-    return {
-      valid: false,
-      data: null,
-      error: err.message,
-    };
+    const trimmed = input.trim();
+    if (trimmed === '') {
+      throw new Error('Empty input string');
+    }
+    
+    return JSON.parse(trimmed) as T;
+  } catch (error) {
+    await logJsonParseError(error as Error, input, context, operation);
+    return fallback !== undefined ? fallback : null;
   }
 }
