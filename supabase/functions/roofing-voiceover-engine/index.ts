@@ -147,6 +147,7 @@ async function tgSendAudio(
 }
 
 // Message 2: raw .mp3 file with full YouTube checklist — iPhone saves directly to Files
+// Must use application/octet-stream — audio/mpeg causes Telegram to auto-promote to audio player
 async function tgSendDocument(
   chatId: string,
   audioBuffer: ArrayBuffer,
@@ -156,7 +157,7 @@ async function tgSendDocument(
   try {
     const form = new FormData();
     form.append("chat_id", chatId);
-    form.append("document", new Blob([audioBuffer], { type: "audio/mpeg" }), filename);
+    form.append("document", new Blob([audioBuffer], { type: "application/octet-stream" }), filename);
     form.append("caption", caption.slice(0, 1024));
     form.append("parse_mode", "Markdown");
     const res = await fetch(
