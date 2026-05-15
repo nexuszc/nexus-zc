@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v22
+# Last updated: May 15, 2026 — v8
 
 ---
 
@@ -150,19 +150,21 @@ Then productized and sold to other multi-business operators.
 | `roofing-aria-setup` | See function source for details | Internal |
 | `roofing-aria-storm-trigger` | See function source for details | Internal |
 | `roofing-aria-webhook` | See function source for details | Internal |
+| `roofing-click-tracker` | See function source for details | Internal |
 | `roofing-closer` | See function source for details | Internal |
 | `roofing-community-monitor` | See function source for details | Internal |
 | `roofing-content-engine` | See function source for details | Internal |
 | `roofing-crew-manager` | See function source for details | Internal |
 | `roofing-depreciation-tracker` | See function source for details | Internal |
 | `roofing-email-nurture` | See function source for details | Internal |
-| `roofing-email-tracker` | 1x1 pixel open tracking — increments open_count, fires hot-open alert on 2nd open | GET from email HTML |
-| `roofing-email-webhook` | Resend webhook handler — delivered, opened, bounced, spam_complaint events | Resend webhook POST |
+| `roofing-email-tracker` | See function source for details | Internal |
+| `roofing-email-webhook` | See function source for details | Internal |
 | `roofing-financial` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-outreach` | See function source for details | Internal |
+| `roofing-outreach-sequencer` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
@@ -179,6 +181,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-voiceover-engine` | See function source for details | Internal |
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
+| `roofing-whale-alert` | See function source for details | Internal |
 | `roofing-youtube-engine` | See function source for details | Internal |
 | `roofing-youtube-publisher` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
@@ -381,50 +384,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session (system sweep):**
-- Fixed aria_call_queue processor in nexus-core (was firing 5 min early, limit 20→5, removed blocking stagger)
-- Added cron job #16: aria-call-queue-processor every 10 minutes
-- Fixed roofing-aria-webhook: added call_analyzed handler to write outcome/sentiment/objection back to roofing_aria_calls
-- Fixed roofing-email-nurture: added enroll_all action, pre-written email bodies for steps 1-3, fixed owner_name bug
-- Enrolled 37 prospects into 7-touch email sequence (first emails fire May 16 at 9am MT)
-- Fixed roofing-outreach: next_touch_at NULL bug, system_heartbeats writes, outreachStart timer
-- Fixed system_heartbeats: GRANT INSERT/SELECT/UPDATE/DELETE to service_role (was missing — permission denied)
-- Fixed nexus-core: added awaited logHeartbeat at cycle end (floating promises were dying before response)
-- Added heartbeat writes to nexus-core, roofing-aria-engine, roofing-voiceover-engine, roofing-outreach
-- 32 calls queued in aria_call_queue — will fire Monday when calling window opens
-
-**DONE this session (Spec 3 — email visibility layer):**
-- DB migration: added delivered, delivered_at, open_count, first_opened_at, last_opened_at, bounced, spam to roofing_outreach_log; added last_activity_at to roofing_prospects
-- Deployed roofing-email-tracker: 1x1 pixel GET endpoint, increments open_count, fires hot-open Telegram alert on 2nd open
-- Deployed roofing-email-webhook: Resend webhook handler (delivered, opened, bounced, spam_complaint events)
-- Deployed roofing-outreach-sequencer v6: pixel injection into email HTML, resend_email_id stored, track_opens + track_clicks enabled
-- Created app/src/pages/OutreachDashboard.jsx: 5-section dark theme, 60s auto-refresh, mobile responsive, whale queue with booked/dead buttons, hot opens, nudge buttons, /outreach route
-- Added to chat/index.ts: outreach dashboard, hot opens, nudge [name] commands; updated help
-- BLOCKER: RESEND_API_KEY in Supabase secrets is corrupted/invalid — emails return "API key is invalid" — Zach must reset it
-
-**BLOCKER — RESEND_API_KEY must be reset before any emails send:**
-```
-npx supabase secrets set RESEND_API_KEY=re_xxxxx --project-ref koqpbnxkhgbsnbdjwldx
-```
-Then fire the sequencer to send 37 Touch 1 emails:
-```
-curl -X POST "https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/roofing-outreach-sequencer" \
-  -H "Content-Type: application/json" -d '{"notify_on_complete": true}'
-```
-Then register Resend webhook in Resend dashboard:
-- URL: https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/roofing-email-webhook
-- Events: email.delivered, email.opened, email.bounced, email.spam_complaint
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
-1. Fix RESEND_API_KEY (external — Zach must do this in Resend dashboard)
-2. Fix smoke_test_failed error (simple)
-3. Fix Recurring Smoke Test Failures (medium)
-4. Add Self-Learning Pattern Recognition (medium)
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Improve client health scores - Brian (65) and Denver Pro Roofing (50)
-8. Draft complete operating agreement for Nexus ZC LLC
-9. Build complete Roofing OS go-to-market system with public landing page
+1. Fix smoke_test_failed error (simple)
+2. Fix Recurring Smoke Test Failures (medium)
+3. Draft complete operating agreement for Nexus ZC LLC — single member LLC
+4. Build complete Roofing OS go-to-market system with public landing page
+5. Add Self-Learning Pattern Recognition (medium)
+6. Add memory consolidation ability (medium)
+7. Add Structured Self-Reflection Capability (medium)
+8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
