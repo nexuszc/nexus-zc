@@ -1460,14 +1460,15 @@ Deno.serve(async (_req) => {
 
     const duration = Date.now() - startTime;
 
-    if (actionsExecuted > 0 || state.errors.length > 3 || claudeMdUpdated) {
+    // Only notify for errors, pending approvals, or money events — not routine success
+    const hasCriticalErrors = state.errors.length > 3;
+    const hasPendingApprovals = state.pendingApprovals.length > 0;
+    if (hasCriticalErrors || hasPendingApprovals) {
       await tg(
         `*Nexus Core — Cycle ${cycleNumber}*\n\n` +
-        `${decisions.summary}\n\n` +
-        (actionsExecuted > 0 ? `Actions taken: ${actionsExecuted}\n` : "") +
-        (claudeMdUpdated ? `CLAUDE.md synced to main\n` : "") +
-        (state.pendingApprovals.length > 0 ? `Pending your approval: ${state.pendingApprovals.length}\n` : "") +
-        `_${duration}ms_`
+        (hasCriticalErrors ? `⚠️ ${state.errors.length} errors need attention\n` : "") +
+        (hasPendingApprovals ? `📋 ${state.pendingApprovals.length} item(s) pending approval\n` : "") +
+        `\n${decisions.summary}\n_${duration}ms_`
       );
     }
 

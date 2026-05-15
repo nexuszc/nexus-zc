@@ -4337,6 +4337,137 @@ Be specific. Reference actual numbers.` }],
       );
     }
 
+    // ── HELP ─────────────────────────────────────────────────────────────────────
+    if (msgLower === "help") {
+      return earlyReturn(
+        `*Nexus Commands*\n\n` +
+        `\`system health\` — functions, errors, uptime\n` +
+        `\`aria stats\` — call volume, outcomes, conversion\n` +
+        `\`youtube now\` — generate 8 YouTube scripts\n` +
+        `\`content queue\` — approve pending content\n` +
+        `\`enroll prospects\` — enroll all prospects in email nurture\n` +
+        `\`storm status\` — recent hail events\n` +
+        `\`contractors\` — all active contractors\n` +
+        `\`roofing pipeline\` — sales pipeline overview\n` +
+        `\`marketing report\` — weekly marketing performance\n` +
+        `\`demo portal\` — open homeowner portal demo\n\n` +
+        `That's it. Everything else runs automatically.`
+      );
+    }
+
+    // ── SYSTEM HEALTH ─────────────────────────────────────────────────────────────
+    if (msgLower === "system health") {
+      const start = Date.now();
+      try {
+        const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        const { data: heartbeats } = await supabase
+          .from("system_heartbeats")
+          .select("function_name, status, response_ms, error_message, checked_at")
+          .gte("checked_at", cutoff)
+          .order("checked_at", { ascending: false });
+
+        const byFn: Record<string, { ok: number; err: number; lastMs: number; lastError?: string }> = {};
+        for (const hb of heartbeats || []) {
+          if (!byFn[hb.function_name]) byFn[hb.function_name] = { ok: 0, err: 0, lastMs: 0 };
+          if (hb.status === "ok") byFn[hb.function_name].ok++;
+          else {
+            byFn[hb.function_name].err++;
+            byFn[hb.function_name].lastError = hb.error_message?.slice(0, 80);
+          }
+          byFn[hb.function_name].lastMs = hb.response_ms;
+        }
+
+        const errFns = Object.entries(byFn).filter(([, v]) => v.err > 0);
+        const okFns = Object.entries(byFn).filter(([, v]) => v.err === 0);
+        const totalFns = Object.keys(byFn).length;
+        const overallEmoji = errFns.length === 0 ? "🟢" : errFns.length <= 2 ? "🟡" : "🔴";
+
+        let reply = `${overallEmoji} *System Health (last 2h)*\n\n`;
+        reply += `${okFns.length}/${totalFns} functions clean\n\n`;
+
+        if (errFns.length > 0) {
+          reply += `*Issues:*\n`;
+          reply += errFns.map(([fn, v]) =>
+            `• ${fn}: ${v.err} error(s)${v.lastError ? ` — ${v.lastError}` : ""}`
+          ).join("\n");
+        } else {
+          reply += `All functions reporting healthy.`;
+        }
+
+        await logUsage(supabase, "system_health", true, Date.now() - start, channel);
+        return earlyReturn(reply);
+      } catch (err: any) {
+        await logUsage(supabase, "system_health", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── STORM STATUS ─────────────────────────────────────────────────────────────
+    if (msgLower === "storm status") {
+      const start = Date.now();
+      try {
+        const { data: events } = await supabase
+          .from("hail_events")
+          .select("location, event_date, headline, hail_size, zip_codes, detected_at")
+          .order("detected_at", { ascending: false })
+          .limit(10);
+
+        if (!events?.length) {
+          await logUsage(supabase, "storm_status", true, Date.now() - start, channel);
+          return earlyReturn("⛅ No hail events detected recently.");
+        }
+
+        const lines = events.map((e: any) =>
+          `• ${e.event_date || "Unknown date"} — ${e.location}${e.hail_size ? ` (${e.hail_size}")` : ""}\n  ${(e.headline || "").slice(0, 80)}`
+        ).join("\n\n");
+
+        await logUsage(supabase, "storm_status", true, Date.now() - start, channel);
+        return earlyReturn(`⛈️ *Storm Events (${events.length} detected)*\n\n${lines}`);
+      } catch (err: any) {
+        await logUsage(supabase, "storm_status", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── YOUTUBE NOW ──────────────────────────────────────────────────────────────
+    if (msgLower === "youtube now") {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+      return earlyReturn("🎬 Generating 8 YouTube scripts now — you'll get Telegram messages with approve buttons shortly.");
+    }
+
+    // ── ENROLL PROSPECTS ─────────────────────────────────────────────────────────
+    if (msgLower === "enroll prospects") {
+      const start = Date.now();
+      try {
+        const enrollRes = await fetch(`${SUPABASE_URL}/functions/v1/roofing-email-nurture`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "enroll_all" })
+        }).then(r => r.json()).catch(() => ({ ok: false }));
+
+        await logUsage(supabase, "enroll_prospects", true, Date.now() - start, channel);
+        const enrolled = enrollRes.enrolled || 0;
+        return earlyReturn(`✅ Enrolled ${enrolled} prospect${enrolled !== 1 ? "s" : ""} into 7-touch email nurture sequence.`);
+      } catch (err: any) {
+        await logUsage(supabase, "enroll_prospects", false, Date.now() - start, channel);
+        return earlyReturn(`❌ Failed: ${err.message}`);
+      }
+    }
+
+    // ── MARKETING REPORT ─────────────────────────────────────────────────────────
+    if (msgLower === "marketing report") {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-weekly-marketing-report`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+      return earlyReturn("📊 Generating weekly marketing report — you'll receive it via Telegram shortly.");
+    }
+
     // ================================================================
     // FETCH CONTEXT + CLASSIFY
     // ================================================================
