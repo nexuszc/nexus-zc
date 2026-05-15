@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v11
+# Last updated: May 15, 2026 — v8
 
 ---
 
@@ -147,14 +147,15 @@ Then productized and sold to other multi-business operators.
 | `roofing-aria-engine` | See function source for details | Internal |
 | `roofing-aria-inbound` | See function source for details | Internal |
 | `roofing-aria-learning` | See function source for details | Internal |
+| `roofing-aria-setup` | See function source for details | Internal |
 | `roofing-aria-storm-trigger` | See function source for details | Internal |
 | `roofing-aria-webhook` | See function source for details | Internal |
 | `roofing-closer` | See function source for details | Internal |
-| `roofing-community-monitor` | Reddit/FB monitoring, relevance scoring (>=7), inline approval buttons | Every 2h cron (job 16) + nexus-core every 4 cycles |
-| `roofing-content-engine` | Daily content: storm blog posts, FB drafts, YouTube script, carrier intel | Daily 7am MT cron (job 15) |
+| `roofing-community-monitor` | See function source for details | Internal |
+| `roofing-content-engine` | See function source for details | Internal |
 | `roofing-crew-manager` | See function source for details | Internal |
 | `roofing-depreciation-tracker` | See function source for details | Internal |
-| `roofing-email-nurture` | 7-touch email sequence: enroll + send + stats; Claude-personalized via Resend | nexus-core every cycle |
+| `roofing-email-nurture` | See function source for details | Internal |
 | `roofing-financial` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
@@ -173,11 +174,11 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-generator` | See function source for details | Internal |
 | `roofing-supplement-rebuttal` | See function source for details | Internal |
 | `roofing-supplement-tracker` | See function source for details | Internal |
+| `roofing-voiceover-engine` | See function source for details | Internal |
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
-| `roofing-youtube-engine` | 8 weekly YouTube scripts + TikTok companions; Telegram inline approvals | Monday 8am MT via nexus-core |
-| `roofing-youtube-publisher` | Approved scripts → ElevenLabs voiceover → Supabase Storage → blog post on GitHub → Telegram delivery (MP3 + description + upload steps) | On demand: `publish youtube [id]` or batch |
-| `roofing-voiceover-engine` | Approved youtube_scripts → ElevenLabs TTS (eleven_turbo_v2) → roofing-content Storage bucket → Telegram upload checklist; auto-fires on `approve content`; nexus-core belt-and-suspenders every cycle | Auto on approve + on demand: `generate voiceover [id]` |
+| `roofing-youtube-engine` | See function source for details | Internal |
+| `roofing-youtube-publisher` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `stripe-webhook` | See function source for details | Internal |
@@ -379,28 +380,17 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
 **DONE this session:**
-- Roofing OS Autonomous Marketing Machine v1 (6 functions, 4 tables, 3 pg_cron jobs)
-- Roofing OS Content Machine v1 (roofing-youtube-engine, roofing-email-nurture, roofing-community-monitor v2, nexus-core wiring, 5 Telegram commands, migration 017)
-- Roofing OS YouTube Publisher v1 (ElevenLabs voiceover, Supabase Storage voiceovers bucket, blog post to GitHub, Telegram delivery with inline MP3, migration 018)
-- Roofing OS Voiceover Engine v1 (roofing-voiceover-engine, roofing-content bucket, auto-fires on approve content, belt-and-suspenders in nexus-core, `uploaded [id]` published flow, migration 019)
+- (nothing yet this session)
 
 **NEXT:**
-1. Set `ELEVENLABS_VOICE_ID` to a voice from your ElevenLabs account (library voices require paid plan — use a cloned or personal voice ID)
-2. Set `ELEVENLABS_API_KEY` in Supabase secrets if not already set
-2. Fix smoke_test_failed error (simple)
-3. Fix Recurring Smoke Test Failures (medium)
-4. Add Self-Learning Pattern Recognition (medium)
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Improve client health for Denver Pro Roofing (health: 50)
-8. Improve client health for Brian (health: 65)
-9. Draft complete operating agreement for Nexus ZC LLC
-
-**POST-DEPLOY ACTIONS (do these in Telegram):**
-- `enroll prospects` — enroll all prospects with email into 7-touch nurture
-- `youtube now` — generate all 8 YouTube scripts for review
-- After approving scripts: voiceover auto-fires — checklist appears in Telegram
-- After uploading to YouTube Studio: `uploaded [content_id]` — marks published
+1. Fix smoke_test_failed error (simple)
+2. Fix Recurring Smoke Test Failures (medium)
+3. Add Self-Learning Pattern Recognition (medium)
+4. Add memory consolidation ability (medium)
+5. Add Structured Self-Reflection Capability (medium)
+6. Improve client health scores - Brian (65) and Denver Pro Roofing (50)
+7. Draft complete operating agreement for Nexus ZC LLC
+8. Build complete Roofing OS go-to-market system with public landing page
 
 ---
 
