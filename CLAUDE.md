@@ -379,8 +379,17 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE this session (system sweep):**
+- Fixed aria_call_queue processor in nexus-core (was firing 5 min early, limit 20→5, removed blocking stagger)
+- Added cron job #16: aria-call-queue-processor every 10 minutes
+- Fixed roofing-aria-webhook: added call_analyzed handler to write outcome/sentiment/objection back to roofing_aria_calls
+- Fixed roofing-email-nurture: added enroll_all action, pre-written email bodies for steps 1-3, fixed owner_name bug
+- Enrolled 37 prospects into 7-touch email sequence (first emails fire May 16 at 9am MT)
+- Fixed roofing-outreach: next_touch_at NULL bug, system_heartbeats writes, outreachStart timer
+- Fixed system_heartbeats: GRANT INSERT/SELECT/UPDATE/DELETE to service_role (was missing — permission denied)
+- Fixed nexus-core: added awaited logHeartbeat at cycle end (floating promises were dying before response)
+- Added heartbeat writes to nexus-core, roofing-aria-engine, roofing-voiceover-engine, roofing-outreach
+- 32 calls queued in aria_call_queue — will fire Monday when calling window opens
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
