@@ -55,13 +55,15 @@ async function log(type: string, detail: string, outcome = "success", data?: Rec
 }
 
 async function logHeartbeat(fnName: string, status: "ok" | "error", ms: number, errorMsg?: string) {
-  await supabase.from("system_heartbeats").insert({
-    function_name: fnName,
-    status,
-    response_ms: ms,
-    error_message: errorMsg || null,
-    metadata: {}
-  }).catch(() => {});
+  try {
+    await supabase.from("system_heartbeats").insert({
+      function_name: fnName,
+      status,
+      response_ms: ms,
+      error_message: errorMsg || null,
+      metadata: {}
+    });
+  } catch { /* ignore */ }
 }
 
 async function readGitHub(path: string): Promise<string> {
@@ -973,7 +975,7 @@ Deno.serve(async (_req) => {
         });
         const data = await res.json();
         const articles = data.news || [];
-        const newHail = articles.filter((a: any) =>
+        const newHail = articles.filter((a: { title?: string }) =>
           a.title?.toLowerCase().includes("hail") && a.title?.toLowerCase().includes("colorado")
         );
         for (const article of newHail.slice(0, 3)) {
@@ -1022,11 +1024,11 @@ Deno.serve(async (_req) => {
           .not("owner_phone", "is", null);
 
         for (const lead of starterLeads || []) {
-          const calls = (lead as any).voice_calls || [];
+          const calls = (lead as { voice_calls?: unknown[] }).voice_calls || [];
           if (calls.length >= 4) continue;
 
-          const lastCall = (calls as any[])
-            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+          const lastCall = (calls as { created_at: string }[])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
           const daysSinceLastCall = lastCall
             ? (Date.now() - new Date(lastCall.created_at).getTime()) / (1000 * 60 * 60 * 24)
             : 999;
@@ -1039,7 +1041,7 @@ Deno.serve(async (_req) => {
             fetch(`${SUPABASE_URL}/functions/v1/nexus-voice-engine`, {
               method: "POST",
               headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ diagnostic_id: (lead as any).id, call_number: calls.length + 1 })
+              body: JSON.stringify({ diagnostic_id: (lead as { id: string }).id, call_number: calls.length + 1 })
             }).catch(() => {});
           }
         }
