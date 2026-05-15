@@ -1,248 +1,212 @@
-export interface ParseResult<T = any> {
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+
+const MAX_LOG_LENGTH = 5000;
+
+export interface JsonParseResult<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
-  recovered?: boolean;
-  attemptedFixes?: string[];
+  rawInput?: string;
 }
 
-export function safeJsonParse<T = any>(
+export function safeJsonParse<T = unknown>(
   input: string | null | undefined,
-  options: { 
-    allowPartial?: boolean;
-    maxDepth?: number;
-    defaultValue?: T;
-  } = {}
-): ParseResult<T> {
-  const attemptedFixes: string[] = [];
+  context?: string
+): JsonParseResult<T> {
+  const logContext = context ? `[${context}]` : "";
 
-  if (input === null || input === undefined || input === '') {
+  if (input === null || input === undefined) {
+    const error = `${logContext} Input is null or undefined`;
+    console.error(error);
     return {
       success: false,
-      error: 'Empty or null input',
-      data: options.defaultValue,
-      attemptedFixes
+      error,
+      rawInput: String(input),
     };
   }
 
-  if (typeof input !== 'string') {
-    try {
-      return {
-        success: true,
-        data: input as T,
-        attemptedFixes
-      };
-    } catch {
-      return {
-        success: false,
-        error: 'Invalid input type',
-        data: options.defaultValue,
-        attemptedFixes
-      };
-    }
+  if (typeof input !== "string") {
+    const error = `${logContext} Input is not a string: ${typeof input}`;
+    console.error(error);
+    return {
+      success: false,
+      error,
+      rawInput: String(input).substring(0, MAX_LOG_LENGTH),
+    };
   }
 
-  const strategies = [
-    { name: 'direct', fn: (s: string) => s },
-    { name: 'trim', fn: (s: string) => s.trim() },
-    { name: 'removeTrailingComma', fn: removeTrailingCommas },
-    { name: 'completeStructure', fn: completeJsonStructure },
-    { name: 'extractFragment', fn: extractValidJsonFragment },
-    { name: 'fixQuotes', fn: fixQuotes },
-    { name: 'removeControlChars', fn: removeControlCharacters },
-    { name: 'combined', fn: (s: string) => completeJsonStructure(removeTrailingCommas(s.trim())) }
-  ];
+  const trimmedInput = input.trim();
 
-  for (const strategy of strategies) {
-    try {
-      const processed = strategy.fn(input);
-      const parsed = JSON.parse(processed);
-      
-      return {
-        success: true,
-        data: parsed as T,
-        recovered: strategy.name !== 'direct',
-        attemptedFixes: strategy.name !== 'direct' ? [strategy.name] : []
-      };
-    } catch (e) {
-      attemptedFixes.push(strategy.name);
-      continue;
-    }
+  if (trimmedInput.length === 0) {
+    const error = `${logContext} Input is empty string`;
+    console.error(error);
+    return {
+      success: false,
+      error,
+      rawInput: "",
+    };
   }
 
-  if (options.allowPartial) {
-    const partial = extractPartialJson(input);
-    if (partial) {
-      attemptedFixes.push('partial');
-      return {
-        success: true,
-        data: partial as T,
-        recovered: true,
-        attemptedFixes
-      };
-    }
-  }
-
-  return {
-    success: false,
-    error: `JSON parse failed after ${attemptedFixes.length} attempts`,
-    data: options.defaultValue,
-    attemptedFixes
-  };
-}
-
-function removeTrailingCommas(json: string): string {
-  return json
-    .replace(/,(\s*[}\]])/g, '$1')
-    .replace(/,(\s*$)/g, '');
-}
-
-function completeJsonStructure(json: string): string {
-  let str = json.trim();
-  const stack: string[] = [];
-  let inString = false;
-  let escapeNext = false;
-
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-
-    if (escapeNext) {
-      escapeNext = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escapeNext = true;
-      continue;
-    }
-
-    if (char === '"') {
-      inString = !inString;
-      continue;
-    }
-
-    if (inString) continue;
-
-    if (char === '{' || char === '[') {
-      stack.push(char);
-    } else if (char === '}') {
-      if (stack[stack.length - 1] === '{') {
-        stack.pop();
-      }
-    } else if (char === ']') {
-      if (stack[stack.length - 1] === '[') {
-        stack.pop();
-      }
-    }
-  }
-
-  if (inString) {
-    str += '"';
-  }
-
-  while (stack.length > 0) {
-    const open = stack.pop();
-    str += open === '{' ? '}' : ']';
-  }
-
-  return str;
-}
-
-function extractValidJsonFragment(json: string): string {
-  const objectMatch = json.match(/\{[\s\S]*\}/);
-  if (objectMatch) {
-    return completeJsonStructure(objectMatch[0]);
-  }
-
-  const arrayMatch = json.match(/\[[\s\S]*\]/);
-  if (arrayMatch) {
-    return completeJsonStructure(arrayMatch[0]);
-  }
-
-  return json;
-}
-
-function fixQuotes(json: string): string {
-  return json
-    .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":')
-    .replace(/:\s*'([^']*)'/g, ': "$1"');
-}
-
-function removeControlCharacters(json: string): string {
-  return json.replace(/[\x00-\x1F\x7F]/g, '');
-}
-
-function extractPartialJson(json: string): any | null {
-  const pairs: Array<{ key: string; value: any }> = [];
-  const keyValuePattern = /"([^"]+)"\s*:\s*("(?:[^"\\]|\\.)*"|[^,}\]]+)/g;
-  
-  let match;
-  while ((match = keyValuePattern.exec(json)) !== null) {
-    try {
-      const key = match[1];
-      let value = match[2].trim();
-      
-      if (value.startsWith('"') && value.endsWith('"')) {
-        value = value.slice(1, -1);
-      } else if (value === 'true') {
-        value = true;
-      } else if (value === 'false') {
-        value = false;
-      } else if (value === 'null') {
-        value = null;
-      } else if (!isNaN(Number(value))) {
-        value = Number(value);
-      }
-      
-      pairs.push({ key, value });
-    } catch {
-      continue;
-    }
-  }
-
-  if (pairs.length > 0) {
-    const result: Record<string, any> = {};
-    pairs.forEach(({ key, value }) => {
-      result[key] = value;
+  if (!isCompleteJson(trimmedInput)) {
+    const error = `${logContext} Incomplete JSON detected`;
+    console.error(error, {
+      length: trimmedInput.length,
+      start: trimmedInput.substring(0, 100),
+      end: trimmedInput.substring(Math.max(0, trimmedInput.length - 100)),
     });
-    return result;
+    return {
+      success: false,
+      error,
+      rawInput: trimmedInput.substring(0, MAX_LOG_LENGTH),
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmedInput) as T;
+    return {
+      success: true,
+      data: parsed,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const fullError = `${logContext} JSON parse error: ${errorMessage}`;
+
+    console.error(fullError, {
+      inputLength: trimmedInput.length,
+      inputStart: trimmedInput.substring(0, 200),
+      inputEnd: trimmedInput.substring(Math.max(0, trimmedInput.length - 200)),
+      rawInputTruncated: trimmedInput.substring(0, MAX_LOG_LENGTH),
+    });
+
+    return {
+      success: false,
+      error: fullError,
+      rawInput: trimmedInput.substring(0, MAX_LOG_LENGTH),
+    };
+  }
+}
+
+function isCompleteJson(input: string): boolean {
+  const trimmed = input.trim();
+
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  const firstChar = trimmed[0];
+  const lastChar = trimmed[trimmed.length - 1];
+
+  if (firstChar === "{" && lastChar !== "}") {
+    return false;
+  }
+
+  if (firstChar === "[" && lastChar !== "]") {
+    return false;
+  }
+
+  if (firstChar === '"' && lastChar !== '"') {
+    return false;
+  }
+
+  if (firstChar === "{" || firstChar === "[") {
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = 0; i < trimmed.length; i++) {
+      const char = trimmed[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === "{" || char === "[") {
+          depth++;
+        } else if (char === "}" || char === "]") {
+          depth--;
+        }
+      }
+    }
+
+    return depth === 0 && !inString;
+  }
+
+  return true;
+}
+
+export async function logJsonParseError(
+  supabaseUrl: string,
+  supabaseKey: string,
+  errorDetails: {
+    context: string;
+    input: string;
+    error: string;
+    nexusId?: string;
+    cycleNumber?: number;
+  }
+): Promise<void> {
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    await supabase.from("json_parse_errors").insert({
+      context: errorDetails.context,
+      raw_input: errorDetails.input.substring(0, MAX_LOG_LENGTH),
+      error_message: errorDetails.error,
+      nexus_id: errorDetails.nexusId,
+      cycle_number: errorDetails.cycleNumber,
+      created_at: new Date().toISOString(),
+    });
+  } catch (logError) {
+    console.error("Failed to log JSON parse error to database:", logError);
+  }
+}
+
+export function extractJsonFromText(text: string): string | null {
+  const trimmed = text.trim();
+
+  const jsonMatch = trimmed.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if (jsonMatch) {
+    return jsonMatch[0];
+  }
+
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    return codeBlockMatch[1].trim();
   }
 
   return null;
 }
 
-export function validateJson(input: string): { valid: boolean; error?: string } {
-  try {
-    JSON.parse(input);
-    return { valid: true };
-  } catch (e) {
-    return {
-      valid: false,
-      error: e instanceof Error ? e.message : 'Unknown JSON error'
-    };
-  }
-}
-
-export function mergePartialJson(existing: any, partial: string): ParseResult {
-  const parseResult = safeJsonParse(partial, { allowPartial: true });
-  
-  if (!parseResult.success) {
-    return parseResult;
+export function validateJsonStructure(
+  data: unknown,
+  requiredFields: string[]
+): { valid: boolean; missingFields: string[] } {
+  if (!data || typeof data !== "object") {
+    return { valid: false, missingFields: requiredFields };
   }
 
-  try {
-    const merged = { ...existing, ...parseResult.data };
-    return {
-      success: true,
-      data: merged,
-      recovered: parseResult.recovered,
-      attemptedFixes: parseResult.attemptedFixes
-    };
-  } catch (e) {
-    return {
-      success: false,
-      error: 'Failed to merge partial JSON',
-      attemptedFixes: parseResult.attemptedFixes
-    };
+  const missingFields: string[] = [];
+
+  for (const field of requiredFields) {
+    if (!(field in (data as Record<string, unknown>))) {
+      missingFields.push(field);
+    }
   }
+
+  return {
+    valid: missingFields.length === 0,
+    missingFields,
+  };
 }
