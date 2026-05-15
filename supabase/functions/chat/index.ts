@@ -2235,7 +2235,7 @@ Be specific. Reference actual numbers.` }],
     // ── ROOFING OUTREACH NOW ──────────────────────────────────────────────────────
     if (msgLower === 'roofing outreach now' || msgLower === 'send roofing emails') {
       const start = Date.now();
-      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-outreach`, {
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-outreach-sequencer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
         body: JSON.stringify({})

@@ -1,3 +1,8 @@
+// roofing-aria-webhook v2
+// Handles Retell AI webhooks: call_started, agent_spoke, user_spoke, call_ended, call_analyzed, call_failed
+// v2: call_analyzed now falls back to Claude analysis when Retell custom_analysis_data is empty
+//     Added /recover endpoint to fix all stale null-outcome calls
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -7,7 +12,7 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
 const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
-const FROM_NUMBER = Deno.env.get("RETELL_PHONE_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+const FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || Deno.env.get("RETELL_PHONE_NUMBER") || "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -20,7 +25,7 @@ async function tg(text: string) {
 }
 
 async function sendSMS(to: string, body: string) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !FROM_NUMBER) return;
   await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
     method: "POST",
     headers: {
@@ -39,7 +44,6 @@ async function analyzeCallOutcome(
     return {
       outcome: callRecord.voicemail ? "voicemail" : "no_answer",
       appointment_booked: false,
-      revenue: 0,
       next_action: "Retry call tomorrow"
     };
   }
@@ -136,10 +140,37 @@ async function triggerPostCallActions(
 }
 
 Deno.serve(async (req) => {
-  const event = await req.json().catch(() => ({}));
-  if (!event.event) return Response.json({ ok: true });
+  const body = await req.json().catch(() => ({}));
 
-  const retellCallId = event.call?.call_id;
+  // Recovery endpoint: fix all stale null-outcome calls
+  if (body.recover) {
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const { data: staleCalls } = await supabase
+      .from("roofing_aria_calls")
+      .select("*")
+      .is("outcome", null)
+      .lt("created_at", cutoff);
+
+    let recovered = 0;
+    for (const call of staleCalls || []) {
+      try {
+        const transcript = call.transcript || "";
+        const analysis = await analyzeCallOutcome(transcript, call);
+        const outcome = analysis.outcome as string || (call.voicemail ? "voicemail" : "no_answer");
+        await supabase.from("roofing_aria_calls").update({
+          outcome,
+          appointment_booked: !!(analysis.appointment_booked),
+          ended_at: call.ended_at || new Date().toISOString(),
+        }).eq("id", call.id);
+        recovered++;
+      } catch { /* skip this one */ }
+    }
+    return Response.json({ ok: true, recovered, stale_found: (staleCalls || []).length });
+  }
+
+  if (!body.event) return Response.json({ ok: true });
+
+  const retellCallId = body.call?.call_id;
   if (!retellCallId) return Response.json({ ok: true });
 
   const { data: callRecord } = await supabase
@@ -150,7 +181,7 @@ Deno.serve(async (req) => {
 
   if (!callRecord) return Response.json({ ok: true });
 
-  switch (event.event) {
+  switch (body.event) {
     case "call_started":
       await supabase.from("roofing_aria_calls")
         .update({ answered: true })
@@ -158,7 +189,7 @@ Deno.serve(async (req) => {
       break;
 
     case "agent_spoke": {
-      const content = (event.transcript_object?.content || "").toLowerCase();
+      const content = (body.transcript_object?.content || "").toLowerCase();
       if ((content.includes("texting you") || content.includes("sending you a link")) && !callRecord.sms_sent_during_call) {
         if (callRecord.job_id) {
           const { data: session } = await supabase
@@ -180,7 +211,7 @@ Deno.serve(async (req) => {
     }
 
     case "user_spoke": {
-      const content = (event.transcript_object?.content || "").toLowerCase();
+      const content = (body.transcript_object?.content || "").toLowerCase();
       const buySignals = ["sounds good", "yes", "okay", "sure", "let's do it", "schedule", "tomorrow", "morning", "afternoon", "what time", "how much", "when can you"];
       const detected = buySignals.filter(s => content.includes(s));
       if (detected.length > 0) {
@@ -197,27 +228,27 @@ Deno.serve(async (req) => {
     }
 
     case "call_ended": {
-      const transcript = event.call?.transcript || "";
-      const duration = (event.call?.end_timestamp && event.call?.start_timestamp)
-        ? Math.round((event.call.end_timestamp - event.call.start_timestamp) / 1000)
+      const transcript = body.call?.transcript || "";
+      const duration = (body.call?.end_timestamp && body.call?.start_timestamp)
+        ? Math.round((body.call.end_timestamp - body.call.start_timestamp) / 1000)
         : null;
-      const isVoicemail = event.call?.disconnection_reason === "voicemail";
+      const isVoicemail = body.call?.disconnection_reason === "voicemail";
 
       const analysis = await analyzeCallOutcome(transcript, callRecord);
+      const outcome = isVoicemail ? "voicemail" : (analysis.outcome as string || "no_answer");
 
       await supabase.from("roofing_aria_calls").update({
         ended_at: new Date().toISOString(),
         duration_seconds: duration,
         transcript,
-        recording_url: event.call?.recording_url,
+        recording_url: body.call?.recording_url,
         voicemail: isVoicemail,
-        outcome: isVoicemail ? "voicemail" : analysis.outcome,
+        outcome,
         appointment_booked: !!(analysis.appointment_booked)
       }).eq("id", callRecord.id);
 
-      await triggerPostCallActions(isVoicemail ? { ...analysis, outcome: "voicemail" } : analysis, callRecord);
+      await triggerPostCallActions({ ...analysis, outcome }, callRecord);
 
-      // Update script performance
       if (callRecord.script_used) {
         const { data: scriptRec } = await supabase
           .from("roofing_aria_scripts")
@@ -226,7 +257,7 @@ Deno.serve(async (req) => {
           .eq("call_type", callRecord.call_type)
           .maybeSingle();
         if (scriptRec) {
-          const converted = ["appointment_booked", "portal_sent", "interested"].includes(analysis.outcome as string);
+          const converted = ["appointment_booked", "portal_sent", "interested"].includes(outcome);
           const newUsed = (scriptRec.times_used || 0) + 1;
           const newConverted = (scriptRec.times_converted || 0) + (converted ? 1 : 0);
           await supabase.from("roofing_aria_scripts").update({
@@ -240,14 +271,32 @@ Deno.serve(async (req) => {
     }
 
     case "call_analyzed": {
-      const analysisData = (event.call?.call_analysis?.custom_analysis_data || {}) as Record<string, unknown>;
+      const analysisData = (body.call?.call_analysis?.custom_analysis_data || {}) as Record<string, unknown>;
       const updatePayload: Record<string, unknown> = {};
+
       if (analysisData.call_outcome) updatePayload.outcome = analysisData.call_outcome;
       if (typeof analysisData.sentiment_score === "number") updatePayload.sentiment_score = analysisData.sentiment_score;
       if (analysisData.primary_objection) updatePayload.primary_objection = analysisData.primary_objection;
       if (analysisData.appointment_time) updatePayload.appointment_time = analysisData.appointment_time;
+
+      // If Retell provided no custom analysis and outcome is still null, run Claude analysis as fallback
+      if (!updatePayload.outcome && !callRecord.outcome) {
+        const transcript = body.call?.transcript || callRecord.transcript || "";
+        const analysis = await analyzeCallOutcome(transcript, callRecord);
+        updatePayload.outcome = (analysis.outcome as string) || (callRecord.voicemail ? "voicemail" : "no_answer");
+        if (analysis.appointment_booked) updatePayload.appointment_booked = true;
+      }
+
+      // Final safety: if still no outcome, set default
+      if (!updatePayload.outcome && !callRecord.outcome) {
+        updatePayload.outcome = callRecord.voicemail ? "voicemail" : "no_answer";
+      }
+
       if (Object.keys(updatePayload).length > 0) {
         await supabase.from("roofing_aria_calls").update(updatePayload).eq("id", callRecord.id);
+        if (updatePayload.outcome) {
+          await triggerPostCallActions(updatePayload, callRecord);
+        }
       }
       break;
     }
