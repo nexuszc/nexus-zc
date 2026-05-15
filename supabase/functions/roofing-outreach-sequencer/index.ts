@@ -1,4 +1,4 @@
-// roofing-outreach-sequencer v2
+// roofing-outreach-sequencer v6
 // 3-touch lead gen sequence: email → voice drop + SMS → email
 // Runs daily at 9am MT (14:00 UTC)
 // Touch 1 (day 0): email — "Your homeowners are calling too much"
@@ -19,6 +19,7 @@ const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const CLICK_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-click-tracker`;
+const EMAIL_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-email-tracker`;
 
 function trackerUrl(prospectId: string, touch: number, dest: "portal" | "website"): string {
   return `${CLICK_TRACKER_BASE}?pid=${prospectId}&touch=${touch}&dest=${dest}`;
@@ -34,6 +35,10 @@ async function tg(text: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: "Markdown" }),
   }).catch(() => {});
+}
+
+function pixelHtml(logId: string): string {
+  return `<img src="${EMAIL_TRACKER_BASE}?lid=${logId}" width="1" height="1" style="display:block;width:1px;height:1px;" alt="" />`;
 }
 
 async function sendEmail(
@@ -54,6 +59,8 @@ async function sendEmail(
         to: [to],
         subject,
         html,
+        track_opens: true,
+        track_clicks: true,
       }),
     });
     const data = await res.json();
@@ -174,19 +181,23 @@ async function logTouch(
   touchType: string,
   touchNumber: number,
   subject: string | null,
-  body: string | null
-): Promise<void> {
+  body: string | null,
+  resendEmailId?: string | null
+): Promise<string | null> {
   try {
-    await supabase.from("roofing_outreach_log").insert({
+    const { data } = await supabase.from("roofing_outreach_log").insert({
       prospect_id: prospectId,
       touch_type: touchType,
       touch_number: touchNumber,
       direction: "outbound",
       subject: subject || "",
       body: body || "",
-    });
+      resend_email_id: resendEmailId || null,
+    }).select("id").single();
+    return data?.id || null;
   } catch (e) {
     console.error("logTouch error:", e);
+    return null;
   }
 }
 
@@ -285,14 +296,20 @@ Deno.serve(async (req) => {
 
         // Touch 1 — day 0 email
         if (daysSinceStart >= 0 && day === 0) {
-          const { subject, html } = emailTouch1(prospect);
+          // Pre-create log to get ID for pixel
+          const logId = await logTouch(prospect.id as string, "email_1", 1, null, "Touch 1 email");
+          const { subject, html: baseHtml } = emailTouch1(prospect);
+          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
           const emailId = await sendEmail(prospect.email as string, subject, html);
           if (emailId) {
+            // Backfill resend_email_id and subject
+            if (logId) {
+              await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
+            }
             await supabase.from("roofing_prospects").update({
               sequence_day: 1,
               last_touch_at: nowIso,
             }).eq("id", prospect.id);
-            await logTouch(prospect.id as string, "email_1", 1, subject, "Touch 1 email");
             emailsSent++;
           } else {
             errors++;
@@ -319,15 +336,19 @@ Deno.serve(async (req) => {
 
         // Touch 3 — day 4 final email
         if (daysSinceStart >= 4 && day === 2) {
-          const { subject, html } = emailTouch3(prospect);
+          const logId = await logTouch(prospect.id as string, "email_3", 3, null, "Touch 3 final email");
+          const { subject, html: baseHtml } = emailTouch3(prospect);
+          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
           const emailId = await sendEmail(prospect.email as string, subject, html);
           if (emailId) {
+            if (logId) {
+              await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
+            }
             await supabase.from("roofing_prospects").update({
               sequence_day: 3,
               in_sequence: false,
               last_touch_at: nowIso,
             }).eq("id", prospect.id);
-            await logTouch(prospect.id as string, "email_3", 3, subject, "Touch 3 final email");
             emailsSent++;
           } else {
             errors++;

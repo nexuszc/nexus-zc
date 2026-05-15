@@ -16,6 +16,7 @@ import RoofingPortal from './pages/roofing/RoofingPortal'
 import RoofingLogin from './pages/roofing/RoofingLogin'
 import RoofingCrew from './pages/roofing/RoofingCrew'
 import RoofingOnboarding from './pages/roofing/RoofingOnboarding'
+import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/leads" element={<Leads />} />
             <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
+            <Route path="/outreach" element={<OutreachDashboard />} />
             <Route element={<ContractorProvider />}>
               <Route path="/roofing" element={<RoofingDashboard />} />
               <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
