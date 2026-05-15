@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v8
+# Last updated: May 15, 2026 — v9
 
 ---
 
@@ -150,10 +150,11 @@ Then productized and sold to other multi-business operators.
 | `roofing-aria-storm-trigger` | See function source for details | Internal |
 | `roofing-aria-webhook` | See function source for details | Internal |
 | `roofing-closer` | See function source for details | Internal |
-| `roofing-community-monitor` | See function source for details | Internal |
-| `roofing-content-engine` | See function source for details | Internal |
+| `roofing-community-monitor` | Reddit/FB monitoring, relevance scoring (>=7), inline approval buttons | Every 2h cron (job 16) + nexus-core every 4 cycles |
+| `roofing-content-engine` | Daily content: storm blog posts, FB drafts, YouTube script, carrier intel | Daily 7am MT cron (job 15) |
 | `roofing-crew-manager` | See function source for details | Internal |
 | `roofing-depreciation-tracker` | See function source for details | Internal |
+| `roofing-email-nurture` | 7-touch email sequence: enroll + send + stats; Claude-personalized via Resend | nexus-core every cycle |
 | `roofing-financial` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
@@ -174,6 +175,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-tracker` | See function source for details | Internal |
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
+| `roofing-youtube-engine` | 8 weekly YouTube scripts + TikTok companions; Telegram inline approvals | Monday 8am MT via nexus-core |
 | `send-email` | Send email via Resend | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `stripe-webhook` | See function source for details | Internal |
@@ -306,6 +308,16 @@ Then productized and sold to other multi-business operators.
 - `supplement_rebuttals` -- AI-generated denial rebuttal letters (strategy, evidence, outcome tracking)
 - `depreciation_tracking` -- depreciation held/released tracking with auto follow-up alerts
 
+### Roofing OS Auto-Marketing (added May 14, 2026):
+- `roofing_content` -- all generated content (type, title, body, status, channel, hook, thumbnail_text, tags[], market, carrier, scheduled_topic, scheduled_day, telegram_message_id, views, signups_attributed)
+- `content_queue` -- outbound email/SMS queue per content piece (channel, recipient, scheduled_for, status, sent_at)
+- `marketing_performance` -- weekly channel metrics (week_of, channel, metric_name, metric_value)
+- `roofing_community_posts` -- Reddit/FB community posts with AI responses (platform, thread_url, our_response, status, portal_mentioned, telegram_message_id)
+
+### Roofing OS Content Machine (added May 15, 2026):
+- `email_sequences` -- 7-touch nurture sequences per prospect (current_step, next_send_at, completed, unsubscribed, total_opens, total_clicks)
+- `email_log` -- every email sent record (sequence_id, step, subject, body, resend_id, status, opened_at, clicked_at)
+
 ### Project categories:
 - `platform` -- core businesses (Nexus, VA Company)
 - `vertical` -- GTM channels (Roofing OS, Cash Out Refinances)
@@ -361,7 +373,8 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- Roofing OS Autonomous Marketing Machine v1 (6 functions, 4 tables, 3 pg_cron jobs)
+- Roofing OS Content Machine v1 (roofing-youtube-engine, roofing-email-nurture, roofing-community-monitor v2, nexus-core wiring, 5 Telegram commands, migration 017)
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
@@ -372,6 +385,10 @@ Then productized and sold to other multi-business operators.
 6. Improve client health for Denver Pro Roofing (health: 50)
 7. Improve client health for Brian (health: 65)
 8. Draft complete operating agreement for Nexus ZC LLC
+
+**POST-DEPLOY ACTIONS (do these in Telegram):**
+- `enroll prospects` — enroll all prospects with email into 7-touch nurture
+- `youtube now` — generate all 8 YouTube scripts for review
 
 ---
 
