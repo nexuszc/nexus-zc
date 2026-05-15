@@ -1493,6 +1493,8 @@ Deno.serve(async (_req) => {
       );
     }
 
+    await logHeartbeat("nexus-core", "ok", duration);
+
     return Response.json({
       ok: true,
       cycle: cycleNumber,
@@ -1508,6 +1510,7 @@ Deno.serve(async (_req) => {
 
   } catch (err) {
     await log("cycle_error", String(err), "failure");
+    await logHeartbeat("nexus-core", "error", Date.now() - startTime, String(err).slice(0, 200));
     return Response.json({ error: String(err) }, { status: 500 });
   }
 });
