@@ -344,14 +344,6 @@ Then productized and sold to other multi-business operators.
 - (nothing yet this session)
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Fix Recurring Smoke Test Failures (medium)
-3. Add Self-Learning Pattern Recognition (medium)
-4. Add memory consolidation ability (medium)
-5. Add Structured Self-Reflection Capability (medium)
-6. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
-7. Build the complete Roofing OS go-to-market system. Create a public landing
-8. Monitor client health: Brian (65) and Denver Pro Roofing (50)
 
 ---
 
