@@ -181,12 +181,14 @@ async function processOne(content: {
   }).eq("id", content.id);
 
   // 5. Log heartbeat
-  await supabase.from("system_heartbeats").insert({
-    function_name: "roofing-voiceover-engine",
-    status: "ok",
-    response_ms: 0,
-    checked_at: new Date().toISOString(),
-  }).catch(() => {});
+  try {
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-voiceover-engine",
+      status: "ok",
+      response_ms: 0,
+      checked_at: new Date().toISOString(),
+    });
+  } catch { /* non-fatal */ }
 
   return mp3Url;
 }
