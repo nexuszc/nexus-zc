@@ -103,76 +103,91 @@ export default function RoofingPortal() {
   useEffect(() => { loadPortal() }, [token])
 
   const loadPortal = async () => {
-    const portalRes = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/roofing_jobs?portal_token=eq.${token}&select=*`,
-      {
-        headers: {
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-api?token=${encodeURIComponent(token)}&action=overview`,
+        { headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` } }
+      )
+      const data = await res.json()
+
+      if (!data.ok || data.error) {
+        console.error('Portal lookup failed:', res.status, data)
+        setError(data.error || 'Invalid portal link. Please contact your contractor.')
+        setLoading(false)
+        return
       }
-    )
-    const portalRows = await portalRes.json()
-    const jobData = Array.isArray(portalRows) ? portalRows[0] : null
 
-    if (!portalRes.ok || !jobData) {
-      console.error('Portal lookup failed:', portalRes.status, portalRows)
-      setError('Invalid portal link. Please contact your contractor.')
+      setJob(data.job)
+      setContractor(null)
+
+      // Map portal_activities → timeline shape UI expects
+      setTimeline((data.activities || []).map(a => ({
+        ...a,
+        completed: true,
+        completed_at: a.created_at,
+      })))
+
+      // Map portal_photos → shape UI expects (photo_url, phase buckets)
+      const phaseMap = {
+        pre_installation: 'before', damage_documentation: 'before',
+        during_tearoff: 'during', during_installation: 'during',
+        post_installation: 'after',
+      }
+      setPhotos((data.photos || []).map(p => ({
+        ...p,
+        photo_url: p.url,
+        phase: phaseMap[p.phase] || p.phase,
+      })))
+
+      // Map portal_messages → shape UI expects (sender_type → sender)
+      setMessages((data.messages || []).map(m => ({
+        ...m,
+        sender: m.sender_type,
+      })))
+
+      // Map portal_documents → shape UI expects (document_type → doc_type, status → signed bool)
+      setDocs((data.documents || []).map(d => ({
+        ...d,
+        doc_type: d.document_type || d.doc_type,
+        signed: d.status === 'signed',
+      })))
+
       setLoading(false)
-      return
+
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ event: 'portal_viewed', job_id: data.job.id })
+      }).catch(() => {})
+    } catch (e) {
+      console.error('Portal load error:', e)
+      setError('Failed to load portal. Please try again.')
+      setLoading(false)
     }
-
-    setJob(jobData)
-    setContractor(jobData.clients)
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ event: 'portal_viewed', job_id: jobData.id })
-    }).catch(() => {})
-
-    const sbUrl = import.meta.env.VITE_SUPABASE_URL
-    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-    const sbHeaders = { 'apikey': sbKey, 'Authorization': `Bearer ${sbKey}` }
-    const jid = jobData.id
-
-    const [tRes, pRes, mRes, dRes] = await Promise.all([
-      fetch(`${sbUrl}/rest/v1/job_timeline?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
-      fetch(`${sbUrl}/rest/v1/job_photos?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
-      fetch(`${sbUrl}/rest/v1/job_messages?job_id=eq.${jid}&order=created_at`, { headers: sbHeaders }),
-      fetch(`${sbUrl}/rest/v1/job_documents?job_id=eq.${jid}&select=doc_type,title,content,signed`, { headers: sbHeaders }),
-    ])
-
-    const [t, p, m, d] = await Promise.all([tRes.json(), pRes.json(), mRes.json(), dRes.json()])
-
-    setTimeline(Array.isArray(t) ? t : [])
-    setPhotos(Array.isArray(p) ? p : [])
-    setMessages(Array.isArray(m) ? m : [])
-    setDocs(Array.isArray(d) ? d : [])
-    setLoading(false)
   }
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return
+    if (!newMessage.trim() || !job) return
     const msg = newMessage
-    const sbKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/rest/v1/job_messages`, {
-      method: 'POST',
-      headers: {
-        'apikey': sbKey,
-        'Authorization': `Bearer ${sbKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({ job_id: job.id, sender: 'homeowner', message: msg }),
-    })
     setNewMessage('')
-    // Notify contractor via SMS/email
-    fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/roofing-notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-      body: JSON.stringify({ event: 'homeowner_message', job_id: job.id, data: { message: msg } }),
-    })
-    loadPortal()
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/portal-api`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ token, action: 'send_message', message: msg }),
+        }
+      )
+      const data = await res.json()
+      setMessages(prev => [
+        ...prev,
+        { id: Date.now(), sender: 'homeowner', sender_type: 'homeowner', message: msg },
+        ...(data.aria_response ? [{ id: Date.now() + 1, sender: 'aria', sender_type: 'aria', message: data.aria_response }] : []),
+      ])
+    } catch (e) {
+      console.error('Send message error:', e)
+    }
   }
 
   if (loading) return (
