@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
     .slice(0, 30);
 
   const planPrices: Record<string, number> = {
+    door: 4900,
     starter: 29900,
     growth: 49900,
     professional: 99900,
