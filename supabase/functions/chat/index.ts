@@ -3173,9 +3173,9 @@ Be specific. Reference actual numbers.` }],
     if (msgLower === "aria test call") {
       const start = Date.now();
       try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-aria-engine`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             call_type: "cold_outbound_contractor",
             contact_phone: "+17203948574",
