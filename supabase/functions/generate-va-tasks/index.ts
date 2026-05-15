@@ -4,6 +4,27 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+function safeJsonParse(text: string, context: string = "unknown"): any {
+  try {
+    if (!text || typeof text !== 'string') {
+      console.error(`[${context}] Invalid input for JSON parsing:`, text);
+      return null;
+    }
+    
+    const trimmed = text.trim();
+    if (!trimmed) {
+      console.error(`[${context}] Empty string provided for JSON parsing`);
+      return null;
+    }
+    
+    return JSON.parse(trimmed);
+  } catch (err) {
+    console.error(`[${context}] JSON parse error:`, err.message);
+    console.error(`[${context}] Failed text (first 200 chars):`, text?.slice(0, 200));
+    return null;
+  }
+}
+
 Deno.serve(async () => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -48,7 +69,7 @@ CLIENT CONTEXT:
 - Script: ${ctx?.script ? "Available" : "Not set"}
 
 RECENT CALL ACTIVITY (last 10 calls):
-${recentCalls?.map((c: any) => `- ${c.lead_name || "Unknown"}: ${c.outcome} — ${c.notes?.slice(0, 100) || "no notes"}`).join("\n") || "No recent calls"}
+${recentCalls?.map((c: any) => `- ${c.lead_name || "Unknown"}: ${c.outcome} â ${c.notes?.slice(0, 100) || "no notes"}`).join("\n") || "No recent calls"}
 
 OPEN CLIENT TASKS:
 ${openTasks?.map((t: any) => `- ${t.content.slice(0, 100)}`).join("\n") || "None"}
@@ -70,26 +91,57 @@ Generate a focused daily task list for this VA. Return ONLY valid JSON:
 
 Max 8 tasks. Be specific. Reference actual client context.`;
 
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-
-    const data = await res.json();
-    const text = data?.content?.[0]?.text || "{}";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-
     try {
-      const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { tasks: [] };
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1000,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(`Anthropic API error for ${assignment.va_name}: ${res.status} ${res.statusText}`);
+        continue;
+      }
+
+      const responseText = await res.text();
+      if (!responseText) {
+        console.error(`Empty response from Anthropic API for ${assignment.va_name}`);
+        continue;
+      }
+
+      const data = safeJsonParse(responseText, `Anthropic response for ${assignment.va_name}`);
+      if (!data) {
+        console.error(`Failed to parse Anthropic response for ${assignment.va_name}`);
+        continue;
+      }
+
+      const text = data?.content?.[0]?.text || "{}";
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (!jsonMatch) {
+        console.error(`No JSON found in Anthropic response for ${assignment.va_name}`);
+        continue;
+      }
+
+      const parsed = safeJsonParse(jsonMatch[0], `Task JSON for ${assignment.va_name}`);
+      
+      if (!parsed) {
+        console.error(`Failed to parse task JSON for ${assignment.va_name}`);
+        continue;
+      }
+
+      if (!Array.isArray(parsed.tasks)) {
+        console.error(`Invalid tasks array for ${assignment.va_name}:`, parsed);
+        parsed.tasks = [];
+      }
 
       await supabase.from("va_task_queues").upsert({
         va_assignment_id: assignment.id,
@@ -103,6 +155,7 @@ Max 8 tasks. Be specific. Reference actual client context.`;
       generated++;
     } catch (err) {
       console.error(`Failed to generate tasks for ${assignment.va_name}:`, err);
+      console.error(`Error context: assignment_id=${assignment.id}, client_id=${assignment.client_id}`);
     }
   }
 
