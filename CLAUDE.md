@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v19
+# Last updated: May 15, 2026 — v20
 
 ---
 
@@ -94,6 +94,7 @@ Then productized and sold to other multi-business operators.
 | Function | Purpose | Trigger |
 |----------|---------|---------|
 | `assess-project` | Run AI assessment on a project | On demand |
+| `aria-call-gate` | Compliance gate for all outbound Aria calls — TZ detection, TCPA hours, holidays, DNC check | Called by roofing-aria-engine |
 | `auto-fix` | Read code from GitHub → Claude writes fix → commit to dev → notify | Called by health-monitor |
 | `brain-api` | REST API for brain browser access | GET/POST from nexus-brain.html |
 | `briefing` | Morning brief at 7am MT (13:00 UTC) via pg_cron | Daily cron (job ID 1) |
@@ -239,6 +240,7 @@ Then productized and sold to other multi-business operators.
 - `system_health_snapshots` -- hourly rollup (ok_calls, error_calls, avg_ms, p95_ms)
 - `nexus_roofing_proposals` -- AI-generated Roofing OS improvement proposals (approve/reject flow)
 - `contractor_dashboard_config` -- per-contractor widget/notification preferences
+- `aria_call_queue` -- outbound calls blocked by compliance gate, queued for next valid window (fire_at, status, attempt_count)
 
 ### Roofing OS Auto-Marketing (added May 14, 2026):
 - `contractor_accounts` -- paid contractor subscribers (plan, Stripe, trial, churn_risk_score, subdomain, referral_code)
@@ -355,33 +357,33 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 14, 2026)
+## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE this session (v20):**
+- Aria Call Gate — Compliance Schedule v1 (15/15 tests passed)
+  - DB: aria_call_queue table (fire_at index, status/phone indexes, RLS enabled)
+  - New function: aria-call-gate — area-code TZ detection, federal holidays, weekend/TCPA/Monday/Friday rules, permanent DNC block
+  - Surgical: roofing-aria-engine — gate check before compliance, queues blocked calls
+  - Surgical: roofing-aria-storm-trigger — gate check per customer, queues blocked storm alerts
+  - Surgical: nexus-core — aria queue processor fires ready calls every 30-min cycle (max 20, 3-min stagger)
+  - Secrets set: ROOFING_ARIA_AGENT_ID, NEXUS_ADMIN_KEY
 
-**DONE this session (v19):**
-- Phase 0: Cleanup audit — no orphaned files found, CLEANUP_LOG.md written
-- Phase 1: DB migration — 6 new tables (contractor_employees, contractor_sessions, system_heartbeats, system_health_snapshots, nexus_roofing_proposals, contractor_dashboard_config) + create_owner_employee() trigger (verified working)
-- Phase 2: 4 new edge functions deployed
-  - contractor-auth: phone-primary magic link auth (send_magic_link, verify_token, ping, add_employee)
-  - contractor-dashboard-api: token-gated dashboard data (overview, jobs, job_detail, supplements, usage, employees, get_config, set_config)
-  - system-heartbeat: probes 14 key functions, writes to system_heartbeats + system_health_snapshots
-  - nexus-admin-api: admin-key-gated platform overview (roofing_overview, contractors, contractor_detail, system_health, proposals, approve/reject_proposal, storm_events, manual_upgrade)
-- Phase 3: roofingos-landing/dashboard/index.html — mobile-first PWA (login, home, jobs, new job, supplements, team)
-- Phase 4: src/components/RoofingOSSection.jsx — Roofing OS admin panel on Dashboard; contractor KPIs, tier breakdown, churn risk, upgrades, recent jobs
-- Phase 5: nexus-core — logHeartbeat() helper added, wraps observe/think/act/reflect/resilience
-- 50/50 tests passed
+**DONE last session (v19):**
+- Phase 0: Cleanup audit — no orphaned files found
+- Phase 1: DB migration — 6 new tables + create_owner_employee() trigger
+- Phase 2: contractor-auth, contractor-dashboard-api, system-heartbeat, nexus-admin-api deployed
+- Phase 3: roofingos-landing/dashboard/index.html — mobile-first PWA
+- Phase 4: RoofingOSSection.jsx — Roofing OS admin panel on Dashboard
+- Phase 5: nexus-core — logHeartbeat() added, wraps 5 core actions
+- Landing page signup flow: inline contractor-signup call + modal, /dashboard redirect
 
 **NEXT:**
-1. Set NEXUS_ADMIN_KEY secret in Supabase (required for nexus-admin-api to accept requests)
-2. Set Twilio secrets in Supabase (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) for SMS to work
-3. Set STRIPE_WEBHOOK_SECRET in Supabase secrets → point Stripe dashboard to stripe-webhook function
-4. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
-5. Wire contractor signup form on landing page to contractor-signup edge function
-6. Add memory consolidation ability (medium)
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
+1. Set Twilio secrets (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) for SMS to work
+2. Set STRIPE_WEBHOOK_SECRET → point Stripe dashboard to stripe-webhook function
+3. Set Retell webhook URL in Retell dashboard → roofing-aria-webhook
+4. Add memory consolidation ability (medium)
+5. Draft complete operating agreement for Nexus ZC LLC
+6. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
