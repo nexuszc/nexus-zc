@@ -116,7 +116,10 @@ Then productized and sold to other multi-business operators.
 | `get-dashboard-stats` | Aggregate stats for React dashboard | API call from frontend |
 | `health-monitor` | Hourly health check, identify improvements, trigger auto-fix | Every hour cron (job ID 3) |
 | `import-leads` | Bulk import leads from CSV or external source | On demand |
+| `job-intake` | See function source for details | Internal |
 | `log-call` | VA logs call outcome + auto-enrolls lead sequences | VA web form |
+| `monthly-truth` | See function source for details | Internal |
+| `morning-digest` | See function source for details | Internal |
 | `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
 | `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
@@ -172,9 +175,12 @@ Then productized and sold to other multi-business operators.
 | `system-heartbeat` | Probes 14 key functions, writes heartbeat records + hourly health snapshots | On demand / scheduled |
 | `nexus-admin-api` | Admin-key-gated: platform overview, contractor list/detail, proposals, system health | Internal admin |
 | `smoke-test` | See function source for details | Internal |
+| `stripe-webhook` | See function source for details | Internal |
 | `supplement-audit-engine` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
+| `tier-enforcement` | See function source for details | Internal |
+| `upgrade-engine` | See function source for details | Internal |
 
 ---
 
@@ -352,28 +358,7 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 14, 2026)
 
 **DONE this session:**
-- Built Roofing OS Homeowner Portal (portal-magic-link, portal-api, portal-activity-generator + full PWA)
-- Built Roofing OS Aria Complete Voice & Chat System (roofing-aria-engine, roofing-aria-inbound, roofing-aria-webhook, roofing-aria-storm-trigger, roofing-aria-learning)
-- Built Roofing OS Supplement AI (roofing-supplement-analyzer, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-depreciation-tracker)
-- Built Roofing OS Operations Layer (roofing-job-pipeline, roofing-crew-manager, roofing-material-order, roofing-permit-tracker, roofing-financial)
-- Built Roofing OS Intelligence Layer (roofing-analytics, roofing-weekly-report, roofing-self-improve, roofing-qa-bot)
-- **Built Nexus Platform Unified Architecture + Roofing OS Auto-Marketing v1 (60/60 tests)**
-  - 7 new DB tables: contractor_accounts, supplement_audit_leads, contractor_competitive_intel, contractor_roi_reports, nexus_verticals, contractor_referrals + more
-  - 6 new edge functions: nexus-vertical-router, supplement-audit-engine, contractor-signup, contractor-roi-engine, contractor-churn-predictor, contractor-competitive-engine
-  - Rebuilt roofingos-landing/index.html (dark theme, audit form, ROI calculator, pricing, FAQ, Aria chat)
-  - Seeded 3 Aria scripts: supplement_audit_followup, contractor_welcome, contractor_save
-  - nexus-core: vertical router (every cycle), audit lead followup (every 2 cycles), trial expiry alerts (daily)
-  - chat: 6 new commands — audit leads, contractors, contractor:, roi report:, churn risk, audit stats
-- **Built Nexus Platform — Tier System + Upgrade Engine v1 (50/50 tests)**
-  - DB migration: platform_tiers (seeded: door $49, taste $799, revenue $2499, command $4999), contractor_monthly_usage, contractor_upgrade_events, drone_orders, background_revenue, maintenance_contracts
-  - roofing_jobs: added contractor_id, fully_handled, handling_tier, supplement_included, permit_included, created_month
-  - contractor_accounts: added total_subscription_paid_cents, service_zips
-  - 6 new edge functions: tier-enforcement, upgrade-engine, job-intake, morning-digest, monthly-truth, stripe-webhook
-  - Landing page pricing replaced: 4-tier system ($49/$799/$2499/$4999), calculator updated to Revenue tier
-  - nexus-core: morning-digest fires daily 6:30am MT, monthly-truth fires 1st of month 8am MT
-  - chat: 11 total roofing commands (added tier stats, upgrade triggers, digest:, truth:, job: create)
-  - Seeded 3 Aria scripts: homeowner_intake, contractor_exit_interview, sms_upgrade_confirm
-  - Fixed: all auto-marketing chat commands (lower → msgLower), correct actual DB column names throughout
+- (nothing yet this session)
 
 **DONE this session (v19):**
 - Phase 0: Cleanup audit — no orphaned files found, CLEANUP_LOG.md written
