@@ -156,6 +156,158 @@ Deno.serve(async (req) => {
       return new Response("ok");
     }
 
+    // ── Roofing OS Marketing Commands ──────────────────────────────────────
+
+    // approve content [id]
+    const approveContentMatch = text.match(/^approve content ([a-f0-9-]{36})$/i);
+    if (approveContentMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        const contentId = approveContentMatch[1];
+        try {
+          const { data: content } = await fetch(`${SUPABASE_URL}/functions/v1/roofing-seo-publisher`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ content_id: contentId })
+          }).then(r => r.json()).catch(() => ({ data: null }));
+
+          // Also mark non-blog content as approved
+          const supRes = await fetch(`${SUPABASE_URL}/rest/v1/roofing_content?id=eq.${contentId}&select=type,status`, {
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "apikey": SUPABASE_SERVICE_ROLE_KEY }
+          });
+          const rows = await supRes.json().catch(() => []);
+          const row = rows[0];
+
+          if (row && row.type !== "blog") {
+            await fetch(`${SUPABASE_URL}/rest/v1/roofing_content?id=eq.${contentId}`, {
+              method: "PATCH",
+              headers: {
+                "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ status: "approved", approved_at: new Date().toISOString() })
+            });
+            await sendTelegramMessage(chatId, `✅ Content approved.`);
+          }
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Approve content failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // approve storm [bundle_id]
+    const approveStormMatch = text.match(/^approve storm ([a-f0-9-]{36})$/i);
+    if (approveStormMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-storm-marketing`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "fire", bundle_id: approveStormMatch[1] })
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Storm approve failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // approve community [id]
+    const approveCommunityMatch = text.match(/^approve community ([a-f0-9-]{36})$/i);
+    if (approveCommunityMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          const postId = approveCommunityMatch[1];
+          await fetch(`${SUPABASE_URL}/rest/v1/roofing_community_posts?id=eq.${postId}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              "apikey": SUPABASE_SERVICE_ROLE_KEY,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ status: "approved", approved_at: new Date().toISOString() })
+          });
+
+          const postRes = await fetch(`${SUPABASE_URL}/rest/v1/roofing_community_posts?id=eq.${postId}&select=our_response,thread_url`, {
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "apikey": SUPABASE_SERVICE_ROLE_KEY }
+          });
+          const posts = await postRes.json().catch(() => []);
+          const post = posts[0];
+
+          if (post) {
+            await sendTelegramMessage(chatId,
+              `✅ Community response approved.\n\n*Copy this response:*\n\n${post.our_response}\n\n🔗 Post: ${post.thread_url}`
+            );
+          }
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Community approve failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // marketing report
+    if (/^marketing report$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, "📊 Generating marketing report...");
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-weekly-marketing-report`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Report failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // content queue
+    if (/^content queue$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/rest/v1/roofing_content?status=eq.pending&select=id,type,title,created_at&order=created_at.desc&limit=15`, {
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "apikey": SUPABASE_SERVICE_ROLE_KEY }
+          });
+          const items = await res.json().catch(() => []);
+          if (!items.length) {
+            await sendTelegramMessage(chatId, "✅ No pending content in queue.");
+            return;
+          }
+          const lines = items.map((item: any) =>
+            `• [${item.type}] ${(item.title || "Untitled").slice(0, 50)}\n  \`approve content ${item.id}\``
+          ).join("\n\n");
+          await sendTelegramMessage(chatId, `📋 *Content Queue (${items.length} pending)*\n\n${lines}`);
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Queue fetch failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // storm marketing: [city]
+    const stormCityMatch = text.match(/^storm marketing:\s*(.+)$/i);
+    if (stormCityMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        const city = stormCityMatch[1].trim();
+        await sendTelegramMessage(chatId, `⛈️ Generating storm marketing bundle for: ${city}...`);
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-storm-marketing`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ city, zip_codes: [], hail_size: 1.5 })
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Storm marketing failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // ── End Roofing OS Commands ─────────────────────────────────────────────
+
     // Return 200 immediately so Telegram never retries.
     // All processing (typing → chat → reply) happens in the background.
     EdgeRuntime.waitUntil(processMessage(text, chatId));

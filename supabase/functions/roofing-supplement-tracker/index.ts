@@ -71,6 +71,19 @@ Deno.serve(async (req) => {
         (approved_amount ? `Approved: $${approved_amount.toLocaleString()}\n` : "") +
         (denied_items?.length ? `Denied items: ${denied_items.length} — rebuttals may be needed` : "")
       );
+
+      // Trigger referral engine on approval
+      if ((outcome === "approved" || outcome === "partial_approved") && pkg.contractor_id) {
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-referral-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trigger: "supplement_approved",
+            package_id,
+            contractor_id: pkg.contractor_id
+          })
+        }).catch(() => {});
+      }
     }
 
     return Response.json({ ok: true, action: "response_recorded", status: update.status });

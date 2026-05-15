@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v8
+# Last updated: May 15, 2026 — v21
 
 ---
 
@@ -354,17 +354,35 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- Built complete Roofing OS landing page (roofingos-landing/index.html) — $49/mo portal signup, two-tier pricing, contact sales modal
+- Fixed portal "invalid link" bugs in portal/index.html and RoofingPortal.jsx
+- Built Roofing OS Autonomous Marketing Machine v1 — 6 functions, 4 DB tables, 3 cron jobs, Telegram commands
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
 2. Fix Recurring Smoke Test Failures (medium)
 3. Draft complete operating agreement for Nexus ZC LLC (single member LLC)
-4. Build complete Roofing OS go-to-market system with public landing page
-5. Add Self-Learning Pattern Recognition (medium)
-6. Add memory consolidation ability (medium)
-7. Add Structured Self-Reflection Capability (medium)
-8. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+4. Add Self-Learning Pattern Recognition (medium)
+5. Add memory consolidation ability (medium)
+6. Add Structured Self-Reflection Capability (medium)
+7. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+8. Set STRIPE_PUBLISHABLE_KEY in Supabase secrets (user action needed)
+
+### Autonomous Marketing Machine (deployed May 15, 2026):
+| Function | Schedule | Purpose |
+|----------|----------|---------|
+| `roofing-content-engine` | Daily 13:00 UTC (7am MT) — cron job 15 | NOAA storms → blog posts + 3 FB drafts + LinkedIn + YouTube script + carrier intel (Mon) → Telegram approval |
+| `roofing-storm-marketing` | Triggered by roofing-aria-storm-trigger | Prospect emails/SMS/voice drop/FB/Google Ads bundle → one-tap `approve storm [id]` |
+| `roofing-community-monitor` | Every 2h — cron job 16 | Reddit r/Roofing, r/RoofingContractors + Serper search → draft replies → `approve community [id]` |
+| `roofing-referral-engine` | Event-triggered + daily 14:00 UTC from nexus-core | supplement_approved / review_detected / tier_upgrade / 90_day_anniversary → personalized SMS + Aria call |
+| `roofing-seo-publisher` | On `approve content [id]` | Formats blog HTML → GitHub commit to roofingos-landing/blog/ → updates index.json |
+| `roofing-weekly-marketing-report` | Monday 14:00 UTC — cron job 17 | 7-day marketing metrics → 3 AI proposals → Telegram |
+
+### New DB tables: roofing_content, content_queue, marketing_performance, roofing_community_posts
+### Telegram commands: `approve content [id]`, `approve storm [id]`, `approve community [id]`, `marketing report`, `content queue`, `storm marketing: [city]`
+### Wired: roofing-aria-storm-trigger → roofing-storm-marketing (auto-fires on detection)
+### Wired: supplement approval → roofing-referral-engine (via roofing-supplement-tracker)
+### Wired: 90-day check → nexus-core daily cycle at 14:00 UTC
 
 ---
 

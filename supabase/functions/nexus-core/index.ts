@@ -1403,6 +1403,15 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // 90-DAY CONTRACTOR ANNIVERSARY — scan once per day at 14:00-14:30 UTC
+    if (_utcH === 14 && _utcM < 30) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-referral-engine`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "scan_anniversaries" })
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

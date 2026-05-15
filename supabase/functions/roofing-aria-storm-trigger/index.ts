@@ -19,7 +19,14 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-aria-storm-trigger ready" });
 
-  const { zip_codes, hail_size, storm_date, contractor_id } = body;
+  const { zip_codes, hail_size, storm_date, contractor_id, city, state, storm_event_id } = body;
+
+  // Fire roofing-storm-marketing in parallel (prospect outreach + content bundles)
+  fetch(`${SUPABASE_URL}/functions/v1/roofing-storm-marketing`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ zip_codes, hail_size, city, state, storm_event_id, storm_date })
+  }).catch(() => {});
 
   if (!zip_codes?.length || !hail_size) {
     return Response.json({ error: "zip_codes and hail_size required" }, { status: 400 });
