@@ -62,6 +62,41 @@ Deno.serve(async (req) => {
       ? `https://roofingos.dev/portal/${session.magic_link_token}`
       : "";
 
+    // CALL GATE — check timing before firing
+    const gateRes = await fetch(`${SUPABASE_URL}/functions/v1/aria-call-gate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_phone: job.homeowner_phone, call_type: "storm_alert" })
+    });
+    const gate = await gateRes.json().catch(() => ({ allowed: true }));
+
+    if (!gate.allowed && !gate.permanent) {
+      await supabase.from("aria_call_queue").insert({
+        call_type: "storm_alert",
+        contact_phone: job.homeowner_phone,
+        contact_name: job.homeowner_name,
+        contact_type: "previous_customer",
+        job_id: job.id,
+        metadata: {
+          property_address: job.property_address,
+          hail_size: String(hail_size),
+          storm_date: storm_date || new Date().toISOString(),
+          portal_link: portalLink
+        },
+        fire_at: gate.next_allowed_at,
+        recipient_timezone: gate.recipient_timezone || "America/Denver",
+        queue_reason: gate.reason,
+        status: "queued"
+      });
+      results.push({ homeowner: job.homeowner_name || "Unknown", phone: job.homeowner_phone, queued: false });
+      continue;
+    }
+
+    if (gate.permanent) {
+      results.push({ homeowner: job.homeowner_name || "Unknown", phone: job.homeowner_phone, queued: false });
+      continue;
+    }
+
     const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },

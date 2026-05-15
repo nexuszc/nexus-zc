@@ -1317,6 +1317,69 @@ Deno.serve(async (_req) => {
       }
     }
 
+    // ARIA QUEUE PROCESSOR — fire queued calls whose window has arrived
+    {
+      const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      const { data: readyToFire } = await supabase
+        .from("aria_call_queue")
+        .select("*")
+        .eq("status", "queued")
+        .lte("fire_at", fiveMinutesFromNow)
+        .lt("attempt_count", 3)
+        .order("fire_at", { ascending: true })
+        .limit(20);
+
+      let queueFired = 0;
+      for (const queuedCall of readyToFire || []) {
+        const gateRes = await fetch(`${SUPABASE_URL}/functions/v1/aria-call-gate`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ contact_phone: queuedCall.contact_phone, call_type: queuedCall.call_type })
+        });
+        const gate = await gateRes.json().catch(() => ({ allowed: true }));
+
+        if (!gate.allowed) {
+          await supabase.from("aria_call_queue")
+            .update({
+              fire_at: gate.next_allowed_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+              attempt_count: (queuedCall.attempt_count || 0) + 1
+            })
+            .eq("id", queuedCall.id);
+          continue;
+        }
+
+        // Stagger calls by 3 minutes each to avoid rate limiting
+        if (queueFired > 0) {
+          await new Promise(r => setTimeout(r, queueFired * 3 * 60 * 1000));
+        }
+
+        await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            call_type: queuedCall.call_type,
+            contact_phone: queuedCall.contact_phone,
+            contact_name: queuedCall.contact_name,
+            contact_type: queuedCall.contact_type,
+            job_id: queuedCall.job_id,
+            language: queuedCall.language || "en",
+            metadata: queuedCall.metadata || {}
+          })
+        }).catch(() => null);
+
+        await supabase.from("aria_call_queue")
+          .update({ status: "fired", fired_at: new Date().toISOString(), attempt_count: (queuedCall.attempt_count || 0) + 1 })
+          .eq("id", queuedCall.id);
+
+        queueFired++;
+      }
+
+      if ((readyToFire || []).length > 0) {
+        await logHeartbeat("nexus-core:aria-queue", "ok", 0);
+        await log("aria_queue_processed", `Fired ${queueFired}/${(readyToFire || []).length} queued calls`);
+      }
+    }
+
     // MORNING DIGEST — daily 6:30am MT (12:30-13:00 UTC)
     const _utcNow = new Date();
     const _utcH = _utcNow.getUTCHours();
