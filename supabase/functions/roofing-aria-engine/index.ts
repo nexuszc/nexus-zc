@@ -7,8 +7,24 @@ const RETELL_AGENT_ID = Deno.env.get("RETELL_AGENT_ID") || "";
 const RETELL_PHONE = Deno.env.get("RETELL_PHONE_NUMBER") || "";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
+const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
+const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || RETELL_PHONE;;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+async function sendSMS(to: string, body: string): Promise<void> {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
+  const params = new URLSearchParams({ To: to, From: TWILIO_FROM_NUMBER, Body: body });
+  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  }).catch(() => {});
+}
 
 async function tg(text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -221,6 +237,18 @@ Deno.serve(async (req) => {
     await supabase.from("roofing_aria_scripts")
       .update({ times_used: (script.times_used || 0) + 1 })
       .eq("id", script.id);
+  }
+
+  // Belt-and-suspenders: always send portal SMS 10s after call starts,
+  // regardless of whether Retell fires send_portal_link during the call.
+  if (call_type === "cold_outbound_contractor") {
+    EdgeRuntime.waitUntil((async () => {
+      await new Promise(r => setTimeout(r, 10000));
+      await sendSMS(
+        contact_phone,
+        `Hey — Aria from Roofing OS. Here's that portal:\napp.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\n30 seconds. This is what your homeowners see.`
+      );
+    })());
   }
 
   return Response.json({ ok: true, call_id: callRecord.id, retell_call_id: retellData.call_id });
