@@ -1233,6 +1233,31 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // ARIA MODEL GUARD — every 12 cycles (~6 hours): ensure model hasn't reverted to GPT
+    if (cycleNumber % 12 === 3) {
+      (async () => {
+        try {
+          const retellKey = Deno.env.get("RETELL_API_KEY");
+          if (!retellKey) return;
+          const res = await fetch("https://api.retellai.com/get-retell-llm/llm_e54f939d8b72817b006519d65c91", {
+            headers: { "Authorization": `Bearer ${retellKey}` }
+          });
+          const llm = await res.json().catch(() => ({}));
+          const currentModel = llm?.model || "";
+          if (!currentModel.startsWith("claude")) {
+            // Reverted — force it back
+            await fetch("https://api.retellai.com/update-retell-llm/llm_e54f939d8b72817b006519d65c91", {
+              method: "PATCH",
+              headers: { "Authorization": `Bearer ${retellKey}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ model: "claude-4.5-haiku" })
+            });
+            await tg(`⚠️ *Aria model reverted — fixed automatically*\nWas: \`${currentModel}\` → restored: \`claude-4.5-haiku\``);
+            await log("aria_model_guard", `Reverted model ${currentModel} → claude-4.5-haiku`, "failure");
+          }
+        } catch { /* non-fatal */ }
+      })().catch(() => {});
+    }
+
     // QA BOT — every 6 hours (offset from product-monitor at === 0)
     if (cycleNumber % 12 === 6) {
       fetch(`${SUPABASE_URL}/functions/v1/roofing-qa-bot`, {
