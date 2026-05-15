@@ -394,6 +394,29 @@ Deno.serve(async (req) => {
       return new Response("ok");
     }
 
+    // publish youtube [id] OR publish youtube (batch — all approved)
+    const publishYouTubeMatch = text.match(/^publish youtube(?:\s+([a-f0-9-]{36}))?$/i);
+    if (publishYouTubeMatch) {
+      EdgeRuntime.waitUntil((async () => {
+        const contentId = publishYouTubeMatch[1];
+        if (contentId) {
+          await sendTelegramMessage(chatId, `🎬 Publishing YouTube script ${contentId}... (voiceover + blog + Telegram delivery)`);
+        } else {
+          await sendTelegramMessage(chatId, `🎬 Publishing all approved YouTube scripts... (may take a few minutes)`);
+        }
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-publisher`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify(contentId ? { content_id: contentId } : {})
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ YouTube publisher failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
     // ── End Roofing OS Commands ─────────────────────────────────────────────
 
     // Return 200 immediately so Telegram never retries.
