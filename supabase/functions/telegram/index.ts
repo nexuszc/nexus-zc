@@ -306,6 +306,94 @@ Deno.serve(async (req) => {
       return new Response("ok");
     }
 
+    // ── Content Machine Commands ────────────────────────────────────────────
+
+    // youtube now
+    if (/^youtube now$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `🎬 Generating all 8 YouTube scripts now... (will take 3-5 min)`);
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ YouTube engine failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // email stats
+    if (/^email stats$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-email-nurture`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "stats" })
+          });
+          const data = await res.json().catch(() => ({}));
+          await sendTelegramMessage(chatId,
+            `✉️ *Email Nurture Stats*\n\n` +
+            `Active sequences: ${data.active || 0}\n` +
+            `Completed: ${data.completed || 0}\n` +
+            `Unsubscribed: ${data.unsubscribed || 0}\n` +
+            `Sent last 7 days: ${data.sent_last_7d || 0}`
+          );
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Email stats failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // enroll prospects
+    if (/^enroll prospects$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `📧 Enrolling new prospects into email nurture...`);
+        try {
+          // Get all prospects with email not yet enrolled
+          const prospectsRes = await fetch(`${SUPABASE_URL}/rest/v1/roofing_prospects?select=id&not.email=is.null&order=created_at.desc&limit=100`, {
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "apikey": SUPABASE_SERVICE_ROLE_KEY }
+          });
+          const prospects = await prospectsRes.json().catch(() => []);
+          if (!prospects.length) {
+            await sendTelegramMessage(chatId, `ℹ️ No prospects with email found.`);
+            return;
+          }
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-email-nurture`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "enroll", prospects })
+          });
+          const data = await res.json().catch(() => ({}));
+          await sendTelegramMessage(chatId, `✅ Enrolled ${data.enrolled || 0} prospects into email nurture.`);
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Enroll failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
+    // community [run]
+    if (/^community(\s+run)?$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `🗣️ Scanning community posts...`);
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/roofing-community-monitor`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+        } catch (e) {
+          await sendTelegramMessage(chatId, `❌ Community scan failed: ${e}`);
+        }
+      })());
+      return new Response("ok");
+    }
+
     // ── End Roofing OS Commands ─────────────────────────────────────────────
 
     // Return 200 immediately so Telegram never retries.

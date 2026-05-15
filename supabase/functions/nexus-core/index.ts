@@ -1412,6 +1412,31 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // CONTENT MACHINE — YouTube: Monday 8am MT (14:00 UTC)
+    if (_utcNow.getUTCDay() === 1 && _utcH === 14 && _utcM < 30) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    // CONTENT MACHINE — Email nurture: every cycle (send due sequences)
+    fetch(`${SUPABASE_URL}/functions/v1/roofing-email-nurture`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send" })
+    }).catch(() => {});
+
+    // CONTENT MACHINE — Community monitor: every 4 cycles (~2 hours, matches pg_cron backup)
+    if (cycleNumber % 4 === 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-community-monitor`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
     // Auto-sync CLAUDE.md at the end of every cycle
     const claudeMdUpdated = await syncClaudeMd(state, cycleNumber);
 

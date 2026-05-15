@@ -1,5 +1,5 @@
-// roofing-community-monitor — Every 2 hours
-// Monitors Reddit and Facebook Groups for relevant posts, drafts helpful responses
+// roofing-community-monitor v2
+// Relevance scoring 1-10 (only respond >= 7), portal_mentioned tracking, inline button approvals
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -12,6 +12,8 @@ const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+const RELEVANCE_THRESHOLD = 7;
+
 async function tg(text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
@@ -20,7 +22,28 @@ async function tg(text: string) {
   }).catch(() => {});
 }
 
-async function claude(prompt: string): Promise<string> {
+async function sendTelegramApproval(postId: string, platform: string, title: string, response: string): Promise<string | null> {
+  const text = `🗣️ *Community Post — ${platform}*\n\n*${title.slice(0, 80)}*\n\n*Draft response:*\n${response.slice(0, 400)}\n\n_Copy and post manually after approving._`;
+  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text,
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "✅ Approve", callback_data: `approve_community_${postId}` },
+          { text: "❌ Skip", callback_data: `skip_community_${postId}` }
+        ]]
+      }
+    })
+  });
+  const data = await res.json();
+  return data.result?.message_id?.toString() || null;
+}
+
+async function claude(prompt: string, maxTokens = 600): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -30,12 +53,47 @@ async function claude(prompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: 600,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }]
     })
   });
   const data = await res.json();
   return data.content?.[0]?.text || "";
+}
+
+async function scoreRelevance(title: string, content: string): Promise<{ score: number; reason: string; portal_relevant: boolean }> {
+  const result = await claude(
+    `Score this forum post for relevance to a roofing contractor software company that sells: homeowner portal, supplement tracking, Aria AI calling, and business management tools.
+
+Post title: "${title}"
+Post content: "${content.slice(0, 400)}"
+
+Return a JSON object with:
+- score: integer 1-10 (10 = direct question about our exact solution, 1 = completely irrelevant)
+- reason: one sentence why
+- portal_relevant: boolean — true if the homeowner portal would directly solve their problem
+
+Score high (8-10) for: supplement help, adjuster denials, homeowner communication issues, needing software/CRM, hail damage questions from contractors
+Score medium (5-7) for: general roofing questions where our tools help but aren't the core answer
+Score low (1-4) for: pricing questions, material questions, hiring, unrelated topics
+
+Return ONLY valid JSON, no other text.`,
+    200
+  );
+
+  try {
+    const parsed = JSON.parse(result.replace(/```json\n?|\n?```/g, "").trim());
+    return {
+      score: Number(parsed.score) || 1,
+      reason: parsed.reason || "",
+      portal_relevant: Boolean(parsed.portal_relevant)
+    };
+  } catch {
+    // Fallback: basic keyword score
+    const lower = (title + " " + content).toLowerCase();
+    const highValue = ["supplement", "adjuster denied", "o&p", "xactimate", "homeowner portal", "supplement software"].filter(kw => lower.includes(kw)).length;
+    return { score: highValue >= 2 ? 8 : highValue >= 1 ? 6 : 3, reason: "keyword match", portal_relevant: lower.includes("portal") || lower.includes("homeowner") };
+  }
 }
 
 async function searchSerper(query: string): Promise<Array<{ title: string; link: string; snippet: string }>> {
@@ -66,17 +124,6 @@ async function fetchRedditPosts(subreddit: string): Promise<Array<{ title: strin
   }
 }
 
-function isRelevant(text: string): boolean {
-  const keywords = [
-    "homeowner call", "supplement software", "customer portal", "hail storm roofer",
-    "roofing app", "adjuster denied", "O&P denied", "o&p", "xactimate",
-    "supplement denied", "insurance claim", "adjuster", "supplement",
-    "how do i", "recommend", "software", "crm", "help with"
-  ];
-  const lower = text.toLowerCase();
-  return keywords.some(kw => lower.includes(kw));
-}
-
 async function alreadyTracked(threadUrl: string): Promise<boolean> {
   const { data } = await supabase
     .from("roofing_community_posts")
@@ -90,9 +137,38 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-community-monitor ready" });
 
+  // Handle Telegram callback_query for inline buttons
+  if (body.callback_query) {
+    const { data: callbackData } = body.callback_query;
+    const postId = callbackData.replace(/^(approve|skip)_community_/, "");
+    const action = callbackData.split("_")[0];
+
+    if (action === "approve") {
+      await supabase.from("roofing_community_posts")
+        .update({ status: "approved", approved_at: new Date().toISOString() })
+        .eq("id", postId);
+
+      const { data: post } = await supabase
+        .from("roofing_community_posts")
+        .select("our_response, thread_url")
+        .eq("id", postId)
+        .maybeSingle();
+
+      if (post) {
+        await tg(`✅ *Community response approved.*\n\n*Copy this response:*\n\n${post.our_response}\n\n🔗 ${post.thread_url}`);
+      }
+    } else if (action === "skip") {
+      await supabase.from("roofing_community_posts")
+        .update({ status: "skipped" })
+        .eq("id", postId);
+    }
+    return Response.json({ ok: true });
+  }
+
   const startMs = Date.now();
-  let postsFound = 0;
+  let postsScanned = 0;
   let responsesQueued = 0;
+  let skippedLowScore = 0;
 
   try {
     const postsToProcess: Array<{ platform: string; title: string; url: string; content: string }> = [];
@@ -101,7 +177,6 @@ Deno.serve(async (req) => {
     for (const subreddit of ["Roofing", "RoofingContractors"]) {
       const posts = await fetchRedditPosts(subreddit);
       for (const post of posts) {
-        if (!isRelevant(post.title + " " + (post.selftext || ""))) continue;
         const url = `https://reddit.com${post.url || ""}`.replace("https://reddit.comhttps://", "https://");
         if (await alreadyTracked(url)) continue;
         postsToProcess.push({
@@ -113,7 +188,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Serper web search for each keyword group
+    // 2. Serper web search
     const searchQueries = [
       `site:reddit.com roofing "supplement software" OR "homeowner portal" OR "adjuster denied" 2026`,
       `site:reddit.com/r/Roofing "O&P" OR "supplement" OR "hail claim" help`,
@@ -124,7 +199,6 @@ Deno.serve(async (req) => {
     for (const query of searchQueries) {
       const results = await searchSerper(query);
       for (const result of results) {
-        if (!isRelevant(result.title + " " + result.snippet)) continue;
         if (await alreadyTracked(result.link)) continue;
         postsToProcess.push({
           platform: result.link.includes("facebook") ? "facebook_groups" : "reddit",
@@ -135,20 +209,29 @@ Deno.serve(async (req) => {
       }
     }
 
-    postsFound = postsToProcess.length;
+    postsScanned = postsToProcess.length;
 
-    // Draft responses for each relevant post
-    for (const post of postsToProcess.slice(0, 10)) {
+    // Score and respond to top posts
+    for (const post of postsToProcess.slice(0, 15)) {
+      const { score, reason, portal_relevant } = await scoreRelevance(post.title, post.content);
+
+      if (score < RELEVANCE_THRESHOLD) {
+        skippedLowScore++;
+        continue;
+      }
+
       const response = await claude(
         `You're a knowledgeable roofing contractor on Reddit/social media. Write a genuine, helpful reply to this post.
 
 Post title: "${post.title}"
 Post content: "${post.content}"
+Relevance reason: "${reason}"
+Portal relevant: ${portal_relevant}
 
 Rules:
 - Sound like a real contractor, not a salesperson
 - Lead with genuinely useful advice (be specific — mention actual Xactimate codes, adjuster tactics, documentation tips)
-- If relevant, you can mention Roofing OS as a tool you use, but only if it directly answers their question
+- If portal_relevant is true, you can naturally mention that contractors tracking documentation through their job management system see faster approvals — don't name the product
 - Max 150 words
 - No marketing speak, no "I'd be happy to help" openers
 - End with a question to continue the conversation
@@ -165,25 +248,24 @@ Return ONLY the response text, nothing else.`
           thread_title: post.title.slice(0, 200),
           thread_content: post.content.slice(0, 500),
           our_response: response,
-          status: "pending"
+          status: "pending",
+          portal_mentioned: portal_relevant
         }).select().single();
 
         if (saved) {
-          await tg(
-            `🗣️ *Community Post — ${post.platform}*\n` +
-            `*${post.title.slice(0, 80)}*\n` +
-            `🔗 ${post.url}\n\n` +
-            `*Our response:*\n${response.slice(0, 500)}\n\n` +
-            `Approve: \`approve community ${saved.id}\`\n` +
-            `_Copy to clipboard on approval_`
-          );
+          const msgId = await sendTelegramApproval(saved.id, post.platform, post.title, response);
+          if (msgId) {
+            await supabase.from("roofing_community_posts")
+              .update({ telegram_message_id: msgId })
+              .eq("id", saved.id);
+          }
           responsesQueued++;
         }
       } catch (e) {
         console.error("Save community post failed:", e);
       }
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 400));
     }
 
     const duration = Date.now() - startMs;
@@ -195,14 +277,11 @@ Return ONLY the response text, nothing else.`
       checked_at: new Date().toISOString()
     }).catch(() => {});
 
-    if (responsesQueued === 0) {
-      // Silent run — no new relevant posts
-      return Response.json({ ok: true, posts_found: postsFound, responses_queued: 0, duration_ms: duration });
+    if (responsesQueued > 0) {
+      await tg(`✅ *Community Monitor Complete*\nScanned: ${postsScanned} | Scored out: ${skippedLowScore} | Drafted: ${responsesQueued}`);
     }
 
-    await tg(`✅ *Community Monitor Complete*\nPosts scanned: ${postsFound}\nResponses drafted: ${responsesQueued}\n_Reply with approve commands above to post_`);
-
-    return Response.json({ ok: true, posts_found: postsFound, responses_queued: responsesQueued, duration_ms: duration });
+    return Response.json({ ok: true, posts_scanned: postsScanned, skipped_low_score: skippedLowScore, responses_queued: responsesQueued, duration_ms: duration });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
