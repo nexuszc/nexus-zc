@@ -1,5 +1,5 @@
-// roofing-voiceover-engine v1
-// Approved youtube_scripts → ElevenLabs TTS → Supabase Storage → Telegram upload checklist
+// roofing-voiceover-engine v2
+// Approved youtube_scripts → ElevenLabs TTS → Supabase Storage → Telegram sendAudio (inline player)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,6 +9,8 @@ const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
 const ELEVENLABS_VOICE_ID = Deno.env.get("ELEVENLABS_VOICE_ID") || "pNInz6obpgDQGcFmaJgB";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+
+const TELEGRAM_MAX_AUDIO_BYTES = 50 * 1024 * 1024; // 50MB Telegram limit
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -28,42 +30,37 @@ function buildSpokenText(content: {
   ].filter(Boolean).join("\n\n");
 
   return raw
-    // URLs → spoken form (before any other processing)
     .replace(/https?:\/\/\S+/g, "visit Roofing OS dot dev")
-    // Section labels like [HOOK], [PROBLEM], [EDUCATION], etc.
     .replace(/\[(HOOK|PROBLEM|EDUCATION|BRIDGE|CTA|INTRO|OUTRO)\]/gi, "")
-    // Markdown headers
     .replace(/#{1,6}\s+/g, "")
-    // Bold and italic markers — preserve the text
     .replace(/\*{1,3}([^*\n]+)\*{1,3}/g, "$1")
-    // Markdown links → text only
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    // Remaining brackets
     .replace(/[\[\]]/g, "")
-    // Bullet points and numbered list markers
     .replace(/^[\s]*[-*•]\s+/gm, "")
     .replace(/^\d+\.\s+/gm, "")
-    // Backticks
     .replace(/`+([^`]*)`+/g, "$1")
-    // Double newlines → sentence break with pause
     .replace(/\n{2,}/g, ". ")
-    // Single newlines → natural comma pause
     .replace(/\n/g, ", ")
-    // Fix punctuation artifacts
     .replace(/\.\s*\./g, ".")
     .replace(/,\s*\./g, ".")
     .replace(/\.\s*,/g, ".")
     .replace(/,{2,}/g, ",")
-    // Collapse whitespace
     .replace(/\s{2,}/g, " ")
     .trim()
-    // ElevenLabs turbo_v2 cap: ~5000 chars
     .slice(0, 4900);
 }
 
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 60);
+}
+
 function estimateMinutes(text: string): number {
-  const words = text.split(/\s+/).length;
-  return Math.max(1, Math.ceil(words / 130));
+  return Math.max(1, Math.ceil(text.split(/\s+/).length / 130));
 }
 
 // ── ELEVENLABS ──────────────────────────────────────────────────────────────────
@@ -115,6 +112,58 @@ async function tg(text: string) {
   }).catch(() => {});
 }
 
+async function tgSendAudio(
+  audioBuffer: ArrayBuffer,
+  filename: string,
+  title: string,
+  caption: string,
+): Promise<boolean> {
+  try {
+    const form = new FormData();
+    form.append("chat_id", TELEGRAM_CHAT_ID);
+    form.append("audio", new Blob([audioBuffer], { type: "audio/mpeg" }), filename);
+    form.append("title", title.slice(0, 64));
+    form.append("caption", caption.slice(0, 1024));
+    form.append("parse_mode", "Markdown");
+
+    const res = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio`,
+      { method: "POST", body: form }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function buildCaption(content: {
+  id: string;
+  title: string;
+  seo_description?: string | null;
+  tags?: string[] | null;
+  thumbnail_text?: string | null;
+}): string {
+  const tags = (content.tags || []).join(", ") || "roofing contractor, roofing software, supplement tracking";
+  const desc = (content.seo_description || content.title).slice(0, 300);
+  const thumbnail = (content.thumbnail_text || content.title.toUpperCase()).slice(0, 60);
+
+  return (
+    `🎙️ *${content.title}*\n\n` +
+    `Open studio.youtube.com → Create → Upload\n` +
+    `Select the audio file above ↑\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `📋 *TITLE* (copy this):\n${content.title}\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `📝 *DESCRIPTION* (copy this):\n${desc}\n\nroofingos.dev — starts at $49/month\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `🏷️ *TAGS* (copy this):\n${tags}\n\n` +
+    `━━━━━━━━━━━━━━━\n` +
+    `🖼️ *THUMBNAIL TEXT*:\n${thumbnail}\n\n` +
+    `Set visibility to Public → Publish ✓\n\n` +
+    `When done reply:\n\`uploaded ${content.id}\``
+  );
+}
+
 // ── CORE PROCESSOR ─────────────────────────────────────────────────────────────
 
 async function processOne(content: {
@@ -129,16 +178,15 @@ async function processOne(content: {
   thumbnail_text?: string | null;
 }): Promise<string> {
   const spokenText = buildSpokenText(content);
-  const estimatedMins = estimateMinutes(spokenText);
 
-  // 1. Generate voiceover via ElevenLabs
+  // 1. Generate voiceover
   const audioBuffer = await generateVoiceover(spokenText);
 
-  // 2. Upload to Supabase Storage bucket 'roofing-content'
-  const filename = `youtube/${content.id}.mp3`;
+  // 2. Upload to Supabase Storage
+  const storageFilename = `youtube/${content.id}.mp3`;
   const { error: uploadError } = await supabase.storage
     .from("roofing-content")
-    .upload(filename, audioBuffer, {
+    .upload(storageFilename, audioBuffer, {
       contentType: "audio/mpeg",
       upsert: true,
     });
@@ -147,31 +195,27 @@ async function processOne(content: {
 
   const { data: urlData } = supabase.storage
     .from("roofing-content")
-    .getPublicUrl(filename);
+    .getPublicUrl(storageFilename);
   const mp3Url = urlData.publicUrl;
 
-  // 3. Send Telegram checklist
-  const tags = (content.tags || []).join(", ") || "roofing contractor, roofing software, supplement tracking";
-  const seoDesc = (content.seo_description || content.title).slice(0, 400);
-  const thumbnail = (content.thumbnail_text || content.title.toUpperCase()).slice(0, 60);
+  // 3. Send audio directly to Telegram (inline player)
+  const caption = buildCaption(content);
+  const tgFilename = `${slugify(content.title)}.mp3`;
 
-  const msg =
-    `🎙️ *Voiceover Ready*\n\n` +
-    `*${content.title}*\n\n` +
-    `⏱ ~${estimatedMins} minutes\n` +
-    `🎤 Aria voice\n\n` +
-    `[Download MP3](${mp3Url})\n\n` +
-    `*YouTube upload checklist:*\n` +
-    `1. studio.youtube.com → Upload\n` +
-    `2. Select the MP3 file\n` +
-    `3. Title: ${content.title}\n` +
-    `4. Description:\n${seoDesc}\n\nroofingos.dev — starts at $49/month\n\n` +
-    `5. Tags: ${tags}\n` +
-    `6. Thumbnail: ${thumbnail}\n` +
-    `7. Click Publish ✓\n\n` +
-    `Reply with:\n\`uploaded ${content.id}\`\nwhen done — I'll mark it published.`;
+  let sent = false;
 
-  await tg(msg);
+  if (audioBuffer.byteLength <= TELEGRAM_MAX_AUDIO_BYTES) {
+    sent = await tgSendAudio(audioBuffer, tgFilename, content.title, caption);
+  }
+
+  // Fallback: send text message with download link if sendAudio failed or file too large
+  if (!sent) {
+    await tg(
+      `🎙️ *Voiceover Ready*\n\n` +
+      caption +
+      `\n\n[Download MP3](${mp3Url})`
+    );
+  }
 
   // 4. Update roofing_content
   await supabase.from("roofing_content").update({
@@ -222,7 +266,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Batch mode: all approved youtube_scripts without voiceover (mp3_url is null)
+  // Batch mode: all approved youtube_scripts without voiceover
   try {
     const { data: pending, error } = await supabase
       .from("roofing_content")
