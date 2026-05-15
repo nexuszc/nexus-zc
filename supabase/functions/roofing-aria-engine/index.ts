@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
     contact_type = "unknown",
     job_id,
     language = "en",
+    bypass_gate = false,
     metadata = {}
   } = body;
 
@@ -87,41 +88,43 @@ Deno.serve(async (req) => {
     return Response.json({ error: "call_type and contact_phone required" }, { status: 400 });
   }
 
-  // CALL GATE — timing compliance (never blocks inbound/test)
-  const gateRes = await fetch(`${SUPABASE_URL}/functions/v1/aria-call-gate`, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ contact_phone, call_type })
-  });
-  const gate = await gateRes.json().catch(() => ({ allowed: true }));
+  // CALL GATE — timing compliance; bypass_gate skips entirely for test calls
+  if (!bypass_gate) {
+    const gateRes = await fetch(`${SUPABASE_URL}/functions/v1/aria-call-gate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ contact_phone, call_type })
+    });
+    const gate = await gateRes.json().catch(() => ({ allowed: true }));
 
-  if (!gate.allowed) {
-    try {
-      await supabase.from("system_heartbeats").insert({
-        function_name: "aria-call-gate",
-        status: gate.permanent ? "error" : "ok",
-        response_ms: 0,
-        error_message: `blocked:${gate.reason} phone:${contact_phone} type:${call_type}`,
-        metadata: { reason: gate.reason, local_time: gate.local_time, timezone: gate.recipient_timezone }
-      });
-    } catch { /* ignore */ }
+    if (!gate.allowed) {
+      try {
+        await supabase.from("system_heartbeats").insert({
+          function_name: "aria-call-gate",
+          status: gate.permanent ? "error" : "ok",
+          response_ms: 0,
+          error_message: `blocked:${gate.reason} phone:${contact_phone} type:${call_type}`,
+          metadata: { reason: gate.reason, local_time: gate.local_time, timezone: gate.recipient_timezone }
+        });
+      } catch { /* ignore */ }
 
-    if (!gate.permanent && gate.next_allowed_at) {
-      await supabase.from("aria_call_queue").insert({
-        call_type, contact_phone, contact_name, contact_type,
-        job_id: job_id || null, language, metadata,
-        fire_at: gate.next_allowed_at,
-        recipient_timezone: gate.recipient_timezone || "America/Denver",
-        queue_reason: gate.reason,
-        status: "queued"
+      if (!gate.permanent && gate.next_allowed_at) {
+        await supabase.from("aria_call_queue").insert({
+          call_type, contact_phone, contact_name, contact_type,
+          job_id: job_id || null, language, metadata,
+          fire_at: gate.next_allowed_at,
+          recipient_timezone: gate.recipient_timezone || "America/Denver",
+          queue_reason: gate.reason,
+          status: "queued"
+        });
+      }
+
+      return Response.json({
+        ok: false, blocked: true, reason: gate.reason,
+        next_allowed_at: gate.next_allowed_at,
+        queued: !gate.permanent && !!gate.next_allowed_at
       });
     }
-
-    return Response.json({
-      ok: false, blocked: true, reason: gate.reason,
-      next_allowed_at: gate.next_allowed_at,
-      queued: !gate.permanent && !!gate.next_allowed_at
-    });
   }
 
   // Compliance check

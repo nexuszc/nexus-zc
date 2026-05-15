@@ -3181,7 +3181,8 @@ Be specific. Reference actual numbers.` }],
             contact_phone: "+17203948574",
             contact_name: "Zach",
             contact_type: "test",
-            metadata: { contractor_name: "Roofing OS", bypass_gate: true }
+            bypass_gate: true,
+            metadata: { contractor_name: "Roofing OS" }
           })
         });
         const data = await res.json().catch(() => ({}));
