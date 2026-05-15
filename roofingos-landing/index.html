@@ -141,9 +141,12 @@
   .field-group { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
-  .field input { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s; width: 100%; }
-  .field input:focus { border-color: var(--blue); }
-  .field input::placeholder { color: rgba(148,163,184,0.5); }
+  .field input, .field select, .field textarea { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s; width: 100%; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue); }
+  .field input::placeholder, .field textarea::placeholder { color: rgba(148,163,184,0.5); }
+  .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; cursor: pointer; }
+  .field select option { background: #1e293b; color: var(--text); }
+  .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
   #card-element { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 13px 14px; transition: border-color 0.15s; }
   #card-element.StripeElement--focus { border-color: var(--blue); }
   .signup-btn { width: 100%; background: var(--blue); color: white; border: none; border-radius: 10px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; font-family: inherit; transition: background 0.15s, transform 0.1s; margin-top: 8px; box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
@@ -470,12 +473,22 @@
         <input type="text" id="c-company" placeholder="ABC Roofing LLC" autocomplete="organization">
       </div>
       <div class="field">
-        <label>Email</label>
-        <input type="email" id="c-email" placeholder="john@abcroofing.com" autocomplete="email">
-      </div>
-      <div class="field">
         <label>Phone</label>
         <input type="tel" id="c-phone" placeholder="(720) 555-0100" autocomplete="tel">
+      </div>
+      <div class="field">
+        <label>How many jobs per month?</label>
+        <select id="c-jobs">
+          <option value="">Select…</option>
+          <option value="1-5">1–5</option>
+          <option value="6-15">6–15</option>
+          <option value="16-30">16–30</option>
+          <option value="30+">30+</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Biggest challenge right now <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
+        <textarea id="c-challenge" rows="3" placeholder="e.g. supplements getting denied, homeowners going dark after install…"></textarea>
       </div>
     </div>
     <div class="signup-error" id="c-error"></div>
@@ -578,18 +591,21 @@ function closeContactModal() {
 }
 
 async function submitContact() {
-  const name    = document.getElementById('c-name').value.trim();
-  const company = document.getElementById('c-company').value.trim();
-  const email   = document.getElementById('c-email').value.trim();
-  const phone   = document.getElementById('c-phone').value.trim();
-  const errEl   = document.getElementById('c-error');
-  const btn     = document.getElementById('c-btn');
+  const name      = document.getElementById('c-name').value.trim();
+  const company   = document.getElementById('c-company').value.trim();
+  const phone     = document.getElementById('c-phone').value.trim();
+  const jobs      = document.getElementById('c-jobs').value;
+  const challenge = document.getElementById('c-challenge').value.trim();
+  const errEl     = document.getElementById('c-error');
+  const btn       = document.getElementById('c-btn');
 
   errEl.textContent = '';
-  if (!name || !email) { errEl.textContent = 'Name and email are required.'; return; }
+  if (!name || !company || !phone) { errEl.textContent = 'Name, company, and phone are required.'; return; }
 
   btn.disabled = true;
   btn.textContent = 'Sending…';
+
+  const placeholderEmail = `${phone.replace(/\D/g,'')}@roofingos-inquiry.dev`;
 
   try {
     await fetch(`${SUPABASE_URL}/functions/v1/contractor-signup`, {
@@ -597,10 +613,11 @@ async function submitContact() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         owner_name:   name,
-        company_name: company || name,
-        owner_email:  email,
+        company_name: company,
+        owner_email:  placeholderEmail,
         owner_phone:  phone,
-        plan:         'enterprise'
+        plan:         'enterprise_inquiry',
+        metadata:     { jobs_per_month: jobs, challenge }
       })
     });
   } catch { /* best effort */ }
@@ -609,7 +626,7 @@ async function submitContact() {
     <div style="text-align:center;padding:20px 0;">
       <div style="font-size:40px;margin-bottom:16px;">✓</div>
       <h3 style="margin-bottom:8px;">Got it.</h3>
-      <p style="color:var(--muted);font-size:15px;line-height:1.6;">Zach will be in touch within a few hours.<br>Check your email — or just call: <a href="tel:+17203339999" style="color:var(--blue-light);">text or call directly</a>.</p>
+      <p style="color:var(--muted);font-size:15px;line-height:1.6;">Zach will call you within 24 hours.</p>
       <button onclick="closeContactModal()" style="margin-top:24px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 24px;cursor:pointer;font-size:14px;font-weight:600;">Close</button>
     </div>
   `;

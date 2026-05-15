@@ -104,7 +104,8 @@ Deno.serve(async (req) => {
     starter: 29900,
     growth: 49900,
     professional: 99900,
-    enterprise: 299900
+    enterprise: 299900,
+    enterprise_inquiry: 0
   };
 
   let stripeCustomerId = '';
