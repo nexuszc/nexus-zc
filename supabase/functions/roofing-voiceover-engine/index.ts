@@ -1,5 +1,7 @@
-// roofing-voiceover-engine v2
-// Approved youtube_scripts → ElevenLabs TTS → Supabase Storage → Telegram sendAudio (inline player)
+// roofing-voiceover-engine v3
+// Approved youtube_scripts → ElevenLabs TTS → Supabase Storage
+// → Telegram sendAudio (inline player, no caption)
+// → Telegram sendDocument (raw .mp3 with full YouTube checklist)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -8,11 +10,25 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
 const ELEVENLABS_VOICE_ID = Deno.env.get("ELEVENLABS_VOICE_ID") || "pNInz6obpgDQGcFmaJgB";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
-const TELEGRAM_MAX_AUDIO_BYTES = 50 * 1024 * 1024; // 50MB Telegram limit
+const TELEGRAM_MAX_BYTES = 50 * 1024 * 1024;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// Look up the primary Telegram chat_id from channel_conversations.
+// Falls back to env var, then to the known Zach Curtis chat.
+async function getChatId(): Promise<string> {
+  const envId = Deno.env.get("TELEGRAM_CHAT_ID");
+  if (envId) return envId;
+  const { data } = await supabase
+    .from("channel_conversations")
+    .select("external_id")
+    .eq("channel", "telegram")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.external_id ?? "6545306511";
+}
 
 // ── TEXT CLEANING ───────────────────────────────────────────────────────────────
 
@@ -59,10 +75,6 @@ function slugify(title: string): string {
     .slice(0, 60);
 }
 
-function estimateMinutes(text: string): number {
-  return Math.max(1, Math.ceil(text.split(/\s+/).length / 130));
-}
-
 // ── ELEVENLABS ──────────────────────────────────────────────────────────────────
 
 async function generateVoiceover(text: string): Promise<ArrayBuffer> {
@@ -99,12 +111,12 @@ async function generateVoiceover(text: string): Promise<ArrayBuffer> {
 
 // ── TELEGRAM ────────────────────────────────────────────────────────────────────
 
-async function tg(text: string) {
+async function tg(chatId: string, text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
+      chat_id: chatId,
       text: text.slice(0, 4096),
       parse_mode: "Markdown",
       disable_web_page_preview: true,
@@ -112,22 +124,43 @@ async function tg(text: string) {
   }).catch(() => {});
 }
 
+// Message 1: inline audio player, no caption
 async function tgSendAudio(
+  chatId: string,
   audioBuffer: ArrayBuffer,
   filename: string,
   title: string,
+): Promise<boolean> {
+  try {
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("audio", new Blob([audioBuffer], { type: "audio/mpeg" }), filename);
+    form.append("title", title.slice(0, 64));
+    const res = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio`,
+      { method: "POST", body: form }
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// Message 2: raw .mp3 file with full YouTube checklist — iPhone saves directly to Files
+async function tgSendDocument(
+  chatId: string,
+  audioBuffer: ArrayBuffer,
+  filename: string,
   caption: string,
 ): Promise<boolean> {
   try {
     const form = new FormData();
-    form.append("chat_id", TELEGRAM_CHAT_ID);
-    form.append("audio", new Blob([audioBuffer], { type: "audio/mpeg" }), filename);
-    form.append("title", title.slice(0, 64));
+    form.append("chat_id", chatId);
+    form.append("document", new Blob([audioBuffer], { type: "audio/mpeg" }), filename);
     form.append("caption", caption.slice(0, 1024));
     form.append("parse_mode", "Markdown");
-
     const res = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio`,
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
       { method: "POST", body: form }
     );
     return res.ok;
@@ -148,35 +181,53 @@ function buildCaption(content: {
   const thumbnail = (content.thumbnail_text || content.title.toUpperCase()).slice(0, 60);
 
   return (
-    `🎙️ *${content.title}*\n\n` +
-    `Open studio.youtube.com → Create → Upload\n` +
-    `Select the audio file above ↑\n\n` +
-    `━━━━━━━━━━━━━━━\n` +
-    `📋 *TITLE* (copy this):\n${content.title}\n\n` +
-    `━━━━━━━━━━━━━━━\n` +
-    `📝 *DESCRIPTION* (copy this):\n${desc}\n\nroofingos.dev — starts at $49/month\n\n` +
-    `━━━━━━━━━━━━━━━\n` +
-    `🏷️ *TAGS* (copy this):\n${tags}\n\n` +
-    `━━━━━━━━━━━━━━━\n` +
-    `🖼️ *THUMBNAIL TEXT*:\n${thumbnail}\n\n` +
-    `Set visibility to Public → Publish ✓\n\n` +
+    `📋 *TITLE:*\n${content.title}\n\n` +
+    `📝 *DESCRIPTION:*\n${desc}\n\nroofingos.dev — starts at $49/month\n\n` +
+    `🏷️ *TAGS:*\n${tags}\n\n` +
+    `🖼️ *THUMBNAIL TEXT:*\n${thumbnail}\n\n` +
+    `studio.youtube.com → Create → Upload → set Public → Publish\n\n` +
     `When done reply:\n\`uploaded ${content.id}\``
   );
 }
 
+// ── TELEGRAM DELIVERY (audio + document) ────────────────────────────────────────
+
+async function deliverToTelegram(
+  chatId: string,
+  audioBuffer: ArrayBuffer,
+  content: { id: string; title: string; seo_description?: string | null; tags?: string[] | null; thumbnail_text?: string | null },
+  mp3Url: string,
+): Promise<void> {
+  const filename = `roofing-os-${slugify(content.title)}.mp3`;
+  const caption = buildCaption(content);
+
+  if (audioBuffer.byteLength <= TELEGRAM_MAX_BYTES) {
+    // Message 1: inline audio player (no caption — keeps it clean)
+    await tgSendAudio(chatId, audioBuffer, filename, content.title);
+    // Message 2: raw file download with full checklist
+    await tgSendDocument(chatId, audioBuffer, filename, caption);
+  } else {
+    // File too large — fallback to text with download link
+    await tg(chatId, `🎙️ *Voiceover Ready*\n\n${caption}\n\n[Download MP3](${mp3Url})`);
+  }
+}
+
 // ── CORE PROCESSOR ─────────────────────────────────────────────────────────────
 
-async function processOne(content: {
-  id: string;
-  title: string;
-  hook?: string | null;
-  body?: string | null;
-  portal_mention?: string | null;
-  call_to_action?: string | null;
-  seo_description?: string | null;
-  tags?: string[] | null;
-  thumbnail_text?: string | null;
-}): Promise<string> {
+async function processOne(
+  chatId: string,
+  content: {
+    id: string;
+    title: string;
+    hook?: string | null;
+    body?: string | null;
+    portal_mention?: string | null;
+    call_to_action?: string | null;
+    seo_description?: string | null;
+    tags?: string[] | null;
+    thumbnail_text?: string | null;
+  }
+): Promise<string> {
   const spokenText = buildSpokenText(content);
 
   // 1. Generate voiceover
@@ -198,24 +249,8 @@ async function processOne(content: {
     .getPublicUrl(storageFilename);
   const mp3Url = urlData.publicUrl;
 
-  // 3. Send audio directly to Telegram (inline player)
-  const caption = buildCaption(content);
-  const tgFilename = `${slugify(content.title)}.mp3`;
-
-  let sent = false;
-
-  if (audioBuffer.byteLength <= TELEGRAM_MAX_AUDIO_BYTES) {
-    sent = await tgSendAudio(audioBuffer, tgFilename, content.title, caption);
-  }
-
-  // Fallback: send text message with download link if sendAudio failed or file too large
-  if (!sent) {
-    await tg(
-      `🎙️ *Voiceover Ready*\n\n` +
-      caption +
-      `\n\n[Download MP3](${mp3Url})`
-    );
-  }
+  // 3. Send audio + document to Telegram
+  await deliverToTelegram(chatId, audioBuffer, content, mp3Url);
 
   // 4. Update roofing_content
   await supabase.from("roofing_content").update({
@@ -244,24 +279,38 @@ Deno.serve(async (req) => {
   if (body.test) return Response.json({ ok: true, message: "roofing-voiceover-engine ready" });
 
   const startMs = Date.now();
+  const chatId = await getChatId();
 
   // Single content ID mode
   if (body.content_id) {
     try {
       const { data: content, error } = await supabase
         .from("roofing_content")
-        .select("id, title, hook, body, portal_mention, call_to_action, seo_description, tags, thumbnail_text")
+        .select("id, title, hook, body, portal_mention, call_to_action, seo_description, tags, thumbnail_text, mp3_url")
         .eq("id", body.content_id)
         .maybeSingle();
 
       if (error) throw error;
       if (!content) return Response.json({ error: "content not found" }, { status: 404 });
 
-      const mp3Url = await processOne(content);
+      // resend_only: download existing MP3 from storage, send both formats — no ElevenLabs call
+      if (body.resend_only && (content as any).mp3_url) {
+        const mp3Url = (content as any).mp3_url as string;
+        const storagePath = `youtube/${content.id}.mp3`;
+        const { data: blob, error: dlErr } = await supabase.storage
+          .from("roofing-content")
+          .download(storagePath);
+        if (dlErr || !blob) throw new Error(`Storage download failed: ${dlErr?.message || "no data"}`);
+        const audioBuffer = await blob.arrayBuffer();
+        await deliverToTelegram(chatId, audioBuffer, content, mp3Url);
+        return Response.json({ ok: true, resent: true, content_id: content.id, mp3_url: mp3Url, duration_ms: Date.now() - startMs });
+      }
+
+      const mp3Url = await processOne(chatId, content);
       return Response.json({ ok: true, content_id: content.id, mp3_url: mp3Url, duration_ms: Date.now() - startMs });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      await tg(`❌ Voiceover failed for \`${body.content_id}\`: ${msg.slice(0, 200)}`);
+      await tg(chatId, `❌ Voiceover failed for \`${body.content_id}\`: ${msg.slice(0, 200)}`);
       return Response.json({ ok: false, error: msg }, { status: 500 });
     }
   }
@@ -288,13 +337,13 @@ Deno.serve(async (req) => {
 
     for (const content of pending) {
       try {
-        await processOne(content);
+        await processOne(chatId, content);
         processed++;
         await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         errors++;
         const msg = err instanceof Error ? err.message : String(err);
-        await tg(`❌ Voiceover error for "${(content.title || "").slice(0, 50)}": ${msg.slice(0, 200)}`);
+        await tg(chatId, `❌ Voiceover error for "${(content.title || "").slice(0, 50)}": ${msg.slice(0, 200)}`);
       }
     }
 
