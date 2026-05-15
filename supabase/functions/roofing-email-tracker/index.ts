@@ -72,7 +72,12 @@ Deno.serve(async (req) => {
       }
 
       // Hot-open alert: fired on 2nd open (they came back)
-      if (newCount === 2 && log.prospect_id) {
+      // Debounce: ignore if both opens are within 30 seconds — email client preload, not a human
+      const secondsApart = log.first_opened_at
+        ? (Date.now() - new Date(log.first_opened_at).getTime()) / 1000
+        : 999;
+
+      if (newCount >= 2 && secondsApart > 30 && log.prospect_id) {
         const { data: prospect } = await supabase
           .from("roofing_prospects")
           .select("owner_name, company_name, phone, city, state")
@@ -84,7 +89,7 @@ Deno.serve(async (req) => {
           const fn = name.split(" ")[0] || name;
           const loc = [prospect.city, prospect.state].filter(Boolean).join(", ") || "unknown";
           await tg(
-            `🔥 *Hot Open — ${name} re-read touch ${log.touch_number}*\n\n` +
+            `🔥 *Hot Open — ${name || prospect.company_name} re-read touch ${log.touch_number}*\n\n` +
             `*${prospect.company_name || ""}*\n` +
             `📞 ${prospect.phone || "no phone"}\n` +
             `📍 ${loc}\n\n` +
