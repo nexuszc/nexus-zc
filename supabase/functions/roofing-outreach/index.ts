@@ -90,30 +90,34 @@ Respond with JSON only (no backticks):
       messages: [{ role: "user", content: prompt }]
     })
   });
-  const data = await res.json();
   try {
-    return JSON.parse(data.content[0].text.replace(/```json|```/g, "").trim());
+    const data = await res.json();
+    return JSON.parse((data.content?.[0]?.text || "{}").replace(/```json|```/g, "").trim());
   } catch {
     return { subject: "Quick question", html: "<p>Hi,</p>", text: "Hi," };
   }
 }
 
 async function sendEmail(to: string, subject: string, html: string): Promise<string | null> {
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: "Zach Curtis <roofing@nexuszc.com>",
-      to,
-      subject,
-      html
-    })
-  });
-  const data = await res.json();
-  return data.id || null;
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: "Zach Curtis <roofing@nexuszc.com>",
+        to,
+        subject,
+        html
+      })
+    });
+    const data = await res.json();
+    return data.id || null;
+  } catch {
+    return null;
+  }
 }
 
 function getNextTouchAt(firstContactAt: Date, nextTouchNumber: number): Date | null {
@@ -124,7 +128,11 @@ function getNextTouchAt(firstContactAt: Date, nextTouchNumber: number): Date | n
   return next;
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  const body = await req.json().catch(() => ({}));
+  if (body.test) return Response.json({ ok: true, message: "roofing-outreach ready" });
+
+  try {
   const now = new Date().toISOString();
 
   const { data: prospects } = await supabase
@@ -199,4 +207,8 @@ Deno.serve(async (_req) => {
   }
 
   return Response.json({ ok: true, sent });
+
+  } catch (err) {
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
 });
