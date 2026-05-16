@@ -260,7 +260,17 @@ async function processOne(
     voiceover_chars: spokenText.length,
   }).eq("id", content.id);
 
-  // 5. Log heartbeat
+  // 5. Trigger YouTube uploader if video_url is set — full chain: voiceover → upload → social post
+  const contentFull = await supabase.from("roofing_content").select("video_url, youtube_video_id").eq("id", content.id).single();
+  if (contentFull.data?.video_url && !contentFull.data?.youtube_video_id) {
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/roofing-youtube-uploader`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content_id: content.id }),
+    }).catch(() => {});
+  }
+
+  // 6. Log heartbeat
   try {
     await supabase.from("system_heartbeats").insert({
       function_name: "roofing-voiceover-engine",
