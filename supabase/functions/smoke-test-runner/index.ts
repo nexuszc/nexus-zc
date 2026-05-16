@@ -1,19 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 Deno.serve(async (req: Request): Promise<Response> => {
-  try {
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-          "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
-        }
-      });
-    }
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+  };
 
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
     // Parse query parameters for optional test filtering
     const url = new URL(req.url);
     const filterParam = url.searchParams.get("filter");
@@ -51,9 +48,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         {
           status: 500,
           headers: { 
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+            ...corsHeaders,
+            "Content-Type": "application/json"
           }
         }
       );
@@ -154,9 +150,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       {
         status: allPassed ? 200 : 500,
         headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+          ...corsHeaders,
+          "Content-Type": "application/json"
         }
       }
     );
@@ -176,9 +171,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       {
         status: 500,
         headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+          ...corsHeaders,
+          "Content-Type": "application/json"
         }
       }
     );
