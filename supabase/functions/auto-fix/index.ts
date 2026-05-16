@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     const fixedSize = fixedCode.length;
     if (fixedSize < originalSize * 0.8) {
       const msg = `⚠️ Auto-fix ABORTED: Fixed file (${fixedSize} chars) is less than 80% of original (${originalSize} chars). Possible handler truncation. Improvement marked for manual review.`;
-      await sendTelegram(telegram_chat_id, msg);
+      // Size guard abort stored to nexus_improvements — visible in System fix queue
       await supabase.from("nexus_improvements").update({
         status: "needs_manual_review",
         auto_fix_error: `File size dropped from ${originalSize} to ${fixedSize} chars (${Math.round(fixedSize / originalSize * 100)}% of original)`,
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       `${confidenceNote}\n\n` +
       `Reply:\n✅ "approve" → push to production\n❌ "reject" → discard this fix`;
 
-    await sendTelegram(telegram_chat_id, msg);
+    // Auto-fix ready stored to nexus_improvements — visible in System fix queue
 
     return new Response(JSON.stringify({ ok: true, summary }), { status: 200 });
 
@@ -102,9 +102,7 @@ Deno.serve(async (req) => {
       status: "pending",
     }).eq("id", improvement_id);
 
-    await sendTelegram(telegram_chat_id,
-      `⚠️ Auto-fix attempted for "${improvement.title}" but encountered an error.\n\nError: ${err.message}\n\nThis has been logged and will be retried next cycle.`
-    );
+    // Auto-fix error stored to nexus_improvements.auto_fix_error — visible in System fix queue
 
     return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }

@@ -1090,7 +1090,7 @@ Deno.serve(async (_req) => {
                   headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
                   body: JSON.stringify({ zip_codes: zipCodes, hail_size: hailSize, storm_date: new Date().toISOString() })
                 }).catch(() => {});
-                await tg(`⛈️ *Storm detected by Nexus*\nHail: ${hailSize}"\nArea: ${zipCodes.join(", ")}\nStorm alerts firing to previous customers.`);
+                // Storm detected stored to hail_events — visible in dashboard Home action queue
                 break;
               }
             }
@@ -1174,16 +1174,7 @@ Deno.serve(async (_req) => {
         const daysPending = Math.round(
           (Date.now() - new Date(pkg.submitted_to_adjuster_at).getTime()) / (1000 * 60 * 60 * 24)
         );
-        if (daysPending > 5 && daysPending % 5 === 0) {
-          await tg(
-            `⏰ *Supplement Follow-up Needed*\n` +
-            `Carrier: ${pkg.carrier_name}\n` +
-            `Submitted ${daysPending} days ago.\n` +
-            `Amount: $${((pkg.supplement_requested_amount || 0) / 100).toLocaleString()}\n` +
-            `Adjuster: ${pkg.adjuster_name || "Unknown"}\n` +
-            `Reply \`follow up supplement: ${pkg.id?.slice(0, 8)}\``
-          );
-        }
+        // Supplement follow-up stored to supplement_packages — visible in dashboard
       }
     } catch {}
 
@@ -1341,14 +1332,7 @@ Deno.serve(async (_req) => {
         const daysLeft = Math.max(0, Math.round(
           (new Date(c.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
         ));
-        await tg(
-          `⏰ *Trial Expiring Soon*\n` +
-          `${c.company_name} — ${c.owner_name}\n` +
-          `Email: ${c.owner_email}\n` +
-          `Phone: ${c.owner_phone || "none"}\n` +
-          `Trial ends in: ${daysLeft} day(s)\n` +
-          `Action: Call to convert to paid`
-        );
+        // Trial expiry stored to contractor_accounts — visible in dashboard Home action queue
       }
     }
 

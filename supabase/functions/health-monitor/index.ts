@@ -101,10 +101,8 @@ Deno.serve(async () => {
         .gt("sent_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
         .maybeSingle();
 
-      if (!existingAlert && telegramChatId) {
-        await sendTelegram(telegramChatId,
-          `🌡️ DEAL GOING COLD\n\n${client.name} has had no activity in 48+ hours.\n\nSend "report: ${client.name}" to see full status.`
-        );
+      if (!existingAlert) {
+        // Deal going cold stored to nexus_alerts — visible in dashboard Home action queue
         await supabase.from("nexus_alerts").insert({
           alert_type: `deal_cold_${client.id}`,
           message: `${client.name} has gone cold — no activity in 48h`,
@@ -236,15 +234,7 @@ async function verifyRecentFixes(supabase: any, healthResults: any[], telegramCh
         post_fix_error_count: relatedHealth.errors,
       }).eq("id", fix.id);
 
-      if (relatedHealth.errors > 5 && telegramChatId) {
-        await sendTelegram(telegramChatId,
-          `⚠️ FIX REGRESSION DETECTED\n\n"${fix.title}" was approved but ${fix.affected_function} now shows ${relatedHealth.errors} errors.\n\nSend "reject" to rollback, or "nexus status" to investigate.`
-        );
-      } else if (isWorking && telegramChatId) {
-        await sendTelegram(telegramChatId,
-          `✅ FIX VERIFIED\n\n"${fix.title}" is working correctly in production.\n${fix.affected_function}: ${relatedHealth.successes} successes, ${relatedHealth.errors} errors.`
-        );
-      }
+      // Fix regression/verified stored to nexus_improvements — visible in System fix queue
     }
   }
 }

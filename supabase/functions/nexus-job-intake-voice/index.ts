@@ -353,27 +353,36 @@ Deno.serve(async (req) => {
     }
 
     if (event === 'call_analyzed') {
+      console.log('call_analyzed received', { callerPhone, call_id: call?.call_id || body.call_id });
+
       const transcript = call?.transcript || body.transcript || '';
+      console.log('transcript length:', transcript.length, 'has_caller:', !!callerPhone);
       if (!transcript || !callerPhone) return Response.json({ ok: true });
 
       const member = await lookupCaller(callerPhone);
+      console.log('member_found:', !!member, 'role:', member?.role);
       if (!member) return Response.json({ ok: true });
 
       const role = member.role as string;
       const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.unknown;
+      console.log('can_start_jobs:', config.can_start_jobs);
       if (!config.can_start_jobs) return Response.json({ ok: true });
 
+      console.log('running extractJobData...');
       const extracted = await extractJobData(transcript);
+      console.log('extracted:', JSON.stringify(extracted));
       const confidence = (extracted.confidence as number) || 0;
+      console.log('confidence:', confidence, 'has_name:', !!extracted.homeowner_name, 'has_address:', !!extracted.address);
 
       if (confidence > 60 && extracted.homeowner_name && extracted.address) {
+        console.log('creating job...');
         const { job, token } = await createJob(extracted, member, transcript) as Record<string, unknown>;
         const contractor = member.contractor_accounts as Record<string, unknown>;
-
         const jobId = (job as Record<string, unknown>).id as string;
+        console.log('job created:', jobId, 'token:', token);
 
         if (extracted.homeowner_email) {
-          // Send portal link to homeowner immediately
+          console.log('sending homeowner email to:', extracted.homeowner_email);
           await sendHomeownerEmail(
             extracted.homeowner_email as string,
             extracted.homeowner_name as string,
@@ -381,18 +390,16 @@ Deno.serve(async (req) => {
             contractor.company_name as string
           );
 
-          // Record that portal was sent
           await supabase.from('roofing_jobs').update({
             portal_sent_at: new Date().toISOString(),
             portal_sent_confirmed: true,
           }).eq('id', jobId);
 
-          // Update homeowner_sessions with the captured email
           await supabase.from('homeowner_sessions')
             .update({ homeowner_email: extracted.homeowner_email })
             .eq('job_id', jobId);
         } else {
-          // No email captured — wait for it via SMS follow-up
+          console.log('no homeowner email — queuing inbound_session for follow-up');
           await supabase.from('inbound_sessions').upsert({
             phone: callerPhone,
             member_id: member.id,
@@ -408,8 +415,8 @@ Deno.serve(async (req) => {
           }, { onConflict: 'phone' });
         }
 
-        // Send roofer confirmation regardless of whether homeowner email was captured
         const rooferEmail = (contractor.owner_email || '') as string;
+        console.log('roofer_email:', rooferEmail || '(none)');
         if (rooferEmail) {
           await sendRooferConfirmEmail(
             rooferEmail,
@@ -421,10 +428,9 @@ Deno.serve(async (req) => {
         }
 
         // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
-        // To re-enable: uncomment below + remove this block
-        // await sendSMS(callerPhone,
-        //   `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nReply with homeowner's cell # to send them the portal link.\nJob ID: ${token}`
-        // );
+        // await sendSMS(callerPhone, `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nJob ID: ${token}`);
+      } else {
+        console.log('skipping job creation — confidence too low or missing fields');
       }
 
       return Response.json({ ok: true });
