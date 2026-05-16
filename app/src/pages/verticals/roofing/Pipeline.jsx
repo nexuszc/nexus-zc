@@ -1,0 +1,336 @@
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '../../../lib/supabase'
+
+const SB_URL = import.meta.env.VITE_SUPABASE_URL
+const SB_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+function ago(ts) {
+  if (!ts) return '—'
+  const s = Math.floor((Date.now() - new Date(ts)) / 1000)
+  if (s < 60) return `${s}s`
+  if (s < 3600) return `${Math.floor(s / 60)}m`
+  if (s < 86400) return `${Math.floor(s / 3600)}h`
+  return `${Math.floor(s / 86400)}d`
+}
+
+const FILTERS = [
+  { key: 'all',        label: 'All' },
+  { key: 'whale',      label: '🐋 Whales' },
+  { key: 'hot',        label: '🔥 Hot Opens' },
+  { key: 'sequence',   label: 'In Sequence' },
+  { key: 'clicked',    label: 'Clicked' },
+  { key: 'booked',     label: 'Booked' },
+  { key: 'dead',       label: 'Dead' },
+]
+
+const STATUS_COLORS = {
+  new:        'text-gray-400 bg-gray-500/10',
+  contacted:  'text-blue-400 bg-blue-500/10',
+  interested: 'text-indigo-400 bg-indigo-500/10',
+  booked:     'text-green-400 bg-green-500/10',
+  dead:       'text-red-400 bg-red-500/10',
+  converted:  'text-emerald-400 bg-emerald-500/10',
+}
+
+function Badge({ status }) {
+  const cls = STATUS_COLORS[status] || 'text-gray-500 bg-gray-800'
+  return (
+    <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${cls}`}>
+      {status}
+    </span>
+  )
+}
+
+function ProspectRow({ p, log, onAction }) {
+  const [expanded, setExpanded] = useState(false)
+  const [acting, setActing] = useState(null)
+
+  const hotOpens = log?.filter(l => l.prospect_id === p.id && l.open_count >= 2)
+  const lastOpen = log?.find(l => l.prospect_id === p.id && l.last_opened_at)
+
+  const act = async (type) => {
+    setActing(type)
+    try { await onAction(p, type) } finally { setActing(null) }
+  }
+
+  return (
+    <>
+      <tr
+        onClick={() => setExpanded(e => !e)}
+        className="border-b border-[#1e1e2e] hover:bg-white/[0.02] cursor-pointer transition-colors"
+      >
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2">
+            {p.whale_alerted && <span className="text-base leading-none">🐋</span>}
+            {hotOpens?.length > 0 && <span className="text-base leading-none">🔥</span>}
+            <div>
+              <div className="text-sm font-semibold text-white">{p.owner_name || '—'}</div>
+              <div className="text-xs text-gray-500">{p.company_name || ''}</div>
+            </div>
+          </div>
+        </td>
+        <td className="px-4 py-3 hidden sm:table-cell">
+          <div className="text-sm text-gray-400 font-mono">{p.phone || '—'}</div>
+        </td>
+        <td className="px-4 py-3 hidden md:table-cell">
+          <Badge status={p.status || 'new'} />
+        </td>
+        <td className="px-4 py-3 hidden lg:table-cell">
+          <div className="text-xs text-gray-500">
+            {lastOpen ? `opened ${ago(lastOpen.last_opened_at)} ago` : p.last_contacted_at ? `contacted ${ago(p.last_contacted_at)} ago` : '—'}
+          </div>
+        </td>
+        <td className="px-4 py-3 text-right">
+          <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => act('nudge')}
+              disabled={acting === 'nudge'}
+              className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 px-2 py-1 rounded hover:bg-indigo-500/10 transition-colors disabled:opacity-40"
+            >
+              {acting === 'nudge' ? '…' : 'Nudge'}
+            </button>
+            <button
+              onClick={() => act('call')}
+              disabled={acting === 'call'}
+              className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-1 rounded hover:bg-cyan-500/10 transition-colors disabled:opacity-40"
+            >
+              {acting === 'call' ? '…' : 'Call'}
+            </button>
+            <button
+              onClick={() => act('dead')}
+              disabled={acting === 'dead'}
+              className="text-[11px] font-semibold text-gray-600 hover:text-red-400 px-2 py-1 rounded hover:bg-red-500/5 transition-colors disabled:opacity-40"
+            >
+              ✕
+            </button>
+          </div>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="bg-[#0e0e18] border-b border-[#1e1e2e]">
+          <td colSpan={5} className="px-4 py-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+              <div>
+                <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Email</div>
+                <div className="text-gray-300">{p.email || '—'}</div>
+              </div>
+              <div>
+                <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">City / State</div>
+                <div className="text-gray-300">{[p.city, p.state].filter(Boolean).join(', ') || '—'}</div>
+              </div>
+              <div>
+                <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Score</div>
+                <div className="text-gray-300">{p.lead_score ?? '—'}</div>
+              </div>
+              <div>
+                <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Touches</div>
+                <div className="text-gray-300">{log?.filter(l => l.prospect_id === p.id).length ?? 0}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Notes</div>
+                <div className="text-gray-300">{p.notes || '—'}</div>
+              </div>
+              <div className="col-span-2 flex gap-2 pt-1">
+                <button
+                  onClick={() => act('book')}
+                  disabled={acting === 'book'}
+                  className="text-xs font-semibold bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  {acting === 'book' ? '…' : 'Mark Booked'}
+                </button>
+                <button
+                  onClick={() => act('enroll')}
+                  disabled={acting === 'enroll'}
+                  className="text-xs font-semibold bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                >
+                  {acting === 'enroll' ? '…' : 'Enroll Sequence'}
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+export default function Pipeline() {
+  const [prospects, setProspects] = useState([])
+  const [log, setLog] = useState([])
+  const [filter, setFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [newForm, setNewForm] = useState({ owner_name: '', company_name: '', phone: '', email: '' })
+
+  const load = useCallback(async () => {
+    const [{ data: pros }, { data: logs }] = await Promise.all([
+      supabase.from('roofing_prospects').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('roofing_outreach_log').select('prospect_id, touch_number, open_count, last_opened_at, direction').order('last_opened_at', { ascending: false }).limit(500),
+    ])
+    setProspects(pros || [])
+    setLog(logs || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const filtered = prospects.filter(p => {
+    if (search) {
+      const q = search.toLowerCase()
+      if (!`${p.owner_name} ${p.company_name} ${p.phone} ${p.email}`.toLowerCase().includes(q)) return false
+    }
+    if (filter === 'whale') return p.whale_alerted && !p.outcome
+    if (filter === 'hot') return log.some(l => l.prospect_id === p.id && l.open_count >= 2)
+    if (filter === 'sequence') return p.in_sequence
+    if (filter === 'clicked') return p.portal_clicked
+    if (filter === 'booked') return p.status === 'booked'
+    if (filter === 'dead') return p.status === 'dead'
+    return true
+  })
+
+  const handleAction = async (prospect, type) => {
+    if (type === 'nudge') {
+      await fetch(`${SB_URL}/functions/v1/roofing-outreach-sequencer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ prospect_id: prospect.id }),
+      }).catch(() => {})
+    } else if (type === 'call') {
+      await fetch(`${SB_URL}/functions/v1/roofing-aria-engine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ prospect_id: prospect.id }),
+      }).catch(() => {})
+    } else if (type === 'dead') {
+      await supabase.from('roofing_prospects').update({ status: 'dead', outcome: 'dead' }).eq('id', prospect.id)
+      await load()
+    } else if (type === 'book') {
+      await supabase.from('roofing_prospects').update({ status: 'booked' }).eq('id', prospect.id)
+      await load()
+    } else if (type === 'enroll') {
+      await fetch(`${SB_URL}/functions/v1/roofing-outreach-sequencer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ prospect_id: prospect.id, enroll: true }),
+      }).catch(() => {})
+    }
+  }
+
+  const addProspect = async () => {
+    if (!newForm.owner_name && !newForm.phone) return
+    await supabase.from('roofing_prospects').insert([{ ...newForm, status: 'new' }])
+    setNewForm({ owner_name: '', company_name: '', phone: '', email: '' })
+    setAdding(false)
+    await load()
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-white">Pipeline</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{prospects.length} prospects</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={load}
+            className="text-xs text-gray-500 hover:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => setAdding(a => !a)}
+            className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+
+      {adding && (
+        <div className="mb-4 bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            {[
+              { key: 'owner_name', placeholder: 'Name *' },
+              { key: 'company_name', placeholder: 'Company' },
+              { key: 'phone', placeholder: 'Phone *' },
+              { key: 'email', placeholder: 'Email' },
+            ].map(f => (
+              <input
+                key={f.key}
+                type="text"
+                placeholder={f.placeholder}
+                value={newForm[f.key]}
+                onChange={e => setNewForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                className="bg-[#0a0a0f] border border-[#1e1e2e] text-white text-sm rounded-lg px-3 py-2 placeholder-gray-600 focus:outline-none focus:border-indigo-500"
+              />
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={addProspect} className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg">Save</button>
+            <button onClick={() => setAdding(false)} className="text-xs text-gray-500 hover:text-gray-300 px-3 py-1.5 rounded-lg">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Filters + search */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <input
+          type="text"
+          placeholder="Search name, company, phone..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="bg-[#12121a] border border-[#1e1e2e] text-white text-sm rounded-lg px-3 py-2 placeholder-gray-600 focus:outline-none focus:border-indigo-500 sm:w-64"
+        />
+        <div className="flex gap-1.5 flex-wrap">
+          {FILTERS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                filter === f.key
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-[#12121a] rounded-xl border border-[#1e1e2e] overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1,2,3,4,5].map(i => <div key={i} className="skeleton h-10 w-full" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center">
+            <p className="text-gray-600 text-sm">No prospects match this filter.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#1e1e2e]">
+                  <th className="px-4 py-3 text-left text-[10px] text-gray-600 font-bold uppercase tracking-widest">Prospect</th>
+                  <th className="px-4 py-3 text-left text-[10px] text-gray-600 font-bold uppercase tracking-widest hidden sm:table-cell">Phone</th>
+                  <th className="px-4 py-3 text-left text-[10px] text-gray-600 font-bold uppercase tracking-widest hidden md:table-cell">Status</th>
+                  <th className="px-4 py-3 text-left text-[10px] text-gray-600 font-bold uppercase tracking-widest hidden lg:table-cell">Last Activity</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => (
+                  <ProspectRow key={p.id} p={p} log={log} onAction={handleAction} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
