@@ -52,6 +52,33 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: 'roofing-social-poster ready' });
 
+  // Direct test post — if youtube_url provided, uses full post format; otherwise raw message
+  if (body.test_post) {
+    if (!FACEBOOK_PAGE_ID || !FACEBOOK_ACCESS_TOKEN) {
+      return Response.json({ ok: false, error: 'FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN not set' }, { status: 503 });
+    }
+    let message: string;
+    if (body.youtube_url) {
+      const hook = body.hook || body.title || '';
+      const link = body.youtube_url as string;
+      message = `${hook}\n\nFull breakdown 👇\n${link}\n\n🏠 roofingos.dev — starts at $49/month`;
+    } else {
+      message = (body.message as string) || 'Test post from Roofing OS';
+    }
+    const res = await fetch(`https://graph.facebook.com/v18.0/${FACEBOOK_PAGE_ID}/feed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        ...(body.youtube_url ? { link: body.youtube_url } : {}),
+        access_token: FACEBOOK_ACCESS_TOKEN,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return Response.json({ ok: false, error: data.error }, { status: 400 });
+    return Response.json({ ok: true, post_id: data.id });
+  }
+
   const { content_id, youtube_url, title, hook } = body;
   if (!youtube_url || !title) return Response.json({ error: 'youtube_url and title required' }, { status: 400 });
 
