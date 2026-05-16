@@ -1000,7 +1000,7 @@ Deno.serve(async (_req) => {
             headline: article.title?.slice(0, 200),
             detected_at: new Date().toISOString()
           });
-          await tg(`⛈️ *Hail Event Detected*\n\n${article.title}\n${article.link}\n\n_Roofing OS prospecting can target affected areas._`);
+          // Hail event stored to hail_events table — visible in dashboard
         }
       })().catch(() => {});
     }

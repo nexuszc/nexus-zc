@@ -313,21 +313,7 @@ Deno.serve(async (_req) => {
   const hasNewProposals = proposals.length > 0;
   const hasStalledOnboardings = stalledOnboardings.length > 0;
 
-  if (hasIssues || hasNewIntel || hasNewProposals || hasStalledOnboardings) {
-    const msg = `🏠 *Roofing OS Product Monitor*\n\n` +
-      `*Health Score:* ${snapshot.product_health_score}/100\n` +
-      `*Contractors:* ${snapshot.total_contractors} active | ${snapshot.onboarded_contractors} onboarded\n` +
-      `*Jobs:* ${snapshot.total_jobs} total | ${snapshot.jobs_with_portal_sent} with portal sent\n` +
-      `*Pipeline:* ${snapshot.total_prospects} prospects | ${snapshot.hot_leads} hot | ${snapshot.closed_won} won\n\n` +
-      (hasIssues ? `⚠️ *${snapshot.portal_errors_24h} errors in last 24h*\n\n` : '') +
-      (hasStalledOnboardings ? `⏳ *Stalled onboardings (>48h):*\n${stalledOnboardings.map(c => `• ${c.name} — missing: ${c.missing.join(', ') || 'unknown'}`).join('\n')}\n\n` : '') +
-      (hasNewIntel ? `🔍 *Competitor updates:*\n${newCompetitorIntel.map(i => `• ${i}`).join('\n')}\n\n` : '') +
-      (hasNewProposals ? `💡 *${proposals.length} new improvements proposed*\n` : '') +
-      `📋 Total pending: ${pendingCount}\n\n` +
-      `_Reply \`roofing improvements\` to review queue._`;
-
-    await sendTelegram(msg);
-  }
+  // Product monitor results stored to roofing_health_snapshots + nexus_roofing_proposals — visible in dashboard
 
   return Response.json({
     ok: true,

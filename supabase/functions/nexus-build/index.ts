@@ -716,14 +716,7 @@ Deno.serve(async (req) => {
       ? `All ${testResults.passed} tests passed`
       : `${testResults.passed} passed, ${testResults.failed} failed`;
 
-    await tg(
-      `*Build ready for review*\n\n` +
-      `*Goal:* ${manifest?.goal}\n` +
-      `*Tests:* ${testSummary}\n` +
-      `*Commit:* ${buildResult.commitSha.slice(0, 8)} (dev)\n\n` +
-      `To deploy: reply \`deploy build ${manifestId.slice(0, 8)}\`\n` +
-      `To discard: reply \`discard build ${manifestId.slice(0, 8)}\``
-    );
+    // Build result stored to nexus_audit_log — visible in dashboard
 
     await supabase.from("nexus_audit_log").insert({
       engine: "nexus-build",

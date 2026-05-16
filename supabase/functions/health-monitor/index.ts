@@ -150,10 +150,7 @@ Deno.serve(async () => {
       .maybeSingle();
 
     if (topFix && !recentFix && telegramChatId) {
-      await sendTelegram(telegramChatId,
-        `🔧 Working on: "${topFix.title}"\nPriority: ${topFix.priority} | Est: ${topFix.estimated_minutes}min\n\nFix coming shortly...`
-      );
-
+      // Improvement trigger stored to nexus_improvements — visible in dashboard
       fetch(`${SUPABASE_URL}/functions/v1/auto-fix`, {
         method: "POST",
         headers: {

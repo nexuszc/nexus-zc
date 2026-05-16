@@ -70,7 +70,7 @@ async function lookupCaller(phone: string) {
 
   const { data: member } = await supabase
     .from('contractor_team_members')
-    .select('*, contractor_accounts(id, company_name, plan, subscription_status)')
+    .select('*, contractor_accounts(id, company_name, owner_email, plan, subscription_status)')
     .eq('phone', phone)
     .eq('active', true)
     .maybeSingle();
@@ -79,7 +79,7 @@ async function lookupCaller(phone: string) {
 
   const { data: member2 } = await supabase
     .from('contractor_team_members')
-    .select('*, contractor_accounts(id, company_name, plan, subscription_status)')
+    .select('*, contractor_accounts(id, company_name, owner_email, plan, subscription_status)')
     .ilike('phone', `%${clean.slice(-10)}`)
     .eq('active', true)
     .maybeSingle();
@@ -102,12 +102,17 @@ async function extractJobData(transcript: string): Promise<Record<string, unknow
         role: 'user',
         content: `Extract job details from this contractor call transcript. Return ONLY valid JSON. No markdown.
 
+IMPORTANT: Email addresses in voice transcripts are often spelled out. Reconstruct them:
+- "john at gmail dot com" → "john@gmail.com"
+- "mike underscore smith at yahoo dot com" → "mike_smith@yahoo.com"
+- "info at roofer dash co dot com" → "info@roofer-co.com"
+
 Transcript: "${transcript}"
 
 Extract:
 {
   "homeowner_name": "full name or null",
-  "homeowner_email": "email address or null",
+  "homeowner_email": "email address if mentioned in any form, reconstructed to valid format, or null",
   "address": "full address or null",
   "city": "city or null",
   "state": "state abbreviation or null",
@@ -369,21 +374,45 @@ Deno.serve(async (req) => {
         const { job, token } = await createJob(extracted, member, transcript) as Record<string, unknown>;
         const contractor = member.contractor_accounts as Record<string, unknown>;
 
-        // Send homeowner portal email if we have their email from the transcript
+        const jobId = (job as Record<string, unknown>).id as string;
+
         if (extracted.homeowner_email) {
+          // Send portal link to homeowner immediately
           await sendHomeownerEmail(
             extracted.homeowner_email as string,
             extracted.homeowner_name as string,
             token as string,
             contractor.company_name as string
           );
+
+          // Record that portal was sent
           await supabase.from('roofing_jobs').update({
             portal_sent_at: new Date().toISOString(),
             portal_sent_confirmed: true,
-          }).eq('id', (job as Record<string, unknown>).id);
+          }).eq('id', jobId);
+
+          // Update homeowner_sessions with the captured email
+          await supabase.from('homeowner_sessions')
+            .update({ homeowner_email: extracted.homeowner_email })
+            .eq('job_id', jobId);
+        } else {
+          // No email captured — wait for it via SMS follow-up
+          await supabase.from('inbound_sessions').upsert({
+            phone: callerPhone,
+            member_id: member.id,
+            contractor_id: contractor.id,
+            session_type: 'sms',
+            state: 'awaiting_homeowner_email',
+            pending_data: {
+              job_id: jobId,
+              token,
+              homeowner_name: extracted.homeowner_name,
+            },
+            last_message_at: new Date().toISOString(),
+          }, { onConflict: 'phone' });
         }
 
-        // Email roofer confirmation (look up their email from contractor_accounts)
+        // Send roofer confirmation regardless of whether homeowner email was captured
         const rooferEmail = (contractor.owner_email || '') as string;
         if (rooferEmail) {
           await sendRooferConfirmEmail(
@@ -400,23 +429,6 @@ Deno.serve(async (req) => {
         // await sendSMS(callerPhone,
         //   `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nReply with homeowner's cell # to send them the portal link.\nJob ID: ${token}`
         // );
-
-        // Store session state waiting for homeowner email (if not captured in transcript)
-        if (!extracted.homeowner_email) {
-          await supabase.from('inbound_sessions').upsert({
-            phone: callerPhone,
-            member_id: member.id,
-            contractor_id: contractor.id,
-            session_type: 'sms',
-            state: 'awaiting_homeowner_email',
-            pending_data: {
-              job_id: (job as Record<string, unknown>).id,
-              token,
-              homeowner_name: extracted.homeowner_name,
-            },
-            last_message_at: new Date().toISOString(),
-          }, { onConflict: 'phone' });
-        }
       }
 
       return Response.json({ ok: true });
