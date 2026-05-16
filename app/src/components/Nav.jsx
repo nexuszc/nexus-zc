@@ -96,12 +96,13 @@ export default function Nav({ session }) {
 
         {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
+          <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-1">Nexus</div>
           <NavItem to="/" icon="home" label="Home" end />
           <NavItem to="/brain" icon="brain" label="Brain" />
 
-          {/* Verticals section */}
+          {/* Roofing OS section */}
           <div className="pt-4 pb-1">
-            <div className="text-[10px] text-gray-600 font-bold uppercase tracking-widest px-3 pb-2">Verticals</div>
+            <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 border-t border-[#1e1e2e] pt-3">Roofing OS</div>
 
             {/* Roofing OS */}
             <button

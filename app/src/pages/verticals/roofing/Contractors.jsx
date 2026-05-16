@@ -159,7 +159,7 @@ export default function Contractors() {
   })
 
   const active  = contractors.filter(c => c.subscription_status === 'active' || c.status === 'active')
-  const trial   = contractors.filter(c => c.plan === 'trial' || (c.trial_ends_at && new Date(c.trial_ends_at) > new Date() && c.subscription_status !== 'active'))
+  const trial   = contractors.filter(c => c.subscription_status === 'trialing' || c.plan === 'trial' || (c.trial_ends_at && new Date(c.trial_ends_at) > new Date() && c.subscription_status !== 'active' && c.subscription_status !== 'trialing'))
   const churned = contractors.filter(c => c.subscription_status === 'cancelled' || c.status === 'churned')
 
   return (

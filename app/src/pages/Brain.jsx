@@ -44,7 +44,7 @@ export default function Brain() {
       { data: dec },
       { data: res },
     ] = await Promise.all([
-      supabase.from('nexus_directives').select('*').eq('active', true).order('priority').limit(10),
+      supabase.from('nexus_directives').select('*').eq('status', 'active').order('priority').limit(10),
       supabase.from('projects').select('id, name, category, status, description').neq('category', 'archived').order('updated_at', { ascending: false }).limit(20),
       supabase.from('nexus_agent_cycles').select('*').order('created_at', { ascending: false }).limit(10),
       supabase.from('nexus_decisions').select('*').order('created_at', { ascending: false }).limit(15),

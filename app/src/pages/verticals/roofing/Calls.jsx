@@ -54,12 +54,13 @@ export default function Calls() {
     const [{ data: q }, { data: c }] = await Promise.all([
       supabase.from('aria_call_queue')
         .select('id, call_type, contact_phone, contact_name, contact_type, status, attempt_count, fire_at, queue_reason, created_at')
+        .eq('status', 'queued')
         .order('fire_at', { ascending: true })
-        .limit(50),
-      supabase.from('roofing_aria_calls')
-        .select('*')
-        .order('created_at', { ascending: false })
         .limit(100),
+      supabase.from('roofing_aria_calls')
+        .select('id, call_type, to_number, outcome, duration_seconds, created_at, buy_signals, transcript')
+        .order('created_at', { ascending: false })
+        .limit(20),
     ])
     setQueue(q || [])
     setCalls(c || [])
@@ -115,7 +116,7 @@ export default function Calls() {
     await load()
   }
 
-  const pendingQueue = queue.filter(q => q.status === 'queued')
+  const pendingQueue = queue
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">

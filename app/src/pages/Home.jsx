@@ -119,14 +119,13 @@ export default function Home() {
   const load = useCallback(async () => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     const hourAgo = new Date(Date.now() - 3600000)
 
     const [
       { count: activeContractors },
       { count: whalesNow },
       { count: emailsToday },
-      { data: monthJobs },
+      { data: activeContractorRevenue },
       { data: whaleList },
       { data: hotOpens },
       { data: pendingContent },
@@ -137,7 +136,7 @@ export default function Home() {
       supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('subscription_status', 'active'),
       supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
       supabase.from('roofing_outreach_log').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-      supabase.from('roofing_jobs').select('contract_amount').gte('created_at', monthStart.toISOString()),
+      supabase.from('contractor_accounts').select('plan_price_cents').eq('subscription_status', 'active'),
       supabase.from('roofing_prospects').select('id, owner_name, company_name, phone, last_activity_at').eq('clicked', true).is('outcome', null).order('last_activity_at', { ascending: false }).limit(5),
       supabase.from('roofing_outreach_log').select('id, prospect_id, touch_number, open_count, last_opened_at').gte('open_count', 2).order('open_count', { ascending: false }).limit(5),
       supabase.from('roofing_content').select('id, title, type').eq('status', 'pending').limit(5),
@@ -146,10 +145,11 @@ export default function Home() {
       supabase.from('system_heartbeats').select('function_name, status, response_ms, error_message, recorded_at').order('recorded_at', { ascending: false }).limit(20),
     ])
 
-    const mrr = (monthJobs || []).reduce((s, j) => s + ((j.contract_amount || 0) / 100), 0)
+    const mrrCents = (activeContractorRevenue || []).reduce((s, c) => s + (c.plan_price_cents || 0), 0)
+    const mrr = mrrCents / 100
 
     setStats({
-      mrr: mrr > 0 ? `$${Math.round(mrr / 1000)}k` : '$0',
+      mrr: mrr > 0 ? `$${mrr.toLocaleString()}` : '$0',
       contractors: activeContractors ?? 0,
       whales: whalesNow ?? 0,
       emailsToday: emailsToday ?? 0,
