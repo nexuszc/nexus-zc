@@ -115,7 +115,6 @@ export default function Home() {
   const [actions, setActions] = useState([])
   const [feed, setFeed] = useState([])
   const [loading, setLoading] = useState(true)
-  const [nexusFocus, setNexusFocus] = useState('')
 
   const load = useCallback(async () => {
     const todayStart = new Date()
@@ -134,19 +133,17 @@ export default function Home() {
       { data: recentErrors },
       { data: recentStorms },
       { data: heartbeats },
-      { data: focus },
     ] = await Promise.all([
-      supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('whale_alerted', true).is('outcome', null),
+      supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('subscription_status', 'active'),
+      supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
       supabase.from('roofing_outreach_log').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
       supabase.from('roofing_jobs').select('contract_amount').gte('created_at', monthStart.toISOString()),
-      supabase.from('roofing_prospects').select('id, owner_name, company_name, phone, whale_alerted_at').eq('whale_alerted', true).is('outcome', null).order('whale_alerted_at', { ascending: false }).limit(5),
+      supabase.from('roofing_prospects').select('id, owner_name, company_name, phone, last_activity_at').eq('clicked', true).is('outcome', null).order('last_activity_at', { ascending: false }).limit(5),
       supabase.from('roofing_outreach_log').select('id, prospect_id, touch_number, open_count, last_opened_at').gte('open_count', 2).order('open_count', { ascending: false }).limit(5),
       supabase.from('roofing_content').select('id, title, type').eq('status', 'pending').limit(5),
       supabase.from('system_heartbeats').select('id, function_name, error_message, recorded_at').eq('status', 'error').gte('recorded_at', hourAgo.toISOString()).limit(3),
       supabase.from('hail_events').select('id, city, state, hail_size_inches, event_date').gte('event_date', new Date(Date.now() - 86400000 * 2).toISOString()).order('hail_size_inches', { ascending: false }).limit(3),
       supabase.from('system_heartbeats').select('function_name, status, response_ms, error_message, recorded_at').order('recorded_at', { ascending: false }).limit(20),
-      supabase.from('nexus_directives').select('title, description').eq('active', true).order('priority').limit(1),
     ])
 
     const mrr = (monthJobs || []).reduce((s, j) => s + ((j.contract_amount || 0) / 100), 0)
@@ -158,8 +155,6 @@ export default function Home() {
       emailsToday: emailsToday ?? 0,
     })
 
-    setNexusFocus(focus?.[0]?.title || 'No active priorities. Check Brain for insights.')
-
     // Build action queue
     const cards = []
 
@@ -168,7 +163,7 @@ export default function Home() {
       cards.push({
         id: `whale-${w.id}`,
         icon: '🐋',
-        title: `${(whaleList || []).length} whale${(whaleList || []).length > 1 ? 's' : ''} clicked your portal`,
+        title: `${whaleList.length} prospect${whaleList.length > 1 ? 's' : ''} clicked your portal`,
         sub: `${w.owner_name} · ${w.company_name}`,
         phone: w.phone,
         actionLabel: 'Call Now',
@@ -297,12 +292,6 @@ export default function Home() {
           {greeting()}, Zach
         </h1>
         <p className="text-gray-500 text-sm mt-0.5">{todayStr()}</p>
-        {nexusFocus && (
-          <div className="mt-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-3">
-            <div className="text-[10px] text-indigo-400 uppercase tracking-widest font-bold mb-1">Nexus Focus</div>
-            <p className="text-sm text-gray-200">{nexusFocus}</p>
-          </div>
-        )}
       </div>
 
       {/* Top stats */}

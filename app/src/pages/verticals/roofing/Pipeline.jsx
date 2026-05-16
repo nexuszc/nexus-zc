@@ -183,7 +183,7 @@ export default function Pipeline() {
     if (filter === 'whale') return p.whale_alerted && !p.outcome
     if (filter === 'hot') return log.some(l => l.prospect_id === p.id && l.open_count >= 2)
     if (filter === 'sequence') return p.in_sequence
-    if (filter === 'clicked') return p.portal_clicked
+    if (filter === 'clicked') return p.clicked
     if (filter === 'booked') return p.status === 'booked'
     if (filter === 'dead') return p.status === 'dead'
     return true

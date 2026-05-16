@@ -155,12 +155,12 @@ export default function Contractors() {
   const filtered = contractors.filter(c => {
     if (!search) return true
     const q = search.toLowerCase()
-    return `${c.business_name} ${c.owner_name} ${c.email} ${c.phone}`.toLowerCase().includes(q)
+    return `${c.company_name} ${c.owner_name} ${c.owner_email} ${c.owner_phone}`.toLowerCase().includes(q)
   })
 
-  const active  = contractors.filter(c => c.status === 'active')
-  const trial   = contractors.filter(c => c.status === 'trial' || c.plan === 'trial')
-  const churned = contractors.filter(c => c.status === 'churned' || c.status === 'cancelled')
+  const active  = contractors.filter(c => c.subscription_status === 'active' || c.status === 'active')
+  const trial   = contractors.filter(c => c.plan === 'trial' || (c.trial_ends_at && new Date(c.trial_ends_at) > new Date() && c.subscription_status !== 'active'))
+  const churned = contractors.filter(c => c.subscription_status === 'cancelled' || c.status === 'churned')
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -187,7 +187,7 @@ export default function Contractors() {
         <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
           <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">MRR</div>
           <div className="text-2xl font-black text-indigo-400">
-            ${active.reduce((s, c) => s + (c.monthly_fee_cents || 0), 0) / 100 | 0}
+            ${active.reduce((s, c) => s + (c.plan_price_cents || 0), 0) / 100 | 0}
           </div>
         </div>
       </div>
@@ -222,24 +222,24 @@ export default function Contractors() {
                 <div className="flex items-center gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-white">{c.business_name || c.owner_name || 'Unknown'}</span>
+                      <span className="text-sm font-semibold text-white">{c.company_name || c.owner_name || 'Unknown'}</span>
                       <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${PLAN_COLORS[c.plan] || 'text-gray-500 bg-gray-800'}`}>
-                        {c.plan || c.status || 'unknown'}
+                        {c.plan || c.subscription_status || 'unknown'}
                       </span>
                       {c.churn_risk_score != null && (
-                        <span className={`text-[10px] font-semibold ${CHURN_COLORS[Math.min(4, Math.floor(c.churn_risk_score * 5))]}`}>
-                          Risk: {Math.round(c.churn_risk_score * 100)}%
+                        <span className={`text-[10px] font-semibold ${CHURN_COLORS[Math.min(4, Math.floor(c.churn_risk_score / 20))]}`}>
+                          Risk: {c.churn_risk_score}%
                         </span>
                       )}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {c.owner_name && c.owner_name !== c.business_name ? `${c.owner_name} · ` : ''}
-                      {c.email || ''}
+                      {c.owner_name && c.owner_name !== c.company_name ? `${c.owner_name} · ` : ''}
+                      {c.owner_email || ''}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm font-semibold text-white">
-                      ${((c.monthly_fee_cents || 0) / 100).toFixed(0)}/mo
+                      ${((c.plan_price_cents || 0) / 100).toFixed(0)}/mo
                     </div>
                     <div className="text-[10px] text-gray-600">{ago(c.created_at)}</div>
                   </div>

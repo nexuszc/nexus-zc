@@ -53,7 +53,7 @@ export default function Calls() {
   const load = useCallback(async () => {
     const [{ data: q }, { data: c }] = await Promise.all([
       supabase.from('aria_call_queue')
-        .select('*, roofing_prospects(owner_name, company_name, phone)')
+        .select('id, call_type, contact_phone, contact_name, contact_type, status, attempt_count, fire_at, queue_reason, created_at')
         .order('fire_at', { ascending: true })
         .limit(50),
       supabase.from('roofing_aria_calls')
@@ -85,9 +85,9 @@ export default function Calls() {
       await fetch(`${SB_URL}/functions/v1/roofing-aria-engine`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
-        body: JSON.stringify({ prospect_id: item.prospect_id }),
+        body: JSON.stringify({ contact_phone: item.contact_phone, contact_name: item.contact_name, call_type: item.call_type }),
       }).catch(() => {})
-      await supabase.from('aria_call_queue').update({ status: 'fired' }).eq('id', item.id)
+      await supabase.from('aria_call_queue').update({ status: 'fired', fired_at: new Date().toISOString() }).eq('id', item.id)
       await load()
     } finally {
       setCalling(null)
@@ -102,9 +102,12 @@ export default function Calls() {
   const addToQueue = async () => {
     if (!addForm.phone) return
     await supabase.from('aria_call_queue').insert([{
-      prospect_id: addForm.prospect_id || null,
+      contact_phone: addForm.phone,
+      contact_name: addForm.name || null,
+      contact_type: 'new_lead',
+      call_type: 'lead_followup',
       fire_at: new Date().toISOString(),
-      status: 'pending',
+      status: 'queued',
       attempt_count: 0,
     }])
     setAdding(false)
@@ -112,7 +115,7 @@ export default function Calls() {
     await load()
   }
 
-  const pendingQueue = queue.filter(q => q.status === 'pending')
+  const pendingQueue = queue.filter(q => q.status === 'queued')
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -213,16 +216,15 @@ export default function Calls() {
         ) : (
           <div className="space-y-2">
             {pendingQueue.map(item => {
-              const prospect = item.roofing_prospects
               return (
                 <div key={item.id} className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 flex items-center gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-white">
-                      {prospect?.owner_name || 'Unknown'}
+                      {item.contact_name || 'Unknown'}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {prospect?.company_name || ''}{prospect?.company_name ? ' · ' : ''}
-                      <span className="font-mono text-cyan-400">{prospect?.phone || '—'}</span>
+                      <span className="capitalize">{item.call_type?.replace(/_/g, ' ') || ''}</span>
+                      {item.contact_phone && <span className="font-mono text-cyan-400"> · {item.contact_phone}</span>}
                     </div>
                     <div className="text-[10px] text-gray-600 mt-0.5">
                       Attempt {item.attempt_count + 1} · Scheduled {ago(item.fire_at)}
