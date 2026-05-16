@@ -384,18 +384,28 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE this session (Spec 4 + Dashboard Rebuild v1):**
+- Deleted 7 dead functions: smoke-test, aria-diag, tg-relay, nexus-self-build, nexus-follow-up, nexus-prospector, roofing-outreach
+- Fixed chat reference: roofing-outreach now command → roofing-outreach-sequencer
+- Fixed TWILIO_FROM_NUMBER fallback in roofing-outreach-sequencer + roofing-aria-engine
+- Fixed roofing-aria-webhook v2: Claude fallback analysis, /recover endpoint (5 calls recovered)
+- Added portal_sent Telegram alert + voicemail requeue to aria-webhook
+- Created cron jobs: morning-digest-daily (13:30 UTC) + monthly-truth-1st (1st of month 15:00 UTC)
+- Upgraded morning-digest v2: Telegram digest (whales, hot opens, pipeline) at 7:30am MT
+- Upgraded portal-api: plain-English insurance status, timeline field, enriched Aria context
+- Upgraded nexus-core: off-hours scheduling guard (skips heavy AI ops 10pm–7am MT)
+- DB indexes: 8 new indexes on key query paths
+- Test suite: 39/39 passing (scripts/test-suite.sh)
+- **Dashboard Rebuild v1:** Full app.nexuszc.com rebuild — Nav sidebar + mobile bottom nav, Home (command center), Brain (intelligence layer + Ask Brain chat), Pipeline (prospect table + filters + inline actions), Content (approval queue + publish), Calls (Aria queue + recent calls), Contractors (account mgmt + churn risk), System (health monitor + proposals + auto-fix queue). All 7 pages wired to live Supabase data. Deployed to Cloudflare Pages via git push.
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Fix Recurring Smoke Test Failures (medium)
-3. Add Self-Learning Pattern Recognition (medium)
-4. Add memory consolidation ability (medium)
-5. Add Structured Self-Reflection Capability (medium)
-6. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
-7. Draft complete operating agreement for Nexus ZC LLC
-8. Build complete Roofing OS go-to-market system with public landing page
+1. Register Resend webhook in Resend dashboard → roofing-email-webhook (manual — external)
+2. Draft complete operating agreement for Nexus ZC LLC
+3. Build complete Roofing OS go-to-market system with public landing page
+4. Add Self-Learning Pattern Recognition (medium)
+5. Add memory consolidation ability (medium)
+6. Add Structured Self-Reflection Capability (medium)
+7. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
