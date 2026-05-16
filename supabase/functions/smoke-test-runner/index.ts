@@ -1,58 +1,192 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+
+interface TestResult {
+  function: string
+  status: 'pass' | 'fail'
+  duration: number
+  error?: string
+  details?: any
+}
+
+interface SmokeTestResults {
+  timestamp: string
+  totalTests: number
+  passed: number
+  failed: number
+  duration: number
+  results: TestResult[]
+}
 
 Deno.serve(async (req) => {
+  const startTime = Date.now()
+  const results: TestResult[] = []
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // Test 1: agent-router
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Missing environment variables",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const smokeTestUrl = `${supabaseUrl}/functions/v1/smoke-test`;
-
-    const result = await fetch(smokeTestUrl, {
-      method: "POST",
+    const testStart = Date.now()
+    const response = await fetch(`${supabaseUrl}/functions/v1/agent-router`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${supabaseAnonKey}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
       },
-    });
-
-    const data = await result.json();
-
-    return new Response(
-      JSON.stringify({
-        success: result.ok,
-        status: result.status,
-        data: data,
-        timestamp: new Date().toISOString(),
+      body: JSON.stringify({
+        message: 'smoke test ping',
+        user_id: 'smoke-test-user',
       }),
-      {
-        status: result.ok ? 200 : 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    })
+
+    const data = await response.json()
+    results.push({
+      function: 'agent-router',
+      status: response.ok ? 'pass' : 'fail',
+      duration: Date.now() - testStart,
+      details: data,
+    })
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    results.push({
+      function: 'agent-router',
+      status: 'fail',
+      duration: Date.now() - startTime,
+      error: error.message,
+    })
   }
-});
+
+  // Test 2: check-auth
+  try {
+    const testStart = Date.now()
+    const response = await fetch(`${supabaseUrl}/functions/v1/check-auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({}),
+    })
+
+    const data = await response.json()
+    results.push({
+      function: 'check-auth',
+      status: response.ok ? 'pass' : 'fail',
+      duration: Date.now() - testStart,
+      details: data,
+    })
+  } catch (error) {
+    results.push({
+      function: 'check-auth',
+      status: 'fail',
+      duration: Date.now() - startTime,
+      error: error.message,
+    })
+  }
+
+  // Test 3: Database connectivity
+  try {
+    const testStart = Date.now()
+    const { data, error } = await supabase
+      .from('nexus_config')
+      .select('key')
+      .limit(1)
+
+    results.push({
+      function: 'database-connectivity',
+      status: !error ? 'pass' : 'fail',
+      duration: Date.now() - testStart,
+      error: error?.message,
+      details: { recordCount: data?.length || 0 },
+    })
+  } catch (error) {
+    results.push({
+      function: 'database-connectivity',
+      status: 'fail',
+      duration: Date.now() - testStart,
+      error: error.message,
+    })
+  }
+
+  // Test 4: openai-proxy
+  try {
+    const testStart = Date.now()
+    const response = await fetch(`${supabaseUrl}/functions/v1/openai-proxy`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 5,
+      }),
+    })
+
+    const data = await response.json()
+    results.push({
+      function: 'openai-proxy',
+      status: response.ok ? 'pass' : 'fail',
+      duration: Date.now() - testStart,
+      details: data,
+    })
+  } catch (error) {
+    results.push({
+      function: 'openai-proxy',
+      status: 'fail',
+      duration: Date.now() - testStart,
+      error: error.message,
+    })
+  }
+
+  // Test 5: token-counter
+  try {
+    const testStart = Date.now()
+    const response = await fetch(`${supabaseUrl}/functions/v1/token-counter`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        text: 'smoke test message',
+        model: 'gpt-3.5-turbo',
+      }),
+    })
+
+    const data = await response.json()
+    results.push({
+      function: 'token-counter',
+      status: response.ok ? 'pass' : 'fail',
+      duration: Date.now() - testStart,
+      details: data,
+    })
+  } catch (error) {
+    results.push({
+      function: 'token-counter',
+      status: 'fail',
+      duration: Date.now() - testStart,
+      error: error.message,
+    })
+  }
+
+  const totalDuration = Date.now() - startTime
+  const passed = results.filter(r => r.status === 'pass').length
+  const failed = results.filter(r => r.status === 'fail').length
+
+  const smokeTestResults: SmokeTestResults = {
+    timestamp: new Date().toISOString(),
+    totalTests: results.length,
+    passed,
+    failed,
+    duration: totalDuration,
+    results,
+  }
+
+  return new Response(JSON.stringify(smokeTestResults), {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+})
