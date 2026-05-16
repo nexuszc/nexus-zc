@@ -363,10 +363,6 @@ Deno.serve(async (req) => {
       const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.unknown;
       if (!config.can_start_jobs) return Response.json({ ok: true });
 
-      const lc = transcript.toLowerCase();
-      const isNewJob = lc.includes('new job') || lc.includes('new homeowner') || lc.includes('new project');
-      if (!isNewJob) return Response.json({ ok: true });
-
       const extracted = await extractJobData(transcript);
       const confidence = (extracted.confidence as number) || 0;
 
