@@ -270,8 +270,49 @@ async function sendRooferConfirmEmail(rooferEmail: string, homeownerName: string
   await sendResendEmail(rooferEmail, `Job created — ${homeownerName}`, html);
 }
 
+async function configureAgentForCaller(callerPhone: string): Promise<void> {
+  if (!callerPhone || !RETELL_API_KEY || !RETELL_AGENT_ID) return;
+  const member = await lookupCaller(callerPhone);
+  if (!member) return;
+  const role = member.role as string || 'unknown';
+  const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.unknown;
+  const firstName = (member.name as string || '').split(' ')[0];
+  const contractor = member.contractor_accounts as Record<string, unknown>;
+  await fetch(`https://api.retellai.com/v2/update-agent/${RETELL_AGENT_ID}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${RETELL_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      begin_message: config.begin_message(firstName),
+      general_prompt: buildSystemPrompt(member, contractor, role),
+    }),
+  }).catch(() => {});
+}
+
 Deno.serve(async (req) => {
   try {
+    const contentType = req.headers.get('content-type') || '';
+
+    // ── Twilio inbound voice call ─────────────────────────────────────────────
+    // Twilio sends application/x-www-form-urlencoded and expects TwiML back.
+    // We pre-configure Aria for the caller, then dial through to Retell.
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const form = await req.formData().catch(() => new FormData());
+      const callerPhone = (form.get('From') as string) || '';
+
+      // Configure Aria before the call connects so the greeting is personalized
+      await configureAgentForCaller(callerPhone);
+
+      const retellPhone = Deno.env.get('RETELL_PHONE_NUMBER') || '+17205006668';
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial>
+    <Number>${retellPhone}</Number>
+  </Dial>
+</Response>`;
+      return new Response(twiml, { headers: { 'Content-Type': 'text/xml' } });
+    }
+
+    // ── Retell webhook or test ping — JSON ────────────────────────────────────
     const body = await req.json().catch(() => ({}));
     if (body.test) return Response.json({ ok: true, message: 'nexus-job-intake-voice ready' });
 
