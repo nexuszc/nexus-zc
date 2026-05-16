@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v8
+# Last updated: May 16, 2026 — v8
 
 ---
 
@@ -156,6 +156,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-closer` | See function source for details | Internal |
 | `roofing-community-monitor` | See function source for details | Internal |
 | `roofing-content-engine` | See function source for details | Internal |
+| `roofing-content-repurposer` | See function source for details | Internal |
 | `roofing-crew-manager` | See function source for details | Internal |
 | `roofing-depreciation-tracker` | See function source for details | Internal |
 | `roofing-email-nurture` | See function source for details | Internal |
@@ -175,6 +176,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-referral-engine` | See function source for details | Internal |
 | `roofing-self-improve` | See function source for details | Internal |
 | `roofing-seo-publisher` | See function source for details | Internal |
+| `roofing-social-poster` | See function source for details | Internal |
 | `roofing-storm-marketing` | See function source for details | Internal |
 | `roofing-supplement-analyzer` | See function source for details | Internal |
 | `roofing-supplement-generator` | See function source for details | Internal |
@@ -186,6 +188,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-whale-alert` | See function source for details | Internal |
 | `roofing-youtube-engine` | See function source for details | Internal |
 | `roofing-youtube-publisher` | See function source for details | Internal |
+| `roofing-youtube-uploader` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `smoke-test-runner` | See function source for details | Internal |
@@ -399,8 +402,8 @@ Then productized and sold to other multi-business operators.
 4. Add Self-Learning Pattern Recognition (medium)
 5. Add memory consolidation ability (medium)
 6. Add Conversation Context Memory (medium)
-7. Build the complete Roofing OS go-to-market system
-8. Review and improve client health scores for Brian and Denver Pro Roofing
+7. Build the complete Roofing OS go-to-market system. Create a public landing
+8. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
