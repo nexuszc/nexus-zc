@@ -1472,17 +1472,7 @@ Deno.serve(async (_req) => {
 
     const duration = Date.now() - startTime;
 
-    // Only notify for errors, pending approvals, or money events — not routine success
-    const hasCriticalErrors = state.errors.length > 3;
-    const hasPendingApprovals = state.pendingApprovals.length > 0;
-    if (hasCriticalErrors || hasPendingApprovals) {
-      await tg(
-        `*Nexus Core — Cycle ${cycleNumber}*\n\n` +
-        (hasCriticalErrors ? `⚠️ ${state.errors.length} errors need attention\n` : "") +
-        (hasPendingApprovals ? `📋 ${state.pendingApprovals.length} item(s) pending approval\n` : "") +
-        `\n${decisions.summary}\n_${duration}ms_`
-      );
-    }
+    // Cycle summary stored to nexus_agent_cycles — visible in dashboard, not sent to Telegram
 
     await logHeartbeat("nexus-core", "ok", duration);
 
