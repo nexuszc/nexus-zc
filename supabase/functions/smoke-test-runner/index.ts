@@ -1,72 +1,60 @@
-// Follow the Deno.serve pattern
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// supabase/functions/smoke-test-runner/index.ts
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
-  // Handle CORS preflight requests
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("Smoke test runner invoked");
-    
-    // Parse URL and query parameters
     const url = new URL(req.url);
     const testFilter = url.searchParams.get("test");
     
-    console.log("Test filter:", testFilter || "all");
+    console.log("=== Smoke Test Runner Started ===");
+    console.log("Request details:", {
+      method: req.method,
+      url: req.url,
+      testFilter,
+      timestamp: new Date().toISOString()
+    });
 
-    // Environment check
-    const envCheckStartTime = performance.now();
-    console.log("Starting environment checks");
-    
-    const requiredEnvVars = [
-      "SUPABASE_URL",
-      "SUPABASE_ANON_KEY",
-      "SUPABASE_SERVICE_ROLE_KEY"
-    ];
-    
+    const envCheckStart = performance.now();
     const denoEnv = {
       SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
-      SUPABASE_ANON_KEY: Deno.env.get("SUPABASE_ANON_KEY") ? "[PRESENT]" : "[MISSING]",
-      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ? "[PRESENT]" : "[MISSING]"
+      SUPABASE_ANON_KEY: Deno.env.get("SUPABASE_ANON_KEY") ? "present" : "missing",
+      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ? "present" : "missing"
     };
     
-    console.log("Environment variables:", denoEnv);
+    console.log("Environment check:", denoEnv);
     
-    const environmentChecks = requiredEnvVars.map(varName => {
-      const value = Deno.env.get(varName);
-      const isPresent = !!value;
-      
-      console.log(`Environment check: ${varName} - ${isPresent ? "PRESENT" : "MISSING"}`);
-      
-      return {
-        variable: varName,
-        status: isPresent ? "present" : "missing",
-        timestamp: new Date().toISOString()
-      };
-    });
+    const environmentChecks = [
+      {
+        variable: "SUPABASE_URL",
+        status: denoEnv.SUPABASE_URL ? "present" : "missing",
+        value: denoEnv.SUPABASE_URL ? denoEnv.SUPABASE_URL : undefined
+      },
+      {
+        variable: "SUPABASE_ANON_KEY",
+        status: denoEnv.SUPABASE_ANON_KEY === "present" ? "present" : "missing"
+      },
+      {
+        variable: "SUPABASE_SERVICE_ROLE_KEY",
+        status: denoEnv.SUPABASE_SERVICE_ROLE_KEY === "present" ? "present" : "missing"
+      }
+    ];
     
-    const envCheckDuration = performance.now() - envCheckStartTime;
+    const envCheckDuration = performance.now() - envCheckStart;
     console.log(`Environment checks completed in ${envCheckDuration}ms`);
 
     const baseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!baseUrl || !anonKey) {
-      console.error("Missing required environment variables:", {
-        baseUrlPresent: !!baseUrl,
-        anonKeyPresent: !!anonKey
-      });
-      
+      console.error("Missing required environment variables");
       return new Response(
         JSON.stringify({
           success: false,
@@ -96,9 +84,11 @@ serve(async (req) => {
 
     const tests = [];
     let currentStep = 0;
-    const totalSteps = testFilter ? 1 : 3;
+    const totalSteps = testFilter 
+      ? 1 
+      : ["api-availability", "database-connectivity", "edge-functions"].length;
 
-    console.log(`Starting test execution - Total steps: ${totalSteps}`);
+    console.log(`Running ${totalSteps} test(s)${testFilter ? ` (filter: ${testFilter})` : ''}`);
 
     // Test 1: API availability
     if (!testFilter || testFilter === "api-availability" || testFilter === "all") {
@@ -107,10 +97,10 @@ serve(async (req) => {
       const startTime = performance.now();
       
       try {
-        const apiTestUrl = `${baseUrl}/rest/v1/`;
-        console.log(`Attempting API test to: ${apiTestUrl}`);
+        const apiUrl = `${baseUrl}/rest/v1/`;
+        console.log(`Attempting API availability check to: ${apiUrl}`);
         
-        const apiTest = await fetch(apiTestUrl, {
+        const apiTest = await fetch(apiUrl, {
           headers: {
             "apikey": anonKey,
             "Authorization": `Bearer ${anonKey}`
@@ -119,7 +109,7 @@ serve(async (req) => {
         
         const responseText = await apiTest.text();
         const apiState = {
-          url: apiTestUrl,
+          url: apiUrl,
           statusCode: apiTest.status,
           statusText: apiTest.statusText,
           headers: Object.fromEntries(apiTest.headers.entries()),
@@ -131,7 +121,7 @@ serve(async (req) => {
         
         tests.push({
           name: "api-availability",
-          description: "Supabase REST API availability",
+          description: "REST API endpoint accessibility",
           status: apiTest.ok ? "passed" : "failed",
           statusCode: apiTest.status,
           duration_ms: performance.now() - startTime,
@@ -160,7 +150,7 @@ serve(async (req) => {
         
         tests.push({
           name: "api-availability",
-          description: "Supabase REST API availability",
+          description: "REST API endpoint accessibility",
           status: "failed",
           error: error.message,
           errorStack: error.stack,
@@ -179,20 +169,20 @@ serve(async (req) => {
       const startTime = performance.now();
       
       try {
-        const dbTestUrl = `${baseUrl}/rest/v1/`;
-        console.log(`Attempting database test to: ${dbTestUrl}`);
+        const dbUrl = `${baseUrl}/rest/v1/?select=*`;
+        console.log(`Attempting database connectivity check to: ${dbUrl}`);
         
-        const dbTest = await fetch(dbTestUrl, {
+        const dbTest = await fetch(dbUrl, {
           headers: {
             "apikey": anonKey,
             "Authorization": `Bearer ${anonKey}`,
-            "Accept": "application/json"
+            "Prefer": "return=minimal"
           }
         });
         
         const responseText = await dbTest.text();
         const dbState = {
-          url: dbTestUrl,
+          url: dbUrl,
           statusCode: dbTest.status,
           statusText: dbTest.statusText,
           headers: Object.fromEntries(dbTest.headers.entries()),
