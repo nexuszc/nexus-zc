@@ -47,6 +47,7 @@ function ProspectRow({ p, log, onAction }) {
 
   const hotOpens = log?.filter(l => l.prospect_id === p.id && l.open_count >= 2)
   const lastOpen = log?.find(l => l.prospect_id === p.id && l.last_opened_at)
+  const isAutoFound = AUTO_FOUND_SOURCES.includes(p.source) && p.created_at > new Date(Date.now() - 86400000).toISOString()
 
   const act = async (type) => {
     setActing(type)
@@ -63,6 +64,7 @@ function ProspectRow({ p, log, onAction }) {
           <div className="flex items-center gap-2">
             {p.whale_alerted && <span className="text-base leading-none">🐋</span>}
             {hotOpens?.length > 0 && <span className="text-base leading-none">🔥</span>}
+            {isAutoFound && <span className="text-base leading-none" title="Auto-found by prospector">🤖</span>}
             <div>
               <div className="text-sm font-semibold text-white">{p.owner_name || '—'}</div>
               <div className="text-xs text-gray-500">{p.company_name || ''}</div>
@@ -154,9 +156,12 @@ function ProspectRow({ p, log, onAction }) {
   )
 }
 
+const AUTO_FOUND_SOURCES = ['serper', 'hail_zone']
+
 export default function Pipeline() {
   const [prospects, setProspects] = useState([])
   const [log, setLog] = useState([])
+  const [autoFoundToday, setAutoFoundToday] = useState(0)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -164,12 +169,15 @@ export default function Pipeline() {
   const [newForm, setNewForm] = useState({ owner_name: '', company_name: '', phone: '', email: '' })
 
   const load = useCallback(async () => {
-    const [{ data: pros }, { data: logs }] = await Promise.all([
+    const since24h = new Date(Date.now() - 86400000).toISOString()
+    const [{ data: pros }, { data: logs }, { count: autoFound }] = await Promise.all([
       supabase.from('roofing_prospects').select('*').order('created_at', { ascending: false }).limit(200),
       supabase.from('roofing_outreach_log').select('prospect_id, touch_number, open_count, last_opened_at, direction').order('last_opened_at', { ascending: false }).limit(500),
+      supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).in('source', AUTO_FOUND_SOURCES).gte('created_at', since24h),
     ])
     setProspects(pros || [])
     setLog(logs || [])
+    setAutoFoundToday(autoFound || 0)
     setLoading(false)
   }, [])
 
@@ -247,6 +255,13 @@ export default function Pipeline() {
           </button>
         </div>
       </div>
+
+      {autoFoundToday > 0 && (
+        <div className="mb-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-2.5 flex items-center gap-2">
+          <span className="text-base leading-none">🤖</span>
+          <span className="text-sm text-indigo-300 font-medium">{autoFoundToday} new prospect{autoFoundToday !== 1 ? 's' : ''} found today by prospector</span>
+        </div>
+      )}
 
       {adding && (
         <div className="mb-4 bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">

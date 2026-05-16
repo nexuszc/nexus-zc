@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v11
+# Last updated: May 15, 2026 — v12
 
 ---
 
@@ -388,7 +388,17 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session (Spec 5 — SMS Bridge):**
+**DONE this session (Telegram Cleanup v1):**
+- Removed Telegram from 5 functions: roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-community-monitor, roofing-prospector
+- Rewrote morning-digest to v3: lean owner digest (whales, email, Aria, content, one thing)
+- Added Community tab to Content.jsx (roofing_community_posts with approve/skip)
+- Added auto-found banner + 🤖 badge to Pipeline.jsx (prospects found in last 24h by prospector)
+- Added TELEGRAM CHANNEL section to CLAUDE.md documenting 9 alerts + 6 commands
+- Deactivated 2 dead cron jobs: nexus-follow-up-hourly + nexus-prospector-4h
+- Fixed 5 dashboard data issues: RLS policies, wrong column names, wrong status values
+- Dashboard data confirmed live: 48 prospects, 337 queued calls, 1 contractor account
+
+**DONE previous session (Spec 5 — SMS Bridge):**
 - SMS bridge complete: all prospect/homeowner SMS → Resend email until 10DLC clears
 - nexus-job-intake-voice v2: TWILIO commented out, RESEND added, Aria asks for homeowner *email* not phone, sendHomeownerEmail + sendRooferConfirmEmail via Resend, session state awaiting_homeowner_email
 - roofing-outreach-sequencer v2: Touch 2 SMS commented out, emailTouch2() added, logged as email_voicedrop
@@ -439,10 +449,40 @@ Twilio dashboard → Phone Numbers → +17202921930
 1. **Monday May 18:** Complete 10DLC registration + re-enable SMS (see checklist above)
 2. Register Resend webhook → roofing-email-webhook (manual — external)
 3. Wire Twilio webhooks for nexus-job-intake-voice and nexus-job-intake-sms (manual — Phase 5 above)
-4. Draft Nexus ZC LLC operating agreement
-5. Add Self-Learning Pattern Recognition (medium)
-6. Add memory consolidation ability (medium)
-7. Review client health scores for Brian (65) and Denver Pro Roofing (50)
+4. Deploy 6 changed functions: morning-digest, roofing-supplement-generator, roofing-supplement-rebuttal, roofing-supplement-tracker, roofing-community-monitor, roofing-prospector
+5. Draft Nexus ZC LLC operating agreement
+6. Add Self-Learning Pattern Recognition (medium)
+7. Add memory consolidation ability (medium)
+8. Review client health scores for Brian (65) and Denver Pro Roofing (50)
+
+---
+
+## TELEGRAM CHANNEL (personal push only)
+
+Telegram is **not** a dashboard or an approval queue. It is a personal push channel for time-sensitive signals that need immediate human attention.
+
+**Rule:** Functions do NOT send Telegram for routine operation results (prospector found leads, community monitor found posts, supplement saved, etc.). Those live in the dashboard at app.nexuszc.com.
+
+**What Telegram sends (9 automatic alerts):**
+1. Morning digest (7:30am MT) — whales, email stats, Aria queue, content pending, one priority action
+2. Monthly truth (1st of month) — portfolio performance report
+3. Briefing (7am MT) — nexus daily brief
+4. Whale alert — prospect clicked portal (hot lead, call now)
+5. Storm alert — hail event in monitored ZIPs
+6. Portal sent — homeowner portal dispatched to new job
+7. nexus-core think cycle — strategic insights and flags
+8. Auto-fix deployed — code change staged to dev branch
+9. Health monitor — critical function errors
+
+**What Telegram accepts (6 commands):**
+1. Free-form message → brain responds (chat function)
+2. `provision: [client]` → spin up new client subdomain
+3. `remind [time] [message]` → set a reminder
+4. `roofing-outreach now` → run outreach sequencer manually
+5. `deploy build [id]` → promote nexus-build dev build to main
+6. `approve` → merge dev branch to main (content-based, conflict-proof)
+
+**Everything else → app.nexuszc.com** (Pipeline, Content, Calls, Contractors, System, Community)
 
 ---
 

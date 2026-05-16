@@ -116,14 +116,6 @@ Respond in JSON only:
       .single();
 
     rebuttals.push(savedRebuttal);
-
-    await tg(
-      `⚖️ *Rebuttal Generated*\n` +
-      `${pkg.carrier_name} denied: ${denial.line_item}\n` +
-      `Amount: $${denial.amount}\n` +
-      `Expected: ${rebuttalData.expected_outcome}\n` +
-      `VA review needed before submission.`
-    );
   }
 
   await supabase.from("supplement_packages")

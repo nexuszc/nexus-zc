@@ -63,15 +63,6 @@ Deno.serve(async (req) => {
         .eq("carrier_type", pkg.carrier_type || "other")
         .catch(() => {});
 
-      const outcome = update.status as string;
-      await tg(
-        `📋 *Supplement Response Recorded*\n` +
-        `Status: ${outcome}\n` +
-        `Carrier: ${pkg.carrier_name}\n` +
-        (approved_amount ? `Approved: $${approved_amount.toLocaleString()}\n` : "") +
-        (denied_items?.length ? `Denied items: ${denied_items.length} — rebuttals may be needed` : "")
-      );
-
       // Trigger referral engine on approval
       if ((outcome === "approved" || outcome === "partial_approved") && pkg.contractor_id) {
         fetch(`${SUPABASE_URL}/functions/v1/roofing-referral-engine`, {

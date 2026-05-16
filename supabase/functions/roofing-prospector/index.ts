@@ -229,18 +229,6 @@ Deno.serve(async (_req) => {
     }
   }
 
-  if (newProspects.length > 0 || skippedNoEmail > 5) {
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: `🏠 *Roofing OS Prospector*\n\nFound ${newProspects.length} new prospects with email.\nSkipped: ${skippedNoEmail} no email | ${skippedDuplicate} duplicates | ${skippedLowScore} low score\n\n${newProspects.slice(0, 10).map(n => `• ${n}`).join('\n')}\n\n_Starting outreach automatically._`,
-        parse_mode: "Markdown"
-      })
-    });
-  }
-
   return Response.json({
     ok: true,
     new_prospects: newProspects.length,

@@ -22,26 +22,6 @@ async function tg(text: string) {
   }).catch(() => {});
 }
 
-async function sendTelegramApproval(postId: string, platform: string, title: string, response: string): Promise<string | null> {
-  const text = `🗣️ *Community Post — ${platform}*\n\n*${title.slice(0, 80)}*\n\n*Draft response:*\n${response.slice(0, 400)}\n\n_Copy and post manually after approving._`;
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text,
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "✅ Approve", callback_data: `approve_community_${postId}` },
-          { text: "❌ Skip", callback_data: `skip_community_${postId}` }
-        ]]
-      }
-    })
-  });
-  const data = await res.json();
-  return data.result?.message_id?.toString() || null;
-}
 
 async function claude(prompt: string, maxTokens = 600): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -154,9 +134,7 @@ Deno.serve(async (req) => {
         .eq("id", postId)
         .maybeSingle();
 
-      if (post) {
-        await tg(`✅ *Community response approved.*\n\n*Copy this response:*\n\n${post.our_response}\n\n🔗 ${post.thread_url}`);
-      }
+      // Response copied from dashboard — no Telegram needed
     } else if (action === "skip") {
       await supabase.from("roofing_community_posts")
         .update({ status: "skipped" })
@@ -253,12 +231,6 @@ Return ONLY the response text, nothing else.`
         }).select().single();
 
         if (saved) {
-          const msgId = await sendTelegramApproval(saved.id, post.platform, post.title, response);
-          if (msgId) {
-            await supabase.from("roofing_community_posts")
-              .update({ telegram_message_id: msgId })
-              .eq("id", saved.id);
-          }
           responsesQueued++;
         }
       } catch (e) {
@@ -276,10 +248,6 @@ Return ONLY the response text, nothing else.`
       response_ms: duration,
       checked_at: new Date().toISOString()
     }).catch(() => {});
-
-    if (responsesQueued > 0) {
-      await tg(`✅ *Community Monitor Complete*\nScanned: ${postsScanned} | Scored out: ${skippedLowScore} | Drafted: ${responsesQueued}`);
-    }
 
     return Response.json({ ok: true, posts_scanned: postsScanned, skipped_low_score: skippedLowScore, responses_queued: responsesQueued, duration_ms: duration });
 

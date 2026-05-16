@@ -241,16 +241,6 @@ Respond in JSON only:
     visible_to_homeowner: true
   }).catch(() => {});
 
-  await tg(
-    `📋 *Supplement Package Ready*\n` +
-    `*${job.property_address || "Job"}*\n` +
-    `Carrier: ${carrierName}\n` +
-    `Items found: ${lineItems.length}\n` +
-    `Amount requested: $${totalAmount.toLocaleString()}\n` +
-    `Status: Pending VA review\n\n` +
-    `Reply \`review supplement: ${savedPackage?.id?.slice(0, 8)}\` to review and approve.`
-  );
-
   return Response.json({
     ok: true,
     package_id: savedPackage?.id,
