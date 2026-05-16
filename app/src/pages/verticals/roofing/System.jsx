@@ -23,33 +23,39 @@ function SectionTitle({ children }) {
 }
 
 export default function System() {
-  const [heartbeats, setHeartbeats]   = useState([])
-  const [proposals, setProposals]     = useState([])
-  const [improvements, setImprovements] = useState([])
+  const [heartbeats, setHeartbeats]       = useState([])
+  const [proposals, setProposals]         = useState([])
+  const [improvements, setImprovements]   = useState([])
+  const [pendingFixCount, setPendingFixCount] = useState(0)
   const [tab, setTab]   = useState('health')
   const [loading, setLoading] = useState(true)
   const [acting, setActing]   = useState(null)
 
   const load = useCallback(async () => {
-    const hourAgo = new Date(Date.now() - 3600000).toISOString()
-    const [{ data: hb }, { data: props }, { data: impr }] = await Promise.all([
+    const dayAgo = new Date(Date.now() - 86400000).toISOString()
+    const [{ data: hb }, { data: props }, { data: impr }, { count: pendingCount }] = await Promise.all([
       supabase.from('system_heartbeats')
         .select('function_name, status, response_ms, error_message, recorded_at')
-        .gte('recorded_at', hourAgo)
+        .gte('recorded_at', dayAgo)
         .order('recorded_at', { ascending: false })
-        .limit(100),
+        .limit(500),
       supabase.from('nexus_roofing_proposals')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(30),
       supabase.from('nexus_improvements')
         .select('*')
+        .in('status', ['pending', 'proposed'])
         .order('created_at', { ascending: false })
-        .limit(30),
+        .limit(20),
+      supabase.from('nexus_improvements')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
     ])
     setHeartbeats(hb || [])
     setProposals(props || [])
     setImprovements(impr || [])
+    setPendingFixCount(pendingCount || 0)
     setLoading(false)
   }, [])
 
@@ -101,7 +107,7 @@ export default function System() {
     { key: 'health',       label: `Health (${latestByFn.length})` },
     { key: 'errors',       label: `Errors (${errors.length})` },
     { key: 'proposals',    label: `Proposals (${proposals.filter(p => p.status === 'pending').length})` },
-    { key: 'improvements', label: `Fixes (${improvements.filter(i => i.status === 'pending').length})` },
+    { key: 'improvements', label: `Fixes (${pendingFixCount})` },
   ]
 
   return (
@@ -133,7 +139,7 @@ export default function System() {
         </div>
         <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
           <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Pending Fixes</div>
-          <div className="text-2xl font-black text-amber-400">{improvements.filter(i => i.status === 'pending').length}</div>
+          <div className="text-2xl font-black text-amber-400">{pendingFixCount}</div>
         </div>
       </div>
 

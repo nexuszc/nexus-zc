@@ -55,8 +55,7 @@ export default function Calls() {
       supabase.from('aria_call_queue')
         .select('id, call_type, contact_phone, contact_name, contact_type, status, attempt_count, fire_at, queue_reason, created_at')
         .eq('status', 'queued')
-        .order('fire_at', { ascending: true })
-        .limit(100),
+        .order('fire_at', { ascending: true }),
       supabase.from('roofing_aria_calls')
         .select('id, call_type, to_number, outcome, duration_seconds, created_at, buy_signals, transcript')
         .order('created_at', { ascending: false })
