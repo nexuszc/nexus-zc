@@ -121,6 +121,8 @@ export default function Home() {
     todayStart.setHours(0, 0, 0, 0)
     const hourAgo = new Date(Date.now() - 3600000)
 
+    const in7Days = new Date(Date.now() + 7 * 86400000).toISOString()
+
     const [
       { count: activeContractors },
       { count: whalesNow },
@@ -132,6 +134,9 @@ export default function Home() {
       { data: recentErrors },
       { data: recentStorms },
       { data: heartbeats },
+      { data: coldDeals },
+      { data: expiringTrials },
+      { data: pendingFixes },
     ] = await Promise.all([
       supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('subscription_status', 'active'),
       supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
@@ -143,6 +148,9 @@ export default function Home() {
       supabase.from('system_heartbeats').select('id, function_name, error_message, recorded_at').eq('status', 'error').gte('recorded_at', hourAgo.toISOString()).limit(3),
       supabase.from('hail_events').select('id, city, state, hail_size_inches, event_date').gte('event_date', new Date(Date.now() - 86400000 * 2).toISOString()).order('hail_size_inches', { ascending: false }).limit(3),
       supabase.from('system_heartbeats').select('function_name, status, response_ms, error_message, recorded_at').order('recorded_at', { ascending: false }).limit(20),
+      supabase.from('nexus_alerts').select('id, message').like('alert_type', 'deal_cold_%').eq('resolved', false).gte('sent_at', new Date(Date.now() - 86400000).toISOString()).limit(10),
+      supabase.from('contractor_accounts').select('id, company_name, owner_name, owner_phone, trial_ends_at').eq('subscription_status', 'trialing').lte('trial_ends_at', in7Days).is('stripe_subscription_id', null).limit(5),
+      supabase.from('nexus_improvements').select('id, title, priority').eq('status', 'pending').order('priority', { ascending: true }).limit(10),
     ])
 
     const mrrCents = (activeContractorRevenue || []).reduce((s, c) => s + (c.plan_price_cents || 0), 0)
@@ -232,6 +240,45 @@ export default function Home() {
             body: JSON.stringify({ hail_event_id: s.id }),
           }).catch(() => {})
         },
+      })
+    }
+
+    if (coldDeals?.length) {
+      cards.push({
+        id: 'cold-deals',
+        icon: '🌡️',
+        title: `${coldDeals.length} client${coldDeals.length > 1 ? 's' : ''} going cold`,
+        sub: coldDeals[0]?.message?.replace('has gone cold — ', '') || 'No activity in 48h',
+        actionLabel: 'View Clients',
+        color: 'amber',
+        onAction: () => navigate('/clients'),
+      })
+    }
+
+    if (expiringTrials?.length) {
+      const t = expiringTrials[0]
+      const daysLeft = Math.max(0, Math.round((new Date(t.trial_ends_at) - Date.now()) / 86400000))
+      cards.push({
+        id: `trial-${t.id}`,
+        icon: '⏰',
+        title: `${expiringTrials.length} trial${expiringTrials.length > 1 ? 's' : ''} expiring soon`,
+        sub: `${t.company_name} — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`,
+        phone: t.owner_phone,
+        actionLabel: 'Call to Convert',
+        color: 'red',
+        onAction: () => navigate('/roofing/contractors'),
+      })
+    }
+
+    if (pendingFixes?.length) {
+      cards.push({
+        id: 'pending-fixes',
+        icon: '🔧',
+        title: `${pendingFixes.length} auto-fix${pendingFixes.length > 1 ? 'es' : ''} ready to review`,
+        sub: pendingFixes[0]?.title || 'Review in System → Fixes tab',
+        actionLabel: 'Review Fixes',
+        color: 'indigo',
+        onAction: () => navigate('/roofing/system'),
       })
     }
 

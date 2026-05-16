@@ -17,6 +17,7 @@ const FILTERS = [
   { key: 'all',        label: 'All' },
   { key: 'whale',      label: '🐋 Whales' },
   { key: 'hot',        label: '🔥 Hot Opens' },
+  { key: 'cold',       label: '🌡️ Going Cold' },
   { key: 'sequence',   label: 'In Sequence' },
   { key: 'clicked',    label: 'Clicked' },
   { key: 'booked',     label: 'Booked' },
@@ -190,6 +191,15 @@ export default function Pipeline() {
     }
     if (filter === 'whale') return p.whale_alerted && !p.outcome
     if (filter === 'hot') return log.some(l => l.prospect_id === p.id && l.open_count >= 2)
+    if (filter === 'cold') {
+      if (!p.in_sequence) return false
+      const touches = log.filter(l => l.prospect_id === p.id)
+      if (!touches.length) return false
+      const allNoOpens = touches.every(l => !l.open_count || l.open_count === 0)
+      const oldest = touches.reduce((a, b) => a.last_opened_at < b.last_opened_at ? a : b)
+      const daysSince = (Date.now() - new Date(oldest.last_opened_at || p.created_at)) / 86400000
+      return allNoOpens && daysSince >= 3
+    }
     if (filter === 'sequence') return p.in_sequence
     if (filter === 'clicked') return p.clicked
     if (filter === 'booked') return p.status === 'booked'
