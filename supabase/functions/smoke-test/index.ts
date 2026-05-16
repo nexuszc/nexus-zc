@@ -1,241 +1,161 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+interface DiagnosticsResponse {
+  status: string;
+  timestamp: string;
+  environment: {
+    runtime: string;
+    denoVersion?: string;
+    supabaseConfigured: boolean;
+  };
+  database: {
+    available: boolean;
+    connectionTest?: string;
+    tablesChecked?: string[];
+    error?: string;
+  };
+  authentication: {
+    serviceAvailable: boolean;
+    serviceError?: string;
+  };
+  storage: {
+    available: boolean;
+    bucketsChecked?: string[];
+    error?: string;
+  };
+  externalServices: {
+    anthropic: {
+      configured: boolean;
+      available: boolean;
+      error?: string;
+    };
+    email: {
+      configured: boolean;
+      available: boolean;
+      error?: string;
+    };
+  };
+  executionTime?: number;
+  logs: Array<{
+    level: string;
+    message: string;
+    timestamp: string;
+    data?: any;
+  }>;
+}
+
 Deno.serve(async (req) => {
   const startTime = Date.now();
   
-  // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  const diagnostics: DiagnosticsResponse = {
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    environment: {
+      runtime: 'deno',
+      denoVersion: Deno.version.deno,
+      supabaseConfigured: false,
+    },
+    database: {
+      available: false,
+    },
+    authentication: {
+      serviceAvailable: false,
+    },
+    storage: {
+      available: false,
+    },
+    externalServices: {
+      anthropic: {
+        configured: false,
+        available: false,
+      },
+      email: {
+        configured: false,
+        available: false,
+      },
+    },
+    logs: [],
   };
 
-  // Handle OPTIONS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204, 
-      headers: corsHeaders 
-    });
-  }
-
-  // Structured logging helper
   const log = (level: string, message: string, data?: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
+    diagnostics.logs.push({
       level,
       message,
-      ...(data && { data }),
-    };
-    console.log(JSON.stringify(logEntry));
+      timestamp: new Date().toISOString(),
+      data,
+    });
   };
 
   try {
-    log('info', 'Starting comprehensive smoke test');
+    log('info', 'Starting smoke test');
 
-    // Validate environment variables
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-    const optionalEnvVars = ['ANTHROPIC_API_KEY', 'RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-    
-    const missingEnvVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-    const missingOptionalVars = optionalEnvVars.filter(varName => !Deno.env.get(varName));
-    
-    if (missingEnvVars.length > 0) {
-      log('error', 'Missing required environment variables', { missing: missingEnvVars });
-      return new Response(
-        JSON.stringify({ 
-          ok: false, 
-          status: "unhealthy", 
-          error: "Missing required environment variables",
-          missing: missingEnvVars,
-          ts: new Date().toISOString() 
-        }),
-        { 
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          }
+    // Check environment configuration
+    log('info', 'Checking environment configuration');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    const resendKey = Deno.env.get('RESEND_API_KEY');
+
+    diagnostics.environment.supabaseConfigured = !!(supabaseUrl && (supabaseServiceKey || supabaseAnonKey));
+    diagnostics.externalServices.anthropic.configured = !!anthropicKey;
+    diagnostics.externalServices.email.configured = !!resendKey;
+
+    log('info', 'Environment configuration checked', {
+      supabaseConfigured: diagnostics.environment.supabaseConfigured,
+      anthropicConfigured: diagnostics.externalServices.anthropic.configured,
+      emailConfigured: diagnostics.externalServices.email.configured,
+    });
+
+    // Test database connectivity
+    log('info', 'Starting database connectivity check');
+    try {
+      if (supabaseUrl && supabaseServiceKey) {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        });
+
+        // Try to query a basic table to test connectivity
+        const { data: tables, error: tableError } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+
+        if (tableError) {
+          diagnostics.database.available = false;
+          diagnostics.database.error = tableError.message;
+          diagnostics.database.connectionTest = 'failed';
+          log('warn', 'Database query failed', { error: tableError.message });
+        } else {
+          diagnostics.database.available = true;
+          diagnostics.database.tablesChecked = ['profiles'];
+          diagnostics.database.connectionTest = 'success';
+          log('info', 'Database connectivity successful');
         }
-      );
-    }
 
-    log('info', 'Environment variables validated', { 
-      required: 'all_present',
-      missingOptional: missingOptionalVars 
-    });
-
-    // Timeout protection - set max execution time
-    const timeoutMs = 25000; // 25 seconds for comprehensive checks
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Function execution timeout')), timeoutMs);
-    });
-
-    // Main health check logic with comprehensive diagnostics
-    const healthCheckPromise = (async () => {
-      const diagnostics = {
-        timestamp: new Date().toISOString(),
-        executionTime: 0,
-        environment: {
-          supabaseUrl: !!Deno.env.get('SUPABASE_URL'),
-          supabaseKey: !!Deno.env.get('SUPABASE_ANON_KEY'),
-          supabaseServiceRoleKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
-          anthropicApiKey: !!Deno.env.get('ANTHROPIC_API_KEY'),
-          resendApiKey: !!Deno.env.get('RESEND_API_KEY'),
-          supabaseUrlValue: Deno.env.get('SUPABASE_URL') || 'NOT_SET',
-          missingOptional: missingOptionalVars,
-        },
-        runtime: {
-          denoVersion: Deno.version.deno,
-          v8Version: Deno.version.v8,
-          typescript: Deno.version.typescript,
-        },
-        memory: {
-          available: true,
-        },
-        database: {
-          available: false,
-          error: null,
-          connectionTest: 'not_attempted',
-          responseTime: 0,
-          tablesChecked: [],
-        },
-        authentication: {
-          headerPresent: false,
-          headerValue: null,
-          serviceAvailable: false,
-          serviceError: null,
-        },
-        storage: {
-          available: false,
-          error: null,
-          bucketsChecked: [],
-        },
-        edgeFunction: {
-          healthy: true,
-          canServeRequests: true,
-        },
-        externalServices: {
-          anthropic: {
-            configured: !!Deno.env.get('ANTHROPIC_API_KEY'),
-            available: false,
-            error: null,
-          },
-          email: {
-            configured: !!Deno.env.get('RESEND_API_KEY'),
-            available: false,
-            error: null,
-          },
-        },
-        criticalTables: {
-          profiles: { exists: false, error: null },
-          nexus_memory: { exists: false, error: null },
-          conversations: { exists: false, error: null },
-        },
-      };
-
-      // Check authentication header
-      const authHeader = req.headers.get('authorization');
-      diagnostics.authentication.headerPresent = !!authHeader;
-      if (authHeader) {
-        diagnostics.authentication.headerValue = authHeader.substring(0, 20) + '...';
-      }
-
-      log('info', 'Starting database connectivity check');
-
-      // Test database connectivity
-      try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-        if (supabaseUrl && supabaseKey) {
-          diagnostics.database.connectionTest = 'attempting';
-          
-          // Import Supabase client
-          const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
-          
-          const supabase = createClient(supabaseUrl, supabaseKey, {
-            auth: {
-              persistSession: false,
-              autoRefreshToken: false,
-            },
-          });
-
-          const dbStartTime = Date.now();
-
-          // Test profiles table
-          log('info', 'Checking profiles table');
-          try {
-            const { data: profilesData, error: profilesError } = await supabase
-              .from('profiles')
-              .select('id')
-              .limit(1);
-
-            if (profilesError) {
-              diagnostics.criticalTables.profiles.error = profilesError.message;
-              log('warn', 'Profiles table check failed', { error: profilesError.message });
-            } else {
-              diagnostics.criticalTables.profiles.exists = true;
-              diagnostics.database.tablesChecked.push('profiles');
-              log('info', 'Profiles table accessible');
+        // Try additional tables if first one succeeded
+        if (diagnostics.database.available) {
+          const additionalTables = ['workspaces', 'conversation_threads'];
+          for (const table of additionalTables) {
+            try {
+              const { error } = await supabase.from(table).select('id').limit(1);
+              if (!error) {
+                diagnostics.database.tablesChecked?.push(table);
+              }
+            } catch (e) {
+              // Silently continue if table doesn't exist
             }
-          } catch (profilesErr) {
-            diagnostics.criticalTables.profiles.error = profilesErr.message;
-            log('error', 'Profiles table error', { error: profilesErr.message });
           }
+          log('info', 'Additional tables checked', { tables: diagnostics.database.tablesChecked });
+        }
 
-          // Test nexus_memory table
-          log('info', 'Checking nexus_memory table');
-          try {
-            const { data: memoryData, error: memoryError } = await supabase
-              .from('nexus_memory')
-              .select('id')
-              .limit(1);
-
-            if (memoryError) {
-              diagnostics.criticalTables.nexus_memory.error = memoryError.message;
-              log('warn', 'Nexus memory table check failed', { error: memoryError.message });
-            } else {
-              diagnostics.criticalTables.nexus_memory.exists = true;
-              diagnostics.database.tablesChecked.push('nexus_memory');
-              log('info', 'Nexus memory table accessible');
-            }
-          } catch (memoryErr) {
-            diagnostics.criticalTables.nexus_memory.error = memoryErr.message;
-            log('error', 'Nexus memory table error', { error: memoryErr.message });
-          }
-
-          // Test conversations table
-          log('info', 'Checking conversations table');
-          try {
-            const { data: convData, error: convError } = await supabase
-              .from('conversations')
-              .select('id')
-              .limit(1);
-
-            if (convError) {
-              diagnostics.criticalTables.conversations.error = convError.message;
-              log('warn', 'Conversations table check failed', { error: convError.message });
-            } else {
-              diagnostics.criticalTables.conversations.exists = true;
-              diagnostics.database.tablesChecked.push('conversations');
-              log('info', 'Conversations table accessible');
-            }
-          } catch (convErr) {
-            diagnostics.criticalTables.conversations.error = convErr.message;
-            log('error', 'Conversations table error', { error: convErr.message });
-          }
-
-          diagnostics.database.responseTime = Date.now() - dbStartTime;
-
-          // If at least one table is accessible, consider database available
-          if (diagnostics.database.tablesChecked.length > 0) {
-            diagnostics.database.available = true;
-            diagnostics.database.connectionTest = 'success';
-            log('info', 'Database connectivity verified', { 
-              tablesChecked: diagnostics.database.tablesChecked.length,
-              responseTime: diagnostics.database.responseTime 
-            });
-          } else {
-            diagnostics.database.available = false;
-            diagnostics.database.error = 'No tables accessible';
+        // If we couldn't access any tables, mark as failed
+        if (!diagnostics.database.tablesChecked || diagnostics.database.tablesChecked.length === 0) {
+          diagnostics.database.available = false;
+          if (!diagnostics.database.error) {
             diagnostics.database.connectionTest = 'failed';
             log('error', 'Database connectivity failed - no tables accessible');
           }
@@ -376,4 +296,62 @@ Deno.serve(async (req) => {
       }
 
       // Calculate response time
-      diagnostics.executionTime = Date.
+      diagnostics.executionTime = Date.now() - startTime;
+
+      // Determine overall status
+      const criticalServicesUp = diagnostics.database.available || diagnostics.authentication.serviceAvailable;
+      diagnostics.status = criticalServicesUp ? 'healthy' : 'degraded';
+
+      log('info', 'Smoke test completed', { 
+        status: diagnostics.status, 
+        executionTime: diagnostics.executionTime 
+      });
+
+    } catch (error) {
+      log('error', 'Smoke test error', { error: error.message, stack: error.stack });
+      diagnostics.status = 'error';
+      diagnostics.executionTime = Date.now() - startTime;
+      
+      return new Response(
+        JSON.stringify(diagnostics),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+          },
+        }
+      );
+    }
+
+    return new Response(
+      JSON.stringify(diagnostics),
+      {
+        status: diagnostics.status === 'healthy' ? 200 : 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        },
+      }
+    );
+
+  } catch (error) {
+    log('error', 'Unexpected error in smoke test', { error: error.message, stack: error.stack });
+    diagnostics.status = 'error';
+    diagnostics.executionTime = Date.now() - startTime;
+
+    return new Response(
+      JSON.stringify(diagnostics),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        },
+      }
+    );
+  }
+});
