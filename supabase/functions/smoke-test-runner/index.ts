@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-Deno.serve(async (req) => {
+export default Deno.serve(async (req) => {
   try {
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
