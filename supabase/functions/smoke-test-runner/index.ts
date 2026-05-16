@@ -1,66 +1,66 @@
-Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     const overallStartTime = performance.now();
-    console.log("Smoke test runner invoked");
+    console.log("Starting smoke test execution");
 
-    // Parse request for test filter
-    let testFilter = null;
-    try {
-      const url = new URL(req.url);
-      testFilter = url.searchParams.get('test');
-      if (testFilter) {
-        console.log(`Test filter applied: ${testFilter}`);
-      }
-    } catch (e) {
-      console.log("No test filter specified, running all tests");
+    const url = new URL(req.url);
+    const testFilter = url.searchParams.get("test");
+
+    if (testFilter) {
+      console.log(`Running filtered test: ${testFilter}`);
+    } else {
+      console.log("Running all tests");
     }
 
-    // Environment variable checks
-    const envCheckStartTime = performance.now();
-    const requiredEnvVars = [
-      'SUPABASE_URL',
-      'SUPABASE_ANON_KEY',
-      'SUPABASE_SERVICE_ROLE_KEY'
-    ];
+    const baseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    const envCheckStart = performance.now();
     const denoEnv = {
-      SUPABASE_URL: Deno.env.get('SUPABASE_URL'),
-      SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY') ? '[PRESENT]' : '[MISSING]',
-      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ? '[PRESENT]' : '[MISSING]'
+      SUPABASE_URL: baseUrl ? "present" : "missing",
+      SUPABASE_ANON_KEY: anonKey ? "present" : "missing",
+      SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey ? "present" : "missing"
     };
 
-    console.log("Environment variables state:", denoEnv);
+    const environmentChecks = [
+      {
+        name: "SUPABASE_URL",
+        status: baseUrl ? "present" : "missing",
+        value: baseUrl ? baseUrl.substring(0, 30) + "..." : undefined
+      },
+      {
+        name: "SUPABASE_ANON_KEY",
+        status: anonKey ? "present" : "missing",
+        value: anonKey ? anonKey.substring(0, 20) + "..." : undefined
+      },
+      {
+        name: "SUPABASE_SERVICE_ROLE_KEY",
+        status: serviceRoleKey ? "present" : "missing",
+        value: serviceRoleKey ? serviceRoleKey.substring(0, 20) + "..." : undefined
+      }
+    ];
 
-    const environmentChecks = requiredEnvVars.map(varName => {
-      const value = Deno.env.get(varName);
-      return {
-        variable: varName,
-        status: value ? "present" : "missing",
-        ...(varName === 'SUPABASE_URL' && value && { value })
-      };
-    });
+    const envCheckDuration = performance.now() - envCheckStart;
 
-    const envCheckDuration = performance.now() - envCheckStartTime;
-    console.log("Environment checks completed in", envCheckDuration, "ms");
-
-    const baseUrl = Deno.env.get('SUPABASE_URL');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    console.log("Environment check results:", denoEnv);
 
     if (!baseUrl || !anonKey) {
       const missingVars = [];
-      if (!baseUrl) missingVars.push('SUPABASE_URL');
-      if (!anonKey) missingVars.push('SUPABASE_ANON_KEY');
-
-      console.error("Missing required environment variables:", missingVars);
+      if (!baseUrl) missingVars.push("SUPABASE_URL");
+      if (!anonKey) missingVars.push("SUPABASE_ANON_KEY");
 
       return new Response(
         JSON.stringify({
@@ -83,12 +83,7 @@ Deno.serve(async (req) => {
 
     const tests = [];
     let currentStep = 0;
-    const availableTests = ["rest-api", "database-connectivity", "edge-functions"];
-    const totalSteps = testFilter && testFilter !== "all"
-      ? 1
-      : availableTests.length;
-
-    console.log(`Will execute ${totalSteps} test(s)`);
+    const totalSteps = testFilter ? 1 : 3;
 
     // Test 1: REST API availability
     if (!testFilter || testFilter === "rest-api" || testFilter === "all") {
@@ -97,10 +92,10 @@ Deno.serve(async (req) => {
       const startTime = performance.now();
 
       try {
-        const restUrl = `${baseUrl}/rest/v1/`;
-        console.log(`Attempting REST API check to: ${restUrl}`);
+        const restTestUrl = `${baseUrl}/rest/v1/`;
+        console.log(`Attempting REST API check to: ${restTestUrl}`);
 
-        const restTest = await fetch(restUrl, {
+        const restTest = await fetch(restTestUrl, {
           headers: {
             "apikey": anonKey,
             "Authorization": `Bearer ${anonKey}`
@@ -109,7 +104,7 @@ Deno.serve(async (req) => {
 
         const responseText = await restTest.text();
         const restState = {
-          url: restUrl,
+          url: restTestUrl,
           statusCode: restTest.status,
           statusText: restTest.statusText,
           headers: Object.fromEntries(restTest.headers.entries()),
@@ -169,43 +164,47 @@ Deno.serve(async (req) => {
       const startTime = performance.now();
 
       try {
-        const dbUrl = `${baseUrl}/rest/v1/rpc/version`;
-        console.log(`Attempting database connectivity check to: ${dbUrl}`);
+        const supabase = createClient(baseUrl, anonKey);
+        console.log("Supabase client created, attempting database query");
 
-        const dbTest = await fetch(dbUrl, {
-          method: "POST",
-          headers: {
-            "apikey": anonKey,
-            "Authorization": `Bearer ${anonKey}`,
-            "Content-Type": "application/json"
-          }
-        });
+        const { data, error } = await supabase
+          .from('_smoke_test_table_check')
+          .select('count')
+          .limit(1);
 
-        const responseText = await dbTest.text();
         const dbState = {
-          url: dbUrl,
-          statusCode: dbTest.status,
-          statusText: dbTest.statusText,
-          headers: Object.fromEntries(dbTest.headers.entries()),
-          responseLength: responseText.length,
+          queryExecuted: true,
+          hasError: !!error,
+          hasData: !!data,
+          dataLength: data?.length,
           timestamp: new Date().toISOString()
         };
 
         console.log("Database connectivity state:", dbState);
 
+        const dbTest = {
+          ok: !error || error.code === 'PGRST116' || error.code === '42P01'
+        };
+
         let parsedResponse;
-        try {
-          parsedResponse = JSON.parse(responseText);
-        } catch (e) {
-          console.log("Response is not JSON, treating as text");
+        if (error) {
+          parsedResponse = error;
+          console.log("Database query error (may be expected if table doesn't exist):", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+          });
+        } else {
+          console.log("Database query successful, data:", data);
         }
 
         tests.push({
           name: "database-connectivity",
           description: "Database connection test",
           status: dbTest.ok ? "passed" : "failed",
-          statusCode: dbTest.status,
-          response: parsedResponse ? {
+          data: data,
+          error: parsedResponse ? {
             m: parsedResponse?.message,
             e: parsedResponse?.error,
             d: parsedResponse?.details,
