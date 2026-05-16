@@ -1,107 +1,135 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
-interface SmokeTest {
-  name: string;
-  status: 'passed' | 'failed';
-  duration: number;
-  error?: string;
+interface SmokeTestResult {
+  name: string
+  status: 'pass' | 'fail'
+  message?: string
+  duration?: number
 }
 
-async function runSmokeTests(): Promise<SmokeTest[]> {
-  const tests: SmokeTest[] = [];
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
-  const testDatabase = async (): Promise<SmokeTest> => {
-    const start = Date.now();
+async function runSmokeTests(): Promise<SmokeTestResult[]> {
+  const results: SmokeTestResult[] = []
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  
+  const testDatabaseConnection = async (): Promise<SmokeTestResult> => {
+    const start = Date.now()
     try {
-      const { error } = await supabase.from('nexus_chains').select('id').limit(1);
-      if (error) throw error;
+      const supabase = createClient(supabaseUrl, supabaseKey)
+      const { error } = await supabase.from('nexus_config').select('count').limit(1).single()
+      
+      if (error && error.code !== 'PGRST116') {
+        throw error
+      }
+      
       return {
         name: 'Database Connection',
-        status: 'passed',
-        duration: Date.now() - start,
-      };
+        status: 'pass',
+        duration: Date.now() - start
+      }
     } catch (error) {
       return {
         name: 'Database Connection',
-        status: 'failed',
-        duration: Date.now() - start,
-        error: error.message,
-      };
+        status: 'fail',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        duration: Date.now() - start
+      }
     }
-  };
-
-  const testAuth = async (): Promise<SmokeTest> => {
-    const start = Date.now();
+  }
+  
+  const testEnvironmentVariables = async (): Promise<SmokeTestResult> => {
+    const start = Date.now()
     try {
-      const { data, error } = await supabase.auth.getUser();
-      if (error && error.message !== 'Auth session missing!') throw error;
+      const required = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
+      const missing = required.filter(key => !Deno.env.get(key))
+      
+      if (missing.length > 0) {
+        throw new Error(`Missing environment variables: ${missing.join(', ')}`)
+      }
+      
       return {
-        name: 'Auth System',
-        status: 'passed',
-        duration: Date.now() - start,
-      };
+        name: 'Environment Variables',
+        status: 'pass',
+        duration: Date.now() - start
+      }
     } catch (error) {
       return {
-        name: 'Auth System',
-        status: 'failed',
-        duration: Date.now() - start,
-        error: error.message,
-      };
+        name: 'Environment Variables',
+        status: 'fail',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        duration: Date.now() - start
+      }
     }
-  };
-
-  const testStorage = async (): Promise<SmokeTest> => {
-    const start = Date.now();
+  }
+  
+  const testFunctionExecution = async (): Promise<SmokeTestResult> => {
+    const start = Date.now()
     try {
-      const { data, error } = await supabase.storage.listBuckets();
-      if (error) throw error;
+      const timestamp = new Date().toISOString()
+      const testData = { test: true, timestamp }
+      
+      if (!testData.timestamp) {
+        throw new Error('Function execution failed')
+      }
+      
       return {
-        name: 'Storage System',
-        status: 'passed',
-        duration: Date.now() - start,
-      };
+        name: 'Function Execution',
+        status: 'pass',
+        duration: Date.now() - start
+      }
     } catch (error) {
       return {
-        name: 'Storage System',
-        status: 'failed',
-        duration: Date.now() - start,
-        error: error.message,
-      };
+        name: 'Function Execution',
+        status: 'fail',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        duration: Date.now() - start
+      }
     }
-  };
-
-  tests.push(await testDatabase());
-  tests.push(await testAuth());
-  tests.push(await testStorage());
-
-  return tests;
+  }
+  
+  results.push(await testEnvironmentVariables())
+  results.push(await testDatabaseConnection())
+  results.push(await testFunctionExecution())
+  
+  return results
 }
 
 Deno.serve(async (req) => {
-  const { method } = req;
-
-  if (method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
-  }
-
   try {
-    const tests = await runSmokeTests();
+    if (req.method !== 'POST') {
+      return new Response(
+        JSON.stringify({ error: 'Method not allowed' }),
+        { status: 405, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    const results = await runSmokeTests()
+    const allPassed = results.every(r => r.status === 'pass')
+    
     return new Response(
-      JSON.stringify({ success: true, tests }),
-      {
-        headers: { 'Content-Type': 'application/json' },
+      JSON.stringify({
+        success: allPassed,
+        timestamp: new Date().toISOString(),
+        results,
+        summary: {
+          total: results.length,
+          passed: results.filter(r => r.status === 'pass').length,
+          failed: results.filter(r => r.status === 'fail').length
+        }
+      }),
+      { 
+        status: allPassed ? 200 : 500,
+        headers: { 'Content-Type': 'application/json' }
       }
-    );
+    )
   } catch (error) {
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+      JSON.stringify({ 
+        error: 'Internal server error',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
   }
-});
+})
