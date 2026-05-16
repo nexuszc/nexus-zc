@@ -1,0 +1,80 @@
+# Test Environment Configuration for Nexus System
+# Addresses smoke test failures with proper timeouts and retry settings
+
+test:
+  # HTTP client configuration
+  http:
+    timeout: 30
+    open_timeout: 10
+    read_timeout: 30
+    write_timeout: 10
+    max_retries: 3
+    retry_delay: 1
+
+  # Async operation settings
+  async:
+    default_timeout: 45
+    polling_interval: 0.5
+    max_retries: 5
+    exponential_backoff: true
+    backoff_multiplier: 1.5
+
+  # Database configuration
+  database:
+    pool: 5
+    timeout: 10
+    checkout_timeout: 5
+    reaping_frequency: 10
+    statement_timeout: 30000
+    connect_timeout: 10
+    
+  # Test execution settings
+  execution:
+    max_wait_time: 60
+    default_wait: 5
+    implicit_wait: 2
+    cleanup_timeout: 10
+    setup_timeout: 15
+
+  # Logging configuration
+  logging:
+    level: debug
+    verbose: true
+    log_requests: true
+    log_responses: true
+    log_database_queries: true
+    
+  # CI-specific overrides
+  ci:
+    enabled: <%= ENV['CI'] == 'true' %>
+    http_timeout: 60
+    async_timeout: 90
+    max_retries: 5
+    database_pool: 10
+    setup_timeout: 30
+    verbose_logging: true
+    fail_fast: false
+    parallel: false
+
+  # Retry configuration for flaky tests
+  retry:
+    max_attempts: 3
+    retry_on:
+      - Timeout::Error
+      - Net::OpenTimeout
+      - Net::ReadTimeout
+      - ActiveRecord::ConnectionTimeoutError
+    delay_between_attempts: 2
+    
+  # Feature flags for testing
+  features:
+    async_enabled: true
+    webhooks_enabled: false
+    background_jobs_inline: true
+    cache_enabled: false
+    
+  # External service stubs
+  external_services:
+    mock_mode: true
+    timeout: 15
+    max_retries: 2
