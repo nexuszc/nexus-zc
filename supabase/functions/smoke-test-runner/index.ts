@@ -1,9 +1,10 @@
-// supabase/functions/smoke-test-runner/index.ts
-
-import { corsHeaders } from "../_shared/cors.ts";
-
 Deno.serve(async (req) => {
-  // Handle CORS preflight
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS"
+  };
+
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -12,42 +13,86 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log("Smoke test runner initiated");
+    const overallStartTime = performance.now();
     
+    // Parse request body for test parameters
+    let testFilter = "all";
+    let requestBody: any = {};
+    
+    try {
+      if (req.method === "POST") {
+        const contentType = req.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          requestBody = await req.json();
+          testFilter = requestBody.testFilter || requestBody.filter || "all";
+        }
+      }
+    } catch (parseError) {
+      console.warn("Could not parse request body, using defaults:", parseError.message);
+    }
+
+    console.log("Smoke test runner started", {
+      testFilter,
+      timestamp: new Date().toISOString(),
+      method: req.method
+    });
+
+    const tests: any[] = [];
+    let currentStep = 0;
+    let totalSteps = 0;
+
+    // Count total steps
+    if (!testFilter || testFilter === "all") {
+      totalSteps = 3;
+    } else {
+      totalSteps = 1;
+    }
+
+    console.log(`Planning to run ${totalSteps} test(s) with filter: ${testFilter}`);
+
     // Environment checks
     const envCheckStart = performance.now();
-    const requiredEnvVars = [
-      "SUPABASE_URL",
-      "SUPABASE_ANON_KEY",
-      "SUPABASE_SERVICE_ROLE_KEY"
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    const environmentChecks = [
+      {
+        name: "SUPABASE_URL",
+        status: supabaseUrl ? "present" : "missing",
+        value: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : undefined
+      },
+      {
+        name: "SUPABASE_ANON_KEY",
+        status: supabaseAnonKey ? "present" : "missing",
+        value: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : undefined
+      },
+      {
+        name: "SUPABASE_SERVICE_ROLE_KEY",
+        status: supabaseServiceRoleKey ? "present" : "missing",
+        value: supabaseServiceRoleKey ? `${supabaseServiceRoleKey.substring(0, 20)}...` : undefined
+      }
     ];
-    
-    const denoEnv = {
-      SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
-      SUPABASE_ANON_KEY: Deno.env.get("SUPABASE_ANON_KEY"),
-      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-    };
-    
-    const environmentChecks = requiredEnvVars.map(varName => ({
-      variable: varName,
-      status: Deno.env.get(varName) ? "present" : "missing",
-      valueLength: Deno.env.get(varName)?.length || 0
-    }));
-    
+
     const envCheckDuration = performance.now() - envCheckStart;
-    
-    console.log("Environment variables check:", environmentChecks);
-    
-    const missingVars = environmentChecks.filter(check => check.status === "missing");
-    if (missingVars.length > 0) {
-      console.error("Missing required environment variables:", missingVars.map(v => v.variable));
+
+    console.log("Environment check completed:", environmentChecks);
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Missing required environment variables");
       return new Response(
         JSON.stringify({
           success: false,
           error: "Missing required environment variables",
-          missingVariables: missingVars.map(v => v.variable),
           environmentChecks,
-          timestamp: new Date().toISOString()
+          tests: [],
+          summary: {
+            total: 0,
+            passed: 0,
+            failed: 0
+          },
+          timestamp: new Date().toISOString(),
+          duration_ms: performance.now() - overallStartTime
         }),
         {
           status: 500,
@@ -59,73 +104,61 @@ Deno.serve(async (req) => {
       );
     }
 
-    const baseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const baseUrl = supabaseUrl;
+    const anonKey = supabaseAnonKey;
 
-    // Parse request for test filter
-    let testFilter: string | null = null;
-    try {
-      const url = new URL(req.url);
-      testFilter = url.searchParams.get("test");
-      if (testFilter) {
-        console.log(`Test filter applied: ${testFilter}`);
-      }
-    } catch (e) {
-      console.warn("Could not parse URL for test filter:", e);
-    }
+    const denoEnv = {
+      arch: Deno.build.arch,
+      os: Deno.build.os,
+      vendor: Deno.build.vendor,
+      version: Deno.version.deno
+    };
 
-    const tests = [];
-    let currentStep = 0;
-    let totalSteps = 0;
+    console.log("Deno environment:", denoEnv);
 
-    // Calculate total steps
-    if (!testFilter || testFilter === "all") {
-      totalSteps = 3;
-    } else {
-      totalSteps = 1;
-    }
-
-    // Test 1: Supabase URL accessibility
-    if (!testFilter || testFilter === "url-check" || testFilter === "all") {
+    // Test 1: REST API connectivity
+    if (!testFilter || testFilter === "rest-api" || testFilter === "all") {
       currentStep++;
-      console.log(`[Step ${currentStep}/${totalSteps}] Starting url-check test`);
+      console.log(`[Step ${currentStep}/${totalSteps}] Starting rest-api test`);
       const startTime = performance.now();
       
       try {
-        const urlTestUrl = `${baseUrl}/rest/v1/`;
-        console.log(`Attempting connection to: ${urlTestUrl}`);
+        const restTestUrl = `${baseUrl}/rest/v1/`;
+        console.log(`Attempting REST API connection to: ${restTestUrl}`);
         
-        const urlTest = await fetch(urlTestUrl, {
+        const restTest = await fetch(restTestUrl, {
           headers: {
             "apikey": anonKey,
             "Authorization": `Bearer ${anonKey}`
           }
         });
         
-        const urlState = {
-          url: urlTestUrl,
-          statusCode: urlTest.status,
-          statusText: urlTest.statusText,
-          headers: Object.fromEntries(urlTest.headers.entries()),
+        const responseText = await restTest.text();
+        const restState = {
+          url: restTestUrl,
+          statusCode: restTest.status,
+          statusText: restTest.statusText,
+          headers: Object.fromEntries(restTest.headers.entries()),
+          responseLength: responseText.length,
           timestamp: new Date().toISOString()
         };
         
-        console.log("URL accessibility state:", urlState);
+        console.log("REST API state:", restState);
         
         tests.push({
-          name: "url-check",
-          description: "Supabase URL accessibility",
-          status: urlTest.ok ? "passed" : "failed",
-          statusCode: urlTest.status,
+          name: "rest-api",
+          description: "REST API connectivity",
+          status: restTest.ok ? "passed" : "failed",
+          statusCode: restTest.status,
           duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString(),
           step: currentStep,
-          state: urlState
+          state: restState
         });
         
-        console.log(`[Step ${currentStep}/${totalSteps}] url-check test ${urlTest.ok ? 'PASSED' : 'FAILED'}`);
+        console.log(`[Step ${currentStep}/${totalSteps}] rest-api test ${restTest.ok ? 'PASSED' : 'FAILED'}`);
       } catch (error) {
-        console.error(`[Step ${currentStep}/${totalSteps}] url-check test FAILED:`, error);
+        console.error(`[Step ${currentStep}/${totalSteps}] rest-api test FAILED:`, error);
         
         const errorContext = {
           message: error.message,
@@ -139,11 +172,11 @@ Deno.serve(async (req) => {
           }
         };
         
-        console.error("URL check error context:", errorContext);
+        console.error("REST API error context:", errorContext);
         
         tests.push({
-          name: "url-check",
-          description: "Supabase URL accessibility",
+          name: "rest-api",
+          description: "REST API connectivity",
           status: "failed",
           error: error.message,
           errorStack: error.stack,
@@ -162,8 +195,8 @@ Deno.serve(async (req) => {
       const startTime = performance.now();
       
       try {
-        const dbTestUrl = `${baseUrl}/rest/v1/?apikey=${anonKey}`;
-        console.log(`Attempting database connection check to: ${dbTestUrl}`);
+        const dbTestUrl = `${baseUrl}/rest/v1/rpc/`;
+        console.log(`Attempting database connectivity check to: ${dbTestUrl}`);
         
         const dbTest = await fetch(dbTestUrl, {
           headers: {
@@ -319,8 +352,10 @@ Deno.serve(async (req) => {
         duration_ms: envCheckDuration,
         allPresent: environmentChecks.every(check => check.status === "present")
       },
+      results: tests,
       tests,
       timestamp: new Date().toISOString(),
+      duration_ms: performance.now() - overallStartTime,
       ...(testFilter && { filter: testFilter }),
       ...(failedTests.length > 0 && { 
         failures: failedTests.map(test => ({
@@ -336,7 +371,8 @@ Deno.serve(async (req) => {
       success: allPassed,
       total: totalTests,
       passed: passedTests,
-      failed: totalTests - passedTests
+      failed: totalTests - passedTests,
+      duration_ms: result.duration_ms
     });
 
     return new Response(
@@ -362,6 +398,7 @@ Deno.serve(async (req) => {
         error: error.message,
         errorStack: error.stack,
         errorType: error.name,
+        results: [],
         tests: [],
         summary: {
           total: 0,
@@ -369,6 +406,7 @@ Deno.serve(async (req) => {
           failed: 0
         },
         timestamp: new Date().toISOString(),
+        duration_ms: 0,
         criticalFailure: true
       }),
       {
