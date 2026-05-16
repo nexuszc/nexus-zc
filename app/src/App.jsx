@@ -21,14 +21,9 @@ import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
-// New dashboard pages
-import Home from './pages/Home'
-import Brain from './pages/Brain'
-import Pipeline from './pages/verticals/roofing/Pipeline'
-import Content from './pages/verticals/roofing/Content'
-import Calls from './pages/verticals/roofing/Calls'
-import Contractors from './pages/verticals/roofing/Contractors'
-import System from './pages/verticals/roofing/System'
+import Home    from './pages/Home'
+import Brain   from './pages/Brain'
+import RoofingOS from './pages/verticals/roofing/RoofingOS'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -59,18 +54,20 @@ export default function App() {
         <Route path="/portal/:token" element={<ClientPortal />} />
         <Route path="/roofing/portal/:token" element={<RoofingPortal />} />
         <Route path="/roofing/login" element={<RoofingLogin />} />
+
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>
-            {/* New command center */}
+            {/* Nexus command center */}
             <Route path="/" element={<Home />} />
             <Route path="/brain" element={<Brain />} />
 
-            {/* Roofing OS verticals */}
-            <Route path="/roofing/pipeline" element={<Pipeline />} />
-            <Route path="/roofing/content" element={<Content />} />
-            <Route path="/roofing/calls" element={<Calls />} />
-            <Route path="/roofing/contractors" element={<Contractors />} />
-            <Route path="/roofing/system" element={<System />} />
+            {/* Roofing OS vertical — all sub-tabs handled inside RoofingOS */}
+            <Route path="/roofing" element={<RoofingOS />} />
+            <Route path="/roofing/pipeline" element={<RoofingOS />} />
+            <Route path="/roofing/content" element={<RoofingOS />} />
+            <Route path="/roofing/calls" element={<RoofingOS />} />
+            <Route path="/roofing/contractors" element={<RoofingOS />} />
+            <Route path="/roofing/system" element={<RoofingOS />} />
 
             {/* Legacy routes kept intact */}
             <Route path="/dashboard" element={<Dashboard />} />
@@ -80,8 +77,10 @@ export default function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
             <Route path="/outreach" element={<OutreachDashboard />} />
+
+            {/* Contractor-facing job management */}
             <Route element={<ContractorProvider />}>
-              <Route path="/roofing" element={<RoofingDashboard />} />
+              <Route path="/roofing/jobs" element={<RoofingDashboard />} />
               <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
               <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
               <Route path="/roofing/crew" element={<RoofingCrew />} />

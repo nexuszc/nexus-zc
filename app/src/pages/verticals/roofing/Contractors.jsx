@@ -1,6 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 
+const OUTCOME_COLORS = {
+  appointment_booked: 'text-green-400 bg-green-500/10',
+  interested:         'text-indigo-400 bg-indigo-500/10',
+  callback_requested: 'text-cyan-400 bg-cyan-500/10',
+  not_interested:     'text-red-400 bg-red-500/10',
+  voicemail:          'text-amber-400 bg-amber-500/10',
+  no_answer:          'text-gray-500 bg-gray-700/30',
+}
+
 function ago(ts) {
   if (!ts) return '—'
   const s = Math.floor((Date.now() - new Date(ts)) / 1000)
@@ -121,6 +130,51 @@ function TeamSection({ contractorId }) {
           {saving ? '…' : '+ Add'}
         </button>
       </form>
+    </div>
+  )
+}
+
+function InboundCallsSection({ contractorId }) {
+  const [calls, setCalls]   = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('roofing_aria_calls')
+      .select('id, to_number, outcome, duration_seconds, created_at')
+      .eq('call_type', 'inbound')
+      .eq('contractor_id', contractorId)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    setCalls(data || [])
+    setLoading(false)
+  }, [contractorId])
+
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div className="mt-3 border-t border-[#1e1e2e] pt-3">
+      <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-2">Inbound Calls</div>
+      {loading ? (
+        <div className="text-xs text-gray-700 py-1">Loading…</div>
+      ) : calls.length === 0 ? (
+        <div className="text-xs text-gray-700 py-1">No inbound calls recorded.</div>
+      ) : (
+        <div className="space-y-1">
+          {calls.map(call => (
+            <div key={call.id} className="flex items-center gap-3 py-1 text-xs">
+              <span className="text-gray-400 font-mono shrink-0">{call.to_number || '—'}</span>
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${OUTCOME_COLORS[call.outcome] || 'text-gray-500 bg-gray-800'}`}>
+                {call.outcome?.replace(/_/g, ' ') || 'unknown'}
+              </span>
+              <span className="text-gray-600 shrink-0">
+                {call.duration_seconds ? `${Math.floor(call.duration_seconds / 60)}m ${call.duration_seconds % 60}s` : '—'}
+              </span>
+              <span className="text-gray-700 ml-auto shrink-0">{ago(call.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -279,6 +333,7 @@ export default function Contractors() {
                     )}
                   </div>
                   <TeamSection contractorId={c.id} />
+                  <InboundCallsSection contractorId={c.id} />
                 </div>
               )}
             </div>
