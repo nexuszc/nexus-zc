@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-export default Deno.serve(async (req) => {
+Deno.serve(async (req) => {
   try {
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
@@ -13,6 +13,23 @@ export default Deno.serve(async (req) => {
         }
       });
     }
+
+    // Parse query parameters for optional test filtering
+    const url = new URL(req.url);
+    const filterParam = url.searchParams.get("filter");
+    
+    // Parse request body for optional test filtering
+    let bodyFilter = null;
+    if (req.method === "POST") {
+      try {
+        const body = await req.json();
+        bodyFilter = body.filter;
+      } catch {
+        // No valid JSON body, continue without body filter
+      }
+    }
+
+    const testFilter = filterParam || bodyFilter;
 
     const tests = [];
     const baseUrl = Deno.env.get("SUPABASE_URL");
@@ -37,80 +54,89 @@ export default Deno.serve(async (req) => {
     }
 
     // Test 1: Health check
-    tests.push({
-      name: "health-check",
-      description: "Basic health check",
-      status: "passed",
-      timestamp: new Date().toISOString()
-    });
-
-    // Test 2: Database connectivity
-    try {
-      const dbTest = await fetch(`${baseUrl}/rest/v1/`, {
-        headers: {
-          "apikey": anonKey,
-          "Authorization": `Bearer ${anonKey}`
-        }
-      });
-      
+    if (!testFilter || testFilter === "health-check" || testFilter === "all") {
       tests.push({
-        name: "database-connectivity",
-        description: "Database connection test",
-        status: dbTest.ok ? "passed" : "failed",
-        statusCode: dbTest.status,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      tests.push({
-        name: "database-connectivity",
-        description: "Database connection test",
-        status: "failed",
-        error: error.message,
+        name: "health-check",
+        description: "Basic health check",
+        status: "passed",
         timestamp: new Date().toISOString()
       });
     }
 
+    // Test 2: Database connectivity
+    if (!testFilter || testFilter === "database-connectivity" || testFilter === "all") {
+      try {
+        const dbTest = await fetch(`${baseUrl}/rest/v1/`, {
+          headers: {
+            "apikey": anonKey,
+            "Authorization": `Bearer ${anonKey}`
+          }
+        });
+        
+        tests.push({
+          name: "database-connectivity",
+          description: "Database connection test",
+          status: dbTest.ok ? "passed" : "failed",
+          statusCode: dbTest.status,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        tests.push({
+          name: "database-connectivity",
+          description: "Database connection test",
+          status: "failed",
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
     // Test 3: Edge function availability
-    try {
-      const functionsTest = await fetch(`${baseUrl}/functions/v1/`, {
-        headers: {
-          "apikey": anonKey,
-          "Authorization": `Bearer ${anonKey}`
-        }
-      });
-      
-      tests.push({
-        name: "edge-functions",
-        description: "Edge functions availability",
-        status: functionsTest.status === 404 || functionsTest.ok ? "passed" : "failed",
-        statusCode: functionsTest.status,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      tests.push({
-        name: "edge-functions",
-        description: "Edge functions availability",
-        status: "failed",
-        error: error.message,
-        timestamp: new Date().toISOString()
-      });
+    if (!testFilter || testFilter === "edge-functions" || testFilter === "all") {
+      try {
+        const functionsTest = await fetch(`${baseUrl}/functions/v1/`, {
+          headers: {
+            "apikey": anonKey,
+            "Authorization": `Bearer ${anonKey}`
+          }
+        });
+        
+        tests.push({
+          name: "edge-functions",
+          description: "Edge functions availability",
+          status: functionsTest.status === 404 || functionsTest.ok ? "passed" : "failed",
+          statusCode: functionsTest.status,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        tests.push({
+          name: "edge-functions",
+          description: "Edge functions availability",
+          status: "failed",
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
 
     const allPassed = tests.every(test => test.status === "passed");
     const totalTests = tests.length;
     const passedTests = tests.filter(test => test.status === "passed").length;
 
+    const result = {
+      success: allPassed,
+      summary: {
+        total: totalTests,
+        passed: passedTests,
+        failed: totalTests - passedTests
+      },
+      tests,
+      timestamp: new Date().toISOString(),
+      ...(testFilter && { filter: testFilter })
+    };
+
     return new Response(
-      JSON.stringify({
-        success: allPassed,
-        summary: {
-          total: totalTests,
-          passed: passedTests,
-          failed: totalTests - passedTests
-        },
-        tests,
-        timestamp: new Date().toISOString()
-      }),
+      JSON.stringify(result),
       {
         status: allPassed ? 200 : 500,
         headers: {
