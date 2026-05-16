@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v9
+# Last updated: May 15, 2026 — v8
 
 ---
 
@@ -121,9 +121,12 @@ Then productized and sold to other multi-business operators.
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
 | `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
 | `nexus-diagnostic` | See function source for details | Internal |
+| `nexus-follow-up` | See function source for details | Internal |
 | `nexus-intake` | See function source for details | Internal |
+| `nexus-prospector` | See function source for details | Internal |
 | `nexus-quick-scan` | See function source for details | Internal |
 | `nexus-router` | See function source for details | Internal |
+| `nexus-self-build` | See function source for details | Internal |
 | `nexus-unsubscribe` | See function source for details | Internal |
 | `nexus-vertical-router` | See function source for details | Internal |
 | `nexus-voice` | See function source for details | Internal |
@@ -160,7 +163,8 @@ Then productized and sold to other multi-business operators.
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
-| `roofing-outreach-sequencer` | 3-touch email+voice+SMS lead gen sequence; runs daily 9am MT | Daily cron + on demand |
+| `roofing-outreach` | See function source for details | Internal |
+| `roofing-outreach-sequencer` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
@@ -181,6 +185,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-youtube-engine` | See function source for details | Internal |
 | `roofing-youtube-publisher` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
+| `smoke-test` | See function source for details | Internal |
 | `stripe-webhook` | See function source for details | Internal |
 | `supplement-audit-engine` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
@@ -379,40 +384,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session (Spec 4 — System Review v1):**
-- Deleted 7 dead functions: smoke-test, aria-diag, tg-relay, nexus-self-build, nexus-follow-up, nexus-prospector, roofing-outreach
-- Fixed chat reference: `roofing-outreach now` command now calls `roofing-outreach-sequencer`
-- Fixed TWILIO_FROM_NUMBER to fall back to TWILIO_PHONE_NUMBER in roofing-outreach-sequencer + roofing-aria-engine
-- Fixed roofing-aria-webhook v2: call_analyzed now runs Claude analysis when Retell custom_analysis_data is empty; added /recover endpoint; 5 stale calls recovered
-- Added portal_sent Telegram alert + voicemail requeue to aria-webhook
-- Created cron jobs: morning-digest-daily (13:30 UTC) + monthly-truth-1st (1st of month 15:00 UTC)
-- Deactivated cron job 8 (roofing-outreach-4h → old dead function)
-- Upgraded morning-digest v2: sends Lead Gen Machine Telegram digest (whales, hot opens, pipeline) to Zach at 7:30am MT
-- Upgraded portal-api: plain-English insurance status, timeline field, enriched Aria context
-- Upgraded nexus-core: off-hours scheduling guard (skips heavy AI ops 10pm–7am MT)
-- DB indexes: 8 new indexes on key query paths
-- Test suite: 39/39 passing (scripts/test-suite.sh)
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
-1. Register Resend webhook in Resend dashboard → roofing-email-webhook (manual — external)
-2. Draft complete operating agreement for Nexus ZC LLC — single member LLC
-3. Build complete Roofing OS go-to-market system with public landing page
-4. Add Self-Learning Pattern Recognition (medium)
-5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
-
-**CRON SCHEDULE (as of this session):**
-| Job | Schedule | Function |
-|-----|----------|----------|
-| nexus-morning-briefing | 0 13 * * * | briefing (7am MT) |
-| nexus-reminders-check | */5 * * * * | reminders |
-| nexus-health-monitor | 0 * * * * | health-monitor |
-| nexus-core-cycle | */30 * * * * | nexus-core |
-| roofing-prospector-daily | 0 14 * * * | roofing-prospector |
-| roofing-sequencer-daily | 0 15 * * * | roofing-outreach-sequencer |
-| morning-digest-daily | 30 13 * * * | morning-digest (7:30am MT) |
-| monthly-truth-1st | 0 15 1 * * | monthly-truth (1st of month) |
+1. Fix smoke_test_failed error (simple)
+2. Fix Recurring Smoke Test Failures (medium)
+3. Add Self-Learning Pattern Recognition (medium)
+4. Add memory consolidation ability (medium)
+5. Add Structured Self-Reflection Capability (medium)
+6. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+7. Draft complete operating agreement for Nexus ZC LLC
+8. Build complete Roofing OS go-to-market system with public landing page
 
 ---
 
