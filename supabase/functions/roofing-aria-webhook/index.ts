@@ -110,6 +110,20 @@ async function triggerPostCallActions(
       });
     }
 
+  } else if (outcome === "portal_sent") {
+    await tg(
+      `🔗 *Portal sent on roofing call*\n` +
+      `*${callRecord.contact_name || "Unknown"}*\n` +
+      `${callRecord.contact_phone}\n` +
+      `Type: ${callRecord.call_type}\n` +
+      `They have the portal link — follow up if they don't open it within 24h.`
+    );
+    await supabase.from("reminders").insert({
+      chat_id: TELEGRAM_CHAT_ID,
+      message: `Referral check-in: ${callRecord.contact_name} ${callRecord.contact_phone} — inspection done? Ask for a referral.`,
+      fire_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    });
+
   } else if (outcome === "interested") {
     const callNum = (callRecord.call_number as number) || 1;
     if (callNum < 4) {
@@ -135,6 +149,23 @@ async function triggerPostCallActions(
         callRecord.contact_phone as string,
         `Hi ${firstName}, this is Aria from your roofing company. We detected storm activity in your area and wanted to reach out. Call us back or reply to schedule a free inspection.`
       );
+    }
+    // Requeue for next day if under the retry limit
+    if (callNum < 3) {
+      await supabase.from("aria_call_queue").insert({
+        contact_phone: callRecord.contact_phone,
+        contact_name: callRecord.contact_name,
+        contact_type: callRecord.contact_type || "prospect",
+        call_type: callRecord.call_type,
+        status: "pending",
+        fire_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        metadata: {
+          call_number: callNum + 1,
+          job_id: callRecord.job_id,
+          previous_call_id: callRecord.id,
+          reason: "voicemail_retry",
+        }
+      }).catch(() => {});
     }
   }
 }

@@ -1,8 +1,22 @@
+// morning-digest v2
+// 1. SMS digest to active contractor accounts (contractor stats, storms, supplements)
+// 2. Lead Gen Machine owner intelligence via Telegram (whales, hot opens, pipeline)
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
+const TELEGRAM_CHAT_ID = Deno.env.get('TELEGRAM_CHAT_ID')!;
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+async function tg(text: string) {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: 'Markdown' })
+  }).catch(() => {});
+}
 
 async function sendSMS(to: string, body: string) {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
@@ -108,6 +122,75 @@ Deno.serve(async (req) => {
       await sendSMS(contractor.owner_phone, message);
       sent++;
     } catch { /* skip, continue */ }
+  }
+
+  // ── Owner intelligence: Lead Gen Machine Telegram digest ──────────────────
+  if (!body.contractor_id) {
+    try {
+      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      const [
+        { data: prospects },
+        { data: recentLogs },
+        { data: whales },
+        { data: hotOpens },
+      ] = await Promise.all([
+        supabase.from('roofing_prospects').select('id, in_sequence, outcome, whale_alerted'),
+        supabase.from('roofing_outreach_log')
+          .select('id, opened, delivered, bounced')
+          .eq('direction', 'outbound')
+          .gte('created_at', since24h),
+        supabase.from('roofing_prospects')
+          .select('owner_name, company_name, phone, whale_alerted_at')
+          .eq('whale_alerted', true)
+          .is('outcome', null)
+          .order('whale_alerted_at', { ascending: false })
+          .limit(5),
+        supabase.from('roofing_outreach_log')
+          .select('id, prospect_id, touch_number, open_count, last_opened_at')
+          .gte('open_count', 2)
+          .order('open_count', { ascending: false })
+          .limit(5),
+      ]);
+
+      const all = prospects || [];
+      const inSeq = all.filter(p => p.in_sequence).length;
+      const booked = all.filter(p => p.outcome === 'booked').length;
+      const whaleCount = (whales || []).length;
+      const logs = recentLogs || [];
+      const sent24 = logs.length;
+      const opened24 = logs.filter(l => l.opened).length;
+      const openRate = sent24 > 0 ? Math.round(opened24 / sent24 * 100) : 0;
+
+      const lines: string[] = [
+        `📊 *Lead Gen Machine — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}*`,
+        ``,
+        `🔄 ${inSeq} in sequence · 📅 ${booked} booked`,
+        `📧 ${sent24} emails yesterday · ${openRate}% open rate`,
+      ];
+
+      if (whaleCount > 0) {
+        lines.push(``, `🐋 *Call these whales today:*`);
+        for (const w of (whales || [])) {
+          lines.push(`• ${w.owner_name} (${w.company_name}) — ${w.phone || 'no phone'}`);
+        }
+      }
+
+      if ((hotOpens || []).length > 0) {
+        lines.push(``, `🔥 *Re-reading emails:*`);
+        for (const h of (hotOpens || [])) {
+          lines.push(`• Touch ${h.touch_number} opened ${h.open_count}x`);
+        }
+      }
+
+      if (whaleCount === 0 && (hotOpens || []).length === 0) {
+        lines.push(``, `✅ No whales or hot opens right now.`);
+      }
+
+      await tg(lines.join('\n'));
+    } catch (e) {
+      console.error('Owner digest error:', e);
+    }
   }
 
   return Response.json({ ok: true, digests_sent: sent });

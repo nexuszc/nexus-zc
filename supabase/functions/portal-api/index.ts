@@ -16,11 +16,36 @@ async function sendTelegram(text: string) {
   }).catch(() => {});
 }
 
+function insurancePlainEnglish(claim: Record<string, unknown> | null): string {
+  if (!claim) return "No insurance claim has been filed yet.";
+  const status = claim.status as string || "";
+  const carrier = claim.carrier_name as string || "your insurance company";
+  const adjuster = claim.adjuster_name as string || "";
+  const estimate = claim.estimate_amount ? `$${((claim.estimate_amount as number) / 100).toLocaleString()}` : null;
+  const supplement = claim.supplement_requested ? `$${((claim.supplement_requested as number) / 100).toLocaleString()}` : null;
+
+  const statusMessages: Record<string, string> = {
+    filed: `Your claim has been filed with ${carrier}. We're waiting for them to assign an adjuster.`,
+    adjuster_assigned: `${carrier} has assigned ${adjuster ? `adjuster ${adjuster}` : "an adjuster"}. We're scheduling the inspection.`,
+    inspection_scheduled: `The insurance adjuster is coming to inspect your roof. We'll be there too.`,
+    estimate_received: `${carrier} has sent their estimate${estimate ? ` of ${estimate}` : ""}. We're reviewing it now.`,
+    supplement_requested: `We've requested additional money from ${carrier}${supplement ? ` — ${supplement} more` : ""}. Waiting for their response.`,
+    supplement_approved: `${carrier} approved the extra money${supplement ? ` (${supplement})` : ""}. Ready to finalize your repair scope.`,
+    supplement_denied: `${carrier} denied part of our request. We're working on a rebuttal to get you what you're owed.`,
+    approved: `Your claim is approved${estimate ? ` for ${estimate}` : ""}. We're scheduling your installation.`,
+    check_received: `Your insurance check has arrived. We're processing it now.`,
+    closed: `Your insurance claim is fully closed. Repair and payment complete.`,
+  };
+  return statusMessages[status] || `Your claim with ${carrier} is in progress (status: ${status}). We'll update you as things move.`;
+}
+
 async function generateAriaResponse(
   message: string,
   session: Record<string, unknown>,
   job: Record<string, unknown> | null,
-  claim: Record<string, unknown> | null
+  claim: Record<string, unknown> | null,
+  supplements?: Record<string, unknown>[],
+  recentActivities?: Record<string, unknown>[]
 ): Promise<string | null> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -39,9 +64,9 @@ async function generateAriaResponse(
 Homeowner: ${session.homeowner_name}
 Property: ${job?.property_address || "on file"}
 Job status: ${job?.status || "in progress"}
-Insurance carrier: ${claim?.carrier_name || "not filed"}
-Insurance status: ${claim?.status || "not filed"}
-Supplement: ${claim?.supplement_requested ? `$${((claim.supplement_requested as number) / 100).toLocaleString()} requested` : "none yet"}
+Insurance: ${insurancePlainEnglish(claim)}
+Open supplements: ${(supplements || []).filter(s => !["approved", "closed"].includes(s.status as string)).length} in progress
+Recent activity: ${(recentActivities || []).slice(0, 3).map(a => a.title).join("; ") || "none"}
 
 Question: "${message}"
 
@@ -153,6 +178,9 @@ Deno.serve(async (req) => {
         ? `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=19&size=600x400&maptype=satellite&key=${googleKey}`
         : null;
 
+      const allActivities = activitiesRes.data || [];
+      const timeline = [...allActivities].reverse(); // chronological for timeline view
+
       return new Response(JSON.stringify({
         ok: true,
         session: {
@@ -161,8 +189,9 @@ Deno.serve(async (req) => {
           notifications: session.notification_preferences
         },
         job: { ...job, progress, satellite_url: satelliteUrl },
-        activities: activitiesRes.data || [],
-        photos: photosRes.data || [],
+        activities: allActivities,
+        timeline,
+        insurance_status_plain: insurancePlainEnglish(claimRes.data),
         claim: claimRes.data,
         supplements: supplementsRes.data || [],
         documents: documentsRes.data || [],
@@ -193,8 +222,12 @@ Deno.serve(async (req) => {
         `Reply in the portal or call ${session.homeowner_phone}`
       );
 
-      const { data: claimData } = await supabase.from("insurance_claims").select("*").eq("job_id", jobId).maybeSingle();
-      const ariaResponse = await generateAriaResponse(msg, session, job, claimData);
+      const [{ data: claimData }, { data: suppData }, { data: actData }] = await Promise.all([
+        supabase.from("insurance_claims").select("*").eq("job_id", jobId).maybeSingle(),
+        supabase.from("supplement_tracker").select("status, description").eq("job_id", jobId).limit(10),
+        supabase.from("portal_activities").select("title").eq("job_id", jobId).eq("visible_to_homeowner", true).order("created_at", { ascending: false }).limit(5)
+      ]);
+      const ariaResponse = await generateAriaResponse(msg, session, job, claimData, suppData || [], actData || []);
 
       if (ariaResponse) {
         await supabase.from("portal_messages").insert({

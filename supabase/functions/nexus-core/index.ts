@@ -493,7 +493,14 @@ async function act(decisions: Awaited<ReturnType<typeof think>>, state: Awaited<
   let buildTriggered = false;
   let actionsExecuted = 0;
 
+  // Off-hours: 22:00–07:00 MT = 04:00–13:00 UTC. Skip heavy AI operations during this window.
+  const utcHour = new Date().getUTCHours();
+  const isOffHours = utcHour >= 4 && utcHour < 13;
+  const HEAVY_ACTIONS = new Set(["research", "identify_improvement"]);
+
   for (const action of actions) {
+    if (isOffHours && HEAVY_ACTIONS.has(action.type)) continue;
+
     try {
       if (action.type === "research") {
         const results = await search(action.instruction);
