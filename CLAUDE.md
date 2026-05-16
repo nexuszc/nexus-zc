@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v10
+# Last updated: May 15, 2026 — v11
 
 ---
 
@@ -388,7 +388,30 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session (Spec 5 — Job Intake v1):**
+**DONE this session (Spec 5 — SMS Bridge):**
+- SMS bridge complete: all prospect/homeowner SMS → Resend email until 10DLC clears
+- nexus-job-intake-voice v2: TWILIO commented out, RESEND added, Aria asks for homeowner *email* not phone, sendHomeownerEmail + sendRooferConfirmEmail via Resend, session state awaiting_homeowner_email
+- roofing-outreach-sequencer v2: Touch 2 SMS commented out, emailTouch2() added, logged as email_voicedrop
+- roofing-aria-engine v2: belt-and-suspenders SMS commented out, Resend email fallback (lookup prospect by phone → send portal email)
+- Deployed: nexus-job-intake-voice (v2), roofing-outreach-sequencer (v12), roofing-aria-engine (v27)
+- Confirmed: roofing-whale-alert has no prospect SMS (Telegram-only, no changes needed)
+- grep to verify all SMS_DISABLED blocks: `grep -r "SMS_DISABLED" supabase/functions/`
+
+**10DLC RE-ENABLE CHECKLIST (Monday May 18 2026):**
+1. Complete 147C letter verification with Twilio
+2. Submit brand registration in Twilio Console
+3. Submit campaign registration (use_case: customer_care or mixed)
+4. Wait for campaign approval (typically same day)
+5. In each file below, uncomment Twilio blocks and remove SMS_DISABLED comments:
+   - `supabase/functions/nexus-job-intake-voice/index.ts` — sendSMS block in call_analyzed
+   - `supabase/functions/nexus-job-intake-sms/index.ts` — already complete, just needs Twilio webhook wired
+   - `supabase/functions/roofing-outreach-sequencer/index.ts` — Touch 2 SMS block
+   - `supabase/functions/roofing-aria-engine/index.ts` — cold_outbound_contractor SMS block
+6. Deploy all 4 functions
+7. Run: `grep -r "SMS_DISABLED" supabase/functions/` — should return nothing
+8. Update header comment in nexus-job-intake-voice removing SMS_DISABLED note
+
+**DONE previous session (Spec 5 — Job Intake v1):**
 - DB migration: contractor_team_members + inbound_sessions tables created
 - DB migration: roofing_jobs + portal_photos + portal_activities columns added
 - New function: nexus-job-intake-voice — Retell call_started/call_analyzed handler, role-based Aria context, job extraction via Claude
@@ -413,12 +436,13 @@ Twilio dashboard → Phone Numbers → +17202921930
 6. Homeowner gets portal link automatically
 
 **NEXT:**
-1. Register Resend webhook → roofing-email-webhook (manual)
-2. Wire Twilio webhooks (Phase 5 above — manual)
-3. Draft Nexus ZC LLC operating agreement
-4. Add Self-Learning Pattern Recognition (medium)
-5. Add memory consolidation ability (medium)
-6. Review client health scores for Brian (65) and Denver Pro Roofing (50)
+1. **Monday May 18:** Complete 10DLC registration + re-enable SMS (see checklist above)
+2. Register Resend webhook → roofing-email-webhook (manual — external)
+3. Wire Twilio webhooks for nexus-job-intake-voice and nexus-job-intake-sms (manual — Phase 5 above)
+4. Draft Nexus ZC LLC operating agreement
+5. Add Self-Learning Pattern Recognition (medium)
+6. Add memory consolidation ability (medium)
+7. Review client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 

@@ -1,8 +1,8 @@
 // roofing-outreach-sequencer v6
-// 3-touch lead gen sequence: email → voice drop + SMS → email
+// 3-touch lead gen sequence: email → voice drop + email → email
 // Runs daily at 9am MT (14:00 UTC)
 // Touch 1 (day 0): email — "Your homeowners are calling too much"
-// Touch 2 (day 2): voice drop + SMS
+// Touch 2 (day 2): voice drop + email (SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026)
 // Touch 3 (day 4): final email
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -10,9 +10,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x7E]/g, "").trim();
-const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
-const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
+// const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
+// const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || "";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
@@ -73,21 +74,23 @@ async function sendEmail(
   }
 }
 
-async function sendSMS(to: string, body: string): Promise<void> {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
-  const params = new URLSearchParams({ To: to, From: TWILIO_FROM_NUMBER, Body: body });
-  await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params.toString(),
-    }
-  ).catch(() => {});
-}
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// To re-enable: uncomment below, remove this block, re-enable Touch 2 SMS call ~line 325
+// async function sendSMS(to: string, body: string): Promise<void> {
+//   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
+//   const params = new URLSearchParams({ To: to, From: TWILIO_FROM_NUMBER, Body: body });
+//   await fetch(
+//     `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+//     {
+//       method: "POST",
+//       headers: {
+//         Authorization: `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+//         "Content-Type": "application/x-www-form-urlencoded",
+//       },
+//       body: params.toString(),
+//     }
+//   ).catch(() => {});
+// }
 
 async function fireVoiceDrop(prospect: Record<string, unknown>): Promise<void> {
   try {
@@ -170,10 +173,33 @@ function emailTouch3(prospect: Record<string, unknown>): { subject: string; html
   };
 }
 
-function smsTouch2(prospect: Record<string, unknown>): string {
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// function smsTouch2(prospect: Record<string, unknown>): string {
+//   const fn = firstName(prospect.owner_name as string);
+//   const link = trackerUrl(prospect.id as string, 2, "portal");
+//   return `${fn} — this is what your homeowners see instead of calling you during installations:\n${link}\n\n$49/month. roofingos.dev\n— Zach @ Roofing OS`;
+// }
+
+function emailTouch2(prospect: Record<string, unknown>): { subject: string; html: string } {
   const fn = firstName(prospect.owner_name as string);
   const link = trackerUrl(prospect.id as string, 2, "portal");
-  return `${fn} — this is what your homeowners see instead of calling you during installations:\n${link}\n\n$49/month. roofingos.dev\n— Zach @ Roofing OS`;
+  const text = [
+    `Hey ${fn} —`,
+    ``,
+    `Zach again. Left you a voicemail.`,
+    ``,
+    `This is what your homeowners see instead of calling you during installations:`,
+    link,
+    ``,
+    `30 seconds to see it. $49/month. No contract.`,
+    ``,
+    `Zach`,
+    `Roofing OS`,
+  ].join("\n");
+  return {
+    subject: `Quick follow-up — ${(prospect.company_name as string) || fn}`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">${text.replace(/\n/g, "<br>")}</div>`,
+  };
 }
 
 async function logTouch(
@@ -317,15 +343,29 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Touch 2 — day 2 voice drop + SMS
+        // Touch 2 — day 2 voice drop + email (SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026)
         if (daysSinceStart >= 2 && day === 1) {
           if (prospect.phone) {
             await fireVoiceDrop(prospect);
             voiceDrops++;
-            const smsBody = smsTouch2(prospect);
-            await sendSMS(prospect.phone as string, smsBody);
-            smsSent++;
-            await logTouch(prospect.id as string, "voice_drop", 2, null, "Voice drop + SMS");
+          }
+          // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+          // if (prospect.phone) {
+          //   const smsBody = smsTouch2(prospect);
+          //   await sendSMS(prospect.phone as string, smsBody);
+          //   smsSent++;
+          // }
+          if (prospect.email) {
+            const { subject, html } = emailTouch2(prospect);
+            const emailId = await sendEmail(prospect.email as string, subject, html);
+            if (emailId) {
+              emailsSent++;
+              await logTouch(prospect.id as string, "email_voicedrop", 2, subject, "Voice drop + email follow-up", emailId);
+            } else {
+              errors++;
+            }
+          } else {
+            await logTouch(prospect.id as string, "email_voicedrop", 2, null, "Voice drop (no email)");
           }
           await supabase.from("roofing_prospects").update({
             sequence_day: 2,

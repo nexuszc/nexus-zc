@@ -1,7 +1,13 @@
 // nexus-job-intake-voice
 // Handles Retell webhooks for inbound roofer calls.
 // call_started → look up caller, set Aria context
-// call_analyzed → extract job data, create job, SMS roofer
+// call_analyzed → extract job data, create job, email roofer
+//
+// SMS_DISABLED: 10DLC pending
+// Re-enable after 147C letter + 10DLC registration
+// Estimated: Monday May 18 2026
+// To re-enable: uncomment sendSMS blocks + remove this note
+// Then run: grep -r "SMS_DISABLED" supabase/functions/
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -10,9 +16,12 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RETELL_API_KEY = Deno.env.get('RETELL_API_KEY') || '';
 const RETELL_AGENT_ID = Deno.env.get('RETELL_AGENT_ID') || '';
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
-const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')!;
-const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
-const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || Deno.env.get('TWILIO_FROM_NUMBER') || '';
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')!;
+// const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
+// const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || Deno.env.get('TWILIO_FROM_NUMBER') || '';
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -66,7 +75,6 @@ async function lookupCaller(phone: string) {
 
   if (member) return member;
 
-  // Try matching last 10 digits
   const { data: member2 } = await supabase
     .from('contractor_team_members')
     .select('*, contractor_accounts(id, company_name, plan, subscription_status)')
@@ -97,6 +105,7 @@ Transcript: "${transcript}"
 Extract:
 {
   "homeowner_name": "full name or null",
+  "homeowner_email": "email address or null",
   "address": "full address or null",
   "city": "city or null",
   "state": "state abbreviation or null",
@@ -130,37 +139,58 @@ YOUR JOB:
 - Take updates on existing jobs
 - Be efficient — they're busy on job sites
 
-FOR NEW JOBS ask for (in one go, not one by one):
+FOR NEW JOBS ask for (all in one go, not one by one):
 - Homeowner name
 - Property address
 - Insurance carrier
 - Approximate start date
 
-Then confirm back: "Got it — [summary]. Should I send the homeowner the portal link?"
+Then confirm back: "Got it — [summary]. What's the homeowner's email so I can send them the portal link?"
 
-If they say yes — confirm you'll send it and give them the job ID.
-If they say no — tell them to text the homeowner's number when ready.
+When they give the email:
+"Perfect — sending now. Job ID is [token]. Email this number anytime with updates — photos, status changes, anything. We translate it all for the homeowner."
+
+If they don't have the email yet:
+"No problem — email us the homeowner's address when you have it and we'll send the portal link right away."
 
 FOR UPDATES: Listen to the update. Confirm you heard it. Tell them the portal will update.
 
 TONE: Fast. Friendly. Peer to peer. No filler words. No corporate speak.`;
 }
 
-async function sendSMS(to: string, body: string) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) return;
-  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+async function sendResendEmail(to: string, subject: string, html: string): Promise<void> {
+  if (!RESEND_API_KEY) return;
+  await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
     },
-    body: new URLSearchParams({ From: TWILIO_PHONE_NUMBER, To: to, Body: body }),
+    body: JSON.stringify({
+      from: 'Roofing OS <zach@nexuszc.com>',
+      to,
+      subject,
+      html,
+    }),
   }).catch(() => {});
 }
 
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// To re-enable: uncomment below, remove this block
+// async function sendSMS(to: string, body: string) {
+//   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) return;
+//   await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+//     method: 'POST',
+//     headers: {
+//       'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+//       'Content-Type': 'application/x-www-form-urlencoded',
+//     },
+//     body: new URLSearchParams({ From: TWILIO_PHONE_NUMBER, To: to, Body: body }),
+//   }).catch(() => {});
+// }
+
 async function createJob(extracted: Record<string, unknown>, member: Record<string, unknown>, transcript: string) {
   const contractor = member.contractor_accounts as Record<string, unknown>;
-
   const token = `ROS-${Date.now().toString(36).toUpperCase()}`;
 
   const { data: job, error } = await supabase
@@ -168,6 +198,7 @@ async function createJob(extracted: Record<string, unknown>, member: Record<stri
     .insert({
       contractor_id: contractor.id,
       homeowner_name: extracted.homeowner_name,
+      homeowner_email: extracted.homeowner_email || null,
       property_address: extracted.address,
       city: extracted.city,
       state: extracted.state,
@@ -193,6 +224,7 @@ async function createJob(extracted: Record<string, unknown>, member: Record<stri
   await supabase.from('homeowner_sessions').insert({
     job_id: job.id,
     homeowner_name: extracted.homeowner_name,
+    homeowner_email: extracted.homeowner_email || null,
     magic_link_token: token,
     magic_link_expires_at: expiresAt.toISOString(),
   });
@@ -207,6 +239,35 @@ async function createJob(extracted: Record<string, unknown>, member: Record<stri
   });
 
   return { job, token };
+}
+
+async function sendHomeownerEmail(homeownerEmail: string, homeownerName: string, token: string, contractorName: string): Promise<void> {
+  const firstName = homeownerName.split(' ')[0];
+  const portalUrl = `https://app.nexuszc.com/roofing/portal/${token}`;
+  const html = `<div style="font-family:-apple-system,sans-serif;max-width:520px;line-height:1.7;color:#1a1a1a;padding:20px;">
+<p>Hi ${firstName} —</p>
+<p>Your contractor just opened your project file.</p>
+<p>You can track everything here — photos as the crew works, your insurance status in plain English, and answers to any question 24/7:</p>
+<p style="margin:24px 0;">
+<a href="${portalUrl}" style="background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">View Your Project →</a>
+</p>
+<p>No need to call your contractor. Everything updates in real time.</p>
+<p style="color:#64748b;font-size:14px;">Roofing OS · roofingos.dev</p>
+</div>`;
+
+  await sendResendEmail(homeownerEmail, 'Your roofing project is underway', html);
+}
+
+async function sendRooferConfirmEmail(rooferEmail: string, homeownerName: string, address: string, homeownerEmail: string, token: string): Promise<void> {
+  const html = `<div style="font-family:-apple-system,sans-serif;max-width:520px;line-height:1.7;color:#1a1a1a;padding:20px;">
+<p>Job file open for <strong>${homeownerName}</strong>.</p>
+<p>${address}</p>
+<p>Portal link sent to ${homeownerEmail}.</p>
+<p>Job ID: <strong>${token}</strong></p>
+<p style="color:#64748b;font-size:14px;">Email updates to this address anytime. We translate them for the homeowner.</p>
+</div>`;
+
+  await sendResendEmail(rooferEmail, `Job created — ${homeownerName}`, html);
 }
 
 Deno.serve(async (req) => {
@@ -263,26 +324,56 @@ Deno.serve(async (req) => {
 
       if (confidence > 60 && extracted.homeowner_name && extracted.address) {
         const { job, token } = await createJob(extracted, member, transcript) as Record<string, unknown>;
+        const contractor = member.contractor_accounts as Record<string, unknown>;
 
-        // SMS roofer — ask for homeowner phone to send portal
-        await sendSMS(callerPhone,
-          `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nReply with homeowner's cell # to send them the portal link.\nJob ID: ${token}`
-        );
+        // Send homeowner portal email if we have their email from the transcript
+        if (extracted.homeowner_email) {
+          await sendHomeownerEmail(
+            extracted.homeowner_email as string,
+            extracted.homeowner_name as string,
+            token as string,
+            contractor.company_name as string
+          );
+          await supabase.from('roofing_jobs').update({
+            portal_sent_at: new Date().toISOString(),
+            portal_sent_confirmed: true,
+          }).eq('id', (job as Record<string, unknown>).id);
+        }
 
-        // Store session state waiting for homeowner phone
-        await supabase.from('inbound_sessions').upsert({
-          phone: callerPhone,
-          member_id: member.id,
-          contractor_id: (member.contractor_accounts as Record<string, unknown>).id,
-          session_type: 'sms',
-          state: 'awaiting_homeowner_phone',
-          pending_data: {
-            job_id: (job as Record<string, unknown>).id,
-            token,
-            homeowner_name: extracted.homeowner_name,
-          },
-          last_message_at: new Date().toISOString(),
-        }, { onConflict: 'phone' });
+        // Email roofer confirmation (look up their email from contractor_accounts)
+        const rooferEmail = (contractor.owner_email || '') as string;
+        if (rooferEmail) {
+          await sendRooferConfirmEmail(
+            rooferEmail,
+            extracted.homeowner_name as string,
+            extracted.address as string,
+            (extracted.homeowner_email || 'not yet provided') as string,
+            token as string
+          );
+        }
+
+        // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+        // To re-enable: uncomment below + remove this block
+        // await sendSMS(callerPhone,
+        //   `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nReply with homeowner's cell # to send them the portal link.\nJob ID: ${token}`
+        // );
+
+        // Store session state waiting for homeowner email (if not captured in transcript)
+        if (!extracted.homeowner_email) {
+          await supabase.from('inbound_sessions').upsert({
+            phone: callerPhone,
+            member_id: member.id,
+            contractor_id: contractor.id,
+            session_type: 'sms',
+            state: 'awaiting_homeowner_email',
+            pending_data: {
+              job_id: (job as Record<string, unknown>).id,
+              token,
+              homeowner_name: extracted.homeowner_name,
+            },
+            last_message_at: new Date().toISOString(),
+          }, { onConflict: 'phone' });
+        }
       }
 
       return Response.json({ ok: true });

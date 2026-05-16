@@ -7,22 +7,49 @@ const RETELL_AGENT_ID = Deno.env.get("RETELL_AGENT_ID") || "";
 const RETELL_PHONE = Deno.env.get("RETELL_PHONE_NUMBER") || "";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
-const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
-const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
-const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || RETELL_PHONE;
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
+// const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
+// const TWILIO_FROM_NUMBER = Deno.env.get("TWILIO_FROM_NUMBER") || Deno.env.get("TWILIO_PHONE_NUMBER") || RETELL_PHONE;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-async function sendSMS(to: string, body: string): Promise<void> {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
-  const params = new URLSearchParams({ To: to, From: TWILIO_FROM_NUMBER, Body: body });
-  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// To re-enable: uncomment below, remove this block, re-enable SMS in cold_outbound_contractor block
+// async function sendSMS(to: string, body: string): Promise<void> {
+//   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) return;
+//   const params = new URLSearchParams({ To: to, From: TWILIO_FROM_NUMBER, Body: body });
+//   await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+//     method: "POST",
+//     headers: {
+//       "Authorization": `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+//       "Content-Type": "application/x-www-form-urlencoded",
+//     },
+//     body: params.toString(),
+//   }).catch(() => {});
+// }
+
+async function sendProspectEmail(to: string, firstName: string): Promise<void> {
+  if (!RESEND_API_KEY) return;
+  const portalLink = "https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS";
+  await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
-      "Authorization": `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
+    headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: "Zach Curtis <ops@nexuszc.com>",
+      reply_to: "zach@nexuszc.com",
+      to: [to],
+      subject: "Here's that portal I mentioned",
+      html: `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">
+<p>Hey ${firstName} —</p>
+<p>Here's the link I mentioned on the call:</p>
+<p><a href="${portalLink}">${portalLink}</a></p>
+<p>30 seconds to see it. This is what your homeowners see instead of calling you.</p>
+<p>$49/month. No contract.</p>
+<p>Zach<br>Roofing OS</p>
+</div>`,
+    }),
   }).catch(() => {});
 }
 
@@ -242,15 +269,25 @@ Deno.serve(async (req) => {
       .eq("id", script.id);
   }
 
-  // Belt-and-suspenders: always send portal SMS 10s after call starts,
-  // regardless of whether Retell fires send_portal_link during the call.
+  // Belt-and-suspenders: send portal link 10s after call starts.
+  // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
   if (call_type === "cold_outbound_contractor") {
     EdgeRuntime.waitUntil((async () => {
       await new Promise(r => setTimeout(r, 10000));
-      await sendSMS(
-        contact_phone,
-        `Hey — Aria from Roofing OS. Here's that portal:\napp.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\n30 seconds. This is what your homeowners see.`
-      );
+      // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+      // await sendSMS(
+      //   contact_phone,
+      //   `Hey — Aria from Roofing OS. Here's that portal:\napp.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\n30 seconds. This is what your homeowners see.`
+      // );
+      const { data: prospect } = await supabase
+        .from("roofing_prospects")
+        .select("email, owner_name")
+        .eq("phone", contact_phone)
+        .maybeSingle();
+      if (prospect?.email) {
+        const fn = (prospect.owner_name as string || "").split(" ")[0] || "there";
+        await sendProspectEmail(prospect.email as string, fn);
+      }
     })());
   }
 
