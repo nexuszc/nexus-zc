@@ -241,6 +241,7 @@ async function createJob(extracted: Record<string, unknown>, member: Record<stri
     activity_type: 'job_created',
     title: 'Job file opened',
     description: `Your contractor opened your job file. ${extracted.job_type || 'Storm'} damage claim with ${extracted.carrier || 'your insurance'}.`,
+    icon: 'folder',
     visible_to_homeowner: true,
     created_by: member.name as string,
   });
@@ -353,26 +354,29 @@ Deno.serve(async (req) => {
     }
 
     if (event === 'call_analyzed') {
+      const debug = body.debug === true;
       console.log('call_analyzed received', { callerPhone, call_id: call?.call_id || body.call_id });
 
       const transcript = call?.transcript || body.transcript || '';
       console.log('transcript length:', transcript.length, 'has_caller:', !!callerPhone);
-      if (!transcript || !callerPhone) return Response.json({ ok: true });
+      if (!transcript || !callerPhone) return Response.json({ ok: true, debug_exit: 'no_transcript_or_phone' });
 
       const member = await lookupCaller(callerPhone);
       console.log('member_found:', !!member, 'role:', member?.role);
-      if (!member) return Response.json({ ok: true });
+      if (!member) return Response.json({ ok: true, debug_exit: 'no_member' });
 
       const role = member.role as string;
       const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.unknown;
       console.log('can_start_jobs:', config.can_start_jobs);
-      if (!config.can_start_jobs) return Response.json({ ok: true });
+      if (!config.can_start_jobs) return Response.json({ ok: true, debug_exit: 'role_cannot_start_jobs', role });
 
       console.log('running extractJobData...');
       const extracted = await extractJobData(transcript);
       console.log('extracted:', JSON.stringify(extracted));
-      const confidence = (extracted.confidence as number) || 0;
+      const rawConf = (extracted.confidence as number) || 0;
+      const confidence = rawConf <= 1 ? rawConf * 100 : rawConf;
       console.log('confidence:', confidence, 'has_name:', !!extracted.homeowner_name, 'has_address:', !!extracted.address);
+      if (debug) return Response.json({ debug: true, extracted, confidence, member_found: true, role, can_start_jobs: true });
 
       if (confidence > 60 && extracted.homeowner_name && extracted.address) {
         console.log('creating job...');
