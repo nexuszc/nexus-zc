@@ -331,6 +331,129 @@ export default function Pipeline() {
           </div>
         )}
       </div>
+
+      <JobsSection />
+    </div>
+  )
+}
+
+const JOB_STATUS_COLORS = {
+  lead:              'text-gray-400',
+  assessed:          'text-blue-400',
+  contracted:        'text-violet-400',
+  materials_ordered: 'text-amber-400',
+  scheduled:         'text-orange-400',
+  in_progress:       'text-green-400',
+  complete:          'text-emerald-400',
+  invoiced:          'text-pink-400',
+  paid:              'text-gray-500',
+}
+
+function JobsSection() {
+  const [jobs, setJobs] = useState([])
+  const [activities, setActivities] = useState({})
+  const [photoCounts, setPhotoCounts] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: jobRows } = await supabase
+        .from('roofing_jobs')
+        .select('id, homeowner_name, property_address, city, status, contract_amount, created_at, portal_sent_at')
+        .not('status', 'in', '("paid","cancelled")')
+        .order('created_at', { ascending: false })
+        .limit(30)
+
+      setJobs(jobRows || [])
+
+      if (!jobRows?.length) { setLoading(false); return }
+
+      const ids = jobRows.map(j => j.id)
+
+      const [{ data: acts }, { data: photos }] = await Promise.all([
+        supabase.from('portal_activities')
+          .select('job_id, title, created_at')
+          .in('job_id', ids)
+          .order('created_at', { ascending: false }),
+        supabase.from('portal_photos')
+          .select('job_id')
+          .in('job_id', ids),
+      ])
+
+      const actMap = {}
+      for (const a of acts || []) {
+        if (!actMap[a.job_id]) actMap[a.job_id] = a
+      }
+
+      const photoMap = {}
+      for (const p of photos || []) {
+        photoMap[p.job_id] = (photoMap[p.job_id] || 0) + 1
+      }
+
+      setActivities(actMap)
+      setPhotoCounts(photoMap)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-bold text-white">Active Jobs</h2>
+          <p className="text-gray-600 text-xs mt-0.5">Real-time from call/text intake</p>
+        </div>
+      </div>
+
+      <div className="bg-[#12121a] rounded-xl border border-[#1e1e2e] overflow-hidden">
+        {loading ? (
+          <div className="p-6 space-y-3">
+            {[1,2,3].map(i => <div key={i} className="skeleton h-14 w-full rounded-lg" />)}
+          </div>
+        ) : jobs.length === 0 ? (
+          <div className="p-10 text-center">
+            <p className="text-gray-600 text-sm">No active jobs yet.</p>
+            <p className="text-gray-700 text-xs mt-1">Call +1 (720) 292-1930 to create one.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#1e1e2e]">
+            {jobs.map(j => {
+              const lastAct = activities[j.id]
+              const photos = photoCounts[j.id] || 0
+              const statusColor = JOB_STATUS_COLORS[j.status] || 'text-gray-400'
+              return (
+                <div key={j.id} className="px-4 py-3 flex items-center gap-4 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-xs font-semibold ${statusColor}`}>{j.status}</span>
+                      <span className="text-white text-sm font-medium truncate">{j.homeowner_name}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 truncate">{j.property_address}{j.city ? `, ${j.city}` : ''}</p>
+                    {lastAct && (
+                      <p className="text-xs text-gray-600 mt-0.5 truncate">
+                        <span className="text-gray-500">{lastAct.title}</span>
+                        {' · '}{ago(lastAct.created_at)} ago
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 text-right">
+                    {photos > 0 && (
+                      <span className="text-xs text-gray-600">{photos} photo{photos !== 1 ? 's' : ''}</span>
+                    )}
+                    {j.contract_amount > 0 && (
+                      <span className="text-sm font-semibold text-amber-400">${j.contract_amount.toLocaleString()}</span>
+                    )}
+                    {j.portal_sent_at && (
+                      <span className="text-[10px] text-green-600 font-semibold">Portal ✓</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

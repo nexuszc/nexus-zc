@@ -2244,69 +2244,15 @@ Be specific. Reference actual numbers.` }],
       return earlyReturn('📧 Sending outreach emails now. Check back in a few minutes.');
     }
 
-    // ── LEAD GEN PIPELINE ─────────────────────────────────────────────────────────
+    // ── LEAD GEN PIPELINE → dashboard ────────────────────────────────────────────
     if (msgLower === 'pipeline') {
-      const start = Date.now();
-      try {
-        const { data: prospects } = await supabase
-          .from('roofing_prospects')
-          .select('in_sequence, clicked, whale_alerted, outcome');
-
-        const all = prospects || [];
-        const inSeq = all.filter((p: any) => p.in_sequence && !p.clicked).length;
-        const clicked = all.filter((p: any) => p.clicked).length;
-        const whales = all.filter((p: any) => p.whale_alerted && !p.outcome).length;
-        const booked = all.filter((p: any) => p.outcome === 'booked').length;
-        const dead = all.filter((p: any) => p.outcome === 'dead').length;
-        const neverTouched = all.filter((p: any) => !p.in_sequence && !p.clicked && !p.outcome).length;
-
-        await logUsage(supabase, 'pipeline', true, Date.now() - start, channel);
-        return earlyReturn(
-          `📊 *Pipeline*\n\n` +
-          `In sequence: ${inSeq}\n` +
-          `Clicked: ${clicked}\n` +
-          `Whales: ${whales}\n` +
-          `Booked: ${booked}\n` +
-          `Dead: ${dead}\n` +
-          `Never touched: ${neverTouched}`
-        );
-      } catch (err: any) {
-        await logUsage(supabase, 'pipeline', false, Date.now() - start, channel);
-        return earlyReturn(`Pipeline failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     // ── WHALE QUEUE ───────────────────────────────────────────────────────────────
+    // ── WHALE QUEUE → dashboard ───────────────────────────────────────────────────
     if (msgLower === 'whale queue' || msgLower === 'whales') {
-      const start = Date.now();
-      try {
-        const { data: whales } = await supabase
-          .from('roofing_prospects')
-          .select('owner_name, company_name, phone, whale_alerted_at')
-          .eq('clicked', true)
-          .or('outcome.is.null,outcome.eq.')
-          .order('whale_alerted_at', { ascending: false })
-          .limit(20);
-
-        if (!whales?.length) {
-          await logUsage(supabase, 'whale_queue', true, Date.now() - start, channel);
-          return earlyReturn('No whales yet. Sequence is running — alert fires instantly when someone clicks.');
-        }
-
-        const now = Date.now();
-        const lines = whales.map((w: any) => {
-          const hoursAgo = w.whale_alerted_at
-            ? Math.round((now - new Date(w.whale_alerted_at).getTime()) / (1000 * 60 * 60))
-            : '?';
-          return `• *${w.owner_name || 'Unknown'}* — ${w.company_name || ''}\n  📞 ${w.phone || 'no phone'} — clicked ${hoursAgo}h ago`;
-        }).join('\n\n');
-
-        await logUsage(supabase, 'whale_queue', true, Date.now() - start, channel);
-        return earlyReturn(`🐋 *Whale Queue (${whales.length})*\n\n${lines}`);
-      } catch (err: any) {
-        await logUsage(supabase, 'whale_queue', false, Date.now() - start, channel);
-        return earlyReturn(`Whale queue failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     // ── SEQUENCE STATS ────────────────────────────────────────────────────────────
@@ -2398,101 +2344,14 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
-    // ── OUTREACH DASHBOARD ────────────────────────────────────────────────────────
+    // ── OUTREACH DASHBOARD → dashboard ───────────────────────────────────────────
     if (msgLower === 'outreach dashboard' || msgLower === 'email dashboard') {
-      const start = Date.now();
-      try {
-        const [prospectsRes, logRes] = await Promise.all([
-          supabase.from('roofing_prospects').select('in_sequence, clicked, whale_alerted, outcome'),
-          supabase.from('roofing_outreach_log')
-            .select('touch_number, delivered, opened, open_count, bounced, spam, first_opened_at')
-            .eq('direction', 'outbound')
-            .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
-        ]);
-
-        const all = prospectsRes.data || [];
-        const inSeq = all.filter((p: any) => p.in_sequence).length;
-        const clicked = all.filter((p: any) => p.clicked).length;
-        const whales = all.filter((p: any) => p.whale_alerted && !p.outcome).length;
-        const booked = all.filter((p: any) => p.outcome === 'booked').length;
-        const dead = all.filter((p: any) => p.outcome === 'dead').length;
-
-        const logs = logRes.data || [];
-        const emailLogs = logs.filter((l: any) => l.touch_number !== 2);
-        const sent = emailLogs.length;
-        const delivered = emailLogs.filter((l: any) => l.delivered).length;
-        const opened = emailLogs.filter((l: any) => l.opened).length;
-        const bounced = emailLogs.filter((l: any) => l.bounced).length;
-        const spam = emailLogs.filter((l: any) => l.spam).length;
-        const deliverRate = sent > 0 ? Math.round(delivered / sent * 100) : 0;
-        const openRate = delivered > 0 ? Math.round(opened / delivered * 100) : 0;
-        const clickRate = sent > 0 ? Math.round(clicked / sent * 100) : 0;
-
-        const t1 = emailLogs.filter((l: any) => l.touch_number === 1).length;
-        const t3 = emailLogs.filter((l: any) => l.touch_number === 3).length;
-
-        await logUsage(supabase, 'outreach_dashboard', true, Date.now() - start, channel);
-        return earlyReturn(
-          `📊 *Outreach Dashboard (30d)*\n\n` +
-          `*Pipeline*\n` +
-          `In sequence: ${inSeq}\n` +
-          `Whales (clicked, uncalled): ${whales}\n` +
-          `Booked: ${booked} | Dead: ${dead}\n\n` +
-          `*Email Performance*\n` +
-          `Sent: ${sent} (T1: ${t1}, T3: ${t3})\n` +
-          `Delivered: ${delivered} (${deliverRate}%)\n` +
-          `Opened: ${opened} (${openRate}% of delivered)\n` +
-          `Clicked: ${clicked} (${clickRate}% of sent)\n` +
-          `Bounced: ${bounced} | Spam: ${spam}\n\n` +
-          `_\`hot opens\` — prospects who re-read emails_\n` +
-          `_\`whale queue\` — call these now_`
-        );
-      } catch (err: any) {
-        await logUsage(supabase, 'outreach_dashboard', false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
-    // ── HOT OPENS ─────────────────────────────────────────────────────────────────
+    // ── HOT OPENS → dashboard ────────────────────────────────────────────────────
     if (msgLower === 'hot opens') {
-      const start = Date.now();
-      try {
-        const { data: logs } = await supabase
-          .from('roofing_outreach_log')
-          .select('prospect_id, open_count, touch_number, last_opened_at')
-          .gte('open_count', 2)
-          .order('open_count', { ascending: false })
-          .limit(10);
-
-        if (!logs?.length) {
-          await logUsage(supabase, 'hot_opens', true, Date.now() - start, channel);
-          return earlyReturn('No hot opens yet. Once prospects re-open an email, they appear here.');
-        }
-
-        const prospectIds = [...new Set(logs.map((l: any) => l.prospect_id))];
-        const { data: prospects } = await supabase
-          .from('roofing_prospects')
-          .select('id, owner_name, company_name, phone')
-          .in('id', prospectIds);
-
-        const prospectMap: Record<string, any> = {};
-        for (const p of prospects || []) prospectMap[p.id] = p;
-
-        const lines = logs.map((l: any) => {
-          const p = prospectMap[l.prospect_id];
-          const hoursAgo = l.last_opened_at
-            ? Math.round((Date.now() - new Date(l.last_opened_at).getTime()) / (1000 * 60 * 60))
-            : null;
-          const timeStr = hoursAgo != null ? (hoursAgo < 1 ? 'just now' : `${hoursAgo}h ago`) : '';
-          return `🔥 ${p?.owner_name || 'Unknown'} — ${p?.company_name || ''}\n   Touch ${l.touch_number}, opened ${l.open_count}x ${timeStr}\n   📞 ${p?.phone || 'no phone'}`;
-        }).join('\n\n');
-
-        await logUsage(supabase, 'hot_opens', true, Date.now() - start, channel);
-        return earlyReturn(`🔥 *Hot Opens (re-read ${logs.length})*\n\n${lines}\n\nCall these. They're thinking about it.`);
-      } catch (err: any) {
-        await logUsage(supabase, 'hot_opens', false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     // ── NUDGE [name] ──────────────────────────────────────────────────────────────
@@ -2671,29 +2530,9 @@ Be specific. Reference actual numbers.` }],
     }
 
     // content queue — all pending approvals across types
+    // content queue → dashboard
     if (msgLower === "content queue") {
-      const start = Date.now();
-      try {
-        const { data: items } = await supabase
-          .from("roofing_content")
-          .select("id, type, title, created_at")
-          .eq("status", "pending")
-          .order("created_at", { ascending: false })
-          .limit(15);
-
-        if (!items?.length) {
-          await logUsage(supabase, "content_queue", true, Date.now() - start, channel);
-          return earlyReturn("✅ No pending content in queue.");
-        }
-        const lines = items.map((item: any) =>
-          `• [${item.type}] ${(item.title || "Untitled").slice(0, 50)}\n  \`approve content ${item.id}\``
-        ).join("\n\n");
-        await logUsage(supabase, "content_queue", true, Date.now() - start, channel);
-        return earlyReturn(`📋 *Content Queue (${items.length} pending)*\n\n${lines}`);
-      } catch (err: any) {
-        await logUsage(supabase, "content_queue", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     // ── ROOFING HEALTH ────────────────────────────────────────────────────────────
@@ -3930,37 +3769,9 @@ Be specific. Reference actual numbers.` }],
       }
     }
 
+    // pipeline → dashboard
     if (msgLower === "pipeline" || msgLower === "roofing pipeline") {
-      const start = Date.now();
-      try {
-        const { data: jobs } = await supabase
-          .from("roofing_jobs")
-          .select("status, property_address, contract_amount, scheduled_start")
-          .not("status", "in", '("cancelled","paid")')
-          .order("created_at", { ascending: false });
-        if (!jobs?.length) {
-          await logUsage(supabase, "pipeline", true, Date.now() - start, channel);
-          return earlyReturn("No active jobs in pipeline.");
-        }
-        const byStatus: Record<string, any[]> = {};
-        for (const j of jobs) {
-          if (!byStatus[j.status]) byStatus[j.status] = [];
-          byStatus[j.status].push(j);
-        }
-        const statusOrder = ["lead","assessed","contracted","materials_ordered","permit_pending","permit_approved","scheduled","in_progress","complete","invoiced"];
-        const lines = statusOrder.filter(s => byStatus[s]?.length).map(s => {
-          const items = byStatus[s];
-          const total = items.reduce((sum: number, j: any) => sum + Math.round((j.contract_amount || 0) * 100), 0);
-          return `*${s}* (${items.length}) — $${(total/100).toLocaleString()}\n` +
-            items.slice(0, 3).map((j: any) => `  • ${j.property_address}`).join("\n") +
-            (items.length > 3 ? `\n  _+${items.length - 3} more_` : "");
-        }).join("\n\n");
-        await logUsage(supabase, "pipeline", true, Date.now() - start, channel);
-        return earlyReturn(`🏗️ *Roofing Pipeline (${jobs.length} jobs)*\n\n${lines}`);
-      } catch (err: any) {
-        await logUsage(supabase, "pipeline", false, Date.now() - start, channel);
-        return earlyReturn(`Pipeline failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     if (msgLower.startsWith("schedule:")) {
@@ -4663,75 +4474,20 @@ Be specific. Reference actual numbers.` }],
     if (msgLower === "help") {
       return earlyReturn(
         `*Nexus Commands*\n\n` +
-        `*Lead Gen Machine*\n` +
-        `\`outreach dashboard\` — email stats, open rates, pipeline\n` +
-        `\`hot opens\` — prospects who re-read emails (call these)\n` +
-        `\`whale queue\` — clicked portal, not yet called\n` +
-        `\`pipeline\` — full funnel snapshot\n` +
-        `\`nudge [name]\` — send next touch immediately\n` +
-        `\`booked [name]\` — mark as won, remove from sequence\n` +
-        `\`dead [name]\` — mark as lost, remove from sequence\n\n` +
-        `*Roofing OS*\n` +
-        `\`roofing pipeline\` — sales pipeline overview\n` +
-        `\`roofing jobs\` — active jobs\n` +
+        `\`booked [name]\` — mark prospect as won\n` +
+        `\`dead [name]\` — remove from sequence\n` +
+        `\`nudge [name]\` — send next touch now\n` +
         `\`storm status\` — recent hail events\n` +
-        `\`contractors\` — all active contractors\n` +
-        `\`enroll prospects\` — enroll all prospects in 7-touch email\n\n` +
-        `*System*\n` +
-        `\`system health\` — functions, errors, uptime\n` +
-        `\`aria stats\` — call volume, outcomes, conversion\n` +
-        `\`youtube now\` — generate 8 YouTube scripts\n` +
-        `\`content queue\` — approve pending content\n` +
-        `\`marketing report\` — weekly marketing performance\n\n` +
-        `Everything else runs automatically.`
+        `\`aria test call\` — trigger a test Aria call\n` +
+        `\`morning brief\` — get today's brief now\n\n` +
+        `Everything else → app.nexuszc.com`
       );
     }
 
     // ── SYSTEM HEALTH ─────────────────────────────────────────────────────────────
+    // system health → dashboard
     if (msgLower === "system health") {
-      const start = Date.now();
-      try {
-        const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-        const { data: heartbeats } = await supabase
-          .from("system_heartbeats")
-          .select("function_name, status, response_ms, error_message, checked_at")
-          .gte("checked_at", cutoff)
-          .order("checked_at", { ascending: false });
-
-        const byFn: Record<string, { ok: number; err: number; lastMs: number; lastError?: string }> = {};
-        for (const hb of heartbeats || []) {
-          if (!byFn[hb.function_name]) byFn[hb.function_name] = { ok: 0, err: 0, lastMs: 0 };
-          if (hb.status === "ok") byFn[hb.function_name].ok++;
-          else {
-            byFn[hb.function_name].err++;
-            byFn[hb.function_name].lastError = hb.error_message?.slice(0, 80);
-          }
-          byFn[hb.function_name].lastMs = hb.response_ms;
-        }
-
-        const errFns = Object.entries(byFn).filter(([, v]) => v.err > 0);
-        const okFns = Object.entries(byFn).filter(([, v]) => v.err === 0);
-        const totalFns = Object.keys(byFn).length;
-        const overallEmoji = errFns.length === 0 ? "🟢" : errFns.length <= 2 ? "🟡" : "🔴";
-
-        let reply = `${overallEmoji} *System Health (last 2h)*\n\n`;
-        reply += `${okFns.length}/${totalFns} functions clean\n\n`;
-
-        if (errFns.length > 0) {
-          reply += `*Issues:*\n`;
-          reply += errFns.map(([fn, v]) =>
-            `• ${fn}: ${v.err} error(s)${v.lastError ? ` — ${v.lastError}` : ""}`
-          ).join("\n");
-        } else {
-          reply += `All functions reporting healthy.`;
-        }
-
-        await logUsage(supabase, "system_health", true, Date.now() - start, channel);
-        return earlyReturn(reply);
-      } catch (err: any) {
-        await logUsage(supabase, "system_health", false, Date.now() - start, channel);
-        return earlyReturn(`❌ Failed: ${err.message}`);
-      }
+      return earlyReturn('Check the dashboard: app.nexuszc.com');
     }
 
     // ── STORM STATUS ─────────────────────────────────────────────────────────────

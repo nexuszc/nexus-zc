@@ -9,6 +9,122 @@ function ago(ts) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
+const ROLE_BADGE = {
+  owner: 'bg-orange-900/50 text-orange-300',
+  pm:    'bg-blue-900/50 text-blue-300',
+  sales: 'bg-violet-900/50 text-violet-300',
+  crew:  'bg-green-900/50 text-green-300',
+  admin: 'bg-gray-800 text-gray-400',
+}
+
+const TEAM_ROLES = ['owner', 'pm', 'sales', 'crew', 'admin']
+
+function TeamSection({ contractorId }) {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState({ name: '', phone: '', role: 'pm' })
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from('contractor_team_members')
+      .select('*')
+      .eq('contractor_id', contractorId)
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+    setMembers(data || [])
+    setLoading(false)
+  }, [contractorId])
+
+  useEffect(() => { load() }, [load])
+
+  const add = async (e) => {
+    e.preventDefault()
+    if (!form.name.trim() || !form.phone.trim()) return
+    const digits = form.phone.replace(/\D/g, '')
+    const normalized = digits.length === 10 ? `+1${digits}` : `+${digits}`
+    setSaving(true)
+    await supabase.from('contractor_team_members').insert({
+      contractor_id: contractorId,
+      name: form.name.trim(),
+      phone: normalized,
+      role: form.role,
+    })
+    setForm({ name: '', phone: '', role: 'pm' })
+    setSaving(false)
+    load()
+  }
+
+  const remove = async (id) => {
+    await supabase.from('contractor_team_members').update({ active: false }).eq('id', id)
+    load()
+  }
+
+  if (loading) return <div className="py-3 px-4 text-xs text-gray-600">Loading team...</div>
+
+  return (
+    <div className="border-t border-[#1e1e2e] mt-3 pt-3">
+      <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-2 px-1">
+        Team — call/text +1 (720) 292-1930
+      </div>
+      {members.length === 0 ? (
+        <p className="text-xs text-gray-600 px-1 mb-3">No team members yet.</p>
+      ) : (
+        <div className="space-y-1 mb-3">
+          {members.map(m => (
+            <div key={m.id} className="flex items-center justify-between gap-3 py-1.5 px-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-[10px] font-bold text-gray-400 shrink-0">
+                  {m.name[0].toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <span className="text-xs font-medium text-white mr-2">{m.name}</span>
+                  <span className="text-xs text-gray-600 font-mono">{m.phone}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE[m.role] || ROLE_BADGE.admin}`}>
+                  {m.role}
+                </span>
+                <button
+                  onClick={() => remove(m.id)}
+                  className="text-[10px] text-gray-700 hover:text-red-400 transition-colors"
+                >
+                  remove
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <form onSubmit={add} className="flex gap-2 flex-wrap">
+        <input
+          type="text" placeholder="Name"
+          value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+          className="bg-[#0a0a0f] border border-[#2a2a3e] text-white text-xs rounded-lg px-2.5 py-1.5 placeholder-gray-700 focus:outline-none focus:border-indigo-600/60 w-28 flex-1 min-w-[100px]"
+        />
+        <input
+          type="tel" placeholder="Phone"
+          value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+          className="bg-[#0a0a0f] border border-[#2a2a3e] text-white text-xs rounded-lg px-2.5 py-1.5 placeholder-gray-700 focus:outline-none focus:border-indigo-600/60 w-32 flex-1 min-w-[110px]"
+        />
+        <select
+          value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+          className="bg-[#0a0a0f] border border-[#2a2a3e] text-white text-xs rounded-lg px-2.5 py-1.5 focus:outline-none"
+        >
+          {TEAM_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <button
+          type="submit" disabled={saving || !form.name.trim() || !form.phone.trim()}
+          className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+        >
+          {saving ? '…' : '+ Add'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 const PLAN_COLORS = {
   trial:    'text-amber-400 bg-amber-500/10',
   starter:  'text-blue-400 bg-blue-500/10',
@@ -135,7 +251,7 @@ export default function Contractors() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                     <div>
                       <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Phone</div>
-                      <div className="text-gray-300 font-mono">{c.phone || '—'}</div>
+                      <div className="text-gray-300 font-mono">{c.owner_phone || c.phone || '—'}</div>
                     </div>
                     <div>
                       <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Subdomain</div>
@@ -155,13 +271,14 @@ export default function Contractors() {
                         <div className="text-gray-300 font-mono">{c.referral_code}</div>
                       </div>
                     )}
-                    {c.city && (
+                    {c.state && (
                       <div>
                         <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Location</div>
-                        <div className="text-gray-300">{[c.city, c.state].filter(Boolean).join(', ')}</div>
+                        <div className="text-gray-300">{[c.primary_zip, c.state].filter(Boolean).join(' · ')}</div>
                       </div>
                     )}
                   </div>
+                  <TeamSection contractorId={c.id} />
                 </div>
               )}
             </div>

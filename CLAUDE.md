@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 15, 2026 — v8
+# Last updated: May 15, 2026 — v10
 
 ---
 
@@ -123,6 +123,8 @@ Then productized and sold to other multi-business operators.
 | `nexus-diagnostic` | See function source for details | Internal |
 | `nexus-follow-up` | See function source for details | Internal |
 | `nexus-intake` | See function source for details | Internal |
+| `nexus-job-intake-voice` | Retell inbound call handler: caller lookup, Aria context, job extraction | Retell webhook (call_started, call_analyzed) |
+| `nexus-job-intake-sms` | Twilio inbound SMS/MMS handler: updates, photos, homeowner notifications | Twilio webhook (+17202921930) |
 | `nexus-prospector` | See function source for details | Internal |
 | `nexus-quick-scan` | See function source for details | Internal |
 | `nexus-router` | See function source for details | Internal |
@@ -246,6 +248,8 @@ Then productized and sold to other multi-business operators.
 
 ### Roofing OS Dashboard + Admin (added May 15, 2026):
 - `contractor_employees` -- contractor team members (role, phone, PIN, is_owner, active)
+- `contractor_team_members` -- team members who can call/text job updates (phone UNIQUE, role: owner/pm/sales/crew/admin, links to contractor_accounts)
+- `inbound_sessions` -- SMS/voice conversation state per phone number (state machine: idle → awaiting_homeowner_phone → awaiting_job_selection, pending_data jsonb)
 - `contractor_sessions` -- magic link + PIN sessions (token, expires_at, 7-day rolling)
 - `system_heartbeats` -- per-function probe results (status, response_ms, error_message)
 - `system_health_snapshots` -- hourly rollup (ok_calls, error_calls, avg_ms, p95_ms)
@@ -384,28 +388,37 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 15, 2026)
 
-**DONE this session (Spec 4 + Dashboard Rebuild v1):**
-- Deleted 7 dead functions: smoke-test, aria-diag, tg-relay, nexus-self-build, nexus-follow-up, nexus-prospector, roofing-outreach
-- Fixed chat reference: roofing-outreach now command → roofing-outreach-sequencer
-- Fixed TWILIO_FROM_NUMBER fallback in roofing-outreach-sequencer + roofing-aria-engine
-- Fixed roofing-aria-webhook v2: Claude fallback analysis, /recover endpoint (5 calls recovered)
-- Added portal_sent Telegram alert + voicemail requeue to aria-webhook
-- Created cron jobs: morning-digest-daily (13:30 UTC) + monthly-truth-1st (1st of month 15:00 UTC)
-- Upgraded morning-digest v2: Telegram digest (whales, hot opens, pipeline) at 7:30am MT
-- Upgraded portal-api: plain-English insurance status, timeline field, enriched Aria context
-- Upgraded nexus-core: off-hours scheduling guard (skips heavy AI ops 10pm–7am MT)
-- DB indexes: 8 new indexes on key query paths
-- Test suite: 39/39 passing (scripts/test-suite.sh)
-- **Dashboard Rebuild v1:** Full app.nexuszc.com rebuild — Nav sidebar + mobile bottom nav, Home (command center), Brain (intelligence layer + Ask Brain chat), Pipeline (prospect table + filters + inline actions), Content (approval queue + publish), Calls (Aria queue + recent calls), Contractors (account mgmt + churn risk), System (health monitor + proposals + auto-fix queue). All 7 pages wired to live Supabase data. Deployed to Cloudflare Pages via git push.
+**DONE this session (Spec 5 — Job Intake v1):**
+- DB migration: contractor_team_members + inbound_sessions tables created
+- DB migration: roofing_jobs + portal_photos + portal_activities columns added
+- New function: nexus-job-intake-voice — Retell call_started/call_analyzed handler, role-based Aria context, job extraction via Claude
+- New function: nexus-job-intake-sms — Twilio SMS/MMS inbound handler, TwiML responses, state machine, photo uploads to job-photos bucket
+- Seeded: Zach Curtis as owner team member on test contractor account
+- Dashboard: Team section added to Contractors page (inline per-contractor, add/remove members)
+- Dashboard: Jobs section added to Pipeline page (active jobs with last activity, photo count, portal status)
+- Telegram trim: pipeline, outreach dashboard, hot opens, whale queue, content queue, system health → redirect to dashboard; help simplified to 6 commands
+- Test suite: 21/21 passing (scripts/test-job-intake.sh)
+
+**PHASE 5 — MANUAL TWILIO WEBHOOK SETUP (do this before testing):**
+Twilio dashboard → Phone Numbers → +17202921930
+- Voice webhook: `https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/nexus-job-intake-voice` (POST)
+- SMS webhook: `https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/nexus-job-intake-sms` (POST)
+
+**END-TO-END TEST:**
+1. Call +17202921930 from +17203948574
+2. Aria should say "Hey Zach — new job or update on an existing one?"
+3. Say: "New job. Homeowner Mike Smith, 123 Main Denver Colorado. State Farm. Start next Monday."
+4. After call ends, you'll get an SMS: "✅ Job created — Mike Smith..."
+5. Reply with homeowner's cell number
+6. Homeowner gets portal link automatically
 
 **NEXT:**
-1. Register Resend webhook in Resend dashboard → roofing-email-webhook (manual — external)
-2. Draft complete operating agreement for Nexus ZC LLC
-3. Build complete Roofing OS go-to-market system with public landing page
+1. Register Resend webhook → roofing-email-webhook (manual)
+2. Wire Twilio webhooks (Phase 5 above — manual)
+3. Draft Nexus ZC LLC operating agreement
 4. Add Self-Learning Pattern Recognition (medium)
 5. Add memory consolidation ability (medium)
-6. Add Structured Self-Reflection Capability (medium)
-7. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
+6. Review client health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
