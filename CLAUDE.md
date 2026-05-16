@@ -403,7 +403,7 @@ Then productized and sold to other multi-business operators.
 5. Add memory consolidation ability (medium)
 6. Add Conversation Context Memory (medium)
 7. Build complete Roofing OS go-to-market system with public landing page
-8. Review and improve client health scores for Brian (65) and Denver Pro Roofing (50)
+8. Review and address client health concerns (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
