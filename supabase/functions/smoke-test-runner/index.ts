@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request): Promise<Response> => {
   try {
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
@@ -183,6 +183,4 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
   }
-};
-
-Deno.serve(handler);
+});
