@@ -14,7 +14,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RETELL_API_KEY = Deno.env.get('RETELL_API_KEY') || '';
-const RETELL_AGENT_ID = Deno.env.get('RETELL_AGENT_ID') || '';
+// ROOFING_ARIA_INBOUND_AGENT_ID: dedicated inbound agent for +17202921930
+// Created 2026-05-15, webhook → nexus-job-intake-voice, llm: llm_e54f939d8b72817b006519d65c91
+const RETELL_INBOUND_AGENT_ID = Deno.env.get('ROOFING_ARIA_INBOUND_AGENT_ID') || Deno.env.get('RETELL_AGENT_ID') || '';
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 
@@ -271,14 +273,14 @@ async function sendRooferConfirmEmail(rooferEmail: string, homeownerName: string
 }
 
 async function configureAgentForCaller(callerPhone: string): Promise<void> {
-  if (!callerPhone || !RETELL_API_KEY || !RETELL_AGENT_ID) return;
+  if (!callerPhone || !RETELL_API_KEY || !RETELL_INBOUND_AGENT_ID) return;
   const member = await lookupCaller(callerPhone);
   if (!member) return;
   const role = member.role as string || 'unknown';
   const config = ROLE_CONFIGS[role] || ROLE_CONFIGS.unknown;
   const firstName = (member.name as string || '').split(' ')[0];
   const contractor = member.contractor_accounts as Record<string, unknown>;
-  await fetch(`https://api.retellai.com/v2/update-agent/${RETELL_AGENT_ID}`, {
+  await fetch(`https://api.retellai.com/update-agent/${RETELL_INBOUND_AGENT_ID}`, {
     method: 'PATCH',
     headers: { 'Authorization': `Bearer ${RETELL_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -327,9 +329,9 @@ Deno.serve(async (req) => {
       const firstName = (member?.name as string || '').split(' ')[0];
       const beginMessage = config.begin_message(firstName);
 
-      if (member && RETELL_API_KEY && RETELL_AGENT_ID) {
+      if (member && RETELL_API_KEY && RETELL_INBOUND_AGENT_ID) {
         const contractor = member.contractor_accounts as Record<string, unknown>;
-        await fetch(`https://api.retellai.com/v2/update-agent/${RETELL_AGENT_ID}`, {
+        await fetch(`https://api.retellai.com/update-agent/${RETELL_INBOUND_AGENT_ID}`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${RETELL_API_KEY}`,
