@@ -40,7 +40,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         JSON.stringify({
           success: false,
           error: "Missing required environment variables",
-          tests: []
+          tests: [],
+          summary: {
+            total: 0,
+            passed: 0,
+            failed: 0
+          },
+          timestamp: new Date().toISOString()
         }),
         {
           status: 500,
@@ -55,16 +61,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Test 1: Health check
     if (!testFilter || testFilter === "health-check" || testFilter === "all") {
+      const startTime = performance.now();
       tests.push({
         name: "health-check",
         description: "Basic health check",
         status: "passed",
+        duration_ms: performance.now() - startTime,
         timestamp: new Date().toISOString()
       });
     }
 
     // Test 2: Database connectivity
     if (!testFilter || testFilter === "database-connectivity" || testFilter === "all") {
+      const startTime = performance.now();
       try {
         const dbTest = await fetch(`${baseUrl}/rest/v1/`, {
           headers: {
@@ -78,6 +87,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           description: "Database connection test",
           status: dbTest.ok ? "passed" : "failed",
           statusCode: dbTest.status,
+          duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -86,6 +96,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           description: "Database connection test",
           status: "failed",
           error: error.message,
+          duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString()
         });
       }
@@ -93,6 +104,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Test 3: Edge function availability
     if (!testFilter || testFilter === "edge-functions" || testFilter === "all") {
+      const startTime = performance.now();
       try {
         const functionsTest = await fetch(`${baseUrl}/functions/v1/`, {
           headers: {
@@ -106,6 +118,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           description: "Edge functions availability",
           status: functionsTest.status === 404 || functionsTest.ok ? "passed" : "failed",
           statusCode: functionsTest.status,
+          duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -114,6 +127,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           description: "Edge functions availability",
           status: "failed",
           error: error.message,
+          duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString()
         });
       }
@@ -152,6 +166,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         success: false,
         error: error.message,
         tests: [],
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0
+        },
         timestamp: new Date().toISOString()
       }),
       {
