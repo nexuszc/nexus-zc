@@ -11,17 +11,19 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const overallStartTime = performance.now();
+
   try {
-    const overallStartTime = performance.now();
-    console.log("Starting smoke test execution");
-
-    // Parse request URL for query parameters
     const url = new URL(req.url);
-    const testFilter = url.searchParams.get("test");
+    const testFilter = url.searchParams.get("filter");
 
-    console.log("Test filter:", testFilter || "all tests");
+    console.log("Starting smoke test runner", {
+      filter: testFilter,
+      timestamp: new Date().toISOString(),
+      url: req.url,
+      method: req.method
+    });
 
-    // Environment check
     const envCheckStart = performance.now();
     const requiredEnvVars = [
       "SUPABASE_URL",
@@ -29,41 +31,27 @@ Deno.serve(async (req) => {
       "SUPABASE_SERVICE_ROLE_KEY"
     ];
 
-    const denoEnv = {
-      SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
-      SUPABASE_ANON_KEY: Deno.env.get("SUPABASE_ANON_KEY") ? "[REDACTED]" : undefined,
-      SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ? "[REDACTED]" : undefined
-    };
-
-    console.log("Environment variables check:", denoEnv);
-
-    const environmentChecks = requiredEnvVars.map(varName => ({
-      variable: varName,
-      status: Deno.env.get(varName) ? "present" : "missing",
-      timestamp: new Date().toISOString()
-    }));
-
-    const envCheckDuration = performance.now() - envCheckStart;
-    console.log("Environment check completed:", {
-      duration_ms: envCheckDuration,
-      checks: environmentChecks
+    const environmentChecks = requiredEnvVars.map(envVar => {
+      const value = Deno.env.get(envVar);
+      const status = value ? "present" : "missing";
+      console.log(`Environment check: ${envVar} - ${status}`);
+      return {
+        variable: envVar,
+        status,
+        length: value ? value.length : 0
+      };
     });
 
-    const baseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const envCheckDuration = performance.now() - envCheckStart;
 
-    if (!baseUrl || !anonKey) {
-      const missingVars = [];
-      if (!baseUrl) missingVars.push("SUPABASE_URL");
-      if (!anonKey) missingVars.push("SUPABASE_ANON_KEY");
-
-      console.error("Missing required environment variables:", missingVars);
-
+    const missingVars = environmentChecks.filter(check => check.status === "missing");
+    if (missingVars.length > 0) {
+      console.error("Missing required environment variables:", missingVars.map(v => v.variable));
       return new Response(
         JSON.stringify({
           success: false,
           error: "Missing required environment variables",
-          missing: missingVars,
+          missingVariables: missingVars.map(v => v.variable),
           environmentChecks,
           timestamp: new Date().toISOString()
         }),
@@ -74,53 +62,77 @@ Deno.serve(async (req) => {
       );
     }
 
-    const tests = [];
+    const baseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    const denoEnv = {
+      build: Deno.build,
+      version: Deno.version,
+      pid: Deno.pid
+    };
+
+    console.log("Environment state:", {
+      baseUrl: baseUrl.substring(0, 30) + "...",
+      anonKeyLength: anonKey.length,
+      denoEnv
+    });
+
+    const tests: any[] = [];
     let currentStep = 0;
-    const totalSteps = testFilter && testFilter !== "all" ? 1 : 3;
+    let totalSteps = 0;
 
-    console.log(`Total test steps to execute: ${totalSteps}`);
+    const availableTests = ["api-availability", "database-connectivity", "edge-functions"];
+    if (!testFilter || testFilter === "all") {
+      totalSteps = availableTests.length;
+    } else {
+      totalSteps = availableTests.includes(testFilter) ? 1 : 0;
+    }
 
-    // Test 1: Health check
-    if (!testFilter || testFilter === "health" || testFilter === "all") {
+    console.log(`Will execute ${totalSteps} test(s)`);
+
+    // Test 1: API availability
+    if (!testFilter || testFilter === "api-availability" || testFilter === "all") {
       currentStep++;
-      console.log(`[Step ${currentStep}/${totalSteps}] Starting health test`);
+      console.log(`[Step ${currentStep}/${totalSteps}] Starting api-availability test`);
       const startTime = performance.now();
 
       try {
-        const healthUrl = `${baseUrl}/rest/v1/`;
-        console.log(`Attempting health check to: ${healthUrl}`);
+        const apiUrl = `${baseUrl}/rest/v1/`;
+        console.log(`Attempting API connection to: ${apiUrl}`);
 
-        const healthCheck = await fetch(healthUrl, {
+        const apiTest = await fetch(apiUrl, {
           headers: {
             "apikey": anonKey,
             "Authorization": `Bearer ${anonKey}`
           }
         });
 
-        const healthState = {
-          url: healthUrl,
-          statusCode: healthCheck.status,
-          statusText: healthCheck.statusText,
-          headers: Object.fromEntries(healthCheck.headers.entries()),
+        const responseText = await apiTest.text();
+        const apiState = {
+          url: apiUrl,
+          statusCode: apiTest.status,
+          statusText: apiTest.statusText,
+          headers: Object.fromEntries(apiTest.headers.entries()),
+          responseLength: responseText.length,
           timestamp: new Date().toISOString()
         };
 
-        console.log("Health check state:", healthState);
+        console.log("API availability state:", apiState);
 
         tests.push({
-          name: "health",
-          description: "API health check",
-          status: healthCheck.ok ? "passed" : "failed",
-          statusCode: healthCheck.status,
+          name: "api-availability",
+          description: "Supabase API endpoint availability",
+          status: apiTest.ok ? "passed" : "failed",
+          statusCode: apiTest.status,
           duration_ms: performance.now() - startTime,
           timestamp: new Date().toISOString(),
           step: currentStep,
-          state: healthState
+          state: apiState
         });
 
-        console.log(`[Step ${currentStep}/${totalSteps}] health test ${healthCheck.ok ? 'PASSED' : 'FAILED'}`);
+        console.log(`[Step ${currentStep}/${totalSteps}] api-availability test ${apiTest.ok ? 'PASSED' : 'FAILED'}`);
       } catch (error) {
-        console.error(`[Step ${currentStep}/${totalSteps}] health test FAILED:`, error);
+        console.error(`[Step ${currentStep}/${totalSteps}] api-availability test FAILED:`, error);
 
         const errorContext = {
           message: error.message,
@@ -134,11 +146,11 @@ Deno.serve(async (req) => {
           }
         };
 
-        console.error("Health check error context:", errorContext);
+        console.error("API availability error context:", errorContext);
 
         tests.push({
-          name: "health",
-          description: "API health check",
+          name: "api-availability",
+          description: "Supabase API endpoint availability",
           status: "failed",
           error: error.message,
           errorStack: error.stack,
@@ -157,13 +169,15 @@ Deno.serve(async (req) => {
       const startTime = performance.now();
 
       try {
-        const dbTestUrl = `${baseUrl}/rest/v1/?select=version()`;
-        console.log(`Attempting database connectivity test to: ${dbTestUrl}`);
+        const dbUrl = `${baseUrl}/rest/v1/rpc/version`;
+        console.log(`Attempting database connection to: ${dbUrl}`);
 
-        const dbTest = await fetch(dbTestUrl, {
+        const dbTest = await fetch(dbUrl, {
+          method: "POST",
           headers: {
             "apikey": anonKey,
-            "Authorization": `Bearer ${anonKey}`
+            "Authorization": `Bearer ${anonKey}`,
+            "Content-Type": "application/json"
           }
         });
 
@@ -171,16 +185,17 @@ Deno.serve(async (req) => {
         let parsedResponse;
         try {
           parsedResponse = JSON.parse(responseText);
-        } catch (e) {
-          console.log("Response is not JSON:", responseText.substring(0, 200));
+        } catch {
+          parsedResponse = null;
         }
 
         const dbState = {
-          url: dbTestUrl,
+          url: dbUrl,
           statusCode: dbTest.status,
           statusText: dbTest.statusText,
           headers: Object.fromEntries(dbTest.headers.entries()),
           responseLength: responseText.length,
+          responsePreview: responseText.substring(0, 200),
           timestamp: new Date().toISOString()
         };
 
