@@ -352,7 +352,7 @@ Deno.serve(async (req) => {
                 metadata: { contractor_name: prospect.company_name },
               }),
             }).catch(() => {});
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, "hot", "whale_branch_detected");
+            await advanceFunnelStage(prospect.id as string, currentFunnelStage, "hot", "whale_branch_detected").catch(() => {});
             continue;
           }
 
@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
                 await supabase.from("roofing_prospects").update({ sequence_day: 4, last_touch_at: nowIso }).eq("id", prospect.id);
                 emailsSent++;
                 (prospect as Record<string, unknown>).sequence_day = 4;
-                await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_hot_branch");
+                await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_hot_branch").catch(() => {});
               } else errors++;
               continue;
             }
@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
             await supabase.from("roofing_prospects").update({ sequence_day: 1, last_touch_at: nowIso }).eq("id", prospect.id);
             emailsSent++;
             (prospect as Record<string, unknown>).sequence_day = 1;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_1_sent");
+            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_1_sent").catch(() => {});
           } else errors++;
           continue;
         }
@@ -405,7 +405,7 @@ Deno.serve(async (req) => {
             await supabase.from("roofing_prospects").update({ sequence_day: 2, last_touch_at: nowIso }).eq("id", prospect.id);
             emailsSent++;
             (prospect as Record<string, unknown>).sequence_day = 2;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_2_sent");
+            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_2_sent").catch(() => {});
           } else errors++;
           continue;
         }
@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
           }
           await supabase.from("roofing_prospects").update({ sequence_day: 3, last_touch_at: nowIso }).eq("id", prospect.id);
           (prospect as Record<string, unknown>).sequence_day = 3;
-          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_3_voice_drop");
+          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_3_voice_drop").catch(() => {});
           continue;
         }
 
@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
             await supabase.from("roofing_prospects").update({ sequence_day: 4, last_touch_at: nowIso }).eq("id", prospect.id);
             emailsSent++;
             (prospect as Record<string, unknown>).sequence_day = 4;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_sent");
+            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_sent").catch(() => {});
           } else errors++;
           continue;
         }
@@ -449,7 +449,7 @@ Deno.serve(async (req) => {
           }
           await supabase.from("roofing_prospects").update({ sequence_day: 5, last_touch_at: nowIso }).eq("id", prospect.id);
           (prospect as Record<string, unknown>).sequence_day = 5;
-          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_5_voice_drop");
+          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_5_voice_drop").catch(() => {});
           continue;
         }
 
@@ -468,7 +468,7 @@ Deno.serve(async (req) => {
             }).eq("id", prospect.id);
             emailsSent++;
             (prospect as Record<string, unknown>).sequence_day = 6;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_6_sent");
+            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_6_sent").catch(() => {});
           } else errors++;
           continue;
         }

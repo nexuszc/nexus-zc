@@ -1336,15 +1336,18 @@ Deno.serve(async (_req) => {
       }
     }
 
-    // ARIA QUEUE PROCESSOR — fire queued calls whose window has arrived
+    // ARIA QUEUE PROCESSOR — fire queued/pending calls whose window has arrived
     {
       const queueNow = new Date().toISOString();
+      const maxAttempts = 3;
+
+      // Process both 'queued' and 'pending' — pending calls fire when fire_at is reached
       const { data: readyToFire } = await supabase
         .from("aria_call_queue")
         .select("*")
-        .eq("status", "queued")
+        .in("status", ["queued", "pending"])
         .lte("fire_at", queueNow)
-        .lt("attempt_count", 3)
+        .lt("attempt_count", maxAttempts)
         .order("fire_at", { ascending: true })
         .limit(5);
 
@@ -1358,10 +1361,12 @@ Deno.serve(async (_req) => {
         const gate = await gateRes.json().catch(() => ({ allowed: true }));
 
         if (!gate.allowed) {
+          // Gate denial: reschedule only — do NOT burn attempt_count
           await supabase.from("aria_call_queue")
             .update({
-              fire_at: gate.next_allowed_at || new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-              attempt_count: (queuedCall.attempt_count || 0) + 1
+              status: "queued",
+              fire_at: gate.next_allowed_at || new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+              last_attempt_at: new Date().toISOString(),
             })
             .eq("id", queuedCall.id);
           continue;
@@ -1381,8 +1386,14 @@ Deno.serve(async (_req) => {
           })
         }).catch(() => null);
 
+        const newAttemptCount = (queuedCall.attempt_count || 0) + 1;
         await supabase.from("aria_call_queue")
-          .update({ status: "fired", fired_at: new Date().toISOString(), attempt_count: (queuedCall.attempt_count || 0) + 1 })
+          .update({
+            status: newAttemptCount >= maxAttempts ? "failed" : "fired",
+            fired_at: new Date().toISOString(),
+            last_attempt_at: new Date().toISOString(),
+            attempt_count: newAttemptCount,
+          })
           .eq("id", queuedCall.id);
 
         queueFired++;
