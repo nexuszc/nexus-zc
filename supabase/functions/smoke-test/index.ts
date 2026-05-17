@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { corsHeaders } from '../_shared/cors.ts';
 
 // ============================================================================
 // CONSTANTS & CONFIGURATION
@@ -18,7 +17,7 @@ interface HealthCheckResult {
   status: 'pass' | 'fail' | 'warn';
   duration_ms: number;
   message?: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, any>;
 }
 
 interface HealthCheckResponse {
@@ -47,37 +46,42 @@ interface ErrorResponse {
 // ============================================================================
 
 /**
- * Enhanced logging utility
- */
-function log(level: 'info' | 'warn' | 'error', message: string, data?: Record<string, unknown>) {
-  const logEntry = {
-    level,
-    function: FUNCTION_NAME,
-    message,
-    timestamp: new Date().toISOString(),
-    ...data,
-  };
-  console.log(JSON.stringify(logEntry));
-}
-
-/**
- * Get CORS headers
+ * CORS headers for all responses
  */
 function getCorsHeaders(): HeadersInit {
   return {
-    ...corsHeaders,
-    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
+    'Access-Control-Max-Age': '86400',
   };
 }
 
 /**
- * Create standardized JSON response
+ * Create a JSON response with CORS headers
  */
-function createJsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data, null, 2), {
+function createJsonResponse(data: any, status = 200): Response {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: getCorsHeaders(),
+    headers: {
+      'Content-Type': 'application/json',
+      ...getCorsHeaders(),
+    },
   });
+}
+
+/**
+ * Structured logging function
+ */
+function log(level: 'info' | 'warn' | 'error', message: string, metadata?: Record<string, any>) {
+  const logEntry = {
+    level,
+    message,
+    function: FUNCTION_NAME,
+    timestamp: new Date().toISOString(),
+    ...metadata,
+  };
+  console.log(JSON.stringify(logEntry));
 }
 
 // ============================================================================
@@ -120,11 +124,12 @@ async function checkRuntime(): Promise<HealthCheckResult> {
 async function checkEnvironment(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
     const missingVars: string[] = [];
 
     for (const envVar of requiredEnvVars) {
-      if (!Deno.env.get(envVar)) {
+      const value = Deno.env.get(envVar);
+      if (!value) {
         missingVars.push(envVar);
       }
     }
@@ -135,6 +140,9 @@ async function checkEnvironment(): Promise<HealthCheckResult> {
         status: 'fail',
         duration_ms: performance.now() - start,
         message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        details: {
+          missing_vars: missingVars,
+        },
       };
     }
 
@@ -143,7 +151,7 @@ async function checkEnvironment(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        variables_checked: requiredEnvVars.length,
+        env_vars_present: requiredEnvVars.length,
       },
     };
   } catch (error) {
@@ -163,20 +171,20 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'supabase_client',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Missing Supabase credentials',
+        message: 'Supabase credentials not available',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const client = createClient(supabaseUrl, supabaseKey);
 
-    if (!supabase) {
+    if (!client) {
       return {
         name: 'supabase_client',
         status: 'fail',
@@ -191,6 +199,7 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
       duration_ms: performance.now() - start,
       details: {
         client_initialized: true,
+        supabase_url: supabaseUrl,
       },
     };
   } catch (error) {
@@ -210,28 +219,32 @@ async function checkDatabase(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Missing database credentials',
+        message: 'Database credentials not available',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const client = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to test database connectivity
-    const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+    // Simple query to check database connectivity
+    const { data, error } = await client.from('profiles').select('count').limit(1).maybeSingle();
 
-    if (error) {
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 is "no rows returned" which is acceptable
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: `Database query failed: ${error.message}`,
+        message: error.message,
+        details: {
+          error_code: error.code,
+        },
       };
     }
 
@@ -241,6 +254,7 @@ async function checkDatabase(): Promise<HealthCheckResult> {
       duration_ms: performance.now() - start,
       details: {
         connected: true,
+        query_executed: true,
       },
     };
   } catch (error) {
@@ -259,24 +273,26 @@ async function checkDatabase(): Promise<HealthCheckResult> {
 async function checkJsonSerialization(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const testData = {
+    const testObject = {
       string: 'test',
-      number: 42,
+      number: 123,
       boolean: true,
-      null: null,
+      null_value: null,
       array: [1, 2, 3],
-      object: { nested: 'value' },
+      nested: {
+        key: 'value',
+      },
     };
 
-    const serialized = JSON.stringify(testData);
+    const serialized = JSON.stringify(testObject);
     const deserialized = JSON.parse(serialized);
 
-    if (JSON.stringify(deserialized) !== serialized) {
+    if (JSON.stringify(testObject) !== JSON.stringify(deserialized)) {
       return {
         name: 'json_serialization',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'JSON serialization/deserialization mismatch',
+        message: 'JSON serialization mismatch',
       };
     }
 
@@ -499,23 +515,4 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const duration = performance.now() - requestStart;
     log('info', 'Request completed', {
       status: response.status,
-      duration_ms: Math.round(duration * 100) / 100,
-    });
-
-    return response;
-  } catch (error) {
-    log('error', 'Unhandled error in request handler', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    const errorResponse: ErrorResponse = {
-      error: 'INTERNAL_SERVER_ERROR',
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
-      timestamp: new Date().toISOString(),
-      path: url.pathname,
-    };
-
-    return createJsonResponse(errorResponse, 500);
-  }
-});
+      duration_
