@@ -1,4 +1,4 @@
-// morning-digest v3
+// morning-digest v4
 // 1. SMS digest to active contractor accounts
 // 2. Lean owner Telegram digest: whales, email, Aria, content, one action
 
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
           .select('id, opened, delivered').eq('direction', 'outbound').gte('created_at', since24h),
         supabase.from('roofing_prospects')
           .select('id').eq('in_sequence', true).is('outcome', null)
-          .lte('next_touch_at', new Date().toISOString()).limit(100),
+          .not('last_touch_at', 'is', null).limit(100),
         supabase.from('aria_call_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
         supabase.from('roofing_content').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       ]);
@@ -202,6 +202,14 @@ Deno.serve(async (req) => {
       console.error('Owner digest error:', e);
     }
   }
+
+  await supabase.from('system_heartbeats').insert({
+    function_name: 'morning-digest',
+    status: 'ok',
+    response_ms: 0,
+    metadata: { contractor_sms_sent: sent },
+    recorded_at: new Date().toISOString(),
+  }).catch(() => {});
 
   return Response.json({ ok: true, digests_sent: sent });
 });
