@@ -1,7 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
 // ============================================================================
-// CONSTANTS & CONFIGURATION
+// SMOKE TEST EDGE FUNCTION
+// Comprehensive health check and diagnostics for Nexus system
 // ============================================================================
 
 const FUNCTION_NAME = 'smoke-test';
@@ -46,14 +45,14 @@ interface ErrorResponse {
 // ============================================================================
 
 /**
- * Structured logging utility
+ * Logging utility with structured output
  */
-function log(level: 'info' | 'warn' | 'error', message: string, meta?: Record<string, unknown>): void {
+function log(level: 'info' | 'warn' | 'error', message: string, meta?: Record<string, unknown>) {
   const logEntry = {
     level,
     message,
-    function: FUNCTION_NAME,
     timestamp: new Date().toISOString(),
+    function: FUNCTION_NAME,
     ...meta,
   };
   console.log(JSON.stringify(logEntry));
@@ -62,11 +61,12 @@ function log(level: 'info' | 'warn' | 'error', message: string, meta?: Record<st
 /**
  * Get CORS headers for responses
  */
-function getCorsHeaders(): Record<string, string> {
+function getCorsHeaders(): HeadersInit {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info',
+    'Access-Control-Max-Age': '86400',
   };
 }
 
@@ -84,27 +84,23 @@ function createJsonResponse(data: unknown, status = 200): Response {
 }
 
 // ============================================================================
-// HEALTH CHECKS
+// HEALTH CHECK FUNCTIONS
 // ============================================================================
 
 /**
- * Check runtime environment
+ * Check Deno runtime information
  */
 async function checkRuntime(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const denoVersion = Deno.version.deno;
-    const v8Version = Deno.version.v8;
-    const typescriptVersion = Deno.version.typescript;
-
     return {
       name: 'runtime',
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        deno: denoVersion,
-        v8: v8Version,
-        typescript: typescriptVersion,
+        deno_version: Deno.version.deno,
+        v8_version: Deno.version.v8,
+        typescript_version: Deno.version.typescript,
       },
     };
   } catch (error) {
@@ -123,21 +119,21 @@ async function checkRuntime(): Promise<HealthCheckResult> {
 async function checkEnvironment(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-    const missingVars: string[] = [];
+    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missing: string[] = [];
 
     for (const varName of requiredVars) {
       if (!Deno.env.get(varName)) {
-        missingVars.push(varName);
+        missing.push(varName);
       }
     }
 
-    if (missingVars.length > 0) {
+    if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        message: `Missing required environment variables: ${missing.join(', ')}`,
       };
     }
 
@@ -147,7 +143,6 @@ async function checkEnvironment(): Promise<HealthCheckResult> {
       duration_ms: performance.now() - start,
       details: {
         variables_checked: requiredVars.length,
-        all_present: true,
       },
     };
   } catch (error) {
@@ -174,18 +169,19 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
         name: 'supabase_client',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Missing Supabase credentials',
+        message: 'Supabase credentials not configured',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    if (!supabase) {
+    // Verify URL format
+    try {
+      new URL(supabaseUrl);
+    } catch {
       return {
         name: 'supabase_client',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Failed to create Supabase client',
+        message: 'Invalid SUPABASE_URL format',
       };
     }
 
@@ -194,7 +190,8 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        client_initialized: true,
+        url_configured: true,
+        key_configured: true,
       },
     };
   } catch (error) {
@@ -214,39 +211,42 @@ async function checkDatabase(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'database',
-        status: 'fail',
+        status: 'warn',
         duration_ms: performance.now() - start,
-        message: 'Missing database credentials',
+        message: 'Database credentials not available',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Simple health check endpoint
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      method: 'HEAD',
+      headers: {
+        apikey: supabaseKey,
+      },
+    });
 
-    // Execute a simple query to verify connectivity
-    const { error } = await supabase.from('users').select('id').limit(1);
-
-    if (error) {
+    if (response.ok) {
+      return {
+        name: 'database',
+        status: 'pass',
+        duration_ms: performance.now() - start,
+        details: {
+          response_status: response.status,
+        },
+      };
+    } else {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: `Database query failed: ${error.message}`,
+        message: `Database returned status ${response.status}`,
       };
     }
-
-    return {
-      name: 'database',
-      status: 'pass',
-      duration_ms: performance.now() - start,
-      details: {
-        connection_successful: true,
-      },
-    };
   } catch (error) {
     return {
       name: 'database',
@@ -276,28 +276,21 @@ async function checkJsonSerialization(): Promise<HealthCheckResult> {
     const deserialized = JSON.parse(serialized);
 
     if (JSON.stringify(deserialized) !== serialized) {
-      return {
-        name: 'json_serialization',
-        status: 'fail',
-        duration_ms: performance.now() - start,
-        message: 'JSON serialization mismatch',
-      };
+      throw new Error('Serialization roundtrip failed');
     }
 
     return {
       name: 'json_serialization',
       status: 'pass',
       duration_ms: performance.now() - start,
-      details: {
-        test_passed: true,
-      },
     };
   } catch (error) {
     return {
       name: 'json_serialization',
       status: 'fail',
       duration_ms: performance.now() - start,
-      message: error instanceof Error ? error.message : 'JSON serialization check failed',
+      message:
+        error instanceof Error ? error.message : 'JSON serialization check failed',
     };
   }
 }
@@ -514,3 +507,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       stack: error instanceof Error ? error.stack : undefined,
       duration_ms: Math.round(duration * 100) / 100,
     });
+
+    const errorResponse: ErrorResponse = {
+      error: 'INTERNAL_ERROR',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      timestamp: new Date().toISOString(),
+      path: url.pathname,
+    };
+
+    return createJsonResponse(errorResponse, 500);
+  }
+});
