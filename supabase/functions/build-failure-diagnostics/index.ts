@@ -1,193 +1,191 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Content-Type': 'application/json',
-}
-
-interface BuildFailure {
-  id: string
-  project_id: string
-  error_message: string
-  error_stack?: string
-  build_logs?: string
-  created_at: string
-}
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 interface DiagnosticResult {
-  failure_id: string
-  error_type: string
-  suggested_fixes: string[]
-  related_errors: number
-  confidence: number
+  success: boolean;
+  errors: Array<{
+    type: string;
+    message: string;
+    line?: number;
+    file?: string;
+    suggestion?: string;
+  }>;
+  warnings: Array<{
+    type: string;
+    message: string;
+    suggestion?: string;
+  }>;
+  summary: string;
 }
 
-function categorizeError(errorMessage: string, errorStack?: string): string {
-  const message = errorMessage.toLowerCase()
-  const stack = (errorStack || '').toLowerCase()
-  
-  if (message.includes('module not found') || message.includes('cannot find module')) {
-    return 'MISSING_DEPENDENCY'
-  }
-  if (message.includes('syntax error') || message.includes('unexpected token')) {
-    return 'SYNTAX_ERROR'
-  }
-  if (message.includes('type error') || message.includes('is not a function')) {
-    return 'TYPE_ERROR'
-  }
-  if (message.includes('memory') || message.includes('heap out of memory')) {
-    return 'MEMORY_ERROR'
-  }
-  if (message.includes('timeout') || message.includes('timed out')) {
-    return 'TIMEOUT_ERROR'
-  }
-  if (message.includes('permission denied') || message.includes('eacces')) {
-    return 'PERMISSION_ERROR'
-  }
-  if (message.includes('network') || message.includes('enotfound') || message.includes('econnrefused')) {
-    return 'NETWORK_ERROR'
-  }
-  
-  return 'UNKNOWN_ERROR'
-}
-
-function generateSuggestedFixes(errorType: string, errorMessage: string): string[] {
-  const fixes: string[] = []
-  
-  switch (errorType) {
-    case 'MISSING_DEPENDENCY':
-      const moduleMatch = errorMessage.match(/['"]([^'"]+)['"]/)
-      const moduleName = moduleMatch ? moduleMatch[1] : 'the missing module'
-      fixes.push(`Install the missing dependency: npm install ${moduleName}`)
-      fixes.push('Verify package.json includes all required dependencies')
-      fixes.push('Check for typos in import statements')
-      break
-      
-    case 'SYNTAX_ERROR':
-      fixes.push('Review recent code changes for syntax errors')
-      fixes.push('Check for missing brackets, parentheses, or semicolons')
-      fixes.push('Validate JSON files for proper formatting')
-      break
-      
-    case 'TYPE_ERROR':
-      fixes.push('Verify function calls match their definitions')
-      fixes.push('Check that variables are properly initialized before use')
-      fixes.push('Review TypeScript type definitions if applicable')
-      break
-      
-    case 'MEMORY_ERROR':
-      fixes.push('Increase Node.js memory limit: NODE_OPTIONS=--max-old-space-size=4096')
-      fixes.push('Optimize bundle size and dependencies')
-      fixes.push('Check for memory leaks in build scripts')
-      break
-      
-    case 'TIMEOUT_ERROR':
-      fixes.push('Increase build timeout in configuration')
-      fixes.push('Optimize slow build steps')
-      fixes.push('Check network connectivity for package downloads')
-      break
-      
-    case 'PERMISSION_ERROR':
-      fixes.push('Check file and directory permissions')
-      fixes.push('Run with appropriate user permissions')
-      fixes.push('Verify write access to output directories')
-      break
-      
-    case 'NETWORK_ERROR':
-      fixes.push('Verify network connectivity')
-      fixes.push('Check npm registry accessibility')
-      fixes.push('Try using a different package registry or mirror')
-      break
-      
-    default:
-      fixes.push('Review complete error logs for more details')
-      fixes.push('Search for similar errors in documentation')
-      fixes.push('Check recent changes that might have caused the issue')
-  }
-  
-  return fixes
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
+serve(async (req) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing environment variables')
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const { failure_id } = await req.json()
-
-    if (!failure_id) {
-      return new Response(
-        JSON.stringify({ error: 'failure_id is required' }),
-        { status: 400, headers: corsHeaders }
-      )
-    }
-
-    const { data: failure, error: fetchError } = await supabase
-      .from('build_failures')
-      .select('*')
-      .eq('id', failure_id)
-      .single()
-
-    if (fetchError || !failure) {
-      return new Response(
-        JSON.stringify({ error: 'Build failure not found' }),
-        { status: 404, headers: corsHeaders }
-      )
-    }
-
-    const buildFailure = failure as BuildFailure
-    const errorType = categorizeError(buildFailure.error_message, buildFailure.error_stack)
-    const suggestedFixes = generateSuggestedFixes(errorType, buildFailure.error_message)
-
-    const { count: relatedCount } = await supabase
-      .from('build_failures')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', buildFailure.project_id)
-      .ilike('error_message', `%${buildFailure.error_message.substring(0, 50)}%`)
-      .neq('id', failure_id)
-
-    const confidence = errorType === 'UNKNOWN_ERROR' ? 0.3 : 0.8
+    const { functionName, errorLog, sourceCode } = await req.json();
 
     const result: DiagnosticResult = {
-      failure_id: buildFailure.id,
-      error_type: errorType,
-      suggested_fixes: suggestedFixes,
-      related_errors: relatedCount || 0,
-      confidence: confidence,
+      success: true,
+      errors: [],
+      warnings: [],
+      summary: "",
+    };
+
+    if (!functionName || !errorLog) {
+      result.success = false;
+      result.errors.push({
+        type: "INVALID_REQUEST",
+        message: "Missing required parameters: functionName and errorLog",
+      });
+      return new Response(JSON.stringify(result), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    const { error: insertError } = await supabase
-      .from('build_diagnostics')
-      .insert({
-        failure_id: buildFailure.id,
-        error_type: errorType,
-        suggested_fixes: suggestedFixes,
-        confidence: confidence,
-      })
-
-    if (insertError) {
-      console.error('Failed to save diagnostic:', insertError)
+    // Check for missing Deno.serve wrapper
+    if (errorLog.includes("Handler isn't a function") || 
+        errorLog.includes("serve is not defined") ||
+        errorLog.includes("default export")) {
+      result.errors.push({
+        type: "MISSING_SERVE_WRAPPER",
+        message: "Function is missing the required Deno.serve() wrapper",
+        suggestion: "Wrap your code with: Deno.serve(async (req) => { /* your code */ return new Response(...) })",
+      });
     }
 
-    return new Response(
-      JSON.stringify(result),
-      { headers: corsHeaders }
-    )
+    // Check for import errors
+    if (errorLog.includes("Cannot resolve") || 
+        errorLog.includes("Module not found") ||
+        errorLog.includes("import")) {
+      const importMatch = errorLog.match(/Cannot resolve ["'](.+?)["']/);
+      result.errors.push({
+        type: "IMPORT_ERROR",
+        message: importMatch ? `Cannot resolve import: ${importMatch[1]}` : "Import resolution failed",
+        suggestion: "Use Deno-compatible imports (https://deno.land/x/ or https://esm.sh/)",
+      });
+    }
+
+    // Check for syntax errors
+    if (errorLog.includes("SyntaxError") || errorLog.includes("Unexpected")) {
+      const lineMatch = errorLog.match(/at line (\d+)/i) || errorLog.match(/:(\d+):/);
+      result.errors.push({
+        type: "SYNTAX_ERROR",
+        message: "JavaScript/TypeScript syntax error detected",
+        line: lineMatch ? parseInt(lineMatch[1]) : undefined,
+        suggestion: "Check for missing brackets, semicolons, or invalid syntax",
+      });
+    }
+
+    // Check for permission errors
+    if (errorLog.includes("PermissionDenied") || errorLog.includes("permission")) {
+      result.errors.push({
+        type: "PERMISSION_ERROR",
+        message: "Deno permission error",
+        suggestion: "Check function permissions configuration in supabase/functions",
+      });
+    }
+
+    // Check for CORS issues
+    if (errorLog.includes("CORS") || errorLog.includes("Access-Control")) {
+      result.warnings.push({
+        type: "CORS_WARNING",
+        message: "Potential CORS configuration issue",
+        suggestion: "Ensure response includes proper CORS headers",
+      });
+    }
+
+    // Check for Response object errors
+    if (errorLog.includes("Response") && errorLog.includes("is not")) {
+      result.errors.push({
+        type: "INVALID_RESPONSE",
+        message: "Function must return a Response object",
+        suggestion: "Return: new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })",
+      });
+    }
+
+    // Check for async/await issues
+    if (errorLog.includes("await") && !errorLog.includes("async")) {
+      result.errors.push({
+        type: "ASYNC_ERROR",
+        message: "await used outside async function",
+        suggestion: "Ensure the request handler is an async function: Deno.serve(async (req) => { ... })",
+      });
+    }
+
+    // Check for environment variable issues
+    if (errorLog.includes("Deno.env") || errorLog.includes("environment")) {
+      result.warnings.push({
+        type: "ENV_WARNING",
+        message: "Environment variable access detected",
+        suggestion: "Use Deno.env.get('VAR_NAME') and ensure secrets are configured",
+      });
+    }
+
+    // Analyze source code if provided
+    if (sourceCode) {
+      if (!sourceCode.includes("Deno.serve")) {
+        result.errors.push({
+          type: "MISSING_SERVE_WRAPPER",
+          message: "Source code does not contain Deno.serve()",
+          suggestion: "Wrap entire function in Deno.serve(async (req) => { ... })",
+        });
+      }
+
+      if (!sourceCode.includes("return new Response")) {
+        result.warnings.push({
+          type: "RESPONSE_WARNING",
+          message: "No Response object found in source",
+          suggestion: "Ensure function returns a Response object",
+        });
+      }
+
+      const importCount = (sourceCode.match(/import .+ from/g) || []).length;
+      if (importCount > 0) {
+        const httpImports = sourceCode.match(/from ['"]http:\/\//g);
+        if (!httpImports) {
+          result.warnings.push({
+            type: "IMPORT_WARNING",
+            message: "Imports detected - ensure they use Deno-compatible URLs",
+            suggestion: "Use https://deno.land/std or https://esm.sh for imports",
+          });
+        }
+      }
+    }
+
+    // Generate summary
+    if (result.errors.length === 0 && result.warnings.length === 0) {
+      result.summary = "No specific issues detected. Check Supabase logs for runtime errors.";
+    } else {
+      result.summary = `Found ${result.errors.length} error(s) and ${result.warnings.length} warning(s). Primary issue: ${result.errors[0]?.type || result.warnings[0]?.type || "Unknown"}`;
+    }
+
+    result.success = result.errors.length === 0;
+
+    return new Response(JSON.stringify(result), {
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      },
+    });
   } catch (error) {
-    console.error('Diagnostic error:', error)
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: corsHeaders }
-    )
+    const errorResult: DiagnosticResult = {
+      success: false,
+      errors: [
+        {
+          type: "DIAGNOSTIC_ERROR",
+          message: error.message || "Unknown diagnostic error",
+        },
+      ],
+      warnings: [],
+      summary: "Diagnostic function encountered an error",
+    };
+
+    return new Response(JSON.stringify(errorResult), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      },
+    });
   }
-})
+});
