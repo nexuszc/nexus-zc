@@ -1,144 +1,170 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+
+interface BuildContext {
+  functionName?: string
+  deploymentId?: string
+  errorMessage?: string
+  timestamp?: string
+}
 
 interface DiagnosticResult {
-  timestamp: string;
-  status: 'success' | 'failure';
-  diagnostics: {
-    environment: {
-      status: string;
-      supabaseUrl: boolean;
-      supabaseAnonKey: boolean;
-      supabaseServiceKey: boolean;
-      denoVersion: string;
-    };
-    fileSystem: {
-      status: string;
-      canReadCwd: boolean;
-      currentDir: string;
-    };
-    supabaseClient: {
-      status: string;
-      canCreateClient: boolean;
-      error?: string;
-    };
-    imports: {
-      status: string;
-      supabaseJs: boolean;
-      error?: string;
-    };
-  };
+  failureType: string
+  suggestedFixes: string[]
+  relevantLogs: string[]
+  detectedIssues: string[]
 }
 
-async function runDiagnostics(): Promise<DiagnosticResult> {
-  const result: DiagnosticResult = {
-    timestamp: new Date().toISOString(),
-    status: 'success',
-    diagnostics: {
-      environment: {
-        status: 'pending',
-        supabaseUrl: false,
-        supabaseAnonKey: false,
-        supabaseServiceKey: false,
-        denoVersion: '',
-      },
-      fileSystem: {
-        status: 'pending',
-        canReadCwd: false,
-        currentDir: '',
-      },
-      supabaseClient: {
-        status: 'pending',
-        canCreateClient: false,
-      },
-      imports: {
-        status: 'pending',
-        supabaseJs: false,
-      },
-    },
-  };
+const COMMON_PATTERNS = [
+  {
+    pattern: /Deno\.serve/i,
+    type: 'missing_deno_serve',
+    fix: 'Wrap your handler in Deno.serve((req) => { ... })',
+    detect: (content: string) => !content.includes('Deno.serve')
+  },
+  {
+    pattern: /import.*from.*['"](\.\.?\/|https?:\/\/)/,
+    type: 'import_error',
+    fix: 'Check import paths and use proper Deno imports (https://esm.sh/ or https://deno.land/x/)',
+    detect: (content: string) => /import.*from\s+['"][^'"]*['"]/.test(content)
+  },
+  {
+    pattern: /timeout|timed out/i,
+    type: 'timeout_error',
+    fix: 'Optimize function execution time or increase timeout limits',
+    detect: (error: string) => /timeout|timed out/i.test(error)
+  },
+  {
+    pattern: /cors/i,
+    type: 'cors_error',
+    fix: 'Add proper CORS headers to response',
+    detect: (error: string) => /cors/i.test(error)
+  },
+  {
+    pattern: /module not found|cannot find module/i,
+    type: 'module_not_found',
+    fix: 'Verify all imports are accessible and use full URLs for external dependencies',
+    detect: (error: string) => /module not found|cannot find module/i.test(error)
+  },
+  {
+    pattern: /syntax error/i,
+    type: 'syntax_error',
+    fix: 'Review code for TypeScript/JavaScript syntax errors',
+    detect: (error: string) => /syntax error/i.test(error)
+  }
+]
 
-  try {
-    result.diagnostics.environment.supabaseUrl = !!Deno.env.get('SUPABASE_URL');
-    result.diagnostics.environment.supabaseAnonKey = !!Deno.env.get('SUPABASE_ANON_KEY');
-    result.diagnostics.environment.supabaseServiceKey = !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    result.diagnostics.environment.denoVersion = Deno.version.deno;
-    result.diagnostics.environment.status = 'success';
-  } catch (error) {
-    result.diagnostics.environment.status = `failed: ${error.message}`;
-    result.status = 'failure';
+function analyzeBuildFailure(context: BuildContext): DiagnosticResult {
+  const suggestedFixes: string[] = []
+  const detectedIssues: string[] = []
+  let failureType = 'unknown_error'
+
+  const errorMessage = context.errorMessage || ''
+
+  for (const pattern of COMMON_PATTERNS) {
+    if (pattern.detect(errorMessage)) {
+      failureType = pattern.type
+      suggestedFixes.push(pattern.fix)
+      detectedIssues.push(`Detected: ${pattern.type.replace(/_/g, ' ')}`)
+    }
   }
 
-  try {
-    result.diagnostics.fileSystem.currentDir = Deno.cwd();
-    result.diagnostics.fileSystem.canReadCwd = true;
-    result.diagnostics.fileSystem.status = 'success';
-  } catch (error) {
-    result.diagnostics.fileSystem.status = `failed: ${error.message}`;
-    result.status = 'failure';
+  if (suggestedFixes.length === 0) {
+    suggestedFixes.push(
+      'Check deployment logs for specific error messages',
+      'Verify all imports are using proper Deno-compatible URLs',
+      'Ensure the function exports a Deno.serve() handler',
+      'Review function permissions and environment variables'
+    )
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'http://localhost:54321';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || 'dummy-key';
-    
-    const client = createClient(supabaseUrl, supabaseKey);
-    result.diagnostics.supabaseClient.canCreateClient = !!client;
-    result.diagnostics.supabaseClient.status = 'success';
-  } catch (error) {
-    result.diagnostics.supabaseClient.status = 'failed';
-    result.diagnostics.supabaseClient.error = error.message;
-    result.status = 'failure';
-  }
+  const relevantLogs = [
+    errorMessage || 'No error message provided',
+    `Function: ${context.functionName || 'unknown'}`,
+    `Timestamp: ${context.timestamp || new Date().toISOString()}`
+  ]
 
-  try {
-    result.diagnostics.imports.supabaseJs = typeof createClient === 'function';
-    result.diagnostics.imports.status = 'success';
-  } catch (error) {
-    result.diagnostics.imports.status = 'failed';
-    result.diagnostics.imports.error = error.message;
-    result.status = 'failure';
+  return {
+    failureType,
+    suggestedFixes,
+    relevantLogs,
+    detectedIssues
   }
-
-  return result;
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (req) => {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  }
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const diagnosticResults = await runDiagnostics();
+    const context: BuildContext = await req.json()
 
-    return new Response(JSON.stringify(diagnosticResults, null, 2), {
+    if (!context.functionName && !context.errorMessage) {
+      return new Response(
+        JSON.stringify({
+          error: 'Missing required fields: functionName or errorMessage'
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const diagnostics = analyzeBuildFailure(context)
+
+    const authHeader = req.headers.get('Authorization')
+    if (authHeader && context.deploymentId) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey)
+          
+          await supabase.from('build_diagnostics').insert({
+            deployment_id: context.deploymentId,
+            function_name: context.functionName,
+            failure_type: diagnostics.failureType,
+            error_message: context.errorMessage,
+            detected_issues: diagnostics.detectedIssues,
+            suggested_fixes: diagnostics.suggestedFixes,
+            created_at: new Date().toISOString()
+          })
+        }
+      } catch (dbError) {
+        console.error('Failed to log diagnostics to database:', dbError)
+      }
+    }
+
+    return new Response(JSON.stringify(diagnostics), {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
   } catch (error) {
+    console.error('Diagnostic function error:', error)
+    
     return new Response(
       JSON.stringify({
-        timestamp: new Date().toISOString(),
-        status: 'failure',
-        error: error.message,
-        stack: error.stack,
-      }, null, 2),
+        error: 'Failed to process diagnostic request',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        failureType: 'diagnostic_error',
+        suggestedFixes: [
+          'Verify request payload is valid JSON',
+          'Check that required fields are present',
+          'Review function logs for detailed error information'
+        ]
+      }),
       {
         status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    );
+    )
   }
-});
+})
