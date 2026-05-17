@@ -1,198 +1,206 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
-import { corsHeaders } from '../_shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
-interface BuildFailure {
-  error_message: string
-  stack_trace?: string
-  build_log?: string
-  project_id?: string
-  deployment_id?: string
+interface BuildFailureRequest {
+  buildId: string
+  error: string
+  logs: string
+  timestamp: string
+  projectId: string
 }
 
-interface DiagnosticReport {
-  issue_type: string
-  description: string
-  suggested_fixes: string[]
-  relevant_logs: string[]
-  confidence: number
+interface DiagnosticResponse {
+  buildId: string
+  failureType: string
+  errorContext: string[]
+  suggestedFixes: string[]
+  similarFailures: any[]
+  relevantLogs: string[]
 }
 
-function analyzeBuildFailure(failure: BuildFailure): DiagnosticReport[] {
-  const diagnostics: DiagnosticReport[] = []
-  const errorMessage = failure.error_message.toLowerCase()
-  const buildLog = (failure.build_log || '').toLowerCase()
-  const stackTrace = (failure.stack_trace || '').toLowerCase()
-  const allText = `${errorMessage} ${buildLog} ${stackTrace}`
-
-  if (allText.includes('cannot find module') || allText.includes('module not found')) {
-    diagnostics.push({
-      issue_type: 'missing_dependency',
-      description: 'One or more required dependencies are missing or not installed',
-      suggested_fixes: [
-        'Run npm install or yarn install to ensure all dependencies are installed',
-        'Check package.json for correct dependency versions',
-        'Verify that the module name is spelled correctly',
-        'Ensure the dependency is listed in dependencies, not just devDependencies'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['module', 'import', 'require']),
-      confidence: 0.9
-    })
-  }
-
-  if (allText.includes('syntaxerror') || allText.includes('unexpected token')) {
-    diagnostics.push({
-      issue_type: 'syntax_error',
-      description: 'Code contains syntax errors preventing successful compilation',
-      suggested_fixes: [
-        'Review the error message for the specific file and line number',
-        'Check for missing brackets, parentheses, or semicolons',
-        'Verify proper use of ES6+ syntax if using older transpiler settings',
-        'Run linter locally before deploying'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['syntax', 'token', 'unexpected']),
-      confidence: 0.95
-    })
-  }
-
-  if (allText.includes('typeerror') || allText.includes('is not a function') || allText.includes('undefined')) {
-    diagnostics.push({
-      issue_type: 'type_error',
-      description: 'Runtime type error detected during build process',
-      suggested_fixes: [
-        'Check for undefined variables or functions',
-        'Verify imports are correct and modules export expected values',
-        'Review TypeScript types if using TypeScript',
-        'Ensure environment variables are properly set'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['typeerror', 'undefined', 'null']),
-      confidence: 0.85
-    })
-  }
-
-  if (allText.includes('out of memory') || allText.includes('heap') || allText.includes('javascript heap')) {
-    diagnostics.push({
-      issue_type: 'memory_issue',
-      description: 'Build process ran out of memory',
-      suggested_fixes: [
-        'Increase Node.js memory limit with --max-old-space-size flag',
-        'Optimize build configuration to reduce memory usage',
-        'Check for memory leaks in build scripts',
-        'Consider splitting large builds into smaller chunks'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['memory', 'heap', 'allocated']),
-      confidence: 0.9
-    })
-  }
-
-  if (allText.includes('enoent') || allText.includes('no such file')) {
-    diagnostics.push({
-      issue_type: 'missing_file',
-      description: 'Required file or directory not found',
-      suggested_fixes: [
-        'Verify all required files are committed to repository',
-        'Check file paths are correct and case-sensitive',
-        'Ensure build directory structure is properly set up',
-        'Review .gitignore to ensure needed files are not excluded'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['enoent', 'file', 'directory']),
-      confidence: 0.88
-    })
-  }
-
-  if (allText.includes('permission denied') || allText.includes('eacces')) {
-    diagnostics.push({
-      issue_type: 'permission_error',
-      description: 'Insufficient permissions to access required resources',
-      suggested_fixes: [
-        'Check file permissions in deployment environment',
-        'Verify deployment user has necessary access rights',
-        'Review security policies and access controls',
-        'Ensure executable scripts have proper permissions'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['permission', 'eacces', 'denied']),
-      confidence: 0.85
-    })
-  }
-
-  if (allText.includes('port') && (allText.includes('already in use') || allText.includes('eaddrinuse'))) {
-    diagnostics.push({
-      issue_type: 'port_conflict',
-      description: 'Required port is already in use',
-      suggested_fixes: [
-        'Use a different port number',
-        'Kill processes using the required port',
-        'Configure dynamic port allocation',
-        'Check for conflicting services in deployment environment'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['port', 'address', 'eaddrinuse']),
-      confidence: 0.92
-    })
-  }
-
-  if (allText.includes('timeout') || allText.includes('timed out')) {
-    diagnostics.push({
-      issue_type: 'timeout',
-      description: 'Build process exceeded time limit',
-      suggested_fixes: [
-        'Optimize build scripts to run faster',
-        'Increase timeout settings if possible',
-        'Check for hanging processes or infinite loops',
-        'Review network requests that might be slow'
-      ],
-      relevant_logs: extractRelevantLines(failure, ['timeout', 'timed', 'exceeded']),
-      confidence: 0.8
-    })
-  }
-
-  if (diagnostics.length === 0) {
-    diagnostics.push({
-      issue_type: 'unknown',
-      description: 'Unable to determine specific issue from error message',
-      suggested_fixes: [
-        'Review full build logs for more details',
-        'Check recent code changes that might have introduced the issue',
-        'Verify deployment configuration is correct',
-        'Test build locally to reproduce the error',
-        'Contact support with full error details'
-      ],
-      relevant_logs: extractRelevantLines(failure, []),
-      confidence: 0.3
-    })
-  }
-
-  return diagnostics
-}
-
-function extractRelevantLines(failure: BuildFailure, keywords: string[]): string[] {
-  const lines: string[] = []
-  const allText = `${failure.error_message}\n${failure.stack_trace || ''}\n${failure.build_log || ''}`
-  const textLines = allText.split('\n')
-
-  if (keywords.length === 0) {
-    return textLines.slice(0, 10).filter(line => line.trim().length > 0)
-  }
-
-  for (const line of textLines) {
-    const lowerLine = line.toLowerCase()
-    if (keywords.some(keyword => lowerLine.includes(keyword))) {
-      lines.push(line.trim())
-    }
-  }
-
-  return lines.slice(0, 20)
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    if (req.method !== 'POST') {
-      return new Response(
-        JSON.stringify({ error: 'Method not allowed' }),
-        { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: req.headers.get('Authorization')! },
+        },
+      }
+    )
+
+    const body: BuildFailureRequest = await req.json()
+    const { buildId, error, logs, timestamp, projectId } = body
+
+    const failureType = analyzeFailureType(error, logs)
+    const errorContext = extractErrorContext(error, logs)
+    const suggestedFixes = generateSuggestedFixes(failureType, error)
+    const relevantLogs = extractRelevantLogs(logs, error)
+
+    const { data: similarFailures } = await supabaseClient
+      .from('build_failures')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('failure_type', failureType)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    await supabaseClient.from('build_failures').insert({
+      build_id: buildId,
+      project_id: projectId,
+      failure_type: failureType,
+      error_message: error,
+      logs: logs,
+      created_at: timestamp,
+    })
+
+    const response: DiagnosticResponse = {
+      buildId,
+      failureType,
+      errorContext,
+      suggestedFixes,
+      similarFailures: similarFailures || [],
+      relevantLogs,
     }
 
-    const buildFailure: BuildFailure = await req.json()
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    })
+  }
+})
+
+function analyzeFailureType(error: string, logs: string): string {
+  const errorLower = error.toLowerCase()
+  const logsLower = logs.toLowerCase()
+
+  if (errorLower.includes('dependency') || logsLower.includes('npm install')) {
+    return 'dependency_error'
+  }
+  if (errorLower.includes('syntax') || errorLower.includes('parse')) {
+    return 'syntax_error'
+  }
+  if (errorLower.includes('memory') || errorLower.includes('heap')) {
+    return 'memory_error'
+  }
+  if (errorLower.includes('timeout')) {
+    return 'timeout_error'
+  }
+  if (errorLower.includes('permission') || errorLower.includes('access denied')) {
+    return 'permission_error'
+  }
+  if (errorLower.includes('network') || errorLower.includes('connection')) {
+    return 'network_error'
+  }
+  if (errorLower.includes('test') || logsLower.includes('test failed')) {
+    return 'test_failure'
+  }
+  if (errorLower.includes('type') || errorLower.includes('typescript')) {
+    return 'type_error'
+  }
+
+  return 'unknown_error'
+}
+
+function extractErrorContext(error: string, logs: string): string[] {
+  const context: string[] = []
+  const logLines = logs.split('\n')
+  const errorLines = error.split('\n')
+
+  context.push(...errorLines.slice(0, 3))
+
+  const errorIndex = logLines.findIndex(line => 
+    line.toLowerCase().includes('error') || line.toLowerCase().includes('failed')
+  )
+
+  if (errorIndex !== -1) {
+    const start = Math.max(0, errorIndex - 2)
+    const end = Math.min(logLines.length, errorIndex + 3)
+    context.push(...logLines.slice(start, end))
+  }
+
+  return context.filter(line => line.trim().length > 0).slice(0, 10)
+}
+
+function generateSuggestedFixes(failureType: string, error: string): string[] {
+  const fixes: string[] = []
+
+  switch (failureType) {
+    case 'dependency_error':
+      fixes.push('Clear node_modules and package-lock.json, then reinstall dependencies')
+      fixes.push('Check for version conflicts in package.json')
+      fixes.push('Verify npm registry is accessible')
+      break
+    case 'syntax_error':
+      fixes.push('Review recent code changes for syntax issues')
+      fixes.push('Run linter to identify syntax problems')
+      fixes.push('Check for missing brackets or semicolons')
+      break
+    case 'memory_error':
+      fixes.push('Increase Node.js memory limit with --max-old-space-size')
+      fixes.push('Optimize build process to reduce memory usage')
+      fixes.push('Check for memory leaks in build scripts')
+      break
+    case 'timeout_error':
+      fixes.push('Increase build timeout duration')
+      fixes.push('Optimize slow build steps')
+      fixes.push('Check for hanging processes or network delays')
+      break
+    case 'permission_error':
+      fixes.push('Verify file and directory permissions')
+      fixes.push('Check user access rights')
+      fixes.push('Ensure proper environment configuration')
+      break
+    case 'network_error':
+      fixes.push('Check network connectivity')
+      fixes.push('Verify firewall and proxy settings')
+      fixes.push('Try using a different registry or mirror')
+      break
+    case 'test_failure':
+      fixes.push('Review failing test output')
+      fixes.push('Update test assertions if expected behavior changed')
+      fixes.push('Check for environmental issues affecting tests')
+      break
+    case 'type_error':
+      fixes.push('Run TypeScript compiler to see full error details')
+      fixes.push('Update type definitions')
+      fixes.push('Check for missing or incorrect type annotations')
+      break
+    default:
+      fixes.push('Review complete build logs for details')
+      fixes.push('Check recent code changes')
+      fixes.push('Verify environment configuration')
+  }
+
+  return fixes
+}
+
+function extractRelevantLogs(logs: string, error: string): string[] {
+  const logLines = logs.split('\n')
+  const relevant: string[] = []
+
+  const keywords = ['error', 'fail', 'warning', 'exception', 'fatal']
+
+  for (const line of logLines) {
+    const lineLower = line.toLowerCase()
+    if (keywords.some(keyword => lineLower.includes(keyword))) {
+      relevant.push(line)
+    }
+  }
+
+  return relevant.slice(0, 20)
+}
