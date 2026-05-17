@@ -32,10 +32,42 @@ function getScheduleDates(count, startFrom = new Date()) {
   return dates
 }
 
+// Get the next occurrence of a named day slot
+function slotToDate(slot) {
+  if (slot === 'now') return new Date().toISOString().split('T')[0]
+  const targets = { mon: 1, wed: 3, fri: 5 }
+  const target = targets[slot]
+  if (target === undefined) return null
+  const d = new Date()
+  d.setHours(14, 0, 0, 0)
+  for (let i = 1; i <= 7; i++) {
+    d.setDate(d.getDate() + 1)
+    if (d.getDay() === target) return d.toISOString().split('T')[0]
+  }
+  return null
+}
+
 function slotLabel(slot) {
   if (!slot) return ''
   if (slot === 'now') return 'Post Now'
   return slot.charAt(0).toUpperCase() + slot.slice(1)
+}
+
+// Simple toast state — module-level so it survives re-renders
+let _setToast = null
+function toast(msg, type = 'success') {
+  if (_setToast) _setToast({ msg, type, id: Date.now() })
+}
+
+function Toast({ toast: t }) {
+  if (!t) return null
+  return (
+    <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg transition-all ${
+      t.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+    }`}>
+      {t.msg}
+    </div>
+  )
 }
 
 const COMMUNITY_STATUS_COLORS = {
@@ -282,6 +314,18 @@ export default function Content() {
   const [loading, setLoading]       = useState(true)
   const [generating, setGenerating] = useState(false)
   const [approvingAll, setApprovingAll] = useState(false)
+  const [toastState, setToastState] = useState(null)
+
+  // Register global toast setter and auto-dismiss
+  useEffect(() => {
+    _setToast = setToastState
+    return () => { _setToast = null }
+  }, [])
+  useEffect(() => {
+    if (!toastState) return
+    const t = setTimeout(() => setToastState(null), 2500)
+    return () => clearTimeout(t)
+  }, [toastState])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -315,35 +359,39 @@ export default function Content() {
 
   // Handlers
   const approve = (item) => async () => {
-    await supabase.from('roofing_content')
+    const { error } = await supabase.from('roofing_content')
       .update({ status: 'approved', approved_at: new Date().toISOString() })
       .eq('id', item.id)
+    if (error) { toast(`Update failed: ${error.message}`, 'error'); console.error('approve error', error); return }
+    toast('Approved ✓')
     await load()
   }
 
   const reject = (item) => async () => {
-    await supabase.from('roofing_content').update({ status: 'rejected' }).eq('id', item.id)
+    const { error } = await supabase.from('roofing_content').update({ status: 'rejected' }).eq('id', item.id)
+    if (error) { toast(`Skip failed: ${error.message}`, 'error'); console.error('reject error', error); return }
+    toast('Skipped')
     await load()
   }
 
   const schedule = (item) => async (slot) => {
-    const scheduleDate = slot === 'now' ? new Date().toISOString().split('T')[0] : null
-    await supabase.from('roofing_content')
+    const scheduleDate = slotToDate(slot)
+    const { error } = await supabase.from('roofing_content')
       .update({ status: 'approved', approved_at: new Date().toISOString(), schedule_slot: slot, schedule_date: scheduleDate })
       .eq('id', item.id)
+    if (error) { toast(`Schedule failed: ${error.message}`, 'error'); console.error('schedule error', error); return }
+    toast(`Scheduled for ${slotLabel(slot)} ✓`)
     await load()
   }
 
-  // Approve All: space pending items across Mon/Wed/Fri starting next available
+  // Approve All: space pending items across Mon/Wed/Fri
   const approveAll = async () => {
     if (queueItems.length === 0) return
     setApprovingAll(true)
     try {
-      // "now" slot for the first one, then Mon/Wed/Fri sequence for the rest
       const nowItem = queueItems[0]
       const rest = queueItems.slice(1)
       const dates = getScheduleDates(rest.length)
-
       const dayToSlot = { 1: 'mon', 3: 'wed', 5: 'fri' }
       const updates = [
         { id: nowItem.id, slot: 'now', date: new Date().toISOString().split('T')[0] },
@@ -353,8 +401,7 @@ export default function Content() {
           date: dates[i].toISOString().split('T')[0],
         })),
       ]
-
-      await Promise.all(updates.map(({ id, slot, date }) =>
+      const results = await Promise.all(updates.map(({ id, slot, date }) =>
         supabase.from('roofing_content').update({
           status: 'approved',
           approved_at: new Date().toISOString(),
@@ -362,6 +409,10 @@ export default function Content() {
           schedule_date: date,
         }).eq('id', id)
       ))
+      const failed = results.filter(r => r.error).length
+      if (failed > 0) toast(`${failed} update(s) failed — check console`, 'error')
+      else toast(`All ${updates.length} scripts scheduled ✓`)
+      results.forEach((r, i) => { if (r.error) console.error(`approveAll[${i}]`, r.error) })
       await load()
     } finally {
       setApprovingAll(false)
@@ -369,14 +420,18 @@ export default function Content() {
   }
 
   const approvePost = (post) => async () => {
-    await supabase.from('roofing_community_posts')
+    const { error } = await supabase.from('roofing_community_posts')
       .update({ status: 'approved', approved_at: new Date().toISOString() })
       .eq('id', post.id)
+    if (error) { toast(`Approve failed: ${error.message}`, 'error'); return }
+    toast('Post approved ✓')
     await load()
   }
 
   const skipPost = (post) => async () => {
-    await supabase.from('roofing_community_posts').update({ status: 'skipped' }).eq('id', post.id)
+    const { error } = await supabase.from('roofing_community_posts').update({ status: 'skipped' }).eq('id', post.id)
+    if (error) { toast(`Skip failed: ${error.message}`, 'error'); return }
+    toast('Post skipped')
     await load()
   }
 
@@ -404,6 +459,7 @@ export default function Content() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+      <Toast toast={toastState} />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
