@@ -665,7 +665,8 @@ Deno.serve(async (req) => {
 
   if (!instruction) return Response.json({ error: "instruction required" }, { status: 400 });
 
-  await tg(`Building: *${instruction.slice(0, 100)}*\nCreating manifest and building...`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: build start is duplicate when triggered from chat (chat.ts already sends earlyReturn); visible in nexus_build_manifests table
+  // await tg(`Building: *${instruction.slice(0, 100)}*\nCreating manifest and building...`);
 
   try {
     const manifestId = await createManifest(instruction, directive_priority || 3);
