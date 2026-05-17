@@ -140,14 +140,8 @@ Deno.serve(async (req) => {
     await new Promise(r => setTimeout(r, 500));
   }
 
-  await tg(
-    `⛈️ *Storm Alert Calls Queued*\n` +
-    `Zip codes: ${zip_codes.join(", ")}\n` +
-    `Hail size: ${hail_size}"\n` +
-    `Previous customers found: ${matchingJobs.length}\n` +
-    `Calls queued: ${callsQueued}\n` +
-    `_Calls completing over next ~2 hours_`
-  );
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: queued storm calls visible in Calls tab (aria_call_queue table)
+  // await tg(`⛈️ *Storm Alert Calls Queued*\nZip codes: ${zip_codes.join(", ")}\nHail size: ${hail_size}"\nPrevious customers found: ${matchingJobs.length}\nCalls queued: ${callsQueued}\n_Calls completing over next ~2 hours_`);
 
   return Response.json({ ok: true, calls_queued: callsQueued, total_found: matchingJobs.length, results });
 });

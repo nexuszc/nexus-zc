@@ -446,22 +446,8 @@ Deno.serve(async (req) => {
     errors++;
   }
 
-  if (body.notify_on_complete && (enrolled > 0 || emailsSent > 0)) {
-    try {
-      const { data: stats } = await supabase.from("roofing_prospects").select("in_sequence, clicked, outcome, whale_alerted, sequence_branch");
-      const all = stats || [];
-      await tg(
-        `✅ *Outreach Sequencer Run*\n\n` +
-        `Enrolled: ${enrolled}\n` +
-        `Emails sent: ${emailsSent}\n` +
-        `Voice drops: ${voiceDrops}\n\n` +
-        `Active: ${all.filter((p: Record<string, unknown>) => p.in_sequence).length}\n` +
-        `Hot: ${all.filter((p: Record<string, unknown>) => p.sequence_branch === "hot").length}\n` +
-        `Whales: ${all.filter((p: Record<string, unknown>) => p.whale_alerted).length}\n` +
-        `Booked: ${all.filter((p: Record<string, unknown>) => p.outcome === "booked").length}`
-      );
-    } catch { /* non-fatal */ }
-  }
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: outreach sequencer stats visible in Pipeline tab (roofing_prospects table)
+  // if (body.notify_on_complete && (enrolled > 0 || emailsSent > 0)) { await tg(`✅ *Outreach Sequencer Run*\n\n...`); }
 
   try {
     await supabase.from("system_heartbeats").insert({

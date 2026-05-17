@@ -161,14 +161,8 @@ async function fireBundle(bundleId: string) {
       .update({ status: "approved", approved_at: new Date().toISOString() })
       .eq("id", bundleId);
 
-    await tg(
-      `⚡ *Storm Marketing Fired*\n` +
-      `Emails sent: ${emailsSent}\n` +
-      `SMS queued: ${smsSent}\n` +
-      `Aria calls queued: ${(prospect_ids || []).length}\n` +
-      `Calls fire at 9am tomorrow\n` +
-      `Facebook/Google Ads content approved ✓`
-    );
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: storm marketing fire results visible in Pipeline tab (roofing_content + aria_call_queue)
+    // await tg(`⚡ *Storm Marketing Fired*\nEmails sent: ${emailsSent}\nSMS queued: ${smsSent}\nAria calls queued: ${(prospect_ids || []).length}\nCalls fire at 9am tomorrow\nFacebook/Google Ads content approved ✓`);
 
     return { ok: true, emails_sent: emailsSent, sms_sent: smsSent, calls_queued: (prospect_ids || []).length };
   } catch (err) {
