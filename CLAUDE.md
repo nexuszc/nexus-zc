@@ -402,8 +402,8 @@ Then productized and sold to other multi-business operators.
 4. Add Self-Learning Pattern Recognition (medium)
 5. Add memory consolidation ability (medium)
 6. Add Conversation Context Memory (medium)
-7. Build the complete Roofing OS go-to-market system. Create a public landing
-8. Improve client health scores for Brian (65) and Denver Pro Roofing (50)
+7. Build the complete Roofing OS go-to-market system. Create a public landing page
+8. Improve client health scores for Brian and Denver Pro Roofing (both below 70%)
 
 ---
 
