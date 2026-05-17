@@ -1,116 +1,92 @@
-import { walk } from "https://deno.land/std@0.208.0/fs/walk.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   try {
+    const { functionName, errorLogs } = await req.json();
+
     const diagnostics = {
-      fileCount: 0,
-      syntaxErrors: [] as string[],
-      missingImports: [] as string[],
-      configValidation: {
-        hasDenoJson: false,
-        isValid: false,
-        errors: [] as string[],
-      },
-      timestamp: new Date().toISOString(),
+      functionName,
+      issues: [],
+      recommendations: [],
+      severity: "info",
     };
 
-    const functionsPath = "/home/deno/functions";
-
-    for await (const entry of walk(functionsPath, {
-      exts: ["ts", "tsx", "js", "jsx"],
-      skip: [/node_modules/, /\.git/],
-    })) {
-      if (entry.isFile) {
-        diagnostics.fileCount++;
-
-        try {
-          const content = await Deno.readTextFile(entry.path);
-
-          if (content.includes("import") && !content.includes("from")) {
-            diagnostics.syntaxErrors.push(
-              `${entry.path}: Malformed import statement`
-            );
-          }
-
-          const importRegex = /import\s+.*?\s+from\s+['"](.+?)['"]/g;
-          let match;
-          while ((match = importRegex.exec(content)) !== null) {
-            const importPath = match[1];
-            if (importPath.startsWith("./") || importPath.startsWith("../")) {
-              const resolvedPath = new URL(importPath, `file://${entry.path}`)
-                .pathname;
-              try {
-                await Deno.stat(resolvedPath);
-              } catch {
-                diagnostics.missingImports.push(
-                  `${entry.path}: Cannot resolve ${importPath}`
-                );
-              }
-            }
-          }
-
-          if (content.includes("export default") && !content.includes("Deno.serve")) {
-            diagnostics.syntaxErrors.push(
-              `${entry.path}: Missing Deno.serve wrapper`
-            );
-          }
-        } catch (error) {
-          diagnostics.syntaxErrors.push(
-            `${entry.path}: ${error instanceof Error ? error.message : "Unknown error"}`
-          );
-        }
-      }
+    // Check for missing Deno.serve wrapper
+    if (errorLogs?.includes("not found") || errorLogs?.includes("default export")) {
+      diagnostics.issues.push("Missing or incorrect Deno.serve() handler");
+      diagnostics.recommendations.push(
+        "Wrap your function logic in: Deno.serve(async (req) => { ... })"
+      );
+      diagnostics.severity = "critical";
     }
 
-    try {
-      const denoJsonPath = `${functionsPath}/deno.json`;
-      const denoJsonContent = await Deno.readTextFile(denoJsonPath);
-      diagnostics.configValidation.hasDenoJson = true;
-
-      try {
-        const denoConfig = JSON.parse(denoJsonContent);
-        diagnostics.configValidation.isValid = true;
-
-        if (!denoConfig.compilerOptions) {
-          diagnostics.configValidation.errors.push(
-            "Missing compilerOptions in deno.json"
-          );
-        }
-
-        if (!denoConfig.imports && !denoConfig.importMap) {
-          diagnostics.configValidation.errors.push(
-            "No import map defined in deno.json"
-          );
-        }
-      } catch (parseError) {
-        diagnostics.configValidation.isValid = false;
-        diagnostics.configValidation.errors.push(
-          `Invalid JSON: ${parseError instanceof Error ? parseError.message : "Parse error"}`
-        );
-      }
-    } catch {
-      diagnostics.configValidation.hasDenoJson = false;
-      diagnostics.configValidation.errors.push("deno.json not found");
+    // Check for import errors
+    if (errorLogs?.includes("import") || errorLogs?.includes("Cannot find module")) {
+      diagnostics.issues.push("Import resolution error detected");
+      diagnostics.recommendations.push(
+        "Use Deno-compatible imports: https://deno.land/std or npm: specifiers"
+      );
+      diagnostics.severity = "critical";
     }
 
-    return new Response(JSON.stringify(diagnostics, null, 2), {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      status: 200,
+    // Check for syntax errors
+    if (errorLogs?.includes("SyntaxError") || errorLogs?.includes("Unexpected token")) {
+      diagnostics.issues.push("Syntax error in function code");
+      diagnostics.recommendations.push(
+        "Review code for TypeScript/JavaScript syntax errors"
+      );
+      diagnostics.severity = "critical";
+    }
+
+    // Check for missing Response return
+    if (errorLogs?.includes("Response") || errorLogs?.includes("return")) {
+      diagnostics.issues.push("Handler may not return a valid Response object");
+      diagnostics.recommendations.push(
+        "Ensure handler returns: new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } })"
+      );
+      diagnostics.severity = "error";
+    }
+
+    // Check for CORS issues
+    if (errorLogs?.includes("CORS") || errorLogs?.includes("Access-Control")) {
+      diagnostics.issues.push("CORS configuration issue");
+      diagnostics.recommendations.push(
+        "Add CORS headers to Response or handle OPTIONS requests"
+      );
+      diagnostics.severity = "warning";
+    }
+
+    // Check for environment variable issues
+    if (errorLogs?.includes("undefined") && errorLogs?.includes("env")) {
+      diagnostics.issues.push("Missing environment variables");
+      diagnostics.recommendations.push(
+        "Verify required environment variables are set in Supabase dashboard"
+      );
+      diagnostics.severity = "error";
+    }
+
+    // If no specific issues found but there are error logs
+    if (diagnostics.issues.length === 0 && errorLogs) {
+      diagnostics.issues.push("Build failure detected");
+      diagnostics.recommendations.push(
+        "Check function logs for detailed error messages",
+        "Ensure function follows Deno edge function patterns"
+      );
+      diagnostics.severity = "error";
+    }
+
+    return new Response(JSON.stringify(diagnostics), {
+      headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
     return new Response(
       JSON.stringify({
-        error: "Diagnostic scan failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
+        error: "Diagnostic analysis failed",
+        message: error.message,
       }),
       {
-        headers: {
-          "Content-Type": "application/json",
-        },
         status: 500,
+        headers: { "Content-Type": "application/json" },
       }
     );
   }
