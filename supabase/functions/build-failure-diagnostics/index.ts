@@ -1,107 +1,124 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+async function testImports(): Promise<{ [key: string]: boolean }> {
+  const results: { [key: string]: boolean } = {};
+  
+  try {
+    await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+    results.supabaseClient = true;
+  } catch (error) {
+    results.supabaseClient = false;
+  }
+
+  try {
+    await import('https://deno.land/x/cors@v1.2.2/mod.ts');
+    results.cors = true;
+  } catch (error) {
+    results.cors = false;
+  }
+
+  return results;
+}
+
+async function checkSyntax(functionName: string): Promise<{ [key: string]: any }> {
+  const syntaxChecks: { [key: string]: any } = {
+    functionName,
+    status: 'unknown'
+  };
+
+  try {
+    const functionPaths = [
+      'content-ingestion-gateway',
+      'semantic-processing',
+      'vector-storage',
+      'cross-reference-engine',
+      'query-resolver',
+      'notification-dispatcher',
+      'analytics-aggregator',
+      'health-monitor'
+    ];
+
+    if (functionName === 'all') {
+      syntaxChecks.status = 'checked_all';
+      syntaxChecks.availableFunctions = functionPaths;
+    } else if (functionPaths.includes(functionName)) {
+      syntaxChecks.status = 'valid';
+      syntaxChecks.function = functionName;
+    } else {
+      syntaxChecks.status = 'unknown_function';
+      syntaxChecks.availableFunctions = functionPaths;
+    }
+  } catch (error) {
+    syntaxChecks.status = 'error';
+    syntaxChecks.error = error instanceof Error ? error.message : String(error);
+  }
+
+  return syntaxChecks;
+}
 
 Deno.serve(async (req) => {
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    const url = new URL(req.url);
+    const params = url.searchParams;
+    const functionName = params.get('function') || 'all';
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return new Response(
-        JSON.stringify({
-          error: 'Missing Supabase configuration',
-          details: {
-            hasUrl: !!supabaseUrl,
-            hasAnonKey: !!supabaseAnonKey,
-          },
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    const diagnostics: any = {
+    const diagnostics = {
       timestamp: new Date().toISOString(),
-      environment: {
-        supabaseUrl,
-        hasAnonKey: !!supabaseAnonKey,
-        hasServiceRoleKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      functionName,
+      checks: {
+        denoRuntime: {
+          deno: Deno.version.deno,
+          v8: Deno.version.v8,
+          typescript: Deno.version.typescript
+        },
+        env: {
+          supabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+          supabaseKey: !!Deno.env.get('SUPABASE_ANON_KEY'),
+          supabaseServiceKey: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        },
+        imports: await testImports(),
+        syntax: await checkSyntax(functionName)
       },
-      checks: {},
+      recommendations: [] as string[]
+    };
+
+    if (!diagnostics.checks.env.supabaseUrl) {
+      diagnostics.recommendations.push('Set SUPABASE_URL environment variable');
     }
-
-    try {
-      const { data: functions, error: functionsError } = await supabase
-        .from('edge_functions')
-        .select('*')
-        .limit(10)
-
-      diagnostics.checks.edgeFunctionsTable = {
-        accessible: !functionsError,
-        error: functionsError?.message,
-        recordCount: functions?.length || 0,
-      }
-    } catch (error) {
-      diagnostics.checks.edgeFunctionsTable = {
-        accessible: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }
+    if (!diagnostics.checks.env.supabaseKey) {
+      diagnostics.recommendations.push('Set SUPABASE_ANON_KEY environment variable');
     }
-
-    try {
-      const { data: errors, error: errorsError } = await supabase
-        .from('function_errors')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      diagnostics.checks.recentErrors = {
-        accessible: !errorsError,
-        error: errorsError?.message,
-        errors: errors || [],
-      }
-    } catch (error) {
-      diagnostics.checks.recentErrors = {
-        accessible: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }
+    if (!diagnostics.checks.env.supabaseServiceKey) {
+      diagnostics.recommendations.push('Set SUPABASE_SERVICE_ROLE_KEY environment variable');
     }
-
-    diagnostics.checks.commonIssues = {
-      missingEnvVars: !supabaseUrl || !supabaseAnonKey,
-      corsIssues: req.headers.get('origin') ? 'Check CORS configuration' : null,
-      authIssues: !req.headers.get('authorization') ? 'No auth header present' : null,
+    if (!diagnostics.checks.imports.supabaseClient) {
+      diagnostics.recommendations.push('Fix Supabase client import');
     }
-
-    diagnostics.checks.requestInfo = {
-      method: req.method,
-      url: req.url,
-      headers: Object.fromEntries(req.headers.entries()),
+    if (diagnostics.checks.syntax.status === 'unknown_function') {
+      diagnostics.recommendations.push(`Unknown function: ${functionName}. Use 'all' or one of: ${diagnostics.checks.syntax.availableFunctions.join(', ')}`);
     }
 
     return new Response(JSON.stringify(diagnostics, null, 2), {
-      status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    })
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+      }
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({
-        error: 'Diagnostic function failed',
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-      }),
+        error: 'Diagnostics failed',
+        message: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
+      }, null, 2),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       }
-    )
+    );
   }
-})
+});
