@@ -1,206 +1,161 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { walk } from 'https://deno.land/std@0.168.0/fs/walk.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 interface DiagnosticResult {
-  status: 'success' | 'warning' | 'error'
-  errors: string[]
-  warnings: string[]
-  recommendations: string[]
-  functionFiles: string[]
-  importIssues: string[]
-  configIssues: string[]
+  errors: string[];
+  warnings: string[];
+  recommendations: string[];
+  checks: {
+    missingImports: boolean;
+    malformedHandlers: boolean;
+    deploymentConflicts: boolean;
+    configurationIssues: boolean;
+  };
 }
 
-async function validateFunctionFiles(): Promise<{ files: string[]; errors: string[] }> {
-  const files: string[] = []
-  const errors: string[] = []
-  
+async function runDiagnostics(): Promise<DiagnosticResult> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const recommendations: string[] = [];
+  const checks = {
+    missingImports: false,
+    malformedHandlers: false,
+    deploymentConflicts: false,
+    configurationIssues: false,
+  };
+
   try {
-    const functionsPath = new URL('../', import.meta.url).pathname
+    const functionPath = Deno.cwd();
     
-    for await (const entry of walk(functionsPath, { 
-      maxDepth: 2,
-      includeFiles: true,
-      includeDirs: false,
-      exts: ['ts', 'tsx', 'js', 'jsx']
-    })) {
-      if (entry.isFile && entry.path.includes('index.')) {
-        files.push(entry.path)
-        
-        try {
-          const content = await Deno.readTextFile(entry.path)
-          
-          if (!content.includes('Deno.serve') && !content.includes('serve(')) {
-            errors.push(`${entry.name}: Missing Deno.serve handler`)
-          }
-          
-          if (content.includes('export default') && !content.includes('Deno.serve')) {
-            errors.push(`${entry.name}: Uses export default instead of Deno.serve`)
-          }
-        } catch (err) {
-          errors.push(`${entry.name}: Failed to read file - ${err.message}`)
-        }
-      }
-    }
-  } catch (err) {
-    errors.push(`Function validation failed: ${err.message}`)
-  }
-  
-  return { files, errors }
-}
-
-async function analyzeImports(): Promise<string[]> {
-  const issues: string[] = []
-  
-  try {
-    const functionsPath = new URL('../', import.meta.url).pathname
+    const commonImportIssues = [
+      "supabase-js not found",
+      "missing @supabase/supabase-js",
+      "cannot find module",
+    ];
     
-    for await (const entry of walk(functionsPath, {
-      maxDepth: 2,
-      includeFiles: true,
-      exts: ['ts', 'tsx', 'js', 'jsx']
-    })) {
-      if (entry.isFile) {
-        try {
-          const content = await Deno.readTextFile(entry.path)
-          
-          if (content.includes('import') && content.match(/from ['"](?!https?:\/\/)[^'"]*['"]/)) {
-            const relativeImports = content.match(/from ['"](\.\.?\/[^'"]*)['"]/g)
-            if (relativeImports) {
-              issues.push(`${entry.name}: Contains relative imports - ${relativeImports.join(', ')}`)
-            }
-          }
-          
-          if (content.includes('require(')) {
-            issues.push(`${entry.name}: Uses CommonJS require() instead of ES modules`)
-          }
-          
-          if (content.match(/from ['"]@supabase\/supabase-js['"]/)) {
-            if (!content.includes('https://esm.sh/') && !content.includes('https://cdn.skypack.dev/')) {
-              issues.push(`${entry.name}: @supabase/supabase-js should be imported from CDN`)
-            }
-          }
-        } catch (err) {
-          issues.push(`${entry.name}: Failed to analyze imports - ${err.message}`)
-        }
+    const files = [];
+    for await (const entry of Deno.readDir(functionPath)) {
+      if (entry.isFile && entry.name.endsWith(".ts")) {
+        files.push(entry.name);
       }
     }
-  } catch (err) {
-    issues.push(`Import analysis failed: ${err.message}`)
-  }
-  
-  return issues
-}
-
-function detectCommonErrorPatterns(content: string, filename: string): string[] {
-  const patterns: string[] = []
-  
-  if (content.includes('process.env') && !content.includes('Deno.env')) {
-    patterns.push(`${filename}: Uses process.env instead of Deno.env`)
-  }
-  
-  if (content.includes('__dirname') || content.includes('__filename')) {
-    patterns.push(`${filename}: Uses Node.js __dirname/__filename`)
-  }
-  
-  if (content.includes('async') && !content.includes('await') && !content.includes('.then(')) {
-    patterns.push(`${filename}: Async function without await or .then()`)
-  }
-  
-  if (content.includes('cors') && !content.includes('Access-Control-Allow-Origin')) {
-    patterns.push(`${filename}: CORS handling may be incomplete`)
-  }
-  
-  return patterns
-}
-
-async function validateDeploymentConfig(): Promise<string[]> {
-  const issues: string[] = []
-  
-  try {
-    const configPath = new URL('../../../supabase/config.toml', import.meta.url).pathname
-    
-    try {
-      const config = await Deno.readTextFile(configPath)
-      
-      if (!config.includes('[functions]')) {
-        issues.push('config.toml: Missing [functions] section')
-      }
-      
-      if (!config.includes('enabled = true')) {
-        issues.push('config.toml: Functions may not be enabled')
-      }
-    } catch {
-      issues.push('config.toml: File not found or not readable')
-    }
-  } catch (err) {
-    issues.push(`Config validation failed: ${err.message}`)
-  }
-  
-  return issues
-}
-
-serve(async (req: Request) => {
-  try {
-    if (req.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        }
-      })
-    }
-
-    const result: DiagnosticResult = {
-      status: 'success',
-      errors: [],
-      warnings: [],
-      recommendations: [],
-      functionFiles: [],
-      importIssues: [],
-      configIssues: []
-    }
-
-    const { files, errors: fileErrors } = await validateFunctionFiles()
-    result.functionFiles = files
-    result.errors.push(...fileErrors)
-
-    const importIssues = await analyzeImports()
-    result.importIssues = importIssues
-    result.warnings.push(...importIssues)
 
     for (const file of files) {
       try {
-        const content = await Deno.readTextFile(file)
-        const patterns = detectCommonErrorPatterns(content, file)
-        result.warnings.push(...patterns)
+        const content = await Deno.readTextFile(`${functionPath}/${file}`);
+        
+        if (!content.includes("Deno.serve") && !content.includes("serve(")) {
+          checks.malformedHandlers = true;
+          errors.push(`${file}: Missing Deno.serve() handler`);
+          recommendations.push(`Wrap ${file} logic in Deno.serve() call`);
+        }
+
+        if (content.includes("import") && !content.includes("https://")) {
+          checks.missingImports = true;
+          warnings.push(`${file}: May contain non-Deno compatible imports`);
+          recommendations.push(`Use Deno-compatible imports (https://deno.land/...)`);
+        }
+
+        if (!content.includes("corsHeaders") && !content.includes("Access-Control-Allow-Origin")) {
+          warnings.push(`${file}: Missing CORS headers`);
+          recommendations.push(`Add CORS headers to ${file} responses`);
+        }
+
+        if (!content.includes("try") && !content.includes("catch")) {
+          warnings.push(`${file}: Missing error handling`);
+          recommendations.push(`Add try/catch blocks to ${file}`);
+        }
       } catch (err) {
-        result.errors.push(`Failed to analyze ${file}: ${err.message}`)
+        errors.push(`Failed to read ${file}: ${err.message}`);
       }
     }
 
-    const configIssues = await validateDeploymentConfig()
-    result.configIssues = configIssues
-    result.warnings.push(...configIssues)
-
-    if (result.errors.length > 0) {
-      result.status = 'error'
-      result.recommendations.push('Fix critical errors before deploying')
-    } else if (result.warnings.length > 0) {
-      result.status = 'warning'
-      result.recommendations.push('Review warnings to improve function reliability')
+    try {
+      const envVars = [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+      ];
+      
+      for (const envVar of envVars) {
+        if (!Deno.env.get(envVar)) {
+          checks.configurationIssues = true;
+          warnings.push(`Environment variable ${envVar} not set`);
+          recommendations.push(`Set ${envVar} in Supabase dashboard`);
+        }
+      }
+    } catch (err) {
+      warnings.push(`Could not check environment variables: ${err.message}`);
     }
 
-    if (result.importIssues.length > 0) {
-      result.recommendations.push('Use CDN imports (esm.sh or cdn.skypack.dev) for external packages')
+    try {
+      const configPath = `${functionPath}/../../config.toml`;
+      await Deno.stat(configPath);
+    } catch {
+      checks.deploymentConflicts = true;
+      warnings.push("config.toml not found");
+      recommendations.push("Create config.toml with function configuration");
     }
 
-    if (result.errors.some(e => e.includes('Deno.serve'))) {
-      result.recommendations.push('All edge functions must use Deno.serve() handler pattern')
-    }
+  } catch (err) {
+    errors.push(`Diagnostic scan failed: ${err.message}`);
+  }
 
-    result.recommendations.push('Test functions locally with: supabase functions serve <function-name>')
-    result.recommendations.push('Check logs with: supabase functions logs <function-name>')
+  if (errors.length === 0 && warnings.length === 0) {
+    recommendations.push("All checks passed. Build failures may be due to runtime errors.");
+  }
 
-    return new Response(JSON.stringify(result, null, 2), {
+  return {
+    errors,
+    warnings,
+    recommendations,
+    checks,
+  };
+}
+
+serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const diagnostics = await runDiagnostics();
+
+    return new Response(
+      JSON.stringify(diagnostics, null, 2),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+        status: 200,
+      }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+        errors: [error.message],
+        warnings: [],
+        recommendations: ["Check function logs for detailed error information"],
+        checks: {
+          missingImports: false,
+          malformedHandlers: false,
+          deploymentConflicts: false,
+          configurationIssues: false,
+        },
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+        status: 500,
+      }
+    );
+  }
+});
