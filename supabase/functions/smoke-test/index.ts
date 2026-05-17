@@ -1,203 +1,172 @@
-ion check failed',
-    };
-  }
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+// ============================================================================
+// TYPES AND INTERFACES
+// ============================================================================
+
+interface HealthCheck {
+  name: string;
+  status: 'pass' | 'fail' | 'warn';
+  duration_ms: number;
+  message?: string;
+  details?: Record<string, unknown>;
 }
 
-/**
- * Check memory usage
- */
-function checkMemory(): HealthCheck {
-  const start = performance.now();
+interface HealthCheckResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  version: string;
+  environment: string;
+  uptime_ms: number;
+  checks: HealthCheck[];
+  metadata: {
+    deno_version: string;
+    region: string;
+    function_name: string;
+  };
+}
 
-  try {
-    if (!Deno.memoryUsage) {
+interface ErrorResponse {
+  error: string;
+  message: string;
+  timestamp: string;
+  path: string;
+  details?: Record<string, unknown>;
+}
+
+interface RequestValidation {
+  valid: boolean;
+  error?: string;
+}
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const FUNCTION_NAME = 'smoke-test';
+const FUNCTION_VERSION = '1.0.0';
+const FUNCTION_START_TIME = performance.now();
+
+// Request validation constants
+const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
+const ALLOWED_METHODS = ['GET', 'POST', 'OPTIONS'];
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'https://nexus.app',
+  /^https:\/\/.*\.nexus\.app$/,
+];
+
+// Health check configuration
+const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds
+const DATABASE_QUERY_TIMEOUT = 3000; // 3 seconds
+
+// ============================================================================
+// LOGGING UTILITIES
+// ============================================================================
+
+/**
+ * Structured logging function
+ */
+function log(
+  level: 'info' | 'warn' | 'error' | 'debug',
+  message: string,
+  context?: Record<string, unknown>
+): void {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    function: FUNCTION_NAME,
+    message,
+    ...context,
+  };
+  console.log(JSON.stringify(logEntry));
+}
+
+// ============================================================================
+// VALIDATION UTILITIES
+// ============================================================================
+
+/**
+ * Validate incoming request
+ */
+function validateRequest(req: Request): RequestValidation {
+  const method = req.method;
+  const url = new URL(req.url);
+
+  // Check HTTP method
+  if (!ALLOWED_METHODS.includes(method)) {
+    return {
+      valid: false,
+      error: `Method ${method} not allowed. Allowed methods: ${ALLOWED_METHODS.join(', ')}`,
+    };
+  }
+
+  // Check origin for non-GET requests
+  if (method !== 'GET' && method !== 'OPTIONS') {
+    const origin = req.headers.get('origin');
+    if (!origin) {
       return {
-        name: 'memory',
-        status: 'warn',
-        duration_ms: performance.now() - start,
-        message: 'Memory API not available',
+        valid: false,
+        error: 'Origin header required for non-GET requests',
       };
     }
 
-    const memory = Deno.memoryUsage();
-    const heapUsedMB = memory.heapUsed / 1024 / 1024;
-    const heapTotalMB = memory.heapTotal / 1024 / 1024;
-
-    return {
-      name: 'memory',
-      status: 'pass',
-      duration_ms: performance.now() - start,
-      details: {
-        heap_used_mb: Math.round(heapUsedMB * 100) / 100,
-        heap_total_mb: Math.round(heapTotalMB * 100) / 100,
-        usage_percent: Math.round((heapUsedMB / heapTotalMB) * 100),
-      },
-    };
-  } catch (error) {
-    return {
-      name: 'memory',
-      status: 'fail',
-      duration_ms: performance.now() - start,
-      message: error instanceof Error ? error.message : 'Memory check failed',
-    };
-  }
-}
-
-// ============================================================================
-// RETRY LOGIC
-// ============================================================================
-
-/**
- * Retry configuration for transient failures
- */
-interface RetryConfig {
-  maxAttempts: number;
-  initialDelayMs: number;
-  maxDelayMs: number;
-  backoffMultiplier: number;
-}
-
-const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxAttempts: 3,
-  initialDelayMs: 100,
-  maxDelayMs: 2000,
-  backoffMultiplier: 2,
-};
-
-/**
- * Execute a function with retry logic for transient failures
- */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  checkName: string,
-  config: RetryConfig = DEFAULT_RETRY_CONFIG
-): Promise<T> {
-  let lastError: Error | unknown;
-  let delay = config.initialDelayMs;
-
-  for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
-    try {
-      log('debug', `Executing ${checkName}`, { attempt, maxAttempts: config.maxAttempts });
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      
-      log('warn', `${checkName} failed on attempt ${attempt}`, {
-        attempt,
-        maxAttempts: config.maxAttempts,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        willRetry: attempt < config.maxAttempts,
-      });
-
-      if (attempt < config.maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay = Math.min(delay * config.backoffMultiplier, config.maxDelayMs);
+    const isAllowedOrigin = ALLOWED_ORIGINS.some((allowed) => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
       }
+      return allowed.test(origin);
+    });
+
+    if (!isAllowedOrigin) {
+      return {
+        valid: false,
+        error: `Origin ${origin} not allowed`,
+      };
     }
   }
 
-  throw lastError;
-}
-
-/**
- * Execute a function with a timeout
- */
-async function withTimeout<T>(
-  fn: () => Promise<T>,
-  timeoutMs: number,
-  checkName: string
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`${checkName} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
-
-  return Promise.race([fn(), timeoutPromise]);
-}
-
-/**
- * Safe wrapper for health checks with timeout and retry
- */
-async function safeHealthCheck(
-  checkFn: () => Promise<HealthCheck> | HealthCheck,
-  checkName: string,
-  timeoutMs: number = 5000
-): Promise<HealthCheck> {
-  const start = performance.now();
-
-  try {
-    const result = await withTimeout(
-      async () => {
-        try {
-          return await withRetry(
-            async () => await Promise.resolve(checkFn()),
-            checkName
-          );
-        } catch (retryError) {
-          // If all retries failed, return a fail status instead of throwing
-          return {
-            name: checkName,
-            status: 'fail' as const,
-            duration_ms: performance.now() - start,
-            message: retryError instanceof Error ? retryError.message : 'Check failed after retries',
-            details: {
-              error: retryError instanceof Error ? {
-                message: retryError.message,
-                stack: retryError.stack,
-              } : { message: 'Unknown error' },
-            },
-          };
-        }
-      },
-      timeoutMs,
-      checkName
-    );
-
-    return result;
-  } catch (error) {
-    // Timeout or other fatal error
-    log('error', `Fatal error in ${checkName}`, {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    return {
-      name: checkName,
-      status: 'fail' as const,
-      duration_ms: performance.now() - start,
-      message: error instanceof Error ? error.message : 'Check encountered a fatal error',
-      details: {
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-        } : { message: 'Unknown error' },
-      },
-    };
+  // Check content-length for POST requests
+  if (method === 'POST') {
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > MAX_REQUEST_SIZE) {
+      return {
+        valid: false,
+        error: `Request body too large. Maximum size: ${MAX_REQUEST_SIZE} bytes`,
+      };
+    }
   }
+
+  return { valid: true };
 }
 
 /**
  * Validate health check result structure
  */
-function validateHealthCheckResult(check: HealthCheck, checkName: string): boolean {
+function validateHealthCheckResult(
+  check: unknown,
+  checkName: string
+): check is HealthCheck {
   if (!check || typeof check !== 'object') {
-    log('error', `Invalid health check result for ${checkName}`, { check });
+    log('error', 'Health check result is not an object', { checkName });
     return false;
   }
 
-  if (!check.name || typeof check.name !== 'string') {
-    log('error', `Health check missing valid name`, { check });
+  const c = check as Record<string, unknown>;
+
+  if (typeof c.name !== 'string') {
+    log('error', 'Health check missing valid name', { checkName });
     return false;
   }
 
-  if (!check.status || !['pass', 'fail', 'warn'].includes(check.status)) {
-    log('error', `Invalid status for ${checkName}`, { status: check.status });
+  if (!['pass', 'fail', 'warn'].includes(c.status as string)) {
+    log('error', 'Health check has invalid status', { checkName, status: c.status });
     return false;
   }
 
-  if (typeof check.duration_ms !== 'number' || check.duration_ms < 0) {
-    log('error', `Invalid duration for ${checkName}`, { duration_ms: check.duration_ms });
+  if (typeof c.duration_ms !== 'number' || c.duration_ms < 0) {
+    log('error', 'Health check has invalid duration', { checkName, duration: c.duration_ms });
     return false;
   }
 
@@ -205,37 +174,66 @@ function validateHealthCheckResult(check: HealthCheck, checkName: string): boole
 }
 
 /**
- * Sanitize health check result for safe serialization
+ * Sanitize health check result to prevent injection
  */
 function sanitizeHealthCheck(check: HealthCheck): HealthCheck {
-  const sanitized: HealthCheck = {
-    name: String(check.name),
+  return {
+    name: String(check.name).substring(0, 100),
     status: check.status,
-    duration_ms: Number(check.duration_ms) || 0,
+    duration_ms: Math.round(check.duration_ms * 100) / 100,
+    message: check.message ? String(check.message).substring(0, 500) : undefined,
+    details: check.details ? sanitizeObject(check.details) : undefined,
   };
+}
 
-  if (check.message) {
-    sanitized.message = String(check.message);
-  }
+/**
+ * Sanitize object recursively
+ */
+function sanitizeObject(obj: Record<string, unknown>, depth = 0): Record<string, unknown> {
+  if (depth > 5) return {}; // Prevent deep recursion
 
-  if (check.details) {
-    try {
-      // Deep clone to avoid circular references
-      sanitized.details = JSON.parse(JSON.stringify(check.details));
-    } catch (error) {
-      log('warn', `Failed to sanitize details for ${check.name}`, {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-      sanitized.details = { sanitization_error: 'Could not serialize details' };
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const sanitizedKey = String(key).substring(0, 100);
+    
+    if (value === null || value === undefined) {
+      sanitized[sanitizedKey] = value;
+    } else if (typeof value === 'string') {
+      sanitized[sanitizedKey] = value.substring(0, 1000);
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      sanitized[sanitizedKey] = value;
+    } else if (Array.isArray(value)) {
+      sanitized[sanitizedKey] = value.slice(0, 100).map((item) =>
+        typeof item === 'object' && item !== null
+          ? sanitizeObject(item as Record<string, unknown>, depth + 1)
+          : item
+      );
+    } else if (typeof value === 'object') {
+      sanitized[sanitizedKey] = sanitizeObject(value as Record<string, unknown>, depth + 1);
     }
   }
-
   return sanitized;
 }
 
 // ============================================================================
-// REQUEST HANDLERS
+// RESPONSE UTILITIES
 // ============================================================================
+
+/**
+ * Create JSON response with appropriate headers
+ */
+function createJsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-Function-Version': FUNCTION_VERSION,
+    },
+  });
+}
 
 /**
  * Handle OPTIONS preflight requests
@@ -243,235 +241,257 @@ function sanitizeHealthCheck(check: HealthCheck): HealthCheck {
 function handleOptions(): Response {
   return new Response(null, {
     status: 204,
-    headers: getCorsHeaders(),
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': ALLOWED_METHODS.join(', '),
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      'Access-Control-Max-Age': '86400',
+    },
   });
 }
 
-/**
- * Validate incoming request
- */
-function validateRequest(req: Request): { valid: boolean; error?: string } {
-  const method = req.method;
-
-  if (!['GET', 'POST', 'OPTIONS'].includes(method)) {
-    return {
-      valid: false,
-      error: `Method ${method} not allowed`,
-    };
-  }
-
-  return { valid: true };
-}
+// ============================================================================
+// HEALTH CHECK IMPLEMENTATIONS
+// ============================================================================
 
 /**
- * Execute all health checks and aggregate results
+ * Check Deno runtime health
  */
-async function performHealthChecks(): Promise<HealthCheckResponse> {
-  const checkStartTime = performance.now();
-
-  log('info', 'Starting health checks');
-
-  // Execute all health checks in parallel with safety wrappers
-  const checkPromises = [
-    safeHealthCheck(() => checkRuntime(), 'runtime', 3000),
-    safeHealthCheck(() => checkEnvironment(), 'environment', 3000),
-    safeHealthCheck(() => checkSupabaseClient(), 'supabase_client', 5000),
-    safeHealthCheck(() => checkDatabase(), 'database', 10000),
-    safeHealthCheck(() => checkJsonSerialization(), 'json_serialization', 3000),
-    safeHealthCheck(() => checkMemory(), 'memory', 3000),
-  ];
-
-  let checks: HealthCheck[];
-  
+async function checkDenoRuntime(): Promise<HealthCheck> {
+  const startTime = performance.now();
   try {
-    checks = await Promise.all(checkPromises);
-  } catch (error) {
-    log('error', 'Critical error during health checks execution', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    // Basic runtime checks
+    const memoryUsage = Deno.memoryUsage();
+    const hasRequiredAPIs = typeof Deno.serve === 'function' &&
+      typeof Deno.env === 'object' &&
+      typeof performance === 'object';
 
-    // Return minimal response indicating critical failure
-    return {
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      version: FUNCTION_VERSION,
-      environment: Deno.env.get('ENVIRONMENT') || 'production',
-      uptime_ms: performance.now() - FUNCTION_START_TIME,
-      checks: [{
-        name: 'health_check_execution',
+    if (!hasRequiredAPIs) {
+      return {
+        name: 'deno_runtime',
         status: 'fail',
-        duration_ms: performance.now() - checkStartTime,
-        message: error instanceof Error ? error.message : 'Critical failure executing health checks',
-        details: {
-          error: error instanceof Error ? {
-            message: error.message,
-            stack: error.stack,
-          } : { message: 'Unknown error' },
-        },
-      }],
-      metadata: {
+        duration_ms: performance.now() - startTime,
+        message: 'Required Deno APIs not available',
+      };
+    }
+
+    // Check memory pressure
+    const memoryMB = memoryUsage.heapUsed / 1024 / 1024;
+    const memoryStatus = memoryMB > 100 ? 'warn' : 'pass';
+
+    return {
+      name: 'deno_runtime',
+      status: memoryStatus,
+      duration_ms: performance.now() - startTime,
+      message: 'Deno runtime operational',
+      details: {
         deno_version: Deno.version.deno,
-        region: Deno.env.get('DENO_REGION') || 'unknown',
-        function_name: FUNCTION_NAME,
+        v8_version: Deno.version.v8,
+        typescript_version: Deno.version.typescript,
+        memory_mb: Math.round(memoryMB * 100) / 100,
       },
     };
-  }
-
-  // Validate and sanitize all check results
-  const validatedChecks: HealthCheck[] = [];
-  for (const check of checks) {
-    if (validateHealthCheckResult(check, check.name)) {
-      validatedChecks.push(sanitizeHealthCheck(check));
-    } else {
-      log('error', 'Invalid health check result, creating fallback', { checkName: check.name });
-      validatedChecks.push({
-        name: check.name || 'unknown',
-        status: 'fail',
-        duration_ms: check.duration_ms || 0,
-        message: 'Health check returned invalid result',
-      });
-    }
-  }
-
-  // Determine overall status
-  const failedChecks = validatedChecks.filter((check) => check.status === 'fail');
-  const warnChecks = validatedChecks.filter((check) => check.status === 'warn');
-  const passedChecks = validatedChecks.filter((check) => check.status === 'pass');
-
-  let overallStatus: 'healthy' | 'degraded' | 'unhealthy';
-  if (failedChecks.length === 0 && warnChecks.length === 0) {
-    overallStatus = 'healthy';
-  } else if (failedChecks.length === 0) {
-    overallStatus = 'degraded';
-  } else if (passedChecks.length > failedChecks.length) {
-    overallStatus = 'degraded';
-  } else {
-    overallStatus = 'unhealthy';
-  }
-
-  const environment = Deno.env.get('ENVIRONMENT') || 'production';
-  const region = Deno.env.get('DENO_REGION') || 'unknown';
-
-  const response: HealthCheckResponse = {
-    status: overallStatus,
-    timestamp: new Date().toISOString(),
-    version: FUNCTION_VERSION,
-    environment,
-    uptime_ms: performance.now() - FUNCTION_START_TIME,
-    checks: validatedChecks,
-    metadata: {
-      deno_version: Deno.version.deno,
-      region,
-      function_name: FUNCTION_NAME,
-    },
-  };
-
-  log('info', 'Health checks completed', {
-    status: overallStatus,
-    total_checks: validatedChecks.length,
-    passed: passedChecks.length,
-    warnings: warnChecks.length,
-    failed: failedChecks.length,
-    duration_ms: performance.now() - checkStartTime,
-  });
-
-  return response;
-}
-
-/**
- * Handle health check requests
- */
-async function handleHealthCheck(req: Request): Promise<Response> {
-  try {
-    const healthCheckResult = await performHealthChecks();
-
-    const statusCode = healthCheckResult.status === 'unhealthy' ? 503 : 200;
-
-    return createJsonResponse(healthCheckResult, statusCode);
   } catch (error) {
-    log('error', 'Health check failed', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-
-    const errorResponse: ErrorResponse = {
-      error: 'HEALTH_CHECK_FAILED',
-      message: error instanceof Error ? error.message : 'Health check encountered an error',
-      timestamp: new Date().toISOString(),
-      path: new URL(req.url).pathname,
-      details: error instanceof Error ? {
-        stack: error.stack,
-        name: error.name,
-      } : undefined,
+    return {
+      name: 'deno_runtime',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: error instanceof Error ? error.message : 'Deno runtime check failed',
     };
-
-    return createJsonResponse(errorResponse, 500);
   }
 }
 
-// ============================================================================
-// MAIN ENTRY POINT
-// ============================================================================
+/**
+ * Check environment variables
+ */
+async function checkEnvironment(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  try {
+    const requiredEnvVars = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+
+    const missingVars: string[] = [];
+    const presentVars: string[] = [];
+
+    for (const varName of requiredEnvVars) {
+      const value = Deno.env.get(varName);
+      if (!value || value.trim() === '') {
+        missingVars.push(varName);
+      } else {
+        presentVars.push(varName);
+      }
+    }
+
+    if (missingVars.length > 0) {
+      return {
+        name: 'environment',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        details: {
+          missing: missingVars,
+          present: presentVars,
+        },
+      };
+    }
+
+    return {
+      name: 'environment',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'All required environment variables present',
+      details: {
+        variables_checked: requiredEnvVars.length,
+      },
+    };
+  } catch (error) {
+    return {
+      name: 'environment',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: error instanceof Error ? error.message : 'Environment check failed',
+    };
+  }
+}
 
 /**
- * Main Deno.serve handler
- * Processes all incoming requests with comprehensive error handling
+ * Check Supabase database connectivity
  */
-Deno.serve(async (req: Request): Promise<Response> => {
-  const requestStart = performance.now();
-  const url = new URL(req.url);
-  const method = req.method;
-
-  log('info', 'Incoming request', {
-    method,
-    path: url.pathname,
-    origin: req.headers.get('origin'),
-  });
-
+async function checkDatabase(): Promise<HealthCheck> {
+  const startTime = performance.now();
   try {
-    // Handle OPTIONS preflight requests
-    if (method === 'OPTIONS') {
-      log('info', 'Handling OPTIONS preflight request');
-      return handleOptions();
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    // Validate request
-    const validation = validateRequest(req);
-    if (!validation.valid) {
-      log('warn', 'Request validation failed', { error: validation.error });
-
-      const errorResponse: ErrorResponse = {
-        error: 'INVALID_REQUEST',
-        message: validation.error || 'Request validation failed',
-        timestamp: new Date().toISOString(),
-        path: url.pathname,
+    if (!supabaseUrl || !supabaseKey) {
+      return {
+        name: 'database',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Database credentials not configured',
       };
-
-      return createJsonResponse(errorResponse, 400);
     }
 
-    // Execute health check
-    const response = await handleHealthCheck(req);
-
-    const duration = performance.now() - requestStart;
-
-    log('info', 'Request completed', {
-      status: response.status,
-      duration_ms: duration,
+    // Create Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
     });
 
-    return response;
+    // Execute simple query with timeout
+    const queryPromise = supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Database query timeout')), DATABASE_QUERY_TIMEOUT)
+    );
+
+    const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as Awaited<typeof queryPromise>;
+
+    if (error) {
+      return {
+        name: 'database',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: `Database query failed: ${error.message}`,
+        details: {
+          error_code: error.code,
+          error_details: error.details,
+        },
+      };
+    }
+
+    return {
+      name: 'database',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'Database connection successful',
+      details: {
+        query_successful: true,
+      },
+    };
   } catch (error) {
-    const duration = performance.now() - requestStart;
+    return {
+      name: 'database',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: error instanceof Error ? error.message : 'Database check failed',
+    };
+  }
+}
 
-    log('error', 'Unhandled error in request handler', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      duration_ms: duration,
-    });
+/**
+ * Check external service connectivity
+ */
+async function checkExternalServices(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  try {
+    // Check if fetch API is available
+    if (typeof fetch !== 'function') {
+      return {
+        name: 'external_services',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Fetch API not available',
+      };
+    }
 
-    const errorResponse: ErrorResponse = {
-      error: 'INTERNAL_SERVER_ERROR',
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
-      timestamp: new Date().toISOString(),
+    // Simple connectivity check to a reliable endpoint
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    try {
+      const response = await fetch('https://www.google.com', {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return {
+          name: 'external_services',
+          status: 'warn',
+          duration_ms: performance.now() - startTime,
+          message: 'External connectivity degraded',
+          details: {
+            status_code: response.status,
+          },
+        };
+      }
+
+      return {
+        name: 'external_services',
+        status: 'pass',
+        duration_ms: performance.now() - startTime,
+        message: 'External service connectivity operational',
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      throw fetchError;
+    }
+  } catch (error) {
+    return {
+      name: 'external_services',
+      status: 'warn',
+      duration_ms: performance.now() - startTime,
+      message: error instanceof Error ? error.message : 'External services check failed',
+    };
+  }
+}
+
+/**
+ * Check function performance metrics
+ */
+async function checkPerformance(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  try {
+    const uptime = performance.now() - FUNCTION_START_TIME;
+    const memoryUsage = Deno.memoryUs
