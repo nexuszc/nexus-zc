@@ -1,178 +1,242 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 interface BuildFailureRequest {
-  build_id: string
-  error_log: string
-  context?: Record<string, unknown>
+  buildId: string;
+  errorMessage?: string;
+  errorStack?: string;
+  buildLogs?: string;
 }
 
 interface DiagnosticResult {
-  build_id: string
-  error_type: string
-  suggested_fix: string
-  confidence: number
-  additional_details?: Record<string, unknown>
+  buildId: string;
+  diagnostics: {
+    errorType: string;
+    possibleCauses: string[];
+    suggestedFixes: string[];
+    severity: 'high' | 'medium' | 'low';
+  };
+  timestamp: string;
 }
 
-Deno.serve(async (req) => {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
+function analyzeError(errorMessage: string, errorStack?: string, buildLogs?: string): DiagnosticResult['diagnostics'] {
+  const message = (errorMessage || '').toLowerCase();
+  const stack = (errorStack || '').toLowerCase();
+  const logs = (buildLogs || '').toLowerCase();
+  const combined = `${message} ${stack} ${logs}`;
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration')
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-    const body: BuildFailureRequest = await req.json()
-
-    if (!body.build_id || !body.error_log) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields: build_id, error_log' }),
-        {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
-    }
-
-    const diagnostic = analyzeBuildFailure(body.error_log, body.context)
-
-    const { error: insertError } = await supabase
-      .from('build_diagnostics')
-      .insert({
-        build_id: body.build_id,
-        error_type: diagnostic.error_type,
-        suggested_fix: diagnostic.suggested_fix,
-        confidence: diagnostic.confidence,
-        additional_details: diagnostic.additional_details,
-        analyzed_at: new Date().toISOString(),
-      })
-
-    if (insertError) {
-      console.error('Error inserting diagnostic:', insertError)
-      throw insertError
-    }
-
-    const result: DiagnosticResult = {
-      build_id: body.build_id,
-      error_type: diagnostic.error_type,
-      suggested_fix: diagnostic.suggested_fix,
-      confidence: diagnostic.confidence,
-      additional_details: diagnostic.additional_details,
-    }
-
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (error) {
-    console.error('Error in build-failure-diagnostics:', error)
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    )
-  }
-})
-
-function analyzeBuildFailure(
-  errorLog: string,
-  context?: Record<string, unknown>
-): Omit<DiagnosticResult, 'build_id'> {
-  const lowerLog = errorLog.toLowerCase()
-
-  if (lowerLog.includes('module not found') || lowerLog.includes('cannot find module')) {
+  if (combined.includes('module not found') || combined.includes('cannot find module')) {
     return {
-      error_type: 'MISSING_DEPENDENCY',
-      suggested_fix: 'Run npm install or yarn install to ensure all dependencies are installed. Check package.json for missing packages.',
-      confidence: 0.9,
-      additional_details: {
-        category: 'dependency',
-        severity: 'high',
-      },
-    }
+      errorType: 'Missing Dependency',
+      possibleCauses: [
+        'Package not installed in package.json',
+        'Import path is incorrect',
+        'Package not compatible with build environment'
+      ],
+      suggestedFixes: [
+        'Run npm install or yarn install',
+        'Check import paths for typos',
+        'Verify package exists in package.json dependencies'
+      ],
+      severity: 'high'
+    };
   }
 
-  if (lowerLog.includes('syntax error') || lowerLog.includes('unexpected token')) {
+  if (combined.includes('syntax error') || combined.includes('unexpected token')) {
     return {
-      error_type: 'SYNTAX_ERROR',
-      suggested_fix: 'Review the code for syntax errors. Check for missing brackets, semicolons, or incorrect syntax.',
-      confidence: 0.85,
-      additional_details: {
-        category: 'code',
-        severity: 'high',
-      },
-    }
+      errorType: 'Syntax Error',
+      possibleCauses: [
+        'Invalid JavaScript/TypeScript syntax',
+        'Incompatible ES version',
+        'Missing babel configuration'
+      ],
+      suggestedFixes: [
+        'Review code for syntax errors',
+        'Check babel/typescript configuration',
+        'Ensure build tools are properly configured'
+      ],
+      severity: 'high'
+    };
   }
 
-  if (lowerLog.includes('out of memory') || lowerLog.includes('heap out of memory')) {
+  if (combined.includes('memory') || combined.includes('heap') || combined.includes('out of memory')) {
     return {
-      error_type: 'MEMORY_ERROR',
-      suggested_fix: 'Increase memory allocation using NODE_OPTIONS=--max-old-space-size=4096 or optimize build process.',
-      confidence: 0.95,
-      additional_details: {
-        category: 'resource',
-        severity: 'critical',
-      },
-    }
+      errorType: 'Memory Issue',
+      possibleCauses: [
+        'Build process exceeding memory limits',
+        'Large dependencies or assets',
+        'Memory leak in build process'
+      ],
+      suggestedFixes: [
+        'Increase Node memory limit (NODE_OPTIONS=--max-old-space-size=4096)',
+        'Optimize dependencies and remove unused packages',
+        'Split large bundles'
+      ],
+      severity: 'high'
+    };
   }
 
-  if (lowerLog.includes('econnrefused') || lowerLog.includes('network error')) {
+  if (combined.includes('timeout') || combined.includes('timed out')) {
     return {
-      error_type: 'NETWORK_ERROR',
-      suggested_fix: 'Check network connectivity and ensure external services are accessible. Verify firewall settings.',
-      confidence: 0.8,
-      additional_details: {
-        category: 'network',
-        severity: 'medium',
-      },
-    }
+      errorType: 'Timeout',
+      possibleCauses: [
+        'Build taking too long',
+        'Network issues downloading dependencies',
+        'Slow or hanging build step'
+      ],
+      suggestedFixes: [
+        'Increase build timeout limit',
+        'Check network connectivity',
+        'Optimize build process and reduce build time'
+      ],
+      severity: 'medium'
+    };
   }
 
-  if (lowerLog.includes('permission denied') || lowerLog.includes('eacces')) {
+  if (combined.includes('permission denied') || combined.includes('eacces')) {
     return {
-      error_type: 'PERMISSION_ERROR',
-      suggested_fix: 'Check file and directory permissions. Ensure the build process has necessary access rights.',
-      confidence: 0.9,
-      additional_details: {
-        category: 'permissions',
-        severity: 'medium',
-      },
-    }
+      errorType: 'Permission Error',
+      possibleCauses: [
+        'Insufficient file system permissions',
+        'Protected directory access',
+        'npm/yarn global installation issue'
+      ],
+      suggestedFixes: [
+        'Check file and directory permissions',
+        'Avoid running builds as root',
+        'Clear npm cache and reinstall'
+      ],
+      severity: 'medium'
+    };
   }
 
-  if (lowerLog.includes('port') && lowerLog.includes('already in use')) {
+  if (combined.includes('network') || combined.includes('enotfound') || combined.includes('econnrefused')) {
     return {
-      error_type: 'PORT_CONFLICT',
-      suggested_fix: 'The specified port is already in use. Change the port configuration or stop the conflicting process.',
-      confidence: 0.95,
-      additional_details: {
-        category: 'configuration',
-        severity: 'medium',
-      },
-    }
+      errorType: 'Network Error',
+      possibleCauses: [
+        'Cannot reach package registry',
+        'DNS resolution failure',
+        'Firewall or proxy blocking connection'
+      ],
+      suggestedFixes: [
+        'Check internet connectivity',
+        'Verify npm registry URL',
+        'Configure proxy settings if behind firewall'
+      ],
+      severity: 'medium'
+    };
+  }
+
+  if (combined.includes('type error') || combined.includes('typescript')) {
+    return {
+      errorType: 'TypeScript Error',
+      possibleCauses: [
+        'Type mismatch or incompatibility',
+        'Missing type definitions',
+        'Strict mode violations'
+      ],
+      suggestedFixes: [
+        'Fix type errors in source code',
+        'Install @types packages for dependencies',
+        'Adjust tsconfig.json settings'
+      ],
+      severity: 'medium'
+    };
   }
 
   return {
-    error_type: 'UNKNOWN_ERROR',
-    suggested_fix: 'Review the full error log for details. Consider checking documentation or consulting with the development team.',
-    confidence: 0.5,
-    additional_details: {
-      category: 'unknown',
-      severity: 'unknown',
-      context,
-    },
-  }
+    errorType: 'Unknown Error',
+    possibleCauses: [
+      'Unrecognized build failure',
+      'Complex or multi-faceted issue'
+    ],
+    suggestedFixes: [
+      'Review full build logs',
+      'Check recent code changes',
+      'Consult documentation for specific error message'
+    ],
+    severity: 'low'
+  };
 }
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Missing Supabase configuration');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { buildId, errorMessage, errorStack, buildLogs }: BuildFailureRequest = await req.json();
+
+    if (!buildId) {
+      return new Response(
+        JSON.stringify({ error: 'buildId is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const diagnostics = analyzeError(
+      errorMessage || '',
+      errorStack,
+      buildLogs
+    );
+
+    const result: DiagnosticResult = {
+      buildId,
+      diagnostics,
+      timestamp: new Date().toISOString()
+    };
+
+    const { error: dbError } = await supabase
+      .from('build_diagnostics')
+      .insert({
+        build_id: buildId,
+        error_type: diagnostics.errorType,
+        possible_causes: diagnostics.possibleCauses,
+        suggested_fixes: diagnostics.suggestedFixes,
+        severity: diagnostics.severity,
+        created_at: result.timestamp
+      });
+
+    if (dbError) {
+      console.error('Error saving diagnostics:', dbError);
+    }
+
+    return new Response(
+      JSON.stringify(result),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+  } catch (error) {
+    console.error('Error in build-failure-diagnostics:', error);
+    return new Response(
+      JSON.stringify({
+        error: error.message || 'Internal server error'
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  }
+});
