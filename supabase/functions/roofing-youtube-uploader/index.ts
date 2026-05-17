@@ -180,7 +180,9 @@ function buildShotstackPayload(content: {
   };
 }
 
-async function renderWithShotstack(content: {
+// Submits a Shotstack render and returns the render_id.
+// Does NOT poll — the webhook (roofing-shotstack-webhook) handles completion.
+async function submitShotstackRender(content: {
   id: string;
   title: string;
   hook_text: string;
@@ -191,9 +193,13 @@ async function renderWithShotstack(content: {
 }): Promise<string> {
   if (!SHOTSTACK_API_KEY) throw new Error("SHOTSTACK_API_KEY not configured");
 
-  const payload = buildShotstackPayload(content);
+  const callbackUrl = `${SUPABASE_URL}/functions/v1/roofing-shotstack-webhook`;
+  const renderPayload = {
+    ...buildShotstackPayload(content),
+    callback: callbackUrl,
+  };
 
-  console.log(`Shotstack render start: ${content.title}`);
+  console.log(`Shotstack render submit: ${content.title}`);
 
   const renderRes = await fetch("https://api.shotstack.io/v1/render", {
     method: "POST",
@@ -201,7 +207,7 @@ async function renderWithShotstack(content: {
       "x-api-key": SHOTSTACK_API_KEY,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(renderPayload),
   });
 
   const renderBody = await renderRes.json();
@@ -209,42 +215,20 @@ async function renderWithShotstack(content: {
     throw new Error(`Shotstack render submit failed (${renderRes.status}): ${JSON.stringify(renderBody).slice(0, 300)}`);
   }
 
-  const renderId = renderBody.response.id;
+  const renderId = renderBody.response.id as string;
   console.log(`Shotstack render queued: ${renderId}`);
 
-  console.log(`Shotstack render ID: ${renderId}`);
-
-  // Poll for completion — max 24 attempts × 5s = 120s
-  for (let attempt = 0; attempt < 24; attempt++) {
-    await new Promise(r => setTimeout(r, 5_000));
-
-    const pollRes = await fetch(`https://api.shotstack.io/v1/render/${renderId}`, {
-      headers: { "x-api-key": SHOTSTACK_API_KEY },
-    });
-
-    const pollBody = await pollRes.json();
-    const status = pollBody.response?.status;
-    const url    = pollBody.response?.url;
-
-    console.log(`Shotstack poll ${attempt + 1}/24: ${status}`);
-
-    if (status === "done" && url) {
-      console.log(`Shotstack render complete: ${url}`);
-      // Cache the rendered URL so we don't re-render if YouTube upload fails
-      try {
-        await supabase.from("roofing_content").update({ video_url: url }).eq("id", content.id);
-      } catch { /* non-fatal */ }
-      return url;
-    }
-
-    if (status === "failed") {
-      const err = pollBody.response?.error || JSON.stringify(pollBody).slice(0, 200);
-      throw new Error(`Shotstack render failed: ${err}`);
-    }
-    // queued / fetching / rendering / saving — keep polling
+  // Store render_id so the webhook can find this content row
+  try {
+    await supabase
+      .from("roofing_content")
+      .update({ shotstack_render_id: renderId })
+      .eq("id", content.id);
+  } catch (err) {
+    console.error("Failed to store shotstack_render_id:", err);
   }
 
-  throw new Error(`Shotstack render timed out after 120s (render ID: ${renderId})`);
+  return renderId;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -297,8 +281,8 @@ Deno.serve(async (req) => {
         }, { status: 422 });
       }
 
-      console.log(`No video_url — rendering with Shotstack for: ${content.title}`);
-      videoUrl = await renderWithShotstack({
+      console.log(`No video_url — submitting Shotstack render for: ${content.title}`);
+      const renderId = await submitShotstackRender({
         id:                 content.id,
         title:              content.title,
         hook_text:          content.hook_text || "",
@@ -306,6 +290,13 @@ Deno.serve(async (req) => {
         mp3_url:            content.mp3_url,
         duration_estimate:  content.duration_estimate || 60,
         format:             content.format || "short",
+      });
+      // Webhook handles completion — return now, don't wait
+      return Response.json({
+        ok: true,
+        queued: true,
+        render_id: renderId,
+        message: "Shotstack render submitted — webhook will trigger YouTube upload when done",
       });
     }
 

@@ -407,10 +407,12 @@ async function processScript(content: {
     youtube_upload_ready: true,
   }).eq("id", content.id);
 
-  // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube package summary (mp3_url, blog_url, description) visible in Content tab
-  // await tg(summaryMsg);
-  // await tg(`📋 *YouTube Description — paste into Studio:*\n\n...`);
-  // if (mp3Url) { await tgAudio(mp3Url, ...) }
+  // Kick off Shotstack video render — webhook handles YouTube upload when done
+  fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-uploader`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ content_id: content.id }),
+  }).catch(() => {});
 
   return { mp3_url: mp3Url, blog_url: blogUrl, description };
 }
