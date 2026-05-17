@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 17, 2026 — v8
+# Last updated: May 17, 2026 — v9
 
 ---
 
@@ -397,8 +397,19 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 17, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE this session (Content Pipeline v2 — May 17, 2026):**
+- Deployed `roofing-youtube-uploader` + `roofing-youtube-publisher` with YouTube OAuth secrets
+- Fixed `roofing-content-engine` — body NOT NULL constraint, `.catch()` crash on supabase-js builder, reduced batch to 5 shorts + 1 long, added heartbeat
+- Rewrote `Content.jsx` — YouTube-first layout, Approval Queue / Scheduled / Posted / Community tabs, schedule slot buttons (now/mon/wed/fri), Approve All, toast feedback
+- Fixed RLS on `roofing_content` — dropped all stale policies, recreated 4 clean ones + GRANT ALL (anon writes were silently rejected)
+- Built + deployed `roofing-content-publisher` — Mon/Wed/Fri 14:00 UTC cron orchestrator (pg_cron job #23), calls youtube-publisher per approved item, sends Telegram summary
+- Generated first batch of 12 YouTube scripts, approved + scheduled Mon/Wed/Fri through June 10
+- Manually triggered publisher for 'now' item — confirmed end-to-end: mp3_url ✅, blog_url ✅, status=published ✅
+- youtube_url still null (expected — needs MP4; roofing-youtube-uploader is ready and waiting for video generation)
+
+**KEY PATTERN — supabase-js in Edge Functions:**
+- PostgrestBuilder does NOT have `.catch()` — always use `try/catch` around `await supabase.from(...)`
+- Always include all NOT NULL columns in inserts (check schema before writing)
 
 **NEXT:**
 1. Fix smoke_test_failed error (simple) - PENDING SELF-IMPROVEMENT
@@ -409,6 +420,7 @@ Then productized and sold to other multi-business operators.
 6. Add memory consolidation ability (medium) - PENDING SELF-IMPROVEMENT
 7. Add Conversation Context Memory (medium) - PENDING SELF-IMPROVEMENT
 8. Monitor and improve health scores for Brian (65) and Denver Pro Roofing (50)
+9. YouTube video generation — `roofing-video-generator` function to produce MP4 from script + voiceover (unlocks actual YouTube uploads)
 
 ---
 
