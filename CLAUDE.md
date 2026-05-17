@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 17, 2026 — v9
+# Last updated: May 17, 2026 — v8
 
 ---
 
@@ -163,9 +163,14 @@ Then productized and sold to other multi-business operators.
 | `roofing-email-tracker` | See function source for details | Internal |
 | `roofing-email-webhook` | See function source for details | Internal |
 | `roofing-financial` | See function source for details | Internal |
+| `roofing-integration-companycam` | See function source for details | Internal |
+| `roofing-integration-crm` | See function source for details | Internal |
+| `roofing-integration-webhook` | See function source for details | Internal |
+| `roofing-job-create` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
+| `roofing-nudge-email` | See function source for details | Internal |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-outreach-sequencer` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
@@ -392,41 +397,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 17, 2026)
 
-**DONE (May 17 session):**
-- Telegram cleanup: 33 routine sends moved to dashboard, 27 kept as push alerts
-- Aria call queue dedup fix: 906 duplicate rows deleted, dedup check deployed in
-  roofing-aria-engine and roofing-aria-storm-trigger
-- Roofer Onboarding v1:
-  - Welcome email fixed (correct dashboard URL + login instructions + Twilio SMS)
-  - Magic link flow working end-to-end
-  - 3-step onboarding checklist banner in dashboard (dismissable)
-  - Create job modal wired to roofing-job-create with homeowner email + portal dispatch
-  - Team member add modal with real contractor-auth add_employee flow
-  - Stripe race condition fixed (2s retry on subscription.created)
-  - onboarding_step auto-advances: account_created → dashboard_accessed → first_job_added
-  - RoofingOnboarding.jsx redirected to roofingos.dev (app.nexuszc.com is owner-only)
-  - DB columns added: magic_link_sent_at, onboarding_dismissed, first_job_at, dashboard_first_accessed_at
-- Platform Integrations v1:
-  - CompanyCam: photo sync via address/name matching, dedup, portal activity on new photos
-  - CRMs: AccuLynx, JobNimbus, Leap, Roofr, Improveit360, Salesforce — enriches matched jobs
-  - Custom webhook: inbound connector with field map + common-field fallbacks
-  - Sync engine in nexus-core: fires every 3 cycles (~90 min) for all active integrations
-  - Integration hub UI: 6th tab in contractor dashboard, connect/disconnect modal per integration
-  - portal-api: integration_sources in overview response
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
-1. Send personal texts to 6 whale prospects
-2. Facebook page token fix for auto-posting
-3. YouTube OAuth setup for auto-upload
-4. Touch 2 status check (fires today 8am MT)
-5. Dashboard cleanup and polish
-6. Test full roofer signup flow end to end with real Stripe test card
-
-**MANUAL STEPS PENDING:**
-- Test roofingos.dev signup with Stripe test card 4242 4242 4242 4242
-- Verify welcome email arrives correctly
-- Verify dashboard login via phone magic link
-- Get CompanyCam trial account to test photo sync end to end
+1. Fix smoke_test_failed error (simple) - PENDING SELF-IMPROVEMENT
+2. Fix Recurring Smoke Test Failures (medium) - PENDING SELF-IMPROVEMENT
+3. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
+4. Build the complete Roofing OS go-to-market system. Create a public landing page
+5. Add Self-Learning Pattern Recognition (medium) - PENDING SELF-IMPROVEMENT
+6. Add memory consolidation ability (medium) - PENDING SELF-IMPROVEMENT
+7. Add Conversation Context Memory (medium) - PENDING SELF-IMPROVEMENT
+8. Monitor and improve health scores for Brian (65) and Denver Pro Roofing (50)
 
 ---
 
