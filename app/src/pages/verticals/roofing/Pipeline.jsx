@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
@@ -14,14 +14,14 @@ function ago(ts) {
 }
 
 const FILTERS = [
-  { key: 'all',        label: 'All' },
-  { key: 'whale',      label: '🐋 Whales' },
-  { key: 'hot',        label: '🔥 Hot Opens' },
-  { key: 'cold',       label: '🌡️ Going Cold' },
-  { key: 'sequence',   label: 'In Sequence' },
-  { key: 'clicked',    label: 'Clicked' },
-  { key: 'booked',     label: 'Booked' },
-  { key: 'dead',       label: 'Dead' },
+  { key: 'all',      label: 'All' },
+  { key: 'whale',    label: '🐋 Whales' },
+  { key: 'hot',      label: '🔥 Hot Opens' },
+  { key: 'cold',     label: '🌡️ Going Cold' },
+  { key: 'sequence', label: 'In Sequence' },
+  { key: 'clicked',  label: 'Clicked' },
+  { key: 'booked',   label: 'Booked' },
+  { key: 'dead',     label: 'Dead' },
 ]
 
 const STATUS_COLORS = {
@@ -33,6 +33,312 @@ const STATUS_COLORS = {
   converted:  'text-emerald-400 bg-emerald-500/10',
 }
 
+const AUTO_FOUND_SOURCES = ['serper', 'hail_zone']
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function Toast({ message, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 3000)
+    return () => clearTimeout(t)
+  }, [onClose])
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1e1e2e] border border-[#2e2e3e] text-white text-sm px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 animate-fade-in">
+      <span className="text-green-400">✓</span> {message}
+    </div>
+  )
+}
+
+// ─── Modals ───────────────────────────────────────────────────────────────────
+
+function ModalShell({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[#12121a] border border-[#1e1e2e] rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1e1e2e]">
+          <span className="text-white font-semibold text-sm">{title}</span>
+          <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-lg leading-none">✕</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function CallDialer({ prospect, onClose, onToast }) {
+  const [calling, setCalling] = useState(false)
+
+  const callAria = async () => {
+    setCalling(true)
+    try {
+      await fetch(`${SB_URL}/functions/v1/roofing-aria-engine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+        body: JSON.stringify({
+          prospect_id: prospect.id,
+          phone: prospect.phone,
+          call_type: 'warm_follow_up',
+          owner_name: prospect.owner_name,
+          company_name: prospect.company_name,
+        }),
+      })
+      onToast('Aria call queued')
+      onClose()
+    } catch { /* ignore */ } finally { setCalling(false) }
+  }
+
+  const directCall = () => {
+    if (prospect.phone) {
+      window.location.href = `tel:${prospect.phone.replace(/[^\d+]/g, '')}`
+    } else {
+      navigator.clipboard.writeText(prospect.phone || '').catch(() => {})
+    }
+  }
+
+  return (
+    <ModalShell title={`Call ${prospect.owner_name || 'prospect'}`} onClose={onClose}>
+      <p className="text-sm text-gray-400 mb-1">{prospect.company_name}</p>
+      <p className="text-lg font-mono text-white mb-5">{prospect.phone || 'No phone on file'}</p>
+      <div className="space-y-2">
+        <button
+          onClick={callAria}
+          disabled={calling || !prospect.phone}
+          className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors"
+        >
+          {calling ? 'Queuing…' : '🤖 Aria Call (AI warm follow-up)'}
+        </button>
+        <button
+          onClick={directCall}
+          disabled={!prospect.phone}
+          className="w-full py-3 bg-[#1e1e2e] hover:bg-[#2a2a3a] disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors border border-[#2e2e3e]"
+        >
+          📞 Direct Call
+        </button>
+      </div>
+    </ModalShell>
+  )
+}
+
+function TextComposer({ prospect, onClose, onToast }) {
+  const firstName = (prospect.owner_name || 'there').split(' ')[0]
+  const [text, setText] = useState(
+    `Hey ${firstName} — just wanted to follow up on Roofing OS. Worth 30 seconds to see the homeowner portal? $49/mo, no contract. — Zach`
+  )
+
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      onToast('Copied to clipboard')
+      onClose()
+    }).catch(() => {})
+  }
+
+  return (
+    <ModalShell title={`Text ${prospect.owner_name || 'prospect'}`} onClose={onClose}>
+      <p className="text-xs text-gray-600 mb-2">{prospect.phone || 'No phone on file'}</p>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        rows={5}
+        className="w-full bg-[#0a0a0f] border border-[#1e1e2e] text-white text-sm rounded-xl px-3 py-2.5 placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-none mb-3"
+      />
+      <div className="space-y-2">
+        <button
+          onClick={copy}
+          className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-sm transition-colors"
+        >
+          Copy & Close
+        </button>
+        <button
+          disabled
+          className="w-full py-2.5 bg-[#1e1e2e] opacity-40 text-gray-500 font-semibold rounded-xl text-sm cursor-not-allowed border border-[#2e2e3e]"
+        >
+          Send via Aria (10DLC pending)
+        </button>
+      </div>
+    </ModalShell>
+  )
+}
+
+function EmailComposer({ prospect, onClose, onToast }) {
+  const firstName = (prospect.owner_name || 'there').split(' ')[0]
+  const [subject, setSubject] = useState('Quick follow up')
+  const [body, setBody] = useState(
+    `Hey ${firstName} —\n\nJust wanted to make sure my last email didn't get buried.\n\nWorth 30 seconds — see the homeowner portal that roofing contractors are using to close more jobs:\nhttps://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\n$49/month. No contract.\n— Zach @ Roofing OS`
+  )
+  const [sending, setSending] = useState(false)
+
+  const send = async () => {
+    if (!prospect.email) return
+    setSending(true)
+    try {
+      const htmlBody = body.replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#3b82f6">$1</a>')
+      const html = `<div style="font-family:-apple-system,sans-serif;max-width:520px;line-height:1.7;color:#1a1a1a;padding:20px;">${htmlBody}</div>`
+      const res = await fetch(`${SB_URL}/functions/v1/roofing-nudge-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+        body: JSON.stringify({ prospect_id: prospect.id, subject, html }),
+      })
+      if (res.ok) {
+        onToast('Email sent')
+        onClose()
+      } else {
+        onToast('Send failed — check email on file')
+      }
+    } catch { onToast('Send failed') } finally { setSending(false) }
+  }
+
+  return (
+    <ModalShell title={`Email ${prospect.owner_name || 'prospect'}`} onClose={onClose}>
+      <p className="text-xs text-gray-600 mb-3">{prospect.email || 'No email on file'}</p>
+      <input
+        type="text"
+        value={subject}
+        onChange={e => setSubject(e.target.value)}
+        placeholder="Subject"
+        className="w-full bg-[#0a0a0f] border border-[#1e1e2e] text-white text-sm rounded-xl px-3 py-2 placeholder-gray-600 focus:outline-none focus:border-indigo-500 mb-2"
+      />
+      <textarea
+        value={body}
+        onChange={e => setBody(e.target.value)}
+        rows={7}
+        className="w-full bg-[#0a0a0f] border border-[#1e1e2e] text-white text-sm rounded-xl px-3 py-2.5 placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-none mb-3"
+      />
+      <button
+        onClick={send}
+        disabled={sending || !prospect.email}
+        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors"
+      >
+        {sending ? 'Sending…' : 'Send Now'}
+      </button>
+    </ModalShell>
+  )
+}
+
+function ConfirmModal({ title, message, confirmLabel, confirmClass, onConfirm, onClose }) {
+  const [loading, setLoading] = useState(false)
+  const go = async () => {
+    setLoading(true)
+    await onConfirm()
+    setLoading(false)
+    onClose()
+  }
+  return (
+    <ModalShell title={title} onClose={onClose}>
+      <p className="text-sm text-gray-400 mb-5">{message}</p>
+      <div className="flex gap-2">
+        <button
+          onClick={go}
+          disabled={loading}
+          className={`flex-1 py-2.5 font-semibold rounded-xl text-sm text-white transition-colors disabled:opacity-40 ${confirmClass}`}
+        >
+          {loading ? '…' : confirmLabel}
+        </button>
+        <button onClick={onClose} className="flex-1 py-2.5 font-semibold rounded-xl text-sm text-gray-400 bg-[#1e1e2e] hover:bg-[#2a2a3a] transition-colors">
+          Cancel
+        </button>
+      </div>
+    </ModalShell>
+  )
+}
+
+// ─── Whale Card ───────────────────────────────────────────────────────────────
+
+function WhaleCard({ p, onModal, onAction, onToast }) {
+  const [acting, setActing] = useState(null)
+
+  const act = async (type) => {
+    if (type === 'call' || type === 'text' || type === 'email') {
+      onModal(type, p)
+      return
+    }
+    setActing(type)
+    await onAction(p, type)
+    setActing(null)
+  }
+
+  return (
+    <div className="bg-[#0e1a1a] border border-cyan-500/30 rounded-xl p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-base">🐋</span>
+            <span className="text-white font-semibold text-sm">{p.owner_name || '—'}</span>
+          </div>
+          <p className="text-xs text-gray-500">{p.company_name || ''}</p>
+          <p className="text-xs text-cyan-400 mt-0.5">Clicked portal · {ago(p.whale_alerted_at)} ago</p>
+        </div>
+        <span className="text-xs text-gray-600">{p.city || ''}</span>
+      </div>
+      <div className="whale-actions">
+        <button
+          onClick={() => act('call')}
+          className="whale-call-btn py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg text-xs transition-colors"
+        >
+          📞 Call
+        </button>
+        <button
+          onClick={() => act('text')}
+          className="py-2 bg-[#1e1e2e] hover:bg-[#2a2a3a] text-gray-300 font-semibold rounded-lg text-xs transition-colors border border-[#2e2e3e]"
+        >
+          💬 Text
+        </button>
+        <button
+          onClick={() => act('email')}
+          className="py-2 bg-[#1e1e2e] hover:bg-[#2a2a3a] text-gray-300 font-semibold rounded-lg text-xs transition-colors border border-[#2e2e3e]"
+        >
+          ✉️ Email
+        </button>
+        <button
+          onClick={() => act('book')}
+          disabled={acting === 'book'}
+          className="py-2 bg-green-700 hover:bg-green-600 text-white font-semibold rounded-lg text-xs transition-colors disabled:opacity-40"
+        >
+          {acting === 'book' ? '…' : '✓ Booked'}
+        </button>
+        <button
+          onClick={() => act('dead')}
+          disabled={acting === 'dead'}
+          className="py-2 bg-[#1e1e2e] hover:bg-red-900/30 text-gray-500 hover:text-red-400 font-semibold rounded-lg text-xs transition-colors border border-[#2e2e3e] disabled:opacity-40"
+        >
+          {acting === 'dead' ? '…' : '✕ Dead'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Whale Queue ──────────────────────────────────────────────────────────────
+
+function WhaleQueue({ whales, onModal, onAction, onToast }) {
+  const [collapsed, setCollapsed] = useState(false)
+  if (!whales.length) return null
+
+  return (
+    <div className="mb-6 bg-[#080f10] border border-cyan-500/20 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-cyan-500/5 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">🐋</span>
+          <span className="text-cyan-300 font-semibold text-sm">Whale Queue</span>
+          <span className="bg-cyan-500/20 text-cyan-400 text-xs font-bold px-2 py-0.5 rounded-full">{whales.length}</span>
+        </div>
+        <span className="text-gray-600 text-sm">{collapsed ? '▾' : '▴'}</span>
+      </button>
+      {!collapsed && (
+        <div className="px-4 pb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {whales.map(p => (
+            <WhaleCard key={p.id} p={p} onModal={onModal} onAction={onAction} onToast={onToast} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Badge + ProspectRow ──────────────────────────────────────────────────────
+
 function Badge({ status }) {
   const cls = STATUS_COLORS[status] || 'text-gray-500 bg-gray-800'
   return (
@@ -42,15 +348,20 @@ function Badge({ status }) {
   )
 }
 
-function ProspectRow({ p, log, onAction }) {
+function ProspectRow({ p, log, onAction, onModal }) {
   const [expanded, setExpanded] = useState(false)
   const [acting, setActing] = useState(null)
 
   const hotOpens = log?.filter(l => l.prospect_id === p.id && l.open_count >= 2)
   const lastOpen = log?.find(l => l.prospect_id === p.id && l.last_opened_at)
   const isAutoFound = AUTO_FOUND_SOURCES.includes(p.source) && p.created_at > new Date(Date.now() - 86400000).toISOString()
+  const isWhale = p.whale_alerted && !p.outcome
 
   const act = async (type) => {
+    if (type === 'call' || type === 'text' || type === 'email') {
+      onModal(type, p)
+      return
+    }
     setActing(type)
     try { await onAction(p, type) } finally { setActing(null) }
   }
@@ -59,11 +370,11 @@ function ProspectRow({ p, log, onAction }) {
     <>
       <tr
         onClick={() => setExpanded(e => !e)}
-        className="border-b border-[#1e1e2e] hover:bg-white/[0.02] cursor-pointer transition-colors"
+        className={`border-b border-[#1e1e2e] hover:bg-white/[0.02] cursor-pointer transition-colors ${isWhale ? 'bg-cyan-500/[0.04]' : ''}`}
       >
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
-            {p.whale_alerted && <span className="text-base leading-none">🐋</span>}
+            {isWhale && <span className="text-base leading-none">🐋</span>}
             {hotOpens?.length > 0 && <span className="text-base leading-none">🔥</span>}
             {isAutoFound && <span className="text-base leading-none" title="Auto-found by prospector">🤖</span>}
             <div>
@@ -84,7 +395,7 @@ function ProspectRow({ p, log, onAction }) {
           </div>
         </td>
         <td className="px-4 py-3 text-right">
-          <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => act('nudge')}
               disabled={acting === 'nudge'}
@@ -94,10 +405,21 @@ function ProspectRow({ p, log, onAction }) {
             </button>
             <button
               onClick={() => act('call')}
-              disabled={acting === 'call'}
-              className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-1 rounded hover:bg-cyan-500/10 transition-colors disabled:opacity-40"
+              className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 px-2 py-1 rounded hover:bg-cyan-500/10 transition-colors"
             >
-              {acting === 'call' ? '…' : 'Call'}
+              Call
+            </button>
+            <button
+              onClick={() => act('text')}
+              className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 px-2 py-1 rounded hover:bg-blue-500/10 transition-colors"
+            >
+              Text
+            </button>
+            <button
+              onClick={() => act('email')}
+              className="text-[11px] font-semibold text-violet-400 hover:text-violet-300 px-2 py-1 rounded hover:bg-violet-500/10 transition-colors"
+            >
+              Email
             </button>
             <button
               onClick={() => act('dead')}
@@ -110,7 +432,7 @@ function ProspectRow({ p, log, onAction }) {
         </td>
       </tr>
       {expanded && (
-        <tr className="bg-[#0e0e18] border-b border-[#1e1e2e]">
+        <tr className={`border-b border-[#1e1e2e] ${isWhale ? 'bg-cyan-500/[0.04]' : 'bg-[#0e0e18]'}`}>
           <td colSpan={5} className="px-4 py-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
               <div>
@@ -133,7 +455,25 @@ function ProspectRow({ p, log, onAction }) {
                 <div className="text-gray-600 uppercase tracking-widest text-[10px] mb-1">Notes</div>
                 <div className="text-gray-300">{p.notes || '—'}</div>
               </div>
-              <div className="col-span-2 flex gap-2 pt-1">
+              <div className="col-span-2 flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => act('call')}
+                  className="text-xs font-semibold bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  📞 Call
+                </button>
+                <button
+                  onClick={() => act('text')}
+                  className="text-xs font-semibold bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  💬 Text
+                </button>
+                <button
+                  onClick={() => act('email')}
+                  className="text-xs font-semibold bg-violet-700 hover:bg-violet-600 text-white px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  ✉️ Email
+                </button>
                 <button
                   onClick={() => act('book')}
                   disabled={acting === 'book'}
@@ -157,7 +497,7 @@ function ProspectRow({ p, log, onAction }) {
   )
 }
 
-const AUTO_FOUND_SOURCES = ['serper', 'hail_zone']
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Pipeline() {
   const [prospects, setProspects] = useState([])
@@ -168,11 +508,17 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [newForm, setNewForm] = useState({ owner_name: '', company_name: '', phone: '', email: '' })
+  const [modal, setModal] = useState(null) // { type: 'call'|'text'|'email'|'book'|'dead', prospect }
+  const [confirm, setConfirm] = useState(null) // { type: 'book'|'dead', prospect }
+  const [toast, setToast] = useState(null)
+
+  const showToast = useCallback((msg) => setToast(msg), [])
+  const closeModal = useCallback(() => setModal(null), [])
 
   const load = useCallback(async () => {
     const since24h = new Date(Date.now() - 86400000).toISOString()
     const [{ data: pros }, { data: logs }, { count: autoFound }] = await Promise.all([
-      supabase.from('roofing_prospects').select('*').order('created_at', { ascending: false }).limit(200),
+      supabase.from('roofing_prospects').select('*').order('whale_alerted_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(200),
       supabase.from('roofing_outreach_log').select('prospect_id, touch_number, open_count, last_opened_at, direction').order('last_opened_at', { ascending: false }).limit(500),
       supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).in('source', AUTO_FOUND_SOURCES).gte('created_at', since24h),
     ])
@@ -183,6 +529,8 @@ export default function Pipeline() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const whales = prospects.filter(p => p.whale_alerted && !p.outcome)
 
   const filtered = prospects.filter(p => {
     if (search) {
@@ -207,24 +555,29 @@ export default function Pipeline() {
     return true
   })
 
-  const handleAction = async (prospect, type) => {
+  const openModal = useCallback((type, prospect) => {
+    if (type === 'book' || type === 'dead') {
+      setConfirm({ type, prospect })
+    } else {
+      setModal({ type, prospect })
+    }
+  }, [])
+
+  const handleAction = useCallback(async (prospect, type) => {
     if (type === 'nudge') {
       await fetch(`${SB_URL}/functions/v1/roofing-outreach-sequencer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
         body: JSON.stringify({ prospect_id: prospect.id }),
       }).catch(() => {})
-    } else if (type === 'call') {
-      await fetch(`${SB_URL}/functions/v1/roofing-aria-engine`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
-        body: JSON.stringify({ prospect_id: prospect.id }),
-      }).catch(() => {})
-    } else if (type === 'dead') {
-      await supabase.from('roofing_prospects').update({ status: 'dead', outcome: 'dead' }).eq('id', prospect.id)
-      await load()
+      showToast('Nudge sent')
     } else if (type === 'book') {
       await supabase.from('roofing_prospects').update({ status: 'booked' }).eq('id', prospect.id)
+      showToast('Marked as booked')
+      await load()
+    } else if (type === 'dead') {
+      await supabase.from('roofing_prospects').update({ status: 'dead', outcome: 'dead' }).eq('id', prospect.id)
+      showToast('Marked as dead')
       await load()
     } else if (type === 'enroll') {
       await fetch(`${SB_URL}/functions/v1/roofing-outreach-sequencer`, {
@@ -232,8 +585,9 @@ export default function Pipeline() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
         body: JSON.stringify({ prospect_id: prospect.id, enroll: true }),
       }).catch(() => {})
+      showToast('Enrolled in sequence')
     }
-  }
+  }, [load, showToast])
 
   const addProspect = async () => {
     if (!newForm.owner_name && !newForm.phone) return
@@ -299,6 +653,9 @@ export default function Pipeline() {
         </div>
       )}
 
+      {/* Whale Queue */}
+      <WhaleQueue whales={whales} onModal={openModal} onAction={handleAction} onToast={showToast} />
+
       {/* Filters + search */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
@@ -349,7 +706,7 @@ export default function Pipeline() {
               </thead>
               <tbody>
                 {filtered.map(p => (
-                  <ProspectRow key={p.id} p={p} log={log} onAction={handleAction} />
+                  <ProspectRow key={p.id} p={p} log={log} onAction={handleAction} onModal={openModal} />
                 ))}
               </tbody>
             </table>
@@ -358,9 +715,43 @@ export default function Pipeline() {
       </div>
 
       <JobsSection />
+
+      {/* Modals */}
+      {modal?.type === 'call' && (
+        <CallDialer prospect={modal.prospect} onClose={closeModal} onToast={showToast} />
+      )}
+      {modal?.type === 'text' && (
+        <TextComposer prospect={modal.prospect} onClose={closeModal} onToast={showToast} />
+      )}
+      {modal?.type === 'email' && (
+        <EmailComposer prospect={modal.prospect} onClose={closeModal} onToast={showToast} />
+      )}
+      {confirm?.type === 'book' && (
+        <ConfirmModal
+          title="Mark as Booked"
+          message={`Mark ${confirm.prospect.owner_name || 'this prospect'} as booked?`}
+          confirmLabel="Yes, Booked"
+          confirmClass="bg-green-700 hover:bg-green-600"
+          onConfirm={() => handleAction(confirm.prospect, 'book')}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm?.type === 'dead' && (
+        <ConfirmModal
+          title="Mark as Dead"
+          message={`Remove ${confirm.prospect.owner_name || 'this prospect'} from active pipeline?`}
+          confirmLabel="Yes, Dead"
+          confirmClass="bg-red-800 hover:bg-red-700"
+          onConfirm={() => handleAction(confirm.prospect, 'dead')}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }
+
+// ─── Jobs Section ─────────────────────────────────────────────────────────────
 
 const JOB_STATUS_COLORS = {
   lead:              'text-gray-400',

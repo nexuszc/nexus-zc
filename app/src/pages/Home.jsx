@@ -42,6 +42,7 @@ export default function Home() {
   const [systemErrors, setSystemErrors] = useState([])
   const [roofingStats, setRoofingStats] = useState(null)
   const [loading, setLoading]       = useState(true)
+  const [nudgingAll, setNudgingAll] = useState(false)
 
   const load = useCallback(async () => {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -57,6 +58,8 @@ export default function Home() {
       { count: rContractors },
       { count: rWhales },
       { count: rCalls },
+      { count: rHotOpens },
+      { count: rContentPending },
     ] = await Promise.all([
       supabase.from('nexus_agent_cycles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
       supabase.from('nexus_directives').select('id', { count: 'exact', head: true }).eq('status', 'active'),
@@ -66,6 +69,8 @@ export default function Home() {
       supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('subscription_status', 'active'),
       supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
       supabase.from('aria_call_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
+      supabase.from('roofing_outreach_log').select('id', { count: 'exact', head: true }).gte('open_count', 2).gte('last_opened_at', dayAgo.toISOString()),
+      supabase.from('roofing_content').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
     ])
 
     setStats({
@@ -76,14 +81,37 @@ export default function Home() {
     setDirectives(dirs || [])
     setSystemErrors(errors || [])
     setRoofingStats({
-      contractors: rContractors ?? 0,
-      whales:      rWhales ?? 0,
-      calls:       rCalls ?? 0,
+      contractors:    rContractors ?? 0,
+      whales:         rWhales ?? 0,
+      calls:          rCalls ?? 0,
+      hotOpens:       rHotOpens ?? 0,
+      contentPending: rContentPending ?? 0,
     })
     setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const nudgeAllHot = async () => {
+    setNudgingAll(true)
+    try {
+      // Get hot opens (open_count >= 2, last 24h)
+      const dayAgo = new Date(Date.now() - 86400000).toISOString()
+      const { data: hotLogs } = await supabase
+        .from('roofing_outreach_log')
+        .select('prospect_id')
+        .gte('open_count', 2)
+        .gte('last_opened_at', dayAgo)
+      const ids = [...new Set((hotLogs || []).map(l => l.prospect_id))]
+      await Promise.allSettled(ids.map(id =>
+        fetch(`${SB_URL}/functions/v1/roofing-outreach-sequencer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SB_KEY}` },
+          body: JSON.stringify({ prospect_id: id }),
+        }).catch(() => {})
+      ))
+    } finally { setNudgingAll(false) }
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -99,6 +127,65 @@ export default function Home() {
         <Stat label="Active Directives" value={stats?.activeDirectives} color="text-indigo-400" loading={loading} />
         <Stat label="Decisions (7d)"    value={stats?.decisionsWeek}    color="text-green-400"  loading={loading} />
       </div>
+
+      {/* Action cards */}
+      {!loading && roofingStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+          {roofingStats.whales > 0 && (
+            <button
+              onClick={() => navigate('/roofing/pipeline')}
+              className="bg-[#0e1a1a] border border-cyan-500/30 rounded-xl p-4 text-left hover:border-cyan-500/60 transition-colors group"
+            >
+              <div className="text-2xl font-black text-cyan-400 mb-0.5">{roofingStats.whales}</div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-widest">🐋 Whales Hot</div>
+              <div className="text-xs text-cyan-500 mt-2 group-hover:text-cyan-300 transition-colors">View Queue →</div>
+            </button>
+          )}
+          {roofingStats.hotOpens > 0 && (
+            <button
+              onClick={nudgeAllHot}
+              disabled={nudgingAll}
+              className="bg-[#1a100e] border border-orange-500/30 rounded-xl p-4 text-left hover:border-orange-500/60 transition-colors group disabled:opacity-40"
+            >
+              <div className="text-2xl font-black text-orange-400 mb-0.5">{roofingStats.hotOpens}</div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-widest">🔥 Hot Opens</div>
+              <div className="text-xs text-orange-500 mt-2 group-hover:text-orange-300 transition-colors">
+                {nudgingAll ? 'Sending…' : 'Send Nudge All →'}
+              </div>
+            </button>
+          )}
+          {roofingStats.contentPending > 0 && (
+            <button
+              onClick={() => navigate('/roofing/content')}
+              className="bg-[#0e0e1a] border border-violet-500/30 rounded-xl p-4 text-left hover:border-violet-500/60 transition-colors group"
+            >
+              <div className="text-2xl font-black text-violet-400 mb-0.5">{roofingStats.contentPending}</div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-widest">✍️ Content Draft</div>
+              <div className="text-xs text-violet-500 mt-2 group-hover:text-violet-300 transition-colors">Review →</div>
+            </button>
+          )}
+          {systemErrors.length > 0 && (
+            <button
+              onClick={() => navigate('/roofing/system')}
+              className="bg-[#1a0e0e] border border-red-500/30 rounded-xl p-4 text-left hover:border-red-500/60 transition-colors group"
+            >
+              <div className="text-2xl font-black text-red-400 mb-0.5">{systemErrors.length}</div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-widest">⚠️ System Error</div>
+              <div className="text-xs text-red-500 mt-2 group-hover:text-red-300 transition-colors">View Error →</div>
+            </button>
+          )}
+          {roofingStats.calls > 0 && (
+            <button
+              onClick={() => navigate('/roofing/calls')}
+              className="bg-[#0e1118] border border-amber-500/30 rounded-xl p-4 text-left hover:border-amber-500/60 transition-colors group"
+            >
+              <div className="text-2xl font-black text-amber-400 mb-0.5">{roofingStats.calls}</div>
+              <div className="text-[11px] text-gray-500 uppercase tracking-widest">📞 Calls Queued</div>
+              <div className="text-xs text-amber-500 mt-2 group-hover:text-amber-300 transition-colors">View Calls →</div>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Active priorities */}
       <div className="mb-6">
@@ -158,30 +245,32 @@ export default function Home() {
         <h2 className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Verticals</h2>
         <div className="space-y-3">
           {/* Roofing OS card */}
-          <div
-            onClick={() => navigate('/roofing')}
-            className="bg-[#12121a] rounded-xl border border-[#1e1e2e] hover:border-indigo-500/40 p-4 cursor-pointer transition-all group"
-          >
+          <div className="bg-[#12121a] rounded-xl border border-[#1e1e2e] hover:border-indigo-500/40 p-4 transition-all">
             <div className="flex items-center gap-3 mb-3">
               <span className="text-lg">🏠</span>
-              <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">Roofing OS</h3>
+              <h3 className="text-sm font-bold text-white">Roofing OS</h3>
               <span className="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide">Active</span>
-              <span className="ml-auto text-[10px] text-gray-600 group-hover:text-indigo-400 transition-colors">Open →</span>
+              <button
+                onClick={() => navigate('/roofing')}
+                className="ml-auto text-[10px] text-gray-600 hover:text-indigo-400 transition-colors"
+              >
+                Open →
+              </button>
             </div>
             {!loading && roofingStats ? (
               <div className="grid grid-cols-3 gap-3">
-                <div>
+                <button onClick={() => navigate('/roofing/contractors')} className="text-left hover:opacity-80 transition-opacity">
                   <div className="text-xl font-black text-white">{roofingStats.contractors}</div>
                   <div className="text-[10px] text-gray-600 uppercase tracking-widest">Contractors</div>
-                </div>
-                <div>
+                </button>
+                <button onClick={() => navigate('/roofing/pipeline')} className="text-left hover:opacity-80 transition-opacity">
                   <div className="text-xl font-black text-cyan-400">{roofingStats.whales}</div>
                   <div className="text-[10px] text-gray-600 uppercase tracking-widest">Whales Hot</div>
-                </div>
-                <div>
+                </button>
+                <button onClick={() => navigate('/roofing/calls')} className="text-left hover:opacity-80 transition-opacity">
                   <div className="text-xl font-black text-amber-400">{roofingStats.calls}</div>
                   <div className="text-[10px] text-gray-600 uppercase tracking-widest">Calls Queued</div>
-                </div>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import CommandBar from './CommandBar'
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
 const SB_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -18,7 +19,7 @@ const ICONS = {
   signout: 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1',
   bolt:    'M13 10V3L4 14h7v7l9-11h-7z',
   more:    'M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z',
-  x:       'M6 18L18 6M6 6l12 12',
+  search:  'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
 }
 
 function NavItem({ to, icon, label, end = false }) {
@@ -43,7 +44,8 @@ function NavItem({ to, icon, label, end = false }) {
 export default function Nav({ session }) {
   const location  = useLocation()
   const navigate  = useNavigate()
-  const [moreOpen, setMoreOpen] = useState(false)
+  const [moreOpen, setMoreOpen]   = useState(false)
+  const [cmdOpen, setCmdOpen]     = useState(false)
 
   const isRoofing = location.pathname.startsWith('/roofing') &&
     !location.pathname.startsWith('/roofing/login') &&
@@ -62,6 +64,19 @@ export default function Nav({ session }) {
     }).catch(() => {})
   }
 
+  // Cmd+K / Ctrl+K global shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen(o => !o)
+      }
+      if (e.key === 'Escape') setCmdOpen(false)
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   return (
     <>
       {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
@@ -77,6 +92,18 @@ export default function Nav({ session }) {
           </div>
         </div>
 
+        {/* Search / Command bar trigger */}
+        <div className="px-3 pt-3">
+          <button
+            onClick={() => setCmdOpen(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 bg-[#0a0a0f] border border-[#1e1e2e] rounded-lg text-sm text-gray-600 hover:text-gray-400 hover:border-[#2e2e3e] transition-all"
+          >
+            <Icon path={ICONS.search} cls="w-3.5 h-3.5 shrink-0" />
+            <span className="flex-1 text-left text-xs">Search…</span>
+            <kbd className="text-[10px] bg-[#1e1e2e] border border-[#2e2e3e] px-1 rounded">⌘K</kbd>
+          </button>
+        </div>
+
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {/* NEXUS section */}
           <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2">Nexus</div>
@@ -87,7 +114,6 @@ export default function Nav({ session }) {
           <div className="pt-4">
             <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 border-t border-[#1e1e2e] pt-3">Verticals</div>
 
-            {/* Roofing OS — single link, sub-tabs live inside the page */}
             <NavLink
               to="/roofing"
               className={() =>
@@ -102,7 +128,6 @@ export default function Nav({ session }) {
               Roofing OS
             </NavLink>
 
-            {/* Coming soon */}
             <div className="mt-1 space-y-0.5 opacity-35 pointer-events-none select-none">
               <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600">
                 <span className="text-base leading-none">💰</span>
@@ -140,7 +165,7 @@ export default function Nav({ session }) {
         </div>
       </aside>
 
-      {/* ── Mobile bottom nav (5 items) ───────────────────────────────────── */}
+      {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0c0c14] border-t border-[#1e1e2e] flex items-stretch h-16 safe-bottom">
         <NavLink to="/" end className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
@@ -163,12 +188,14 @@ export default function Nav({ session }) {
           Roofing
         </NavLink>
 
-        <NavLink to="/roofing/calls" className={({ isActive }) =>
-          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
-        }>
-          <Icon path={ICONS.calls} cls="w-5 h-5" />
-          Calls
-        </NavLink>
+        {/* Search / Command bar — mobile */}
+        <button
+          onClick={() => setCmdOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-gray-600"
+        >
+          <Icon path={ICONS.search} cls="w-5 h-5" />
+          Search
+        </button>
 
         <button
           onClick={() => setMoreOpen(o => !o)}
@@ -192,6 +219,14 @@ export default function Nav({ session }) {
                 <Icon path={ICONS.bolt} cls="w-5 h-5" />
                 Run Nexus Core
               </button>
+              <NavLink
+                to="/roofing/calls"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] transition-all"
+              >
+                <Icon path={ICONS.calls} cls="w-5 h-5" />
+                Calls
+              </NavLink>
             </div>
             <div className="border-t border-[#1e1e2e] px-4 py-3">
               <button
@@ -205,6 +240,9 @@ export default function Nav({ session }) {
           </div>
         </div>
       )}
+
+      {/* Command bar overlay */}
+      <CommandBar open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </>
   )
 }
