@@ -1,17 +1,16 @@
 // ============================================================================
 // SMOKE TEST EDGE FUNCTION
+// Comprehensive health check and system validation for Nexus
 // ============================================================================
-// Comprehensive health check and smoke test endpoint for Nexus system
-// Validates runtime environment, database connectivity, and system health
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 // ============================================================================
-// CONSTANTS & CONFIGURATION
+// CONSTANTS AND CONFIGURATION
 // ============================================================================
 
 const FUNCTION_NAME = 'smoke-test';
-const FUNCTION_VERSION = '2.0.0';
+const FUNCTION_VERSION = '1.0.0';
 const FUNCTION_START_TIME = performance.now();
 
 // ============================================================================
@@ -52,39 +51,23 @@ interface ErrorResponse {
 // ============================================================================
 
 /**
- * Enhanced logging with structured output
+ * Log structured messages
  */
-function log(
-  level: 'info' | 'warn' | 'error',
-  message: string,
-  data?: Record<string, unknown>
-): void {
+function log(level: 'info' | 'warn' | 'error', message: string, meta?: Record<string, unknown>) {
   const logEntry = {
     timestamp: new Date().toISOString(),
     level,
     function: FUNCTION_NAME,
     message,
-    ...data,
+    ...meta,
   };
-
-  const logString = JSON.stringify(logEntry);
-
-  switch (level) {
-    case 'error':
-      console.error(logString);
-      break;
-    case 'warn':
-      console.warn(logString);
-      break;
-    default:
-      console.log(logString);
-  }
+  console.log(JSON.stringify(logEntry));
 }
 
 /**
- * Get CORS headers for all responses
+ * Get CORS headers for responses
  */
-function getCorsHeaders(): Record<string, string> {
+function getCorsHeaders(): HeadersInit {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -94,7 +77,7 @@ function getCorsHeaders(): Record<string, string> {
 }
 
 /**
- * Create standardized JSON response
+ * Create a standardized JSON response
  */
 function createJsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -116,16 +99,18 @@ function createJsonResponse(data: unknown, status = 200): Response {
 async function checkRuntime(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const version = Deno.version;
-    
+    const denoVersion = Deno.version.deno;
+    const v8Version = Deno.version.v8;
+    const typescriptVersion = Deno.version.typescript;
+
     return {
       name: 'runtime',
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        deno: version.deno,
-        v8: version.v8,
-        typescript: version.typescript,
+        deno_version: denoVersion,
+        v8_version: v8Version,
+        typescript_version: typescriptVersion,
       },
     };
   } catch (error) {
@@ -144,29 +129,21 @@ async function checkRuntime(): Promise<HealthCheckResult> {
 async function checkEnvironment(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-    const missing: string[] = [];
-    const present: string[] = [];
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const missingVars: string[] = [];
 
-    for (const envVar of requiredEnvVars) {
-      const value = Deno.env.get(envVar);
-      if (!value) {
-        missing.push(envVar);
-      } else {
-        present.push(envVar);
+    for (const varName of requiredEnvVars) {
+      if (!Deno.env.get(varName)) {
+        missingVars.push(varName);
       }
     }
 
-    if (missing.length > 0) {
+    if (missingVars.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
-        details: {
-          missing,
-          present,
-        },
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
       };
     }
 
@@ -203,13 +180,13 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
         name: 'supabase_client',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Supabase credentials not available',
+        message: 'Missing Supabase credentials',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const client = createClient(supabaseUrl, supabaseKey);
 
-    if (!supabase) {
+    if (!client) {
       return {
         name: 'supabase_client',
         status: 'fail',
@@ -223,7 +200,8 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        initialized: true,
+        client_initialized: true,
+        url: supabaseUrl,
       },
     };
   } catch (error) {
@@ -237,39 +215,34 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
 }
 
 /**
- * Check database connectivity
+ * Check database connectivity with a simple query
  */
 async function checkDatabase(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Database credentials not available',
+        message: 'Missing Supabase credentials',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const client = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to check connectivity - using a basic RPC or table query
-    // This is a lightweight check that doesn't require specific table structure
-    const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+    // Simple query to check database connectivity
+    const { data, error } = await client.from('profiles').select('id').limit(1);
 
     if (error) {
       return {
         name: 'database',
-        status: 'warn',
+        status: 'fail',
         duration_ms: performance.now() - start,
-        message: `Database query returned error: ${error.message}`,
-        details: {
-          error_code: error.code,
-          error_hint: error.hint,
-        },
+        message: `Database query failed: ${error.message}`,
       };
     }
 
@@ -278,7 +251,8 @@ async function checkDatabase(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        connected: true,
+        query_successful: true,
+        connection_active: true,
       },
     };
   } catch (error) {
@@ -292,15 +266,14 @@ async function checkDatabase(): Promise<HealthCheckResult> {
 }
 
 /**
- * Check JSON serialization capabilities
+ * Check JSON serialization/deserialization
  */
 async function checkJsonSerialization(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const testObject = {
-      timestamp: new Date().toISOString(),
-      number: 42,
       string: 'test',
+      number: 42,
       boolean: true,
       null: null,
       array: [1, 2, 3],
@@ -526,4 +499,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
       const errorResponse: ErrorResponse = {
         error: 'INVALID_REQUEST',
-        message: validation.error
+        message: validation.error || 'Request validation failed',
+        timestamp: new Date().toISOString(),
+        path: url.pathname,
+      };
+
+      return createJsonResponse(errorResponse, 400);
+    }
+
+    // Execute health check
+    const response = await handleHealthCheck(req);
+
+    const duration = performance.now() - requestStart;
+    log('info', 'Request completed', {
+      status: response.status,
+      duration_ms: Math.round(duration * 100) / 100,
+    });
