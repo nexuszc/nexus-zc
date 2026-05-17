@@ -395,15 +395,30 @@ Then productized and sold to other multi-business operators.
 **DONE this session:**
 - (nothing yet this session)
 
+**DONE this session:**
+- Roofer Onboarding v1 — full signup to first job flow:
+  - Welcome email fixed (correct dashboard URL + login instructions + Twilio SMS)
+  - Stripe race condition fixed (2s retry on subscription.created)
+  - Onboarding checklist banner in dashboard (3-step, dismissable)
+  - onboarding_step auto-advances: account_created → dashboard_accessed → first_job_added
+  - Team member add modal with real contractor-auth add_employee flow
+  - roofing-job-create — new edge function with session auth + homeowner email + portal dispatch
+  - Dashboard createJob() switches to roofing-job-create with homeowner email field
+  - RoofingOnboarding.jsx redirected to roofingos.dev (app.nexuszc.com is owner-only)
+  - Homeowner portal URL fixed in nexus-job-intake-voice (→ roofingos.dev/portal/)
+  - DB columns added: magic_link_sent_at, onboarding_dismissed, first_job_at, dashboard_first_accessed_at
+  - Telegram cleanup clusters 1-6 deployed (33 routine sends → dashboard)
+  - Aria duplicate call queue fix (1,348 rows cleaned, dedup at insert)
+
 **NEXT:**
 1. Fix smoke_test_failed error (simple)
 2. Fix Recurring Smoke Test Failures (medium)
 3. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
-4. Build the complete Roofing OS go-to-market system with public landing page
-5. Add Self-Learning Pattern Recognition (medium)
-6. Add memory consolidation ability (medium)
-7. Add Conversation Context Memory (medium)
-8. Review and improve client health scores for Brian and Denver Pro Roofing
+4. Add Self-Learning Pattern Recognition (medium)
+5. Add memory consolidation ability (medium)
+6. Add Conversation Context Memory (medium)
+7. Review and improve client health scores for Brian and Denver Pro Roofing
+8. Test Roofer Onboarding v1 end-to-end with Stripe test card
 
 ---
 
@@ -413,7 +428,7 @@ Telegram is **not** a dashboard or an approval queue. It is a personal push chan
 
 **Rule:** Functions do NOT send Telegram for routine operation results (prospector found leads, community monitor found posts, supplement saved, etc.). Those live in the dashboard at app.nexuszc.com.
 
-**What Telegram sends (9 automatic alerts):**
+**What Telegram sends (10 automatic alerts):**
 1. Morning digest (7:30am MT) — whales, email stats, Aria queue, content pending, one priority action
 2. Monthly truth (1st of month) — portfolio performance report
 3. Briefing (7am MT) — nexus daily brief
@@ -423,6 +438,7 @@ Telegram is **not** a dashboard or an approval queue. It is a personal push chan
 7. nexus-core think cycle — strategic insights and flags
 8. Auto-fix deployed — code change staged to dev branch
 9. Health monitor — critical function errors
+10. First job created — contractor's first job (they're live, call to check in)
 
 **What Telegram accepts (6 commands):**
 1. Free-form message → brain responds (chat function)
