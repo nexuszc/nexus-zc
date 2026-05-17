@@ -6,7 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -78,33 +78,49 @@ async function generateScript(topic: { title: string; pain_point: string; format
   tags?: string[];
   duration_estimate: number;
 } | null> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: topic.format === "short" ? 300 : 1000,
-      system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
-      messages: [{
-        role: "user",
-        content: `Topic: "${topic.title}"\nPain point: ${topic.pain_point}\nGenerate the script now. JSON only.`,
-      }],
-    }),
-  });
+  if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY not set");
 
-  const data = await res.json();
-  const text = data.content?.[0]?.text;
-  if (!text) return null;
+  const controller = new AbortController();
+  const timeoutMs = topic.format === "long" ? 50000 : 30000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
-  } catch {
-    console.error("Parse failed for topic:", topic.title, text?.slice(0, 200));
-    return null;
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: topic.format === "short" ? 300 : 2000,
+        system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
+        messages: [{
+          role: "user",
+          content: `Topic: "${topic.title}"\nPain point: ${topic.pain_point}\nGenerate the script now. JSON only.`,
+        }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      throw new Error(`Anthropic ${res.status}: ${errBody.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const text = data.content?.[0]?.text;
+    if (!text) return null;
+
+    try {
+      return JSON.parse(text.replace(/```json|```/g, "").trim());
+    } catch {
+      console.error("Parse failed for topic:", topic.title, text?.slice(0, 200));
+      return null;
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -112,118 +128,114 @@ async function generateScript(topic: { title: string; pain_point: string; format
 
 Deno.serve(async (req) => {
   try {
-  const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v2 ready" });
+    const body = await req.json().catch(() => ({}));
+    if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v2 ready" });
 
-  const startMs = Date.now();
+    const startMs = Date.now();
 
-  // Get already-used topic hashes
-  const { data: usedTopics } = await supabase
-    .from("content_topics")
-    .select("topic_hash")
-    .not("used_at", "is", null);
-
-  const usedHashes = new Set((usedTopics || []).map((t: { topic_hash: string }) => t.topic_hash));
-
-  // Also skip topics that already have content generated (even if not yet used)
-  const { data: existingContent } = await supabase
-    .from("roofing_content")
-    .select("topic_hash")
-    .not("topic_hash", "is", null);
-
-  const generatedHashes = new Set((existingContent || []).map((c: { topic_hash: string }) => c.topic_hash));
-
-  // Get all topics ordered by created_at
-  const { data: allTopics } = await supabase
-    .from("content_topics")
-    .select("*")
-    .order("created_at", { ascending: true });
-
-  const unused = (allTopics || []).filter(
-    (t: { topic_hash: string }) => !usedHashes.has(t.topic_hash) && !generatedHashes.has(t.topic_hash)
-  );
-
-  // Pick 2 shorts + 1 long — keeps total execution under 45s
-  const shorts = unused.filter((t: { format: string }) => t.format === "short").slice(0, 2);
-  const longs  = unused.filter((t: { format: string }) => t.format === "long").slice(0, 1);
-  const toGenerate = [...shorts, ...longs];
-
-  if (toGenerate.length === 0) {
-    // All topics used — reset low performers so cycle can restart
-    await supabase
+    const { data: usedTopics } = await supabase
       .from("content_topics")
-      .update({ used_at: null })
-      .lt("performance_score", 50);
+      .select("topic_hash")
+      .not("used_at", "is", null);
+
+    const usedHashes = new Set((usedTopics || []).map((t: { topic_hash: string }) => t.topic_hash));
+
+    const { data: existingContent } = await supabase
+      .from("roofing_content")
+      .select("topic_hash")
+      .not("topic_hash", "is", null);
+
+    const generatedHashes = new Set((existingContent || []).map((c: { topic_hash: string }) => c.topic_hash));
+
+    const { data: allTopics } = await supabase
+      .from("content_topics")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    const unused = (allTopics || []).filter(
+      (t: { topic_hash: string }) => !usedHashes.has(t.topic_hash) && !generatedHashes.has(t.topic_hash)
+    );
+
+    const shorts = unused.filter((t: { format: string }) => t.format === "short").slice(0, 5);
+    const longs  = unused.filter((t: { format: string }) => t.format === "long").slice(0, 1);
+    const toGenerate = [...shorts, ...longs];
+
+    if (toGenerate.length === 0) {
+      await supabase
+        .from("content_topics")
+        .update({ used_at: null })
+        .lt("performance_score", 50);
+
+      try {
+        await supabase.from("system_heartbeats").insert({
+          function_name: "roofing-content-engine",
+          status: "ok",
+          response_ms: Date.now() - startMs,
+          metadata: { generated: 0, message: "all topics used — reset low performers" },
+          recorded_at: new Date().toISOString(),
+        });
+      } catch { /* non-fatal */ }
+
+      return Response.json({ ok: true, generated: 0, message: "All topics used — reset low performers" });
+    }
+
+    let generated = 0;
+    const errors: string[] = [];
+
+    for (const topic of toGenerate) {
+      try {
+        const parsed = await generateScript(topic);
+        if (!parsed) {
+          errors.push(`Parse failed: ${topic.title}`);
+          continue;
+        }
+
+        const { error: insertErr } = await supabase.from("roofing_content").insert({
+          title: parsed.title,
+          body: parsed.script,
+          script: parsed.script,
+          hook_text: parsed.hook_text,
+          thumbnail_text: parsed.thumbnail_text,
+          seo_description: parsed.description || null,
+          tags: parsed.tags || [],
+          format: topic.format,
+          pain_point: topic.pain_point,
+          topic_hash: topic.topic_hash,
+          duration_estimate: parsed.duration_estimate,
+          type: topic.format === "long" ? "youtube_long" : "youtube_short",
+          channel: "youtube",
+          status: "pending_approval",
+          schedule_slot: null,
+        });
+
+        if (insertErr) {
+          errors.push(`Insert failed (${topic.title}): ${insertErr.message}`);
+          continue;
+        }
+
+        await supabase
+          .from("content_topics")
+          .update({ used_at: new Date().toISOString() })
+          .eq("topic_hash", topic.topic_hash);
+
+        generated++;
+      } catch (err) {
+        errors.push(`${topic.title}: ${String(err).slice(0, 200)}`);
+      }
+    }
 
     try {
       await supabase.from("system_heartbeats").insert({
         function_name: "roofing-content-engine",
-        status: "ok",
+        status: errors.length > 0 && generated === 0 ? "error" : "ok",
         response_ms: Date.now() - startMs,
-        metadata: { generated: 0, message: "all topics used — reset low performers" },
+        error_message: errors.length > 0 ? errors.join("; ").slice(0, 500) : null,
+        metadata: { generated, errors: errors.length, topics_available: toGenerate.length },
         recorded_at: new Date().toISOString(),
       });
-    } catch (_) {}
+    } catch { /* non-fatal */ }
 
-    return Response.json({ ok: true, generated: 0, message: "All topics used — reset low performers" });
-  }
-
-  let generated = 0;
-  const errors: string[] = [];
-
-  for (const topic of toGenerate) {
-    try {
-      const parsed = await generateScript(topic);
-      if (!parsed) {
-        errors.push(`Parse failed: ${topic.title}`);
-        continue;
-      }
-
-      const { error: insertErr } = await supabase.from("roofing_content").insert({
-        title: parsed.title,
-        body: parsed.script,
-        script: parsed.script,
-        hook_text: parsed.hook_text,
-        thumbnail_text: parsed.thumbnail_text,
-        seo_description: parsed.description || null,
-        tags: parsed.tags || [],
-        format: topic.format,
-        pain_point: topic.pain_point,
-        topic_hash: topic.topic_hash,
-        duration_estimate: parsed.duration_estimate,
-        type: topic.format === "long" ? "youtube_long" : "youtube_short",
-        channel: "youtube",
-        status: "pending_approval",
-        schedule_slot: null,
-      });
-      if (insertErr) {
-        errors.push(`Insert failed (${topic.title}): ${insertErr.message}`);
-        continue;
-      }
-
-      await supabase
-        .from("content_topics")
-        .update({ used_at: new Date().toISOString() })
-        .eq("topic_hash", topic.topic_hash);
-
-      generated++;
-    } catch (err) {
-      errors.push(`${topic.title}: ${String(err).slice(0, 100)}`);
-    }
-  }
-
-  try {
-    await supabase.from("system_heartbeats").insert({
-      function_name: "roofing-content-engine",
-      status: errors.length > 0 && generated === 0 ? "error" : "ok",
-      response_ms: Date.now() - startMs,
-      error_message: errors.length > 0 ? errors.join("; ").slice(0, 500) : null,
-      metadata: { generated, errors: errors.length, topics_available: toGenerate.length },
-      recorded_at: new Date().toISOString(),
-    });
-  } catch (_) {}
-
-  return Response.json({ ok: true, generated, errors: errors.length > 0 ? errors : undefined });
+    return Response.json({ ok: true, generated, errors: errors.length > 0 ? errors : undefined });
   } catch (fatal) {
     console.error("roofing-content-engine fatal:", fatal);
     return Response.json({ ok: false, error: String(fatal) }, { status: 500 });
