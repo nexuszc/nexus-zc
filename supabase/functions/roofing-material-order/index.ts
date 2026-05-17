@@ -64,12 +64,8 @@ Deno.serve(async (req) => {
         .update({ material_cost: totalAmount })
         .eq("job_id", job_id);
 
-      await tg(
-        `📦 *Materials Ordered*\n` +
-        `Supplier: ${supplier}\n` +
-        `Total: $${(totalAmount / 100).toLocaleString()}\n` +
-        `Delivery: ${delivery_date || "TBD"}`
-      );
+      // MOVED_TO_DASHBOARD [date: 2026-05-17]: material orders visible in Jobs tab (material_orders table)
+      // await tg(`📦 *Materials Ordered*\nSupplier: ${supplier}\nTotal: $${(totalAmount / 100).toLocaleString()}\nDelivery: ${delivery_date || "TBD"}`);
 
       return Response.json({ ok: true, order_id: order?.id });
     }

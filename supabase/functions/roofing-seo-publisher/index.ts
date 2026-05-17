@@ -246,12 +246,8 @@ Deno.serve(async (req) => {
       checked_at: new Date().toISOString()
     }).catch(() => {});
 
-    await tg(
-      `🚀 *Blog Post Published*\n` +
-      `*${content.title}*\n` +
-      `🔗 ${publishedUrl}\n` +
-      `_Deployed to roofingos.dev/blog — Google indexing submitted_`
-    );
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: published blog posts visible in Content tab (roofing_content.published_url set)
+    // await tg(`🚀 *Blog Post Published*\n*${content.title}*\n🔗 ${publishedUrl}\n_Deployed to roofingos.dev/blog — Google indexing submitted_`);
 
     return Response.json({ ok: true, published_url: publishedUrl, slug, duration_ms: duration });
 
