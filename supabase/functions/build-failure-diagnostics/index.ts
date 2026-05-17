@@ -1,193 +1,142 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
-interface DiagnosticRequest {
-  error?: string;
-  errorType?: string;
-  functionName?: string;
-  deploymentId?: string;
-  timestamp?: string;
-}
-
-interface DiagnosticResponse {
-  diagnosis: string;
-  errorType: string;
-  suggestions: string[];
-  documentation: string[];
-  severity: "critical" | "high" | "medium" | "low";
-}
-
-const commonIssues = [
-  {
-    pattern: /Deno\.serve/i,
-    errorType: "missing_deno_serve",
-    diagnosis: "Edge function is missing required Deno.serve() wrapper",
-    suggestions: [
-      "Wrap your function code with Deno.serve(async (req) => { ... })",
-      "Ensure the function exports a handler using Deno.serve()",
-      "Example: Deno.serve(async (req) => { return new Response('Hello') })",
-    ],
-    documentation: [
-      "https://supabase.com/docs/guides/functions",
-      "https://deno.land/api@v1.35.0?s=Deno.serve",
-    ],
-    severity: "critical" as const,
-  },
-  {
-    pattern: /import.*from.*npm:/i,
-    errorType: "npm_import_issue",
-    diagnosis: "NPM package import may not be supported or configured correctly",
-    suggestions: [
-      "Use Deno-compatible imports from deno.land/x or esm.sh",
-      "For NPM packages, use npm: specifier with version",
-      "Check if the package has TypeScript types available",
-    ],
-    documentation: [
-      "https://deno.land/manual/node/npm_specifiers",
-      "https://supabase.com/docs/guides/functions/import-maps",
-    ],
-    severity: "high" as const,
-  },
-  {
-    pattern: /CORS|cross-origin/i,
-    errorType: "cors_error",
-    diagnosis: "CORS configuration issue detected",
-    suggestions: [
-      "Add CORS headers to your response",
-      "Include Access-Control-Allow-Origin header",
-      "Handle OPTIONS preflight requests",
-    ],
-    documentation: [
-      "https://supabase.com/docs/guides/functions/cors",
-    ],
-    severity: "medium" as const,
-  },
-  {
-    pattern: /timeout|deadline/i,
-    errorType: "timeout_error",
-    diagnosis: "Function execution timeout",
-    suggestions: [
-      "Optimize database queries",
-      "Reduce external API call duration",
-      "Consider async processing for long tasks",
-      "Check for infinite loops or blocking operations",
-    ],
-    documentation: [
-      "https://supabase.com/docs/guides/functions/limits",
-    ],
-    severity: "high" as const,
-  },
-  {
-    pattern: /env|environment variable/i,
-    errorType: "environment_variable_error",
-    diagnosis: "Missing or incorrect environment variable",
-    suggestions: [
-      "Set required environment variables in Supabase dashboard",
-      "Use Deno.env.get() to access environment variables",
-      "Verify variable names match exactly",
-    ],
-    documentation: [
-      "https://supabase.com/docs/guides/functions/secrets",
-    ],
-    severity: "high" as const,
-  },
-  {
-    pattern: /type|typescript/i,
-    errorType: "typescript_error",
-    diagnosis: "TypeScript type checking error",
-    suggestions: [
-      "Add proper type definitions",
-      "Use @ts-ignore sparingly for quick fixes",
-      "Check import paths and module resolution",
-    ],
-    documentation: [
-      "https://deno.land/manual/typescript",
-    ],
-    severity: "medium" as const,
-  },
-];
-
-function analyzeBuildFailure(request: DiagnosticRequest): DiagnosticResponse {
-  const errorText = request.error || "";
-  
-  for (const issue of commonIssues) {
-    if (issue.pattern.test(errorText)) {
-      return {
-        diagnosis: issue.diagnosis,
-        errorType: issue.errorType,
-        suggestions: issue.suggestions,
-        documentation: issue.documentation,
-        severity: issue.severity,
-      };
-    }
-  }
-
-  return {
-    diagnosis: "Unable to determine specific issue from error message",
-    errorType: "unknown_error",
-    suggestions: [
-      "Check Supabase Edge Function logs for detailed error messages",
-      "Verify all imports are using correct Deno-compatible URLs",
-      "Ensure function has proper Deno.serve() wrapper",
-      "Test function locally with Supabase CLI: supabase functions serve",
-      "Review function code for syntax errors",
-    ],
-    documentation: [
-      "https://supabase.com/docs/guides/functions",
-      "https://supabase.com/docs/guides/functions/troubleshooting",
-    ],
-    severity: "medium",
+interface DiagnosticResult {
+  timestamp: string;
+  status: 'success' | 'failure';
+  diagnostics: {
+    environment: {
+      status: string;
+      supabaseUrl: boolean;
+      supabaseAnonKey: boolean;
+      supabaseServiceKey: boolean;
+      denoVersion: string;
+    };
+    fileSystem: {
+      status: string;
+      canReadCwd: boolean;
+      currentDir: string;
+    };
+    supabaseClient: {
+      status: string;
+      canCreateClient: boolean;
+      error?: string;
+    };
+    imports: {
+      status: string;
+      supabaseJs: boolean;
+      error?: string;
+    };
   };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
+async function runDiagnostics(): Promise<DiagnosticResult> {
+  const result: DiagnosticResult = {
+    timestamp: new Date().toISOString(),
+    status: 'success',
+    diagnostics: {
+      environment: {
+        status: 'pending',
+        supabaseUrl: false,
+        supabaseAnonKey: false,
+        supabaseServiceKey: false,
+        denoVersion: '',
+      },
+      fileSystem: {
+        status: 'pending',
+        canReadCwd: false,
+        currentDir: '',
+      },
+      supabaseClient: {
+        status: 'pending',
+        canCreateClient: false,
+      },
+      imports: {
+        status: 'pending',
+        supabaseJs: false,
+      },
+    },
+  };
+
+  try {
+    result.diagnostics.environment.supabaseUrl = !!Deno.env.get('SUPABASE_URL');
+    result.diagnostics.environment.supabaseAnonKey = !!Deno.env.get('SUPABASE_ANON_KEY');
+    result.diagnostics.environment.supabaseServiceKey = !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    result.diagnostics.environment.denoVersion = Deno.version.deno;
+    result.diagnostics.environment.status = 'success';
+  } catch (error) {
+    result.diagnostics.environment.status = `failed: ${error.message}`;
+    result.status = 'failure';
+  }
+
+  try {
+    result.diagnostics.fileSystem.currentDir = Deno.cwd();
+    result.diagnostics.fileSystem.canReadCwd = true;
+    result.diagnostics.fileSystem.status = 'success';
+  } catch (error) {
+    result.diagnostics.fileSystem.status = `failed: ${error.message}`;
+    result.status = 'failure';
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'http://localhost:54321';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || 'dummy-key';
+    
+    const client = createClient(supabaseUrl, supabaseKey);
+    result.diagnostics.supabaseClient.canCreateClient = !!client;
+    result.diagnostics.supabaseClient.status = 'success';
+  } catch (error) {
+    result.diagnostics.supabaseClient.status = 'failed';
+    result.diagnostics.supabaseClient.error = error.message;
+    result.status = 'failure';
+  }
+
+  try {
+    result.diagnostics.imports.supabaseJs = typeof createClient === 'function';
+    result.diagnostics.imports.status = 'success';
+  } catch (error) {
+    result.diagnostics.imports.status = 'failed';
+    result.diagnostics.imports.error = error.message;
+    result.status = 'failure';
+  }
+
+  return result;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
     return new Response(null, {
+      status: 204,
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     });
   }
 
   try {
-    if (req.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: "Method not allowed" }),
-        {
-          status: 405,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
+    const diagnosticResults = await runDiagnostics();
 
-    const diagnosticRequest: DiagnosticRequest = await req.json();
-    const result = analyzeBuildFailure(diagnosticRequest);
-
-    return new Response(
-      JSON.stringify(result),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
+    return new Response(JSON.stringify(diagnosticResults, null, 2), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   } catch (error) {
     return new Response(
       JSON.stringify({
-        error: "Failed to process diagnostic request",
-        details: error instanceof Error ? error.message : "Unknown error",
-      }),
+        timestamp: new Date().toISOString(),
+        status: 'failure',
+        error: error.message,
+        stack: error.stack,
+      }, null, 2),
       {
         status: 500,
         headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         },
       }
     );
