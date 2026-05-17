@@ -1,266 +1,518 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-interface TestResult {
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface HealthCheckResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  version: string;
+  environment: string;
+  uptime_ms: number;
+  checks: HealthCheck[];
+  metadata: {
+    deno_version: string;
+    region?: string;
+    function_name: string;
+  };
+}
+
+interface HealthCheck {
   name: string;
-  passed: boolean;
+  status: 'pass' | 'fail';
   duration_ms: number;
-  error?: string;
+  message?: string;
+  details?: Record<string, unknown>;
 }
 
-async function testDBConnection(): Promise<TestResult> {
-  const start = performance.now();
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { error } = await supabase.from('_prisma_migrations').select('id').limit(1);
-    
-    if (error && error.code !== 'PGRST116') {
-      throw new Error(error.message);
-    }
-    
-    return {
-      name: 'database_connection',
-      passed: true,
-      duration_ms: performance.now() - start,
-    };
-  } catch (error) {
-    return {
-      name: 'database_connection',
-      passed: false,
-      duration_ms: performance.now() - start,
-      error: error.message,
-    };
-  }
+interface ErrorResponse {
+  error: string;
+  message: string;
+  timestamp: string;
+  path?: string;
 }
 
-async function testRuntime(): Promise<TestResult> {
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const FUNCTION_VERSION = '1.0.0';
+const FUNCTION_NAME = 'smoke-test';
+const REQUIRED_ENV_VARS = [
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+];
+
+// Global start time for uptime calculation
+const FUNCTION_START_TIME = performance.now();
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Returns CORS headers for cross-origin requests
+ */
+function getCorsHeaders(): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+/**
+ * Creates a JSON response with proper headers
+ */
+function createJsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...getCorsHeaders(),
+    },
+  });
+}
+
+/**
+ * Structured logging utility
+ */
+function log(level: 'info' | 'warn' | 'error', message: string, data?: unknown): void {
+  const logEntry = {
+    level,
+    message,
+    timestamp: new Date().toISOString(),
+    function: FUNCTION_NAME,
+    ...(data && { data }),
+  };
+  console.log(JSON.stringify(logEntry));
+}
+
+// ============================================================================
+// HEALTH CHECK FUNCTIONS
+// ============================================================================
+
+/**
+ * Check Deno runtime availability and version
+ */
+async function checkRuntime(): Promise<HealthCheck> {
   const start = performance.now();
   try {
     if (typeof Deno === 'undefined') {
       throw new Error('Deno runtime not available');
     }
-    
+
     const version = Deno.version;
     if (!version || !version.deno) {
-      throw new Error('Invalid Deno version');
+      throw new Error('Invalid Deno version information');
     }
-    
+
     return {
-      name: 'runtime_check',
-      passed: true,
+      name: 'runtime',
+      status: 'pass',
       duration_ms: performance.now() - start,
+      details: {
+        deno: version.deno,
+        v8: version.v8,
+        typescript: version.typescript,
+      },
     };
   } catch (error) {
     return {
-      name: 'runtime_check',
-      passed: false,
+      name: 'runtime',
+      status: 'fail',
       duration_ms: performance.now() - start,
-      error: error.message,
+      message: error instanceof Error ? error.message : 'Unknown runtime error',
     };
   }
 }
 
-async function testAuthContext(): Promise<TestResult> {
+/**
+ * Check environment variables configuration
+ */
+async function checkEnvironment(): Promise<HealthCheck> {
   const start = performance.now();
   try {
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-    
-    if (missingVars.length > 0) {
-      throw new Error(`Missing vars: ${missingVars.join(', ')}`);
+    const missing: string[] = [];
+    const present: string[] = [];
+
+    for (const varName of REQUIRED_ENV_VARS) {
+      const value = Deno.env.get(varName);
+      if (!value || value.trim() === '') {
+        missing.push(varName);
+      } else {
+        present.push(varName);
+      }
     }
-    
+
+    if (missing.length > 0) {
+      throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
     return {
-      name: 'auth_context',
-      passed: true,
+      name: 'environment',
+      status: 'pass',
       duration_ms: performance.now() - start,
+      details: {
+        variables_checked: REQUIRED_ENV_VARS.length,
+        variables_present: present.length,
+      },
     };
   } catch (error) {
     return {
-      name: 'auth_context',
-      passed: false,
+      name: 'environment',
+      status: 'fail',
       duration_ms: performance.now() - start,
-      error: error.message,
+      message: error instanceof Error ? error.message : 'Environment check failed',
     };
   }
 }
 
-async function testJSONResponse(): Promise<TestResult> {
-  const start = performance.now();
-  try {
-    const testObj = { test: 'data', timestamp: new Date().toISOString() };
-    const serialized = JSON.stringify(testObj);
-    const parsed = JSON.parse(serialized);
-    
-    if (parsed.test !== 'data') {
-      throw new Error('JSON serialization failed');
-    }
-    
-    return {
-      name: 'json_response',
-      passed: true,
-      duration_ms: performance.now() - start,
-    };
-  } catch (error) {
-    return {
-      name: 'json_response',
-      passed: false,
-      duration_ms: performance.now() - start,
-      error: error.message,
-    };
-  }
-}
-
-async function testSupabaseInit(): Promise<TestResult> {
+/**
+ * Check Supabase client initialization
+ */
+async function checkSupabaseClient(): Promise<HealthCheck> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-    
+
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase credentials not available');
     }
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     if (!supabase) {
-      throw new Error('Failed to create Supabase client');
+      throw new Error('Failed to initialize Supabase client');
     }
-    
+
     return {
-      name: 'supabase_init',
-      passed: true,
+      name: 'supabase_client',
+      status: 'pass',
       duration_ms: performance.now() - start,
+      details: {
+        url: supabaseUrl.substring(0, 30) + '...',
+      },
     };
   } catch (error) {
     return {
-      name: 'supabase_init',
-      passed: false,
+      name: 'supabase_client',
+      status: 'fail',
       duration_ms: performance.now() - start,
-      error: error.message,
+      message: error instanceof Error ? error.message : 'Client initialization failed',
     };
   }
 }
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
-  }
-
-  const startTime = performance.now();
-
+/**
+ * Check database connectivity
+ */
+async function checkDatabase(): Promise<HealthCheck> {
+  const start = performance.now();
   try {
-    const tests: TestResult[] = [];
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    try {
-      tests.push(await testRuntime());
-    } catch (error) {
-      tests.push({
-        name: 'runtime_check',
-        passed: false,
-        duration_ms: 0,
-        error: error.message,
-      });
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Database credentials not available');
     }
 
-    try {
-      tests.push(await testAuthContext());
-    } catch (error) {
-      tests.push({
-        name: 'auth_context',
-        passed: false,
-        duration_ms: 0,
-        error: error.message,
-      });
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Attempt to query a system table
+    const { error } = await supabase
+      .from('_prisma_migrations')
+      .select('id')
+      .limit(1);
+
+    // PGRST116 is "not found" which is acceptable - means connection works
+    if (error && error.code !== 'PGRST116') {
+      throw new Error(`Database query failed: ${error.message}`);
     }
 
-    try {
-      tests.push(await testSupabaseInit());
-    } catch (error) {
-      tests.push({
-        name: 'supabase_init',
-        passed: false,
-        duration_ms: 0,
-        error: error.message,
-      });
-    }
+    return {
+      name: 'database',
+      status: 'pass',
+      duration_ms: performance.now() - start,
+      message: 'Database connection successful',
+    };
+  } catch (error) {
+    return {
+      name: 'database',
+      status: 'fail',
+      duration_ms: performance.now() - start,
+      message: error instanceof Error ? error.message : 'Database check failed',
+    };
+  }
+}
 
-    try {
-      tests.push(await testJSONResponse());
-    } catch (error) {
-      tests.push({
-        name: 'json_response',
-        passed: false,
-        duration_ms: 0,
-        error: error.message,
-      });
-    }
-
-    try {
-      tests.push(await testDBConnection());
-    } catch (error) {
-      tests.push({
-        name: 'database_connection',
-        passed: false,
-        duration_ms: 0,
-        error: error.message,
-      });
-    }
-
-    const totalDuration = performance.now() - startTime;
-    const failedTests = tests.filter(test => !test.passed);
-    const passedTests = tests.filter(test => test.passed);
-
-    let status: 'healthy' | 'degraded' | 'failed';
-    if (failedTests.length === 0) {
-      status = 'healthy';
-    } else if (passedTests.length > failedTests.length) {
-      status = 'degraded';
-    } else {
-      status = 'failed';
-    }
-
-    const response = {
-      status,
-      tests,
+/**
+ * Check JSON serialization capabilities
+ */
+async function checkJsonSerialization(): Promise<HealthCheck> {
+  const start = performance.now();
+  try {
+    const testData = {
+      string: 'test',
+      number: 42,
+      boolean: true,
+      null: null,
+      array: [1, 2, 3],
+      object: { nested: 'value' },
       timestamp: new Date().toISOString(),
-      total_duration_ms: totalDuration,
     };
 
-    return new Response(JSON.stringify(response, null, 2), {
-      status: status === 'failed' ? 500 : 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      },
-    });
+    const serialized = JSON.stringify(testData);
+    const deserialized = JSON.parse(serialized);
+
+    if (deserialized.string !== 'test' || deserialized.number !== 42) {
+      throw new Error('JSON serialization verification failed');
+    }
+
+    return {
+      name: 'json_serialization',
+      status: 'pass',
+      duration_ms: performance.now() - start,
+      message: 'JSON operations working correctly',
+    };
   } catch (error) {
-    const totalDuration = performance.now() - startTime;
-    
-    return new Response(JSON.stringify({
-      status: 'failed',
-      tests: [],
-      timestamp: new Date().toISOString(),
-      total_duration_ms: totalDuration,
-      error: error.message,
-    }, null, 2), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+    return {
+      name: 'json_serialization',
+      status: 'fail',
+      duration_ms: performance.now() - start,
+      message: error instanceof Error ? error.message : 'Serialization check failed',
+    };
+  }
+}
+
+/**
+ * Check memory availability
+ */
+async function checkMemory(): Promise<HealthCheck> {
+  const start = performance.now();
+  try {
+    if (!Deno.memoryUsage) {
+      return {
+        name: 'memory',
+        status: 'pass',
+        duration_ms: performance.now() - start,
+        message: 'Memory API not available',
+      };
+    }
+
+    const memory = Deno.memoryUsage();
+    const heapUsedMB = memory.heapUsed / 1024 / 1024;
+    const heapTotalMB = memory.heapTotal / 1024 / 1024;
+
+    return {
+      name: 'memory',
+      status: 'pass',
+      duration_ms: performance.now() - start,
+      details: {
+        heap_used_mb: Math.round(heapUsedMB * 100) / 100,
+        heap_total_mb: Math.round(heapTotalMB * 100) / 100,
+        usage_percent: Math.round((heapUsedMB / heapTotalMB) * 100),
       },
+    };
+  } catch (error) {
+    return {
+      name: 'memory',
+      status: 'fail',
+      duration_ms: performance.now() - start,
+      message: error instanceof Error ? error.message : 'Memory check failed',
+    };
+  }
+}
+
+// ============================================================================
+// REQUEST HANDLERS
+// ============================================================================
+
+/**
+ * Handle OPTIONS preflight requests
+ */
+function handleOptions(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: getCorsHeaders(),
+  });
+}
+
+/**
+ * Validate incoming request
+ */
+function validateRequest(req: Request): { valid: boolean; error?: string } {
+  const method = req.method;
+
+  if (!['GET', 'POST', 'OPTIONS'].includes(method)) {
+    return {
+      valid: false,
+      error: `Method ${method} not allowed`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Execute all health checks and aggregate results
+ */
+async function performHealthChecks(): Promise<HealthCheckResponse> {
+  const checkStartTime = performance.now();
+
+  log('info', 'Starting health checks');
+
+  // Execute all health checks in parallel
+  const checks = await Promise.all([
+    checkRuntime(),
+    checkEnvironment(),
+    checkSupabaseClient(),
+    checkDatabase(),
+    checkJsonSerialization(),
+    checkMemory(),
+  ]);
+
+  // Determine overall status
+  const failedChecks = checks.filter((check) => check.status === 'fail');
+  const passedChecks = checks.filter((check) => check.status === 'pass');
+
+  let overallStatus: 'healthy' | 'degraded' | 'unhealthy';
+  if (failedChecks.length === 0) {
+    overallStatus = 'healthy';
+  } else if (passedChecks.length > failedChecks.length) {
+    overallStatus = 'degraded';
+  } else {
+    overallStatus = 'unhealthy';
+  }
+
+  const environment = Deno.env.get('ENVIRONMENT') || 'production';
+  const region = Deno.env.get('DENO_REGION') || 'unknown';
+
+  const response: HealthCheckResponse = {
+    status: overallStatus,
+    timestamp: new Date().toISOString(),
+    version: FUNCTION_VERSION,
+    environment,
+    uptime_ms: performance.now() - FUNCTION_START_TIME,
+    checks,
+    metadata: {
+      deno_version: Deno.version.deno,
+      region,
+      function_name: FUNCTION_NAME,
+    },
+  };
+
+  log('info', 'Health checks completed', {
+    status: overallStatus,
+    total_checks: checks.length,
+    passed: passedChecks.length,
+    failed: failedChecks.length,
+    duration_ms: performance.now() - checkStartTime,
+  });
+
+  return response;
+}
+
+/**
+ * Handle health check requests
+ */
+async function handleHealthCheck(req: Request): Promise<Response> {
+  try {
+    const healthCheckResult = await performHealthChecks();
+
+    const statusCode = healthCheckResult.status === 'unhealthy' ? 503 : 200;
+
+    return createJsonResponse(healthCheckResult, statusCode);
+  } catch (error) {
+    log('error', 'Health check failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
+
+    const errorResponse: ErrorResponse = {
+      error: 'HEALTH_CHECK_FAILED',
+      message: error instanceof Error ? error.message : 'Health check encountered an error',
+      timestamp: new Date().toISOString(),
+      path: new URL(req.url).pathname,
+    };
+
+    return createJsonResponse(errorResponse, 500);
+  }
+}
+
+// ============================================================================
+// MAIN ENTRY POINT
+// ============================================================================
+
+/**
+ * Main Deno.serve handler
+ * Processes all incoming requests with comprehensive error handling
+ */
+Deno.serve(async (req: Request): Promise<Response> => {
+  const requestStart = performance.now();
+  const url = new URL(req.url);
+  const method = req.method;
+
+  log('info', 'Incoming request', {
+    method,
+    path: url.pathname,
+    origin: req.headers.get('origin'),
+  });
+
+  try {
+    // Handle OPTIONS preflight requests
+    if (method === 'OPTIONS') {
+      log('info', 'Handling OPTIONS preflight request');
+      return handleOptions();
+    }
+
+    // Validate request
+    const validation = validateRequest(req);
+    if (!validation.valid) {
+      log('warn', 'Request validation failed', { error: validation.error });
+
+      const errorResponse: ErrorResponse = {
+        error: 'INVALID_REQUEST',
+        message: validation.error || 'Request validation failed',
+        timestamp: new Date().toISOString(),
+        path: url.pathname,
+      };
+
+      return createJsonResponse(errorResponse, 400);
+    }
+
+    // Handle health check request
+    const response = await handleHealthCheck(req);
+
+    const requestDuration = performance.now() - requestStart;
+    log('info', 'Request completed', {
+      status: response.status,
+      duration_ms: requestDuration,
+    });
+
+    return response;
+  } catch (error) {
+    const requestDuration = performance.now() - requestStart;
+
+    log('error', 'Unhandled error in request handler', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration_ms: requestDuration,
+    });
+
+    const errorResponse: ErrorResponse = {
+      error: 'INTERNAL_SERVER_ERROR',
+      message: error instanceof Error ? error.message : 'An unexpected error occurred',
+      timestamp: new Date().toISOString(),
+      path: url.pathname,
+    };
+
+    return createJsonResponse(errorResponse, 500);
   }
 });
+
+// Log function initialization
+log('info', '
