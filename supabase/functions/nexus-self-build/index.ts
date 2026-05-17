@@ -120,9 +120,8 @@ Deno.serve(async (req) => {
     updateBenchmarks()
   ]);
 
-  for (const alert of alerts) {
-    await tg(alert);
-  }
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: vertical opportunities visible in Brain tab (nexus_vertical_proposals table)
+  // for (const alert of alerts) { await tg(alert); }
 
   return Response.json({ ok: true, vertical_alerts: alerts.length });
 });

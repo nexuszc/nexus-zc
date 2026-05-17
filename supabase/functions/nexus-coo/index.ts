@@ -128,19 +128,9 @@ Be ruthlessly specific. Name names. Reference actual tasks. No fluff.`,
       await supabase.from("stale_alerts").insert({ client_id: client.id, days_inactive: daysInactive });
     }
 
-    const chatId = await getTelegramChatId();
-    if (chatId) {
-      const msg =
-        `⚠️ *Stale client alert*\n\n` +
-        newStale.map((c: any) => {
-          const days = c.last_activity_at
-            ? Math.floor((Date.now() - new Date(c.last_activity_at).getTime()) / (1000 * 60 * 60 * 24))
-            : "unknown";
-          return `• *${c.name}* — ${days} days inactive`;
-        }).join("\n") +
-        `\n\nWant me to draft follow-ups? Reply "follow up: [client name]"`;
-      await sendTelegram(chatId, msg);
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: stale client alerts visible in Home action queue (stale_alerts table)
+    // const chatId = await getTelegramChatId();
+    // if (chatId) { await sendTelegram(chatId, msg); }
 
     return Response.json({ ok: true, stale_count: newStale.length });
   }
@@ -163,17 +153,9 @@ Be ruthlessly specific. Name names. Reference actual tasks. No fluff.`,
       await supabase.from("projects").update({ momentum_status: "stale" }).eq("id", project.id);
     }
 
-    const chatId = await getTelegramChatId();
-    if (chatId) {
-      const msg =
-        `📉 *Project momentum alert*\n\n` +
-        staleProjects.map((p: any) => {
-          const days = Math.floor((Date.now() - new Date(p.last_update_at).getTime()) / (1000 * 60 * 60 * 24));
-          return `• *${p.name}* (${p.category}) — no update in ${days} days${p.next_milestone ? `\n  Next: ${p.next_milestone}` : ""}`;
-        }).join("\n") +
-        `\n\nReply "project update: [name] | [next milestone]" to log progress.`;
-      await sendTelegram(chatId, msg);
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: stale projects visible in Brain tab (projects.momentum_status='stale')
+    // const chatId = await getTelegramChatId();
+    // if (chatId) { await sendTelegram(chatId, msg); }
 
     return Response.json({ ok: true, stale_projects: staleProjects.length });
   }

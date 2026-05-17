@@ -101,9 +101,10 @@ Deno.serve(async (req) => {
     body: JSON.stringify({ diagnostic_id: diagnostic.id })
   }).catch(() => {});
 
-  if (proactive && quickScore >= 60) {
-    await tg(`🔍 *Proactive Scan — Promising Lead*\n*Business:* ${name}\n*URL:* ${url || "unknown"}\n*Quick Score:* ${quickScore}/100\nFull 24-layer diagnostic running now.`);
-  }
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: proactive scan leads visible in Pipeline tab (nexus_diagnostics table)
+  // if (proactive && quickScore >= 60) {
+  //   await tg(`🔍 *Proactive Scan — Promising Lead*\n*Business:* ${name}\n*URL:* ${url || "unknown"}\n*Quick Score:* ${quickScore}/100\nFull 24-layer diagnostic running now.`);
+  // }
 
   return Response.json({ ok: true, quick_score: quickScore, diagnostic_id: diagnostic.id, slug });
 });

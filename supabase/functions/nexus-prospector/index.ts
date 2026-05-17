@@ -43,7 +43,8 @@ Deno.serve(async (req) => {
     .limit(20);
 
   if (!prospects?.length) {
-    await tg("📋 *Nexus Prospector*\n\nNo undiagnosed prospects found yet — roofing-prospector is running now, prospects available tomorrow.");
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: prospector status visible in Pipeline tab (roofing_prospects table)
+    // await tg("📋 *Nexus Prospector*\n\nNo undiagnosed prospects found yet — roofing-prospector is running now, prospects available tomorrow.");
     return Response.json({ ok: true, prospector_fired: true, diagnostics_queued: 0 });
   }
 
@@ -57,7 +58,8 @@ Deno.serve(async (req) => {
   const todiagnose = prospects.filter(p => p.website && !diagnosedUrls.has(p.website)).slice(0, 5);
 
   if (!todiagnose.length) {
-    await tg("📋 *Nexus Prospector*\n\nTop prospects already diagnosed. roofing-prospector running now for fresh leads.");
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: diagnostic status visible in Pipeline tab (nexus_diagnostics table)
+    // await tg("📋 *Nexus Prospector*\n\nTop prospects already diagnosed. roofing-prospector running now for fresh leads.");
     return Response.json({ ok: true, prospector_fired: true, diagnostics_queued: 0 });
   }
 
@@ -95,13 +97,8 @@ Deno.serve(async (req) => {
     queued.push(prospect.company_name);
   }
 
-  await tg(
-    `🔍 *Nexus Prospector — Daily Run*\n\n` +
-    `Roofing prospector: running in background\n` +
-    `Diagnostics queued: ${queued.length}\n\n` +
-    `${queued.map(n => `• ${n}`).join("\n")}\n\n` +
-    `_Reports in ~3 min each. You'll be alerted per completion._`
-  );
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: queued diagnostics visible in Pipeline tab (nexus_diagnostics.status='pending')
+  // await tg(`🔍 *Nexus Prospector — Daily Run*\n\nRoofing prospector: running in background\nDiagnostics queued: ${queued.length}\n\n${queued.map(n => `• ${n}`).join("\n")}\n\n_Reports in ~3 min each. You'll be alerted per completion._`);
 
   return Response.json({ ok: true, prospector_fired: true, diagnostics_queued: queued.length, queued });
 });
