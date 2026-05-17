@@ -1,241 +1,161 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-interface BuildFailureRequest {
-  buildId: string;
-  errorMessage?: string;
-  errorStack?: string;
-  buildLogs?: string;
+interface BuildContext {
+  error?: string;
+  buildLog?: string;
+  projectId?: string;
+  componentPath?: string;
+  stackTrace?: string;
 }
 
-interface DiagnosticResult {
-  buildId: string;
-  diagnostics: {
-    errorType: string;
-    possibleCauses: string[];
-    suggestedFixes: string[];
-    severity: 'high' | 'medium' | 'low';
-  };
-  timestamp: string;
+interface DiagnosticReport {
+  analysis: string;
+  commonIssues: string[];
+  suggestions: string[];
+  severity: 'high' | 'medium' | 'low';
+  detectedPatterns: string[];
 }
 
-function analyzeError(errorMessage: string, errorStack?: string, buildLogs?: string): DiagnosticResult['diagnostics'] {
-  const message = (errorMessage || '').toLowerCase();
-  const stack = (errorStack || '').toLowerCase();
-  const logs = (buildLogs || '').toLowerCase();
-  const combined = `${message} ${stack} ${logs}`;
+function analyzeFailurePatterns(context: BuildContext): DiagnosticReport {
+  const commonIssues: string[] = [];
+  const suggestions: string[] = [];
+  const detectedPatterns: string[] = [];
+  let severity: 'high' | 'medium' | 'low' = 'medium';
 
-  if (combined.includes('module not found') || combined.includes('cannot find module')) {
-    return {
-      errorType: 'Missing Dependency',
-      possibleCauses: [
-        'Package not installed in package.json',
-        'Import path is incorrect',
-        'Package not compatible with build environment'
-      ],
-      suggestedFixes: [
-        'Run npm install or yarn install',
-        'Check import paths for typos',
-        'Verify package exists in package.json dependencies'
-      ],
-      severity: 'high'
-    };
+  const errorText = (context.error || '') + (context.buildLog || '') + (context.stackTrace || '');
+  const lowerError = errorText.toLowerCase();
+
+  if (lowerError.includes('cannot find module') || lowerError.includes('module not found')) {
+    commonIssues.push('Missing module import');
+    suggestions.push('Check that all dependencies are installed and import paths are correct');
+    suggestions.push('Verify package.json includes the missing module');
+    detectedPatterns.push('MISSING_IMPORT');
+    severity = 'high';
   }
 
-  if (combined.includes('syntax error') || combined.includes('unexpected token')) {
-    return {
-      errorType: 'Syntax Error',
-      possibleCauses: [
-        'Invalid JavaScript/TypeScript syntax',
-        'Incompatible ES version',
-        'Missing babel configuration'
-      ],
-      suggestedFixes: [
-        'Review code for syntax errors',
-        'Check babel/typescript configuration',
-        'Ensure build tools are properly configured'
-      ],
-      severity: 'high'
-    };
+  if (lowerError.includes('type error') || lowerError.includes('ts(')) {
+    commonIssues.push('TypeScript type error');
+    suggestions.push('Review type definitions and ensure type compatibility');
+    suggestions.push('Check for missing type declarations');
+    detectedPatterns.push('TYPE_ERROR');
   }
 
-  if (combined.includes('memory') || combined.includes('heap') || combined.includes('out of memory')) {
-    return {
-      errorType: 'Memory Issue',
-      possibleCauses: [
-        'Build process exceeding memory limits',
-        'Large dependencies or assets',
-        'Memory leak in build process'
-      ],
-      suggestedFixes: [
-        'Increase Node memory limit (NODE_OPTIONS=--max-old-space-size=4096)',
-        'Optimize dependencies and remove unused packages',
-        'Split large bundles'
-      ],
-      severity: 'high'
-    };
+  if (lowerError.includes('syntax error') || lowerError.includes('unexpected token')) {
+    commonIssues.push('Syntax error detected');
+    suggestions.push('Check for missing brackets, parentheses, or semicolons');
+    suggestions.push('Verify proper JSX/TSX syntax');
+    detectedPatterns.push('SYNTAX_ERROR');
+    severity = 'high';
   }
 
-  if (combined.includes('timeout') || combined.includes('timed out')) {
-    return {
-      errorType: 'Timeout',
-      possibleCauses: [
-        'Build taking too long',
-        'Network issues downloading dependencies',
-        'Slow or hanging build step'
-      ],
-      suggestedFixes: [
-        'Increase build timeout limit',
-        'Check network connectivity',
-        'Optimize build process and reduce build time'
-      ],
-      severity: 'medium'
-    };
+  if (lowerError.includes('enoent') || lowerError.includes('no such file')) {
+    commonIssues.push('File not found');
+    suggestions.push('Verify file paths are correct and files exist');
+    suggestions.push('Check for case sensitivity in file names');
+    detectedPatterns.push('FILE_NOT_FOUND');
+    severity = 'high';
   }
 
-  if (combined.includes('permission denied') || combined.includes('eacces')) {
-    return {
-      errorType: 'Permission Error',
-      possibleCauses: [
-        'Insufficient file system permissions',
-        'Protected directory access',
-        'npm/yarn global installation issue'
-      ],
-      suggestedFixes: [
-        'Check file and directory permissions',
-        'Avoid running builds as root',
-        'Clear npm cache and reinstall'
-      ],
-      severity: 'medium'
-    };
+  if (lowerError.includes('configuration') || lowerError.includes('config')) {
+    commonIssues.push('Configuration issue');
+    suggestions.push('Review configuration files (tsconfig.json, vite.config, etc.)');
+    suggestions.push('Ensure all required configuration options are set');
+    detectedPatterns.push('CONFIG_ERROR');
   }
 
-  if (combined.includes('network') || combined.includes('enotfound') || combined.includes('econnrefused')) {
-    return {
-      errorType: 'Network Error',
-      possibleCauses: [
-        'Cannot reach package registry',
-        'DNS resolution failure',
-        'Firewall or proxy blocking connection'
-      ],
-      suggestedFixes: [
-        'Check internet connectivity',
-        'Verify npm registry URL',
-        'Configure proxy settings if behind firewall'
-      ],
-      severity: 'medium'
-    };
+  if (lowerError.includes('memory') || lowerError.includes('heap out of memory')) {
+    commonIssues.push('Memory issue');
+    suggestions.push('Increase Node memory limit');
+    suggestions.push('Check for memory leaks or large file processing');
+    detectedPatterns.push('MEMORY_ERROR');
+    severity = 'high';
   }
 
-  if (combined.includes('type error') || combined.includes('typescript')) {
-    return {
-      errorType: 'TypeScript Error',
-      possibleCauses: [
-        'Type mismatch or incompatibility',
-        'Missing type definitions',
-        'Strict mode violations'
-      ],
-      suggestedFixes: [
-        'Fix type errors in source code',
-        'Install @types packages for dependencies',
-        'Adjust tsconfig.json settings'
-      ],
-      severity: 'medium'
-    };
+  if (lowerError.includes('permission denied') || lowerError.includes('eacces')) {
+    commonIssues.push('Permission error');
+    suggestions.push('Check file and directory permissions');
+    suggestions.push('Verify write access to build directories');
+    detectedPatterns.push('PERMISSION_ERROR');
   }
+
+  if (lowerError.includes('port') || lowerError.includes('eaddrinuse')) {
+    commonIssues.push('Port already in use');
+    suggestions.push('Check if another process is using the port');
+    suggestions.push('Try a different port or stop conflicting processes');
+    detectedPatterns.push('PORT_CONFLICT');
+  }
+
+  if (commonIssues.length === 0) {
+    commonIssues.push('Unknown build failure');
+    suggestions.push('Review complete error logs for details');
+    suggestions.push('Check recent code changes for potential issues');
+    detectedPatterns.push('UNKNOWN');
+  }
+
+  const analysis = `Build failure detected with ${detectedPatterns.length} pattern(s). ${commonIssues.join(', ')}.`;
 
   return {
-    errorType: 'Unknown Error',
-    possibleCauses: [
-      'Unrecognized build failure',
-      'Complex or multi-faceted issue'
-    ],
-    suggestedFixes: [
-      'Review full build logs',
-      'Check recent code changes',
-      'Consult documentation for specific error message'
-    ],
-    severity: 'low'
+    analysis,
+    commonIssues,
+    suggestions,
+    severity,
+    detectedPatterns,
   };
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const buildContext: BuildContext = await req.json();
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase configuration');
-    }
+    const diagnosticReport = analyzeFailurePatterns(buildContext);
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    if (buildContext.projectId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    const { buildId, errorMessage, errorStack, buildLogs }: BuildFailureRequest = await req.json();
-
-    if (!buildId) {
-      return new Response(
-        JSON.stringify({ error: 'buildId is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const diagnostics = analyzeError(
-      errorMessage || '',
-      errorStack,
-      buildLogs
-    );
-
-    const result: DiagnosticResult = {
-      buildId,
-      diagnostics,
-      timestamp: new Date().toISOString()
-    };
-
-    const { error: dbError } = await supabase
-      .from('build_diagnostics')
-      .insert({
-        build_id: buildId,
-        error_type: diagnostics.errorType,
-        possible_causes: diagnostics.possibleCauses,
-        suggested_fixes: diagnostics.suggestedFixes,
-        severity: diagnostics.severity,
-        created_at: result.timestamp
-      });
-
-    if (dbError) {
-      console.error('Error saving diagnostics:', dbError);
-    }
-
-    return new Response(
-      JSON.stringify(result),
-      {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+      if (supabaseUrl && supabaseKey) {
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        await supabase.from('build_diagnostics').insert({
+          project_id: buildContext.projectId,
+          component_path: buildContext.componentPath,
+          error_message: buildContext.error,
+          severity: diagnosticReport.severity,
+          detected_patterns: diagnosticReport.detectedPatterns,
+          suggestions: diagnosticReport.suggestions,
+          created_at: new Date().toISOString(),
+        });
       }
-    );
+    }
 
+    return new Response(JSON.stringify(diagnosticReport), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
   } catch (error) {
-    console.error('Error in build-failure-diagnostics:', error);
     return new Response(
       JSON.stringify({
-        error: error.message || 'Internal server error'
+        error: 'Failed to process build diagnostics',
+        message: error.message,
       }),
       {
         status: 500,
         headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       }
     );
   }
