@@ -255,9 +255,8 @@ Deno.serve(async (req) => {
       enrolled++;
     }
 
-    if (enrolled > 0) {
-      await tg(`✉️ *Prospects Enrolled*\n${enrolled} prospects added to 7-touch email nurture.\nFirst emails fire tomorrow at 9am MT.`);
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: enrollment count visible in Pipeline tab (email_sequences table)
+    // if (enrolled > 0) { await tg(`✉️ *Prospects Enrolled*\n${enrolled} ...`); }
     return Response.json({ ok: true, action: "enroll_all", enrolled });
   }
 
@@ -342,9 +341,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (sent > 0) {
-      await tg(`✉️ *Email Nurture Sent*\n${sent} emails sent | ${errors} errors`);
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: email send counts visible in Pipeline tab (email_log table)
+    // if (sent > 0) { await tg(`✉️ *Email Nurture Sent*\n${sent} emails sent | ${errors} errors`); }
 
     return Response.json({ ok: true, action: "send", sent, errors });
   }

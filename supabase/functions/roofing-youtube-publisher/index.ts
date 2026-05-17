@@ -407,37 +407,10 @@ async function processScript(content: {
     youtube_upload_ready: true,
   }).eq("id", content.id);
 
-  // 5. Send Telegram delivery package
-  const thumbnailText = content.thumbnail_text || content.title.toUpperCase().slice(0, 60);
-
-  const summaryMsg =
-    `🎬 *YouTube Package Ready*\n\n` +
-    `*${content.title}*\n\n` +
-    `📌 *Thumbnail text:*\n\`${thumbnailText}\`\n\n` +
-    (blogUrl ? `📖 *Blog post:* ${blogUrl}\n\n` : "") +
-    (mp3Url ? `🎙️ *Voiceover:* ${voiceoverChars} chars${truncated ? " (truncated to 4800)" : ""}\n\n` : "⚠️ Voiceover failed — upload script manually\n\n") +
-    `*YouTube upload steps (2 min):*\n` +
-    `1. Download MP3 from Telegram below\n` +
-    `2. Go to YouTube Studio → Create → Upload\n` +
-    `3. Upload MP3 as audio file\n` +
-    `4. Title: \`${content.title}\`\n` +
-    `5. Paste description (next message)\n` +
-    `6. Add thumbnail from Canva using text above\n` +
-    `7. Set to Public → Upload`;
-
-  await tg(summaryMsg);
-
-  // Send the YouTube description as a separate message
-  await tg(`📋 *YouTube Description — paste into Studio:*\n\n\`\`\`\n${description.slice(0, 3800)}\n\`\`\``);
-
-  // Send audio file via Telegram (shows inline audio player)
-  if (mp3Url) {
-    await tgAudio(
-      mp3Url,
-      `🎙️ ${content.title}\n\nDownload → upload to YouTube Studio`,
-      content.title
-    );
-  }
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube package summary (mp3_url, blog_url, description) visible in Content tab
+  // await tg(summaryMsg);
+  // await tg(`📋 *YouTube Description — paste into Studio:*\n\n...`);
+  // if (mp3Url) { await tgAudio(mp3Url, ...) }
 
   return { mp3_url: mp3Url, blog_url: blogUrl, description };
 }

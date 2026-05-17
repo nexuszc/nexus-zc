@@ -190,7 +190,8 @@ Deno.serve(async (req) => {
       }),
     }).catch(() => {});
 
-    await tg(`🎬 *Video Published*\n\n${title}\n${youtubeUrl}\n\nPosting to Facebook + Reddit now.`);
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: published video visible in Content tab (youtube_video_id set)
+    // await tg(`🎬 *Video Published*\n\n${title}\n${youtubeUrl}\n\nPosting to Facebook + Reddit now.`);
 
     return Response.json({ ok: true, youtube_id: youtubeId, youtube_url: youtubeUrl });
   } catch (err) {

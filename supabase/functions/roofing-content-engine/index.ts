@@ -46,13 +46,13 @@ async function saveAndNotify(type: string, title: string, body: string, channel:
     }).select().single();
 
     if (content) {
-      const preview = body.slice(0, 350).replace(/\n+/g, " ");
-      await tg(
-        `📝 *${type.toUpperCase()} Ready for Approval*\n` +
-        `*${title}*\n\n` +
-        `${preview}…\n\n` +
-        `Reply: \`approve content ${content.id}\``
-      );
+      // MOVED_TO_DASHBOARD [date: 2026-05-17]: content pending approval visible in Content tab
+      // await tg(
+      //   `📝 *${type.toUpperCase()} Ready for Approval*\n` +
+      //   `*${title}*\n\n` +
+      //   `${preview}…\n\n` +
+      //   `Reply: \`approve content ${content.id}\``
+      // );
       return content.id;
     }
   } catch (e) {
@@ -227,7 +227,8 @@ Format as a professional briefing: bold section headers, short paragraphs.`,
       checked_at: new Date().toISOString()
     }).catch(() => {});
 
-    await tg(`✅ *Content Engine Complete*\nGenerated: ${generated.length} pieces\n${generated.map(g => `• ${g}`).join("\n")}\n\n_Reply \`content queue\` to see all pending approvals._`);
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: content pipeline summary visible in Content tab
+    // await tg(`✅ *Content Engine Complete*\nGenerated: ${generated.length} pieces\n${generated.map(g => `• ${g}`).join("\n")}\n\n_Reply \`content queue\` to see all pending approvals._`);
 
     return Response.json({ ok: true, generated, storm_count: storms.length, duration_ms: duration });
 
@@ -239,7 +240,8 @@ Format as a professional briefing: bold section headers, short paragraphs.`,
       error_message: msg,
       checked_at: new Date().toISOString()
     }).catch(() => {});
-    await tg(`❌ *Content Engine Error*\n${msg}`);
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab via system_heartbeats
+    // await tg(`❌ *Content Engine Error*\n${msg}`);
     return Response.json({ ok: false, error: msg }, { status: 500 });
   }
 });

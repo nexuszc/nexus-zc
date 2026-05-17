@@ -102,7 +102,8 @@ Deno.serve(async (req) => {
     }).eq('id', content_id).catch(() => {});
   }
 
-  await tg(`📱 *Social Posts Done*\n\nFacebook: ${results.facebook ? '✅' : '❌'}\nTikTok: pending API setup`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: social post results visible in Content tab (social_post_ids set)
+  // await tg(`📱 *Social Posts Done*\n\nFacebook: ${results.facebook ? '✅' : '❌'}\nTikTok: pending API setup`);
 
   return Response.json({ ok: true, results });
 });

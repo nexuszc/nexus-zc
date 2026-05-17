@@ -263,18 +263,19 @@ async function generateForSlot(slot: typeof WEEKLY_SCHEDULE[0]): Promise<void> {
       });
     }
 
-    // Send Telegram approval with inline buttons
-    if (ytContent?.id) {
-      const msgId = await sendTelegramApproval(ytContent.id, title, hook);
-      if (msgId) {
-        await supabase.from("roofing_content")
-          .update({ telegram_message_id: msgId })
-          .eq("id", ytContent.id);
-      }
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube scripts pending approval visible in Content tab
+    // if (ytContent?.id) {
+    //   const msgId = await sendTelegramApproval(ytContent.id, title, hook);
+    //   if (msgId) {
+    //     await supabase.from("roofing_content")
+    //       .update({ telegram_message_id: msgId })
+    //       .eq("id", ytContent.id);
+    //   }
+    // }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    await tg(`❌ YouTube engine error for ${slot.day}/${slot.topic}: ${msg}`);
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab
+    // await tg(`❌ YouTube engine error for ${slot.day}/${slot.topic}: ${msg}`);
   }
 }
 
@@ -292,7 +293,8 @@ Deno.serve(async (req) => {
       await supabase.from("roofing_content")
         .update({ status: "approved", approved_at: new Date().toISOString() })
         .eq("id", contentId);
-      await tg(`✅ YouTube script approved and queued for recording.`);
+      // MOVED_TO_DASHBOARD [date: 2026-05-17]: approval status visible in Content tab
+      // await tg(`✅ YouTube script approved and queued for recording.`);
     } else if (action === "skip") {
       await supabase.from("roofing_content")
         .update({ status: "skipped" })
@@ -319,7 +321,8 @@ Deno.serve(async (req) => {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  await tg(`🎬 *YouTube Engine Complete*\n${results.length} scripts generated and sent for approval.`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube engine summary visible in Content tab
+  // await tg(`🎬 *YouTube Engine Complete*\n${results.length} scripts generated and sent for approval.`);
 
   await fetch(`${SUPABASE_URL}/functions/v1/system-heartbeat`, {
     method: "POST",
