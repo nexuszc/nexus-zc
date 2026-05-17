@@ -261,7 +261,8 @@ Deno.serve(async (req) => {
         icon: "✍️"
       });
 
-      await sendTelegram(`✍️ *Document signed*\n${session.homeowner_name} signed: ${document_title || "document"}`);
+      // MOVED_TO_DASHBOARD [date: 2026-05-17]: document signatures visible in Portal tab (portal_documents.status='signed')
+      // await sendTelegram(`✍️ *Document signed*\n${session.homeowner_name} signed: ${document_title || "document"}`);
 
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
     }
@@ -279,9 +280,8 @@ Deno.serve(async (req) => {
         referred_phone: refPhone
       });
 
-      await sendTelegram(
-        `🎯 *New referral*\nFrom: ${session.homeowner_name}\nReferred: ${name} at ${refAddress}\nPhone: ${refPhone}`
-      );
+      // MOVED_TO_DASHBOARD [date: 2026-05-17]: homeowner referrals visible in Portal tab (portal_referrals table)
+      // await sendTelegram(`🎯 *New referral*\nFrom: ${session.homeowner_name}\nReferred: ${name} at ${refAddress}\nPhone: ${refPhone}`);
 
       return new Response(JSON.stringify({ ok: true, referral_code: referralCode }), { headers: corsHeaders });
     }

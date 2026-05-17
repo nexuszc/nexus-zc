@@ -143,12 +143,8 @@ Sound like a human text, not marketing. No emojis overload.`
     referred_email: null
   }).catch(() => {});
 
-  await tg(
-    `🤝 *Referral Outreach Sent*\n` +
-    `Trigger: Supplement approved ($${approvedAmount})\n` +
-    `Contractor: ${contractor.company_name}\n` +
-    `Outreach: SMS + Aria call queued`
-  );
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: referral outreach visible in Pipeline tab (contractor_referrals table)
+  // await tg(`🤝 *Referral Outreach Sent*\nTrigger: Supplement approved ($${approvedAmount})\nContractor: ${contractor.company_name}\nOutreach: SMS + Aria call queued`);
 }
 
 async function handleReviewDetected(payload: any) {
@@ -175,7 +171,8 @@ Mention referral code: ${contractor.referral_code}. One free month per referral.
   );
 
   await sendReferralOutreach(contractor, message, "review_detected");
-  await tg(`⭐ *Referral Sent — 5-Star Review*\nContractor: ${contractor.company_name} (${platform})`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: review-triggered referrals visible in Pipeline tab (contractor_referrals table)
+  // await tg(`⭐ *Referral Sent — 5-Star Review*\nContractor: ${contractor.company_name} (${platform})`);
 }
 
 async function handleTierUpgrade(payload: any) {
@@ -198,7 +195,8 @@ Sound genuine, not salesy.`
   );
 
   await sendReferralOutreach(contractor, message, "tier_upgrade");
-  await tg(`⬆️ *Referral Sent — Tier Upgrade*\nContractor: ${contractor.company_name}\n${old_plan} → ${new_plan}`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: tier upgrade referrals visible in Pipeline tab (contractor_referrals table)
+  // await tg(`⬆️ *Referral Sent — Tier Upgrade*\nContractor: ${contractor.company_name}\n${old_plan} → ${new_plan}`);
 }
 
 async function handle90DayAnniversary(payload: any) {
@@ -225,7 +223,8 @@ Referral code: ${contractor.referral_code}. One free month per referral they sen
   );
 
   await sendReferralOutreach(contractor, message, "90_day_anniversary");
-  await tg(`🎂 *90-Day Referral Outreach*\nContractor: ${contractor.company_name}\n${summary.split("\n").slice(2, 5).join(" | ")}`);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: 90-day referral outreach visible in Pipeline tab (contractor_referrals table)
+  // await tg(`🎂 *90-Day Referral Outreach*\nContractor: ${contractor.company_name}\n${summary.split("\n").slice(2, 5).join(" | ")}`);
 }
 
 async function scan90DayAnniversaries() {
