@@ -224,7 +224,7 @@ Format as a professional briefing: bold section headers, short paragraphs.`,
       function_name: "roofing-content-engine",
       status: "ok",
       response_ms: duration,
-      checked_at: new Date().toISOString()
+      recorded_at: new Date().toISOString()
     }).catch(() => {});
 
     // MOVED_TO_DASHBOARD [date: 2026-05-17]: content pipeline summary visible in Content tab
@@ -238,7 +238,7 @@ Format as a professional briefing: bold section headers, short paragraphs.`,
       function_name: "roofing-content-engine",
       status: "error",
       error_message: msg,
-      checked_at: new Date().toISOString()
+      recorded_at: new Date().toISOString()
     }).catch(() => {});
     // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab via system_heartbeats
     // await tg(`❌ *Content Engine Error*\n${msg}`);

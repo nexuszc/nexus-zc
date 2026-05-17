@@ -359,9 +359,24 @@ Deno.serve(async (req) => {
       }
     }
 
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-voiceover-engine",
+      status: errors > 0 ? "error" : "ok",
+      response_ms: Date.now() - startMs,
+      error_message: errors > 0 ? `${errors} voiceover errors` : null,
+      metadata: { processed, errors },
+      recorded_at: new Date().toISOString(),
+    }).catch(() => {});
+
     return Response.json({ ok: true, processed, errors, duration_ms: Date.now() - startMs });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-voiceover-engine",
+      status: "error",
+      error_message: msg,
+      recorded_at: new Date().toISOString(),
+    }).catch(() => {});
     return Response.json({ ok: false, error: msg }, { status: 500 });
   }
 });
