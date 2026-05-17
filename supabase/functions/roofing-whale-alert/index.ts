@@ -1,5 +1,5 @@
-// roofing-whale-alert v1
-// Fires Telegram alert when a prospect clicks for the first time
+// roofing-whale-alert v2
+// Fires Telegram alert when a prospect clicks, advances funnel to 'hot'
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   try {
     const { data: prospect } = await supabase
       .from("roofing_prospects")
-      .select("id, owner_name, company_name, phone, city, state, whale_alerted")
+      .select("id, owner_name, company_name, phone, city, state, whale_alerted, funnel_stage")
       .eq("id", prospect_id)
       .maybeSingle();
 
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: "prospect not found" }, { status: 404 });
     }
 
-    const firstName = (prospect.owner_name || "").split(" ")[0] || "them";
+    const fn = (prospect.owner_name || "").split(" ")[0] || "them";
     const location = [prospect.city, prospect.state].filter(Boolean).join(", ") || "unknown";
 
     const msg =
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       `Clicked touch ${touch_number} link\n` +
       `Just now\n\n` +
       `*Call script:*\n` +
-      `Hey ${firstName} — Zach Curtis\\.\n` +
+      `Hey ${fn} — Zach Curtis\\.\n` +
       `You just looked at the homeowner portal demo\\.\n` +
       `What did you think — is that something\n` +
       `your homeowners would actually use?\n\n` +
@@ -63,22 +63,37 @@ Deno.serve(async (req) => {
       `*Full product:*\n` +
       `roofingos\\.dev — starts at \\$49/month\n\n` +
       `Reply to log outcome:\n` +
-      `\`booked ${firstName}\`\n` +
-      `\`dead ${firstName}\``;
+      `\`booked ${fn}\`\n` +
+      `\`dead ${fn}\``;
 
     await tg(msg);
 
+    const prevStage = (prospect.funnel_stage as string) || "new_lead";
+    const now = new Date().toISOString();
+
+    // Mark whale + advance funnel to 'hot'
     await supabase.from("roofing_prospects").update({
       whale_alerted: true,
-      whale_alerted_at: new Date().toISOString(),
+      whale_alerted_at: now,
+      funnel_stage: "hot",
+      funnel_stage_updated_at: now,
     }).eq("id", prospect_id);
+
+    if (prevStage !== "hot") {
+      await supabase.from("funnel_stage_history").insert({
+        prospect_id,
+        from_stage: prevStage,
+        to_stage: "hot",
+        reason: `portal_click_touch_${touch_number}`,
+      }).catch(() => {});
+    }
 
     await supabase.from("system_heartbeats").insert({
       function_name: "roofing-whale-alert",
       status: "ok",
       response_ms: 0,
       metadata: { prospect_id, touch_number },
-      recorded_at: new Date().toISOString(),
+      recorded_at: now,
     }).catch(() => {});
 
     return Response.json({ ok: true, alerted: true });

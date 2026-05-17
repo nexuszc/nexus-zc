@@ -1,5 +1,5 @@
-// roofing-email-tracker v1
-// 1x1 tracking pixel — counts opens, fires hot-open alert on repeat openers
+// roofing-email-tracker v2
+// 1x1 tracking pixel — counts opens, advances funnel stage on re-open
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -29,7 +29,6 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const lid = url.searchParams.get("lid") || "";
 
-  // Always return pixel immediately
   const pixel = () => new Response(PIXEL, {
     headers: {
       "Content-Type": "image/png",
@@ -44,7 +43,6 @@ Deno.serve(async (req) => {
     try {
       const now = new Date().toISOString();
 
-      // Fetch current log entry
       const { data: log } = await supabase
         .from("roofing_outreach_log")
         .select("id, prospect_id, open_count, first_opened_at, touch_number")
@@ -64,23 +62,21 @@ Deno.serve(async (req) => {
         opened_at: isFirstOpen ? now : undefined,
       }).eq("id", lid);
 
-      // Update prospect last_activity_at
       if (log.prospect_id) {
         await supabase.from("roofing_prospects").update({
           last_activity_at: now,
         }).eq("id", log.prospect_id);
       }
 
-      // Hot-open alert: fired on 2nd open (they came back)
-      // Debounce: ignore if both opens are within 30 seconds — email client preload, not a human
       const secondsApart = log.first_opened_at
         ? (Date.now() - new Date(log.first_opened_at).getTime()) / 1000
         : 999;
 
+      // Hot-open alert + funnel advance on 2nd open (debounced, >30s)
       if (newCount >= 2 && secondsApart > 30 && log.prospect_id) {
         const { data: prospect } = await supabase
           .from("roofing_prospects")
-          .select("owner_name, company_name, phone, city, state")
+          .select("owner_name, company_name, phone, city, state, funnel_stage")
           .eq("id", log.prospect_id)
           .maybeSingle();
 
@@ -88,6 +84,7 @@ Deno.serve(async (req) => {
           const name = prospect.owner_name || "Unknown";
           const fn = name.split(" ")[0] || name;
           const loc = [prospect.city, prospect.state].filter(Boolean).join(", ") || "unknown";
+
           await tg(
             `🔥 *Hot Open — ${name || prospect.company_name} re-read touch ${log.touch_number}*\n\n` +
             `*${prospect.company_name || ""}*\n` +
@@ -96,6 +93,22 @@ Deno.serve(async (req) => {
             `Opened ${newCount}x — they're thinking about it. Good time to call.\n\n` +
             `Call script: "Hey ${fn} — just following up on the email I sent about homeowner callbacks."`
           );
+
+          // Advance to 'engaged' if not already hot or beyond
+          const currentStage = (prospect.funnel_stage as string) || "new_lead";
+          const advanceableStages = ["new_lead", "contacted"];
+          if (advanceableStages.includes(currentStage)) {
+            await supabase.from("roofing_prospects").update({
+              funnel_stage: "engaged",
+              funnel_stage_updated_at: now,
+            }).eq("id", log.prospect_id);
+            await supabase.from("funnel_stage_history").insert({
+              prospect_id: log.prospect_id,
+              from_stage: currentStage,
+              to_stage: "engaged",
+              reason: `email_open_count_${newCount}`,
+            }).catch(() => {});
+          }
         }
       }
     } catch (e) {
