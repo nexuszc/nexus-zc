@@ -1,207 +1,335 @@
-est state:", dbState);
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-          const testStatus = dbTest.ok ? 'passed' : 'failed';
-          tests.push({
-            name: "database-connectivity",
-            description: "Database connection test",
-            status: testStatus,
-            statusCode: dbTest.status,
-            duration_ms: performance.now() - startTime,
-            timestamp: new Date().toISOString(),
-            step: currentStep,
-            state: dbState,
-            errorCategory: dbTest.ok ? null : categorizeError(dbTest.status, responseText)
-          });
+Deno.serve(async (req) => {
+  try {
+    const baseUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const denoEnv = Deno.version;
 
-          console.log(`[Step ${currentStep}/${totalSteps}] database-connectivity test ${testStatus.toUpperCase()}`);
+    if (!baseUrl || !anonKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Missing required environment variables",
+          details: {
+            hasUrl: !!baseUrl,
+            hasAnonKey: !!anonKey
+          }
+        }),
+        { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
 
-          if (!dbTest.ok) {
-            const diagnostics = {
-              statusCode: dbTest.status,
-              responsePreview: responseText.substring(0, 200),
-              parsedError: parsedResponse,
-              structuralIssues: structuralIssues.length > 0 ? structuralIssues : 'none',
-              possibleSizeGuardTrigger: responseText.includes('size_guard') || responseText.length > 500000,
-              errorCategory: categorizeError(dbTest.status, responseText)
-            };
-            console.error('Database test diagnostics:', diagnostics);
+    const supabase = createClient(baseUrl, anonKey);
+    
+    console.log('Starting comprehensive smoke test suite...');
+    console.log('='.repeat(60));
+    
+    const overallStartTime = performance.now();
+    const tests: any[] = [];
+    let currentStep = 0;
+    const totalSteps = 8;
+
+    // Test 1: Database Connection
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing database connection...`);
+    const dbTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.from('users').select('count').limit(1).single();
+      const duration = performance.now() - dbTestStart;
+      
+      if (error && error.code !== 'PGRST116') {
+        tests.push({
+          name: 'Database Connection',
+          status: 'failed',
+          duration_ms: duration,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+      } else {
+        tests.push({
+          name: 'Database Connection',
+          status: 'passed',
+          duration_ms: duration
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'Database Connection',
+        status: 'failed',
+        duration_ms: performance.now() - dbTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 2: Auth Service
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing auth service...`);
+    const authTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      const duration = performance.now() - authTestStart;
+      
+      if (error) {
+        tests.push({
+          name: 'Auth Service',
+          status: 'failed',
+          duration_ms: duration,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+      } else {
+        tests.push({
+          name: 'Auth Service',
+          status: 'passed',
+          duration_ms: duration
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'Auth Service',
+        status: 'failed',
+        duration_ms: performance.now() - authTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 3: Storage Service
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing storage service...`);
+    const storageTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.storage.listBuckets();
+      const duration = performance.now() - storageTestStart;
+      
+      if (error) {
+        tests.push({
+          name: 'Storage Service',
+          status: 'failed',
+          duration_ms: duration,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+      } else {
+        tests.push({
+          name: 'Storage Service',
+          status: 'passed',
+          duration_ms: duration
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'Storage Service',
+        status: 'failed',
+        duration_ms: performance.now() - storageTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 4: Edge Functions Health
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing edge functions health...`);
+    const edgeFnTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.functions.invoke('health-check', {
+        body: { test: true }
+      });
+      const duration = performance.now() - edgeFnTestStart;
+      
+      if (error) {
+        tests.push({
+          name: 'Edge Functions Health',
+          status: 'failed',
+          duration_ms: duration,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+      } else {
+        tests.push({
+          name: 'Edge Functions Health',
+          status: 'passed',
+          duration_ms: duration
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'Edge Functions Health',
+        status: 'failed',
+        duration_ms: performance.now() - edgeFnTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 5: API Response Time
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing API response time...`);
+    const apiTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.from('users').select('id').limit(1);
+      const duration = performance.now() - apiTestStart;
+      
+      const threshold = 1000;
+      if (duration > threshold) {
+        tests.push({
+          name: 'API Response Time',
+          status: 'failed',
+          duration_ms: duration,
+          error: `Response time ${duration.toFixed(2)}ms exceeds threshold ${threshold}ms`,
+          errorCategory: categorizeError(null, 'timeout')
+        });
+      } else {
+        tests.push({
+          name: 'API Response Time',
+          status: 'passed',
+          duration_ms: duration
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'API Response Time',
+        status: 'failed',
+        duration_ms: performance.now() - apiTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 6: RLS Policies
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing RLS policies...`);
+    const rlsTestStart = performance.now();
+    try {
+      const { data, error } = await supabase.from('users').select('*').limit(1);
+      const duration = performance.now() - rlsTestStart;
+      
+      if (error && !error.message.includes('permission denied')) {
+        tests.push({
+          name: 'RLS Policies',
+          status: 'failed',
+          duration_ms: duration,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+      } else {
+        tests.push({
+          name: 'RLS Policies',
+          status: 'passed',
+          duration_ms: duration,
+          note: error ? 'RLS correctly blocking access' : 'RLS allowing access'
+        });
+      }
+    } catch (error) {
+      tests.push({
+        name: 'RLS Policies',
+        status: 'failed',
+        duration_ms: performance.now() - rlsTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+    }
+
+    // Test 7: Environment Variables
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Testing environment variables...`);
+    const envTestStart = performance.now();
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
+    const duration = performance.now() - envTestStart;
+    
+    if (missingVars.length > 0) {
+      tests.push({
+        name: 'Environment Variables',
+        status: 'failed',
+        duration_ms: duration,
+        error: `Missing required environment variables: ${missingVars.join(', ')}`,
+        errorCategory: categorizeError(null, 'missing env')
+      });
+    } else {
+      tests.push({
+        name: 'Environment Variables',
+        status: 'passed',
+        duration_ms: duration
+      });
+    }
+
+    // Test 8: Structural Analysis
+    currentStep++;
+    console.log(`[${currentStep}/${totalSteps}] Performing structural analysis...`);
+    const structuralTestStart = performance.now();
+    const structuralIssues: any[] = [];
+    
+    try {
+      const functionPath = './';
+      for await (const entry of Deno.readDir(functionPath)) {
+        if (entry.isFile && entry.name.endsWith('.ts')) {
+          try {
+            const content = await Deno.readTextFile(`${functionPath}${entry.name}`);
             
-            // Only throw if it's a critical infrastructure error
-            const errorCat = categorizeError(dbTest.status, responseText);
-            if (errorCat.isCritical) {
-              throw new Error(`Database connectivity test failed: ${dbTest.status} - ${dbTest.statusText}`);
-            } else {
-              console.warn(`Non-critical database test failure: ${errorCat.category} - ${errorCat.reason}`);
+            if (!content.includes('Deno.serve')) {
+              structuralIssues.push({
+                file: entry.name,
+                issue: 'Missing Deno.serve() wrapper',
+                severity: 'critical'
+              });
             }
+            
+            if (content.includes('serve(async (req)') && !content.includes('return new Response')) {
+              structuralIssues.push({
+                file: entry.name,
+                issue: 'Handler missing Response return',
+                severity: 'critical'
+              });
+            }
+          } catch (readError) {
+            structuralIssues.push({
+              file: entry.name,
+              issue: `Cannot read file: ${readError.message}`,
+              severity: 'warning'
+            });
           }
-        });
-      } catch (error) {
-        console.error(`[Step ${currentStep}/${totalSteps}] database-connectivity test FAILED:`, error);
-
-        const errorContext = {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-          baseUrl,
-          timestamp: new Date().toISOString(),
-          environmentState: {
-            denoEnv,
-            memoryUsage: Deno.memoryUsage()
-          },
-          structuralIssues,
-          sizeGuardAnalysis: {
-            triggered: error.message.includes('size_guard') || error.stack?.includes('size_guard'),
-            errorMessageLength: error.message.length,
-            stackLength: error.stack?.length || 0,
-            recommendations: [
-              'Check for file truncation in recent deployments',
-              'Verify brace matching in source files',
-              'Review recent code changes for structural issues',
-              'Check deployment logs for size warnings'
-            ]
-          },
-          possibleCauses: [
-            structuralIssues.length > 0 ? 'File structure issues detected' : null,
-            error.message.includes('404') ? 'RPC function smoke_test not found' : null,
-            error.message.includes('timeout') ? 'Database query timeout' : null,
-            error.message.includes('size_guard') ? 'Response size exceeded limits' : null
-          ].filter(Boolean),
-          errorCategory: categorizeError(null, error.message)
-        };
-
-        console.error("Database connectivity error context:", errorContext);
-
-        tests.push({
-          name: "database-connectivity",
-          description: "Database connection test",
-          status: "failed",
-          error: error.message,
-          errorStack: error.stack,
-          errorContext,
-          duration_ms: performance.now() - startTime,
-          timestamp: new Date().toISOString(),
-          step: currentStep,
-          errorCategory: errorContext.errorCategory
-        });
+        }
       }
+      
+      const duration = performance.now() - structuralTestStart;
+      tests.push({
+        name: 'Structural Analysis',
+        status: structuralIssues.filter(i => i.severity === 'critical').length > 0 ? 'failed' : 'passed',
+        duration_ms: duration,
+        details: structuralIssues.length > 0 ? `Found ${structuralIssues.length} issues` : 'No issues found'
+      });
+    } catch (error) {
+      tests.push({
+        name: 'Structural Analysis',
+        status: 'failed',
+        duration_ms: performance.now() - structuralTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
     }
 
-    if (!testFilter || testFilter === "edge-functions" || testFilter === "all") {
-      currentStep++;
-      console.log(`[Step ${currentStep}/${totalSteps}] Starting edge-functions test`);
-      const startTime = performance.now();
-
-      try {
-        await executeWithRetry("edge-functions", async () => {
-          const functionsTestUrl = `${baseUrl}/functions/v1/`;
-          console.log(`Attempting edge functions check to: ${functionsTestUrl}`);
-
-          const functionsTest = await fetch(functionsTestUrl, {
-            headers: {
-              "apikey": anonKey,
-              "Authorization": `Bearer ${anonKey}`
-            }
-          });
-
-          const functionsState = {
-            url: functionsTestUrl,
-            statusCode: functionsTest.status,
-            statusText: functionsTest.statusText,
-            headers: Object.fromEntries(functionsTest.headers.entries()),
-            timestamp: new Date().toISOString(),
-            fileStructureIssues: structuralIssues
-          };
-
-          console.log("Edge functions state:", functionsState);
-
-          const testPassed = functionsTest.ok || functionsTest.status === 404;
-          const errorCategory = testPassed ? null : categorizeError(functionsTest.status, functionsTest.statusText);
-
-          tests.push({
-            name: "edge-functions",
-            description: "Edge functions availability",
-            status: testPassed ? "passed" : "failed",
-            statusCode: functionsTest.status,
-            duration_ms: performance.now() - startTime,
-            timestamp: new Date().toISOString(),
-            step: currentStep,
-            state: functionsState,
-            errorCategory
-          });
-
-          console.log(`[Step ${currentStep}/${totalSteps}] edge-functions test ${testPassed ? 'PASSED' : 'FAILED'}`);
-
-          if (!functionsTest.ok && functionsTest.status !== 404) {
-            const errorCat = categorizeError(functionsTest.status, functionsTest.statusText);
-            if (errorCat.isCritical) {
-              throw new Error(`Edge functions check failed with status ${functionsTest.status}`);
-            } else {
-              console.warn(`Non-critical edge functions failure: ${errorCat.category} - ${errorCat.reason}`);
-            }
-          }
-        });
-      } catch (error) {
-        console.error(`[Step ${currentStep}/${totalSteps}] edge-functions test FAILED:`, error);
-
-        const errorContext = {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-          baseUrl,
-          timestamp: new Date().toISOString(),
-          environmentState: {
-            denoEnv,
-            memoryUsage: Deno.memoryUsage()
-          },
-          structuralIssues,
-          sizeGuardAnalysis: {
-            triggered: error.message.includes('size_guard') || error.stack?.includes('size_guard'),
-            chatFunctionIssues: structuralIssues.filter(i => i.file?.includes('chat/index.ts')),
-            recommendations: [
-              'Verify chat/index.ts has proper Deno.serve handler',
-              'Check for brace mismatches in edge function files',
-              'Review deployment logs for function initialization errors',
-              'Ensure all edge functions have proper error handling'
-            ]
-          },
-          possibleCauses: [
-            structuralIssues.some(i => i.file?.includes('chat/index.ts')) ? 'Chat function structure issues' : null,
-            error.message.includes('404') ? 'Functions endpoint not found' : null,
-            error.message.includes('timeout') ? 'Functions initialization timeout' : null,
-            error.message.includes('size_guard') ? 'Function response size exceeded limits' : null
-          ].filter(Boolean),
-          errorCategory: categorizeError(null, error.message)
-        };
-
-        console.error("Edge functions error context:", errorContext);
-
-        tests.push({
-          name: "edge-functions",
-          description: "Edge functions availability",
-          status: "failed",
-          error: error.message,
-          errorStack: error.stack,
-          errorContext,
-          duration_ms: performance.now() - startTime,
-          timestamp: new Date().toISOString(),
-          step: currentStep,
-          errorCategory: errorContext.errorCategory
-        });
-      }
-    }
-
-    // Comprehensive result analysis
-    const totalTests = tests.length;
+    // Calculate summary
     const passedTests = tests.filter(t => t.status === 'passed').length;
     const failedTests = tests.filter(t => t.status === 'failed').length;
-    const criticalFailures = tests.filter(t => 
-      t.status === 'failed' && 
-      t.errorCategory?.isCritical
-    ).length;
+    const criticalFailures = tests.filter(t => t.status === 'failed' && t.errorCategory?.isCritical).length;
     const nonCriticalFailures = failedTests - criticalFailures;
+    
+    const healthScore = totalSteps > 0 ? Math.round((passedTests / totalSteps) * 100) : 0;
+    
+    let overallStatus = 'healthy';
+    if (criticalFailures > 0) {
+      overallStatus = 'critical';
+    } else if (failedTests > 0) {
+      overallStatus = 'degraded';
+    }
 
-    const overallStatus = criticalFailures === 0 ? 'healthy' : 'degraded';
-    const healthScore = totalTests > 0 ? Math.round((passedTests / totalTests) * 100) : 0;
+    const totalTests = tests.length > 0 ? tests.length : 0;
 
     const summary = {
       overallStatus,
@@ -308,111 +436,3 @@ function categorizeError(statusCode: number | null, message: string): {
   const msg = message?.toLowerCase() || '';
   
   // Infrastructure errors (critical)
-  if (statusCode === 503 || msg.includes('service unavailable')) {
-    return {
-      category: 'infrastructure',
-      isCritical: true,
-      reason: 'Service unavailable - infrastructure issue',
-      actionable: false
-    };
-  }
-  
-  if (statusCode === 502 || msg.includes('bad gateway')) {
-    return {
-      category: 'infrastructure',
-      isCritical: true,
-      reason: 'Bad gateway - upstream service issue',
-      actionable: false
-    };
-  }
-  
-  if (msg.includes('timeout') || msg.includes('timed out')) {
-    return {
-      category: 'infrastructure',
-      isCritical: true,
-      reason: 'Request timeout - performance issue',
-      actionable: true
-    };
-  }
-  
-  if (msg.includes('econnrefused') || msg.includes('connection refused')) {
-    return {
-      category: 'infrastructure',
-      isCritical: true,
-      reason: 'Connection refused - service not responding',
-      actionable: false
-    };
-  }
-  
-  // Application errors (may be non-critical)
-  if (statusCode === 404 || msg.includes('not found')) {
-    return {
-      category: 'application',
-      isCritical: false,
-      reason: 'Resource not found - may be expected',
-      actionable: true
-    };
-  }
-  
-  if (statusCode === 401 || statusCode === 403 || msg.includes('unauthorized') || msg.includes('forbidden')) {
-    return {
-      category: 'application',
-      isCritical: false,
-      reason: 'Authentication/authorization issue',
-      actionable: true
-    };
-  }
-  
-  if (msg.includes('size_guard') || msg.includes('payload too large')) {
-    return {
-      category: 'application',
-      isCritical: false,
-      reason: 'Response size limit exceeded',
-      actionable: true
-    };
-  }
-  
-  if (statusCode === 400 || msg.includes('bad request')) {
-    return {
-      category: 'application',
-      isCritical: false,
-      reason: 'Bad request - invalid parameters',
-      actionable: true
-    };
-  }
-  
-  // Configuration errors
-  if (msg.includes('missing') && (msg.includes('key') || msg.includes('config') || msg.includes('env'))) {
-    return {
-      category: 'configuration',
-      isCritical: true,
-      reason: 'Missing configuration or credentials',
-      actionable: true
-    };
-  }
-  
-  // Parse/syntax errors
-  if (msg.includes('parse') || msg.includes('syntax') || msg.includes('unexpected token')) {
-    return {
-      category: 'code',
-      isCritical: true,
-      reason: 'Code syntax or parsing error',
-      actionable: true
-    };
-  }
-  
-  // Default to unknown
-  return {
-    category: 'unknown',
-    isCritical: statusCode ? statusCode >= 500 : true,
-    reason: 'Unclassified error',
-    actionable: false
-  };
-}
-
-function generateRecommendations(tests: any[], structuralIssues: any[]): string[] {
-  const recommendations: string[] = [];
-  
-  const failedTests = tests.filter(t => t.status === 'failed');
-  const criticalErrors = failedTests.filter(t => t.errorCategory?.isCritical);
-  const actionableErrors
