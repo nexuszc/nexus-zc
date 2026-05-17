@@ -246,12 +246,43 @@ async function createJob(extracted: Record<string, unknown>, member: Record<stri
     created_by: member.name as string,
   });
 
+  // Advance onboarding on first job
+  const { count } = await supabase
+    .from('roofing_jobs')
+    .select('id', { count: 'exact', head: true })
+    .eq('contractor_id', contractor.id as string);
+
+  if ((count || 0) <= 1) {
+    await supabase.from('contractor_accounts')
+      .update({ onboarding_step: 'first_job_added', first_job_at: new Date().toISOString() })
+      .eq('id', contractor.id as string);
+
+    const { data: ca } = await supabase.from('contractor_accounts')
+      .select('company_name')
+      .eq('id', contractor.id as string)
+      .maybeSingle();
+
+    const tgToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    const tgChatId = Deno.env.get('TELEGRAM_CHAT_ID');
+    if (tgToken && tgChatId) {
+      await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: tgChatId,
+          text: `🎉 First job created — ${ca?.company_name || contractor.id}\nHomeowner: ${extracted.homeowner_name || 'unknown'}\nThey're live.`,
+          parse_mode: 'Markdown'
+        })
+      }).catch(() => {});
+    }
+  }
+
   return { job, token };
 }
 
 async function sendHomeownerEmail(homeownerEmail: string, homeownerName: string, token: string, contractorName: string): Promise<void> {
   const firstName = homeownerName.split(' ')[0];
-  const portalUrl = `https://app.nexuszc.com/roofing/portal/${token}`;
+  const portalUrl = `https://roofingos.dev/portal/?token=${token}`;
   const html = `<div style="font-family:-apple-system,sans-serif;max-width:520px;line-height:1.7;color:#1a1a1a;padding:20px;">
 <p>Hi ${firstName} —</p>
 <p>Your contractor just opened your project file.</p>

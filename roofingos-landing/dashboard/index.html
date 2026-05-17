@@ -149,6 +149,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
 .modal h3{font-size:16px;font-weight:700;margin-bottom:14px}
 .modal-close{float:right;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;line-height:1}
+
+/* ONBOARDING BANNER */
+.banner-onboarding{background:#0d1a2e;border:1px solid #2563eb55;border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.banner-onboarding h4{font-size:14px;font-weight:700;margin-bottom:2px}
+.banner-onboarding p{font-size:12px;color:var(--t2);margin-bottom:14px}
+.ob-steps{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.ob-step{display:flex;align-items:center;gap:10px;font-size:13px}
+.ob-dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
+.ob-dot.done{background:var(--green);border-color:var(--green);color:white}
+.ob-dot.current{border-color:var(--blue)}
+.ob-dismiss{font-size:11px;color:var(--t3);background:none;border:none;cursor:pointer;text-decoration:underline;margin-left:auto}
 </style>
 </head>
 <body>
@@ -265,6 +276,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
             </select>
           </div>
           <div class="form-field">
+            <label>Homeowner Email</label>
+            <input type="email" id="job-email" placeholder="homeowner@email.com">
+          </div>
+          <div class="form-field">
             <label>Notes</label>
             <input type="text" id="job-notes" placeholder="Adjuster scheduled, deductible amount, etc.">
           </div>
@@ -322,6 +337,34 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 </div>
 
 <div id="toast"></div>
+
+<!-- ADD EMPLOYEE MODAL -->
+<div class="modal-overlay" id="add-employee-modal" style="display:none" onclick="if(event.target===this)closeAddEmployee()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeAddEmployee()">×</button>
+    <h3>Add Team Member</h3>
+    <div class="form-field">
+      <label>Name</label>
+      <input type="text" id="emp-name" placeholder="Jane Smith">
+    </div>
+    <div class="form-field">
+      <label>Phone (for login)</label>
+      <input type="tel" id="emp-phone" placeholder="+1 555 000 0000">
+    </div>
+    <div class="form-field">
+      <label>Role</label>
+      <select id="emp-role">
+        <option value="owner">Owner</option>
+        <option value="office">Office / PM</option>
+        <option value="sales">Sales</option>
+        <option value="crew" selected>Crew</option>
+      </select>
+    </div>
+    <div id="emp-error" style="display:none"></div>
+    <button class="btn" id="emp-submit-btn" onclick="submitAddEmployee()" style="margin-top:4px">Add Member</button>
+  </div>
+</div>
 
 <script>
 const API = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1';
@@ -439,6 +482,39 @@ function renderBanners(contractor, stats) {
   const el = document.getElementById('banners');
   let html = '';
 
+  // Onboarding checklist
+  const step = contractor?.onboarding_step || 'account_created';
+  const dismissed = localStorage.getItem('ros_ob_dismissed') === 'true';
+  const isComplete = step === 'first_job_added' || step === 'complete';
+  if (!dismissed && !isComplete) {
+    const step1done = true; // always — they have an account
+    const step2done = step === 'dashboard_accessed' || step === 'first_job_added';
+    const step3done = step === 'first_job_added';
+    const dotClass = (done, current) => done ? 'ob-dot done' : current ? 'ob-dot current' : 'ob-dot';
+    html += `<div class="banner-onboarding">
+      <h4>Welcome to Roofing OS</h4>
+      <p>Complete setup to start sending portals to homeowners.</p>
+      <div class="ob-steps">
+        <div class="ob-step">
+          <div class="${dotClass(step1done, false)}">${step1done ? '✓' : '1'}</div>
+          <span style="color:${step1done ? 'var(--t1)' : 'var(--t2)'}">Account created</span>
+        </div>
+        <div class="ob-step">
+          <div class="${dotClass(step2done, !step2done)}">${step2done ? '✓' : '2'}</div>
+          <span style="color:${step2done ? 'var(--t1)' : 'var(--blue)'}">Logged into dashboard${!step2done ? ' ← you're here' : ''}</span>
+        </div>
+        <div class="ob-step">
+          <div class="${dotClass(step3done, step2done && !step3done)}">${step3done ? '✓' : '3'}</div>
+          <span style="color:${step3done ? 'var(--t1)' : 'var(--t2)'}">Create your first job</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="banner-btn" onclick="switchTab('new-job')">Create Your First Job →</button>
+        <button class="ob-dismiss" onclick="dismissOnboarding()">Dismiss</button>
+      </div>
+    </div>`;
+  }
+
   if (stats.pending_upgrade > 0) {
     html += `<div class="banner banner-upgrade">
       <div class="banner-icon">⚡</div>
@@ -476,6 +552,11 @@ function renderBanners(contractor, stats) {
   }
 
   el.innerHTML = html;
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('ros_ob_dismissed', 'true');
+  loadOverview();
 }
 
 function renderRecentJobs(jobs) {
@@ -554,9 +635,9 @@ async function loadTeam() {
   const el = document.getElementById('team-list');
   el.innerHTML = '<div class="empty"><p>Loading...</p></div>';
   try {
-    const res = await api('contractor-dashboard-api', { action: 'employees', token: SESSION_TOKEN });
+    const res = await api('contractor-auth', { action: 'list_employees', token: SESSION_TOKEN });
     if (!res.ok || !res.employees.length) {
-      el.innerHTML = '<div class="empty"><h3>No team members</h3><p>Add employees to give them dashboard access.</p></div>';
+      el.innerHTML = '<div class="empty"><h3>No team members yet</h3><p>Tap + Add to give crew members dashboard access.</p></div>';
       return;
     }
     el.innerHTML = res.employees.map(e => `
@@ -577,7 +658,55 @@ async function loadTeam() {
 }
 
 function showAddEmployee() {
-  toast('Contact support to add team members', 'info');
+  document.getElementById('emp-name').value = '';
+  document.getElementById('emp-phone').value = '';
+  document.getElementById('emp-role').value = 'crew';
+  document.getElementById('emp-error').style.display = 'none';
+  document.getElementById('add-employee-modal').style.display = 'flex';
+}
+
+function closeAddEmployee() {
+  document.getElementById('add-employee-modal').style.display = 'none';
+}
+
+async function submitAddEmployee() {
+  const name = document.getElementById('emp-name').value.trim();
+  const phone = document.getElementById('emp-phone').value.trim();
+  const role = document.getElementById('emp-role').value;
+
+  if (!name) { showEmpError('Name is required'); return; }
+
+  const btn = document.getElementById('emp-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+
+  try {
+    const res = await api('contractor-auth', {
+      action: 'add_employee',
+      contractor_id: CONTRACTOR?.id,
+      session_token: SESSION_TOKEN,
+      name,
+      phone: phone || null,
+      role,
+    });
+    if (res.ok) {
+      closeAddEmployee();
+      toast(`${name} added`, 'success');
+      loadTeam();
+    } else {
+      showEmpError(res.error || 'Failed to add member');
+    }
+  } catch {
+    showEmpError('Network error. Please try again.');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Add Member';
+}
+
+function showEmpError(msg) {
+  const el = document.getElementById('emp-error');
+  el.innerHTML = `<div class="err-msg">${msg}</div>`;
+  el.style.display = 'block';
 }
 
 // --- CREATE JOB ---
@@ -585,44 +714,44 @@ async function createJob() {
   const address = document.getElementById('job-address').value.trim();
   const ownerName = document.getElementById('job-owner').value.trim();
   const ownerPhone = document.getElementById('job-phone').value.trim();
+  const ownerEmail = document.getElementById('job-email').value.trim();
   const carrier = document.getElementById('job-carrier').value.trim();
   const damage = document.getElementById('job-damage').value;
   const notes = document.getElementById('job-notes').value.trim();
 
-  if (!address) { toast('Address is required', 'error'); return; }
+  if (!address && !ownerName) { toast('Address or homeowner name required', 'error'); return; }
 
   const btn = document.getElementById('create-job-btn');
   btn.disabled = true;
   btn.textContent = 'Creating...';
 
   try {
-    const res = await api('job-intake', {
-      contractor_id: CONTRACTOR?.id,
-      property_address: address,
+    const res = await api('roofing-job-create', {
+      session_token: SESSION_TOKEN,
+      property_address: address || null,
       homeowner_name: ownerName || null,
       homeowner_phone: ownerPhone || null,
+      homeowner_email: ownerEmail || null,
       insurance_carrier: carrier || null,
       damage_type: damage || null,
-      notes: notes || null
+      notes: notes || null,
     });
 
+    const result = document.getElementById('create-job-result');
     if (res.ok) {
-      const result = document.getElementById('create-job-result');
-      if (res.allowed === false) {
-        result.innerHTML = `<div class="err-msg">
-          <strong>Job limit reached</strong><br>${res.reason}<br>
-          <button class="banner-btn" style="margin-top:8px" onclick="showUpgradeInfo()">Upgrade to continue</button>
-        </div>`;
-      } else {
-        result.innerHTML = `<div class="sent-msg">✓ Job created! ${res.fully_handled ? 'AI handling is active on this job.' : ''}</div>`;
-        // Clear form
-        ['job-address','job-owner','job-phone','job-carrier','job-notes'].forEach(id => document.getElementById(id).value = '');
-        document.getElementById('job-damage').value = '';
-        toast('Job created successfully', 'success');
-        loadOverview();
-      }
+      const portalLine = res.portal_url
+        ? `<br><small>Portal: <a href="${res.portal_url}" target="_blank" style="color:var(--blue)">${res.portal_url}</a></small>`
+        : '';
+      const emailLine = ownerEmail ? ` Portal link sent to ${ownerEmail}.` : '';
+      result.innerHTML = `<div class="sent-msg">✓ Job created!${emailLine}${portalLine}</div>`;
+      ['job-address','job-owner','job-phone','job-email','job-carrier','job-notes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('job-damage').value = '';
+      toast('Job created', 'success');
+      // Refresh onboarding step
+      CONTRACTOR = { ...CONTRACTOR, onboarding_step: 'first_job_added' };
+      loadOverview();
     } else {
-      document.getElementById('create-job-result').innerHTML = `<div class="err-msg">${res.error || 'Failed to create job'}</div>`;
+      result.innerHTML = `<div class="err-msg">${res.error || 'Failed to create job'}</div>`;
     }
   } catch {
     document.getElementById('create-job-result').innerHTML = `<div class="err-msg">Network error. Please try again.</div>`;

@@ -16,40 +16,38 @@ async function sendTelegram(msg: string) {
 }
 
 function generateWelcomeEmail(contractor: Record<string, unknown>): string {
-  const name = (contractor.owner_name as string || '').split(' ')[0];
+  const companyName = contractor.company_name as string || '';
+  const ownerPhone = contractor.owner_phone as string || '';
+  const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
   return `<!DOCTYPE html>
 <html>
 <head>
 <style>
-  body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-  .cta { background: #3b82f6; color: white; padding: 16px 32px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: 700; }
-  .step { display: flex; gap: 16px; margin: 16px 0; align-items: flex-start; }
-  .step-num { background: #3b82f6; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; line-height: 32px; text-align: center; }
+  body{font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;line-height:1.8}
+  h2{font-size:22px;margin-bottom:4px}
+  h3{font-size:16px;margin-bottom:8px}
+  hr{border:none;border-top:1px solid #e2e8f0;margin:24px 0}
+  .cta{background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block}
+  .sub{color:#64748b;font-size:14px}
 </style>
 </head>
 <body>
-  <h1>Welcome to Roofing OS, ${name}.</h1>
-  <p>You just made the best decision for your roofing business. Here's how to get your first $4,000+ in recovered supplement revenue this week.</p>
-  <h3>Your first 3 steps:</h3>
-  <div class="step">
-    <div class="step-num">1</div>
-    <div><strong>Add your first job</strong><br>Enter any active insurance job. We'll generate a pre-install supplement package and send your homeowner their portal link — both automatically.</div>
-  </div>
-  <div class="step">
-    <div class="step-num">2</div>
-    <div><strong>Upload the adjuster estimate</strong><br>Take a photo of the adjuster's estimate. Our AI reads it, finds what they missed, and writes the supplement package in carrier-specific language.</div>
-  </div>
-  <div class="step">
-    <div class="step-num">3</div>
-    <div><strong>Send your homeowner their portal</strong><br>One click. They get a link showing their house, their job progress, their insurance status in plain English. They'll text their neighbor about it.</div>
-  </div>
-  <div style="text-align:center; margin: 32px 0;">
-    <a href="https://roofingos.dev/contractor/${contractor.id as string}" class="cta">Open Your Dashboard →</a>
-  </div>
-  <p>Aria will call you in the next few hours to walk through everything.</p>
-  <p>And if you know another contractor who's leaving supplement money behind — here's your referral link. They get 14 days free. You get a free month.<br>
-  <strong>roofingos.dev/ref/${contractor.referral_code as string}</strong></p>
-  <p>Talk soon,<br>Zach Curtis<br>Roofing OS</p>
+<h2>Welcome to Roofing OS, ${companyName}.</h2>
+<p class="sub" style="margin-top:0">Your account is active. Here's how to get started.</p>
+<hr>
+<h3>Step 1 — Log into your dashboard</h3>
+<p>Go to your contractor dashboard and enter your phone number to get a login link:</p>
+<p style="margin:16px 0"><a href="https://roofingos.dev/dashboard" class="cta">Open Your Dashboard →</a></p>
+<p class="sub">Your phone: ${ownerPhone}<br>We'll text you a login link — no password needed.</p>
+<hr>
+<h3>Step 2 — Create your first job</h3>
+<p>Call or text <strong>${twilioNumber}</strong> to start a job with your voice. Say the homeowner's name, address, and insurance carrier. We handle the rest.</p>
+<hr>
+<h3>Step 3 — Your homeowner gets the portal</h3>
+<p>When you enter the homeowner's email, we send them a live project link instantly. They see every update. They stop calling.</p>
+<hr>
+<p>Questions? Reply to this email or text ${twilioNumber} anytime.</p>
+<p style="margin-top:32px" class="sub">Zach Curtis<br>Roofing OS<br>roofingos.dev</p>
 </body>
 </html>`;
 }
@@ -213,8 +211,12 @@ Deno.serve(async (req) => {
     }).catch(() => {});
   }
 
-  // Welcome call + email
+  const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
+  const firstName = (owner_name || '').split(' ')[0] || 'there';
+
+  // Welcome call + email + SMS
   await Promise.allSettled([
+    // Aria welcome call
     owner_phone ? fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
@@ -227,6 +229,7 @@ Deno.serve(async (req) => {
       })
     }).catch(() => {}) : Promise.resolve(),
 
+    // Welcome email
     fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -234,12 +237,30 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Zach at Roofing OS <zach@roofingos.dev>',
+        from: 'Zach Curtis <zach@roofingos.dev>',
         to: owner_email,
-        subject: `Welcome to Roofing OS, ${(owner_name || '').split(' ')[0]}`,
+        subject: `Welcome to Roofing OS — here's how to get started`,
         html: generateWelcomeEmail(contractor)
       })
-    }).catch(() => {})
+    }).catch(() => {}),
+
+    // Welcome SMS (only if Twilio is configured)
+    owner_phone && Deno.env.get('TWILIO_ACCOUNT_SID') ? (() => {
+      const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
+      const token = Deno.env.get('TWILIO_AUTH_TOKEN')!;
+      return fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${sid}:${token}`),
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          To: owner_phone,
+          From: twilioNumber,
+          Body: `Hey ${firstName} — welcome to Roofing OS. Log in here: roofingos.dev/dashboard\nEnter this number when prompted. Any questions — reply here.`
+        }).toString()
+      }).catch(() => {});
+    })() : Promise.resolve(),
   ]);
 
   // Schedule onboarding reminder
@@ -267,6 +288,6 @@ Deno.serve(async (req) => {
     subdomain,
     referral_code: referralCode,
     trial_ends_at: trialEndsAt,
-    dashboard_url: `https://roofingos.dev/contractor/${contractor.id}`
+    dashboard_url: `https://roofingos.dev/dashboard`
   });
 });

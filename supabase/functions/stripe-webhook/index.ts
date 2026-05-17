@@ -88,6 +88,25 @@ Deno.serve(async (req) => {
     const nickname = ((items?.[0]?.price as Record<string, unknown>)?.nickname as string || '').toLowerCase();
     const newPlan = TIER_MAP[nickname] || null;
 
+    const findContractor = async () => {
+      const { data } = await supabase
+        .from('contractor_accounts')
+        .select('id')
+        .eq('stripe_customer_id', customerId)
+        .maybeSingle();
+      return data;
+    };
+
+    let found = await findContractor();
+    if (!found) {
+      await new Promise(r => setTimeout(r, 2000));
+      found = await findContractor();
+    }
+    if (!found) {
+      console.error('stripe-webhook: no contractor for customer', customerId);
+      return Response.json({ ok: true, received: eventType });
+    }
+
     const updates: Record<string, unknown> = {
       subscription_status: status,
       stripe_subscription_id: obj?.id as string,

@@ -130,13 +130,47 @@ Deno.serve(async (req) => {
       employee = emp;
     }
 
-    // Update last login
+    // Update last login + advance onboarding step
+    const now = new Date().toISOString();
+    const onboardingUpdate: Record<string, unknown> = { last_login_at: now };
+    if (contractor?.onboarding_step === 'account_created') {
+      onboardingUpdate.onboarding_step = 'dashboard_accessed';
+      onboardingUpdate.dashboard_first_accessed_at = now;
+    }
     await supabase
       .from('contractor_accounts')
-      .update({ last_login_at: new Date().toISOString() })
+      .update(onboardingUpdate)
       .eq('id', session.contractor_id);
 
+    if (contractor && onboardingUpdate.onboarding_step) {
+      contractor.onboarding_step = onboardingUpdate.onboarding_step as string;
+    }
+
     return Response.json({ ok: true, authenticated: true, contractor, employee, session_token: token });
+  }
+
+  // LIST EMPLOYEES — returns all team members for this contractor
+  if (action === 'list_employees') {
+    const { token } = body;
+    if (!token) return Response.json({ ok: false, error: 'token required' }, { status: 400 });
+
+    const { data: session } = await supabase
+      .from('contractor_sessions')
+      .select('contractor_id, expires_at')
+      .eq('token', token)
+      .single();
+
+    if (!session || new Date(session.expires_at) < new Date()) {
+      return Response.json({ ok: false, error: 'invalid session' }, { status: 401 });
+    }
+
+    const { data: employees } = await supabase
+      .from('contractor_employees')
+      .select('id, name, phone, role, is_owner, active')
+      .eq('contractor_id', session.contractor_id)
+      .order('is_owner', { ascending: false });
+
+    return Response.json({ ok: true, employees: employees || [] });
   }
 
   // PING — session keepalive
@@ -198,5 +232,5 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, employee: newEmp });
   }
 
-  return Response.json({ ok: false, error: 'action required: send_magic_link | verify_token | ping | add_employee' }, { status: 400 });
+  return Response.json({ ok: false, error: 'action required: send_magic_link | verify_token | ping | add_employee | list_employees' }, { status: 400 });
 });
