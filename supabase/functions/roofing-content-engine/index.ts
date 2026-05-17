@@ -1,247 +1,231 @@
-// roofing-content-engine — Daily 7am MT (13:00 UTC)
-// Generates blog posts, social content, YouTube scripts, and carrier intel
+// roofing-content-engine v2
+// YouTube-first content system — pulls from content_topics, generates scripts,
+// queues for dashboard approval. 5 shorts + 1 long per run.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-async function tg(text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: "Markdown" })
-  }).catch(() => {});
-}
+// ── PROMPTS ───────────────────────────────────────────────────────────────────
 
-async function claude(prompt: string, maxTokens = 1500): Promise<string> {
+const SHORT_SYSTEM = `You write 60-second YouTube Shorts scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+
+TARGET: Insurance restoration roofers. Busy, skeptical, and practical.
+
+STRUCTURE (strict — do not deviate):
+0-5 sec: ONE sentence. The exact pain. No intro. No name. Just the problem.
+5-25 sec: Make it worse. They feel it daily. Use specifics — times, dollar amounts, scenarios.
+25-50 sec: Roofing OS fixes this. One feature. Be specific. Show the outcome.
+50-60 sec: "Go to roofingos.dev. Free trial. Link in bio."
+
+RULES:
+- Max 130 words
+- No filler: "today" "guys" "awesome" "literally"
+- Sound like a contractor not a marketer
+- Mention roofingos.dev once at the end
+- Every word earns its place
+
+OUTPUT: JSON only. No markdown. No explanation.
+{
+  "title": "max 50 chars",
+  "script": "full word-for-word script",
+  "hook_text": "on-screen text for first 5 sec",
+  "thumbnail_text": "3-5 word thumbnail overlay",
+  "duration_estimate": 55
+}`;
+
+const LONG_SYSTEM = `You write YouTube video scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+
+TARGET: Insurance restoration roofers. Busy. Skeptical. Practical. 2-50 employees.
+
+STRUCTURE (follow exactly):
+Hook (0:00-0:20): State the pain immediately. No intro. Make them feel it in 3 sentences.
+Problem (0:20-2:00): Why this happens in roofing. Use data, stories, or common scenarios.
+Cost (2:00-3:00): What it actually costs them. Time lost, revenue missed, stress caused.
+Solution (3:00-5:30): How Roofing OS fixes it. Walk through the specific feature step by step. Be concrete — what the roofer does, what the homeowner sees.
+CTA (5:30-end): "Go to roofingos.dev right now. 14-day free trial. No contract. I'll put the link in the description." Say the URL twice.
+
+RULES:
+- Max 800 words
+- No filler words
+- Mention roofingos.dev minimum 3 times
+- Sound like a contractor helping contractors
+- Specific numbers whenever possible
+
+OUTPUT: JSON only. No markdown.
+{
+  "title": "max 65 chars, SEO optimized",
+  "script": "full word-for-word script",
+  "hook_text": "first sentence on screen",
+  "thumbnail_text": "3-5 word thumbnail overlay",
+  "description": "YouTube SEO description 200 words",
+  "tags": ["tag1", "tag2"],
+  "duration_estimate": 360
+}`;
+
+// ── GENERATE ──────────────────────────────────────────────────────────────────
+
+async function generateScript(topic: { title: string; pain_point: string; format: string }): Promise<{
+  title: string;
+  script: string;
+  hook_text: string;
+  thumbnail_text: string;
+  description?: string;
+  tags?: string[];
+  duration_estimate: number;
+} | null> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
+      "content-type": "application/json",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
-      max_tokens: maxTokens,
-      system: "You are a content expert for Roofing OS — a platform that helps roofing contractors recover more supplement revenue and delight their homeowners. Write compelling, practical content for roofing contractors. Be direct, specific, and results-oriented. No fluff.",
-      messages: [{ role: "user", content: prompt }]
-    })
+      max_tokens: topic.format === "short" ? 300 : 1000,
+      system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
+      messages: [{
+        role: "user",
+        content: `Topic: "${topic.title}"\nPain point: ${topic.pain_point}\nGenerate the script now. JSON only.`,
+      }],
+    }),
   });
+
   const data = await res.json();
-  return data.content?.[0]?.text || "";
-}
+  const text = data.content?.[0]?.text;
+  if (!text) return null;
 
-async function saveAndNotify(type: string, title: string, body: string, channel: string, stormEventId?: string): Promise<string | null> {
   try {
-    const { data: content } = await supabase.from("roofing_content").insert({
-      type, title, body, status: "pending", channel,
-      storm_event_id: stormEventId || null
-    }).select().single();
-
-    if (content) {
-      // MOVED_TO_DASHBOARD [date: 2026-05-17]: content pending approval visible in Content tab
-      // await tg(
-      //   `📝 *${type.toUpperCase()} Ready for Approval*\n` +
-      //   `*${title}*\n\n` +
-      //   `${preview}…\n\n` +
-      //   `Reply: \`approve content ${content.id}\``
-      // );
-      return content.id;
-    }
-  } catch (e) {
-    console.error(`saveAndNotify failed for ${type}:`, e);
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
+  } catch {
+    console.error("Parse failed for topic:", topic.title, text?.slice(0, 200));
+    return null;
   }
-  return null;
 }
 
-async function getRecentStorms() {
-  const since48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase
-    .from("hail_events")
-    .select("*")
-    .gte("created_at", since48h)
-    .order("hail_size_inches", { ascending: false });
-
-  const dbEvents = data || [];
-
-  // Pull NOAA today's hail reports
-  const external: Array<{ id: null; city: string; state: string; hail_size_inches: number; external: boolean }> = [];
-  try {
-    const noaaRes = await fetch("https://www.spc.noaa.gov/climo/reports/today.csv");
-    if (noaaRes.ok) {
-      const csv = await noaaRes.text();
-      const lines = csv.split("\n").slice(1, 15);
-      for (const line of lines) {
-        const parts = line.split(",");
-        const size = parseFloat(parts[3] || "0");
-        if (size >= 1.0 && parts[5] && parts[6]) {
-          external.push({ id: null, city: parts[5].trim(), state: parts[6].trim(), hail_size_inches: size, external: true });
-        }
-      }
-    }
-  } catch { /* NOAA optional */ }
-
-  return [...dbEvents, ...external.slice(0, 3)];
-}
+// ── MAIN ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  try {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-content-engine ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v2 ready" });
 
-  const generated: string[] = [];
-  const isMonday = new Date().getUTCDay() === 1;
   const startMs = Date.now();
 
+  // Get already-used topic hashes
+  const { data: usedTopics } = await supabase
+    .from("content_topics")
+    .select("topic_hash")
+    .not("used_at", "is", null);
+
+  const usedHashes = new Set((usedTopics || []).map((t: { topic_hash: string }) => t.topic_hash));
+
+  // Also skip topics that already have content generated (even if not yet used)
+  const { data: existingContent } = await supabase
+    .from("roofing_content")
+    .select("topic_hash")
+    .not("topic_hash", "is", null);
+
+  const generatedHashes = new Set((existingContent || []).map((c: { topic_hash: string }) => c.topic_hash));
+
+  // Get all topics ordered by created_at
+  const { data: allTopics } = await supabase
+    .from("content_topics")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  const unused = (allTopics || []).filter(
+    (t: { topic_hash: string }) => !usedHashes.has(t.topic_hash) && !generatedHashes.has(t.topic_hash)
+  );
+
+  // Pick 2 shorts + 1 long — keeps total execution under 45s
+  const shorts = unused.filter((t: { format: string }) => t.format === "short").slice(0, 2);
+  const longs  = unused.filter((t: { format: string }) => t.format === "long").slice(0, 1);
+  const toGenerate = [...shorts, ...longs];
+
+  if (toGenerate.length === 0) {
+    // All topics used — reset low performers so cycle can restart
+    await supabase
+      .from("content_topics")
+      .update({ used_at: null })
+      .lt("performance_score", 50);
+
+    try {
+      await supabase.from("system_heartbeats").insert({
+        function_name: "roofing-content-engine",
+        status: "ok",
+        response_ms: Date.now() - startMs,
+        metadata: { generated: 0, message: "all topics used — reset low performers" },
+        recorded_at: new Date().toISOString(),
+      });
+    } catch (_) {}
+
+    return Response.json({ ok: true, generated: 0, message: "All topics used — reset low performers" });
+  }
+
+  let generated = 0;
+  const errors: string[] = [];
+
+  for (const topic of toGenerate) {
+    try {
+      const parsed = await generateScript(topic);
+      if (!parsed) {
+        errors.push(`Parse failed: ${topic.title}`);
+        continue;
+      }
+
+      const { error: insertErr } = await supabase.from("roofing_content").insert({
+        title: parsed.title,
+        body: parsed.script,
+        script: parsed.script,
+        hook_text: parsed.hook_text,
+        thumbnail_text: parsed.thumbnail_text,
+        seo_description: parsed.description || null,
+        tags: parsed.tags || [],
+        format: topic.format,
+        pain_point: topic.pain_point,
+        topic_hash: topic.topic_hash,
+        duration_estimate: parsed.duration_estimate,
+        type: topic.format === "long" ? "youtube_long" : "youtube_short",
+        channel: "youtube",
+        status: "pending_approval",
+        schedule_slot: null,
+      });
+      if (insertErr) {
+        errors.push(`Insert failed (${topic.title}): ${insertErr.message}`);
+        continue;
+      }
+
+      await supabase
+        .from("content_topics")
+        .update({ used_at: new Date().toISOString() })
+        .eq("topic_hash", topic.topic_hash);
+
+      generated++;
+    } catch (err) {
+      errors.push(`${topic.title}: ${String(err).slice(0, 100)}`);
+    }
+  }
+
   try {
-    const storms = await getRecentStorms();
-
-    // Storm blog posts (up to 3)
-    for (const storm of storms.slice(0, 3)) {
-      const location = (storm as any).city
-        ? `${(storm as any).city}, ${(storm as any).state || "CO"}`
-        : (storm as any).location || "the affected area";
-      const hailSize = (storm as any).hail_size_inches || 1.0;
-
-      const blogContent = await claude(
-        `Write a 600-word blog post for roofing contractors about the recent hail storm near ${location} (${hailSize}" hail reported).
-
-Title should be: "${location} Hail Storm: How to Maximize Your Supplement Revenue Before Adjusters Close the File"
-
-Cover:
-1. Damage documentation checklist specific to ${hailSize}" hail (what to photograph, how many shots per square)
-2. 3 Xactimate line items adjusters commonly miss on ${hailSize}" hail events (be specific with codes)
-3. How to counter adjuster low-ball tactics on this storm type
-4. Why sending homeowners a live portal link during the claim process gets contractors 40% fewer callbacks
-
-End with: "Want to generate a pre-built supplement package for this storm in 90 seconds? Try Roofing OS free for 14 days at roofingos.dev"
-
-Format: H1 title, then H2 sections, then a closing CTA paragraph.`,
-        2000
-      );
-
-      if (blogContent) {
-        const titleLine = blogContent.split("\n")[0].replace(/^#+\s*/, "").replace(/\*+/g, "");
-        const id = await saveAndNotify("blog", titleLine || `${location} Storm Guide`, blogContent, "blog", (storm as any).id);
-        if (id) generated.push(`blog: ${location}`);
-      }
-    }
-
-    // 3 Facebook post drafts
-    const fbPrompts = [
-      `Write a Facebook post (max 150 words) as a roofing contractor sharing a story: "We just recovered $4,200 in additional supplement revenue for a homeowner in [your city] that the adjuster tried to skip." Tell it as a brief, punchy story. End with a question: "Has this happened on any of your jobs?" Use 2-3 hashtags.`,
-      `Write a Facebook post (max 150 words) warning homeowners about the #1 thing that gets their roof claims underpaid — lack of documentation. Be specific: mention the adjuster's 30-day window, photo requirements, and what happens when contractors don't follow up. Include one real stat if possible.`,
-      `Write a Facebook post (max 150 words) describing the before/after experience of a homeowner working with a contractor who uses a homeowner portal vs. one who doesn't. Focus on the emotional: not knowing what's happening vs. getting live updates, photos, and insurance status in plain English. End with: "Your homeowners deserve better than radio silence."`
-    ];
-
-    for (let i = 0; i < fbPrompts.length; i++) {
-      const post = await claude(fbPrompts[i], 400);
-      if (post) {
-        const id = await saveAndNotify("facebook", `Facebook Draft ${i + 1}`, post, "facebook");
-        if (id) generated.push("facebook post");
-      }
-    }
-
-    // LinkedIn post
-    const linkedinPost = await claude(
-      `Write a LinkedIn post (max 250 words) from Zach Curtis, founder of Roofing OS.
-
-Topic: The roofing industry leaves $8,000 on average per insurance job because contractors aren't supplementing correctly. That's not a sales problem — it's a documentation and follow-up problem.
-
-Share: One specific story (anonymized), the exact mechanism that causes this loss, and what Roofing OS does to solve it.
-
-Tone: Founder-to-founder. Direct. No buzzwords. No corporate speak.
-
-End with 3 relevant hashtags.`,
-      600
-    );
-    if (linkedinPost) {
-      const id = await saveAndNotify("linkedin", "LinkedIn Post", linkedinPost, "linkedin");
-      if (id) generated.push("linkedin post");
-    }
-
-    // YouTube script
-    const ytScript = await claude(
-      `Write a 5-minute YouTube video script for roofing contractors.
-
-Title: "How I Add $4,000+ to Every Insurance Roof Job (Step by Step)"
-
-Structure:
-- HOOK (30s): Shocking stat or claim — "The average roofing contractor leaves $8,000 on the table per job..."
-- PROBLEM (60s): Why supplement revenue gets missed — adjuster tactics, documentation gaps, follow-up failures
-- TACTIC 1 (60s): The pre-install supplement — file before you tear off
-- TACTIC 2 (60s): The 3 Xactimate codes adjusters always skip (give real examples: O&P, code upgrades, drip edge)
-- TACTIC 3 (60s): The homeowner portal move — why showing homeowners their claim status gets adjusters to approve faster
-- TOOL REVEAL (45s): Introduce Roofing OS — what it does, how fast it works
-- CTA (15s): "14-day free trial at roofingos.dev — link in description"
-
-Write as natural spoken dialogue. Include stage directions like [PAUSE] or [SHOW SCREEN].`,
-      2500
-    );
-    if (ytScript) {
-      const id = await saveAndNotify("youtube", "How I Add $4,000+ to Every Insurance Roof Job", ytScript, "youtube");
-      if (id) generated.push("youtube script");
-    }
-
-    // Carrier intelligence report (Mondays only)
-    if (isMonday) {
-      const { data: carriers } = await supabase.from("carrier_intelligence").select("*").limit(10);
-      const carrierSummary = (carriers || [])
-        .map((c: any) => `${c.carrier_name}: ${c.approval_rate_pct}% approval, avg ${c.avg_days_to_approval || "?"} days`)
-        .join("\n") || "State Farm, Allstate, USAA, Travelers, Liberty Mutual, Farmers";
-
-      const report = await claude(
-        `Write a weekly carrier intelligence briefing for roofing contractors (400 words).
-
-Current carrier data:
-${carrierSummary}
-
-Cover:
-1. Which 2 carriers are being most difficult this week and why
-2. 3 supplement tactics that are getting approvals right now (be specific — include Xactimate codes if relevant)
-3. What to say to adjusters on calls this week (1-2 scripts)
-4. One specific code combination that's been getting approved: suggest codes like ECH, EDP, O&P with amounts
-
-Format as a professional briefing: bold section headers, short paragraphs.`,
-        1200
-      );
-
-      if (report) {
-        const title = `Weekly Carrier Intel — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
-        const id = await saveAndNotify("carrier_intelligence", title, report, "email");
-        if (id) generated.push("carrier intelligence");
-      }
-    }
-
-    const duration = Date.now() - startMs;
     await supabase.from("system_heartbeats").insert({
       function_name: "roofing-content-engine",
-      status: "ok",
-      response_ms: duration,
-      recorded_at: new Date().toISOString()
-    }).catch(() => {});
+      status: errors.length > 0 && generated === 0 ? "error" : "ok",
+      response_ms: Date.now() - startMs,
+      error_message: errors.length > 0 ? errors.join("; ").slice(0, 500) : null,
+      metadata: { generated, errors: errors.length, topics_available: toGenerate.length },
+      recorded_at: new Date().toISOString(),
+    });
+  } catch (_) {}
 
-    // MOVED_TO_DASHBOARD [date: 2026-05-17]: content pipeline summary visible in Content tab
-    // await tg(`✅ *Content Engine Complete*\nGenerated: ${generated.length} pieces\n${generated.map(g => `• ${g}`).join("\n")}\n\n_Reply \`content queue\` to see all pending approvals._`);
-
-    return Response.json({ ok: true, generated, storm_count: storms.length, duration_ms: duration });
-
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    await supabase.from("system_heartbeats").insert({
-      function_name: "roofing-content-engine",
-      status: "error",
-      error_message: msg,
-      recorded_at: new Date().toISOString()
-    }).catch(() => {});
-    // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab via system_heartbeats
-    // await tg(`❌ *Content Engine Error*\n${msg}`);
-    return Response.json({ ok: false, error: msg }, { status: 500 });
+  return Response.json({ ok: true, generated, errors: errors.length > 0 ? errors : undefined });
+  } catch (fatal) {
+    console.error("roofing-content-engine fatal:", fatal);
+    return Response.json({ ok: false, error: String(fatal) }, { status: 500 });
   }
 });
