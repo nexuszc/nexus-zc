@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 17, 2026 — v8
+# Last updated: May 17, 2026 — v9
 
 ---
 
@@ -390,35 +390,43 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 15, 2026)
+## CURRENT BUILD PRIORITIES (as of May 17, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
-
-**DONE this session:**
-- Roofer Onboarding v1 — full signup to first job flow:
+**DONE (May 17 session):**
+- Telegram cleanup: 33 routine sends moved to dashboard, 27 kept as push alerts
+- Aria call queue dedup fix: 906 duplicate rows deleted, dedup check deployed in
+  roofing-aria-engine and roofing-aria-storm-trigger
+- Roofer Onboarding v1:
   - Welcome email fixed (correct dashboard URL + login instructions + Twilio SMS)
-  - Stripe race condition fixed (2s retry on subscription.created)
-  - Onboarding checklist banner in dashboard (3-step, dismissable)
-  - onboarding_step auto-advances: account_created → dashboard_accessed → first_job_added
+  - Magic link flow working end-to-end
+  - 3-step onboarding checklist banner in dashboard (dismissable)
+  - Create job modal wired to roofing-job-create with homeowner email + portal dispatch
   - Team member add modal with real contractor-auth add_employee flow
-  - roofing-job-create — new edge function with session auth + homeowner email + portal dispatch
-  - Dashboard createJob() switches to roofing-job-create with homeowner email field
+  - Stripe race condition fixed (2s retry on subscription.created)
+  - onboarding_step auto-advances: account_created → dashboard_accessed → first_job_added
   - RoofingOnboarding.jsx redirected to roofingos.dev (app.nexuszc.com is owner-only)
-  - Homeowner portal URL fixed in nexus-job-intake-voice (→ roofingos.dev/portal/)
   - DB columns added: magic_link_sent_at, onboarding_dismissed, first_job_at, dashboard_first_accessed_at
-  - Telegram cleanup clusters 1-6 deployed (33 routine sends → dashboard)
-  - Aria duplicate call queue fix (1,348 rows cleaned, dedup at insert)
+- Platform Integrations v1:
+  - CompanyCam: photo sync via address/name matching, dedup, portal activity on new photos
+  - CRMs: AccuLynx, JobNimbus, Leap, Roofr, Improveit360, Salesforce — enriches matched jobs
+  - Custom webhook: inbound connector with field map + common-field fallbacks
+  - Sync engine in nexus-core: fires every 3 cycles (~90 min) for all active integrations
+  - Integration hub UI: 6th tab in contractor dashboard, connect/disconnect modal per integration
+  - portal-api: integration_sources in overview response
 
 **NEXT:**
-1. Fix smoke_test_failed error (simple)
-2. Fix Recurring Smoke Test Failures (medium)
-3. Draft a complete operating agreement for Nexus ZC LLC — single member LLC
-4. Add Self-Learning Pattern Recognition (medium)
-5. Add memory consolidation ability (medium)
-6. Add Conversation Context Memory (medium)
-7. Review and improve client health scores for Brian and Denver Pro Roofing
-8. Test Roofer Onboarding v1 end-to-end with Stripe test card
+1. Send personal texts to 6 whale prospects
+2. Facebook page token fix for auto-posting
+3. YouTube OAuth setup for auto-upload
+4. Touch 2 status check (fires today 8am MT)
+5. Dashboard cleanup and polish
+6. Test full roofer signup flow end to end with real Stripe test card
+
+**MANUAL STEPS PENDING:**
+- Test roofingos.dev signup with Stripe test card 4242 4242 4242 4242
+- Verify welcome email arrives correctly
+- Verify dashboard login via phone magic link
+- Get CompanyCam trial account to test photo sync end to end
 
 ---
 
