@@ -150,6 +150,21 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 .modal h3{font-size:16px;font-weight:700;margin-bottom:14px}
 .modal-close{float:right;background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;line-height:1}
 
+/* INTEGRATIONS TAB */
+.intg-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.intg-logo{width:40px;height:40px;border-radius:8px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.intg-info{flex:1;min-width:0}
+.intg-name{font-size:14px;font-weight:700;color:var(--t1)}
+.intg-desc{font-size:12px;color:var(--t3);margin-top:2px}
+.intg-status{font-size:11px;font-weight:700;margin-top:4px;display:flex;align-items:center;gap:4px}
+.intg-status.connected{color:var(--green)}
+.intg-status.error{color:var(--red)}
+.intg-status.pending{color:var(--t3)}
+.intg-btn{font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;border:none;cursor:pointer;flex-shrink:0}
+.intg-btn.connect{background:var(--blue);color:white}
+.intg-btn.disconnect{background:var(--border);color:var(--t2)}
+.intg-last-sync{font-size:11px;color:var(--t3);margin-top:2px}
+
 /* ONBOARDING BANNER */
 .banner-onboarding{background:#0d1a2e;border:1px solid #2563eb55;border-radius:var(--radius);padding:16px;margin-bottom:12px}
 .banner-onboarding h4{font-size:14px;font-weight:700;margin-bottom:2px}
@@ -308,6 +323,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
           <div id="team-list"></div>
         </div>
       </div>
+
+      <div class="content" id="tab-integrations" style="display:none">
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Integrations</span>
+          </div>
+          <p style="font-size:12px;color:var(--t3);margin-bottom:14px">Connect your tools. Photos and job data sync automatically.</p>
+          <div id="integrations-list"></div>
+        </div>
+      </div>
     </div>
 
     <!-- BOTTOM NAV -->
@@ -331,6 +356,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
       <button class="nav-tab" id="tab-btn-team" onclick="switchTab('team')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
         Team
+      </button>
+      <button class="nav-tab" id="tab-btn-integrations" onclick="switchTab('integrations')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="16" r="3"/><path d="M10.5 10.5l3 3"/><path d="M7.5 4.5l-3-3M16.5 19.5l3 3M4.5 7.5l-3 3M19.5 16.5l3-3"/></svg>
+        Connect
       </button>
     </div>
   </div>
@@ -363,6 +392,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
     </div>
     <div id="emp-error" style="display:none"></div>
     <button class="btn" id="emp-submit-btn" onclick="submitAddEmployee()" style="margin-top:4px">Add Member</button>
+  </div>
+</div>
+
+<!-- CONNECT INTEGRATION MODAL -->
+<div class="modal-overlay" id="intg-modal" style="display:none" onclick="if(event.target===this)closeConnectModal()">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeConnectModal()">×</button>
+    <h3 id="intg-modal-title">Connect Integration</h3>
+    <input type="hidden" id="intg-modal-type">
+    <div id="intg-modal-fields"></div>
+    <div id="intg-modal-error" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px"></div>
+    <button class="btn" id="intg-modal-submit" onclick="submitIntegration()" style="margin-top:4px">Connect</button>
   </div>
 </div>
 
@@ -769,9 +811,190 @@ function showUpgradeInfo() {
   toast('Reply UPGRADE to your last Roofing OS SMS to upgrade', 'info');
 }
 
+// --- INTEGRATIONS ---
+const INTEGRATION_DEFS = [
+  { type: 'companycam', name: 'CompanyCam', emoji: '📷', desc: 'Sync job photos automatically from CompanyCam projects.' },
+  { type: 'acculynx', name: 'AccuLynx', emoji: '🔧', desc: 'Pull job data from AccuLynx into your portal.' },
+  { type: 'jobnimbus', name: 'JobNimbus', emoji: '🏗️', desc: 'Sync contacts, jobs, and status from JobNimbus.' },
+  { type: 'leap', name: 'Leap', emoji: '⚡', desc: 'Pull estimates and job details from Leap.' },
+  { type: 'roofr', name: 'Roofr', emoji: '📐', desc: 'Import measurements and quotes from Roofr.' },
+  { type: 'improveit360', name: 'Improveit360', emoji: '🎯', desc: 'Sync lead and job data from Improveit360.' },
+  { type: 'salesforce', name: 'Salesforce', emoji: '☁️', desc: 'Connect Salesforce opportunities to portal jobs.' },
+  { type: 'custom_webhook', name: 'Custom Webhook', emoji: '🔗', desc: 'Any CRM or tool — receive job data via webhook URL.' },
+];
+
+let _intgConnected = {};
+
+async function loadIntegrations() {
+  const list = document.getElementById('integrations-list');
+  list.innerHTML = '<div class="empty"><p>Loading...</p></div>';
+
+  try {
+    const res = await api('roofing-integration-crm', { action: 'list', session_token: SESSION_TOKEN });
+    _intgConnected = {};
+    for (const intg of res.integrations || []) {
+      _intgConnected[intg.integration_type] = intg;
+    }
+
+    // Also check CompanyCam separately
+    const ccRes = await api('roofing-integration-companycam', { action: 'verify', session_token: SESSION_TOKEN }).catch(() => null);
+    if (ccRes?.ok) _intgConnected['companycam'] = { integration_type: 'companycam', status: 'active' };
+
+    list.innerHTML = '';
+    for (const def of INTEGRATION_DEFS) {
+      const connected = _intgConnected[def.type];
+      const isConnected = connected?.status === 'active';
+      const isError = connected?.status === 'error';
+
+      let statusHtml = '';
+      if (isConnected) {
+        const lastSync = connected.last_sync_at ? new Date(connected.last_sync_at).toLocaleDateString() : 'never';
+        statusHtml = `<div class="intg-status connected">● Connected</div><div class="intg-last-sync">Last sync: ${lastSync} · ${connected.total_records_synced || 0} records</div>`;
+      } else if (isError) {
+        statusHtml = `<div class="intg-status error">✕ Error — ${connected.last_sync_error || 'check credentials'}</div>`;
+      } else {
+        statusHtml = `<div class="intg-status pending">Not connected</div>`;
+      }
+
+      const btn = isConnected
+        ? `<button class="intg-btn disconnect" onclick="disconnectIntegration('${def.type}')">Disconnect</button>`
+        : `<button class="intg-btn connect" onclick="showConnectModal('${def.type}')">Connect</button>`;
+
+      list.innerHTML += `
+        <div class="intg-card">
+          <div class="intg-logo">${def.emoji}</div>
+          <div class="intg-info">
+            <div class="intg-name">${def.name}</div>
+            <div class="intg-desc">${def.desc}</div>
+            ${statusHtml}
+          </div>
+          ${btn}
+        </div>`;
+    }
+  } catch(e) {
+    list.innerHTML = '<div class="empty"><p>Failed to load integrations.</p></div>';
+  }
+}
+
+function showConnectModal(intgType) {
+  const def = INTEGRATION_DEFS.find(d => d.type === intgType);
+  if (!def) return;
+
+  const isSalesforce = intgType === 'salesforce';
+  const isWebhook = intgType === 'custom_webhook';
+  const needsSecret = intgType === 'improveit360' || intgType === 'salesforce';
+  const useToken = intgType === 'companycam' || intgType === 'salesforce' || intgType === 'leap';
+
+  let fieldsHtml = '';
+  if (isWebhook) {
+    // Custom webhook — just need a label/name, we generate the key
+    fieldsHtml = `<p style="font-size:13px;color:var(--t3);margin-bottom:12px">
+      We'll generate a unique webhook URL for you to paste into your CRM.
+    </p>
+    <div class="form-group">
+      <label>Custom Field Mapping (optional JSON)</label>
+      <textarea id="intg-field-map" placeholder='{"homeowner_name":"contact_name","property_address":"job_site"}' style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:10px;font-size:12px;height:80px;resize:none"></textarea>
+    </div>`;
+  } else {
+    const keyLabel = useToken ? 'Access Token / API Key' : 'API Key';
+    fieldsHtml = `
+    <div class="form-group">
+      <label>${keyLabel}</label>
+      <input type="password" id="intg-api-key" placeholder="Paste your ${keyLabel.toLowerCase()} here" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:10px;font-size:13px">
+    </div>`;
+    if (needsSecret) {
+      fieldsHtml += `
+    <div class="form-group">
+      <label>${isSalesforce ? 'Instance URL' : 'API Secret'}</label>
+      <input type="${isSalesforce ? 'url' : 'password'}" id="intg-api-secret" placeholder="${isSalesforce ? 'https://yourinstance.salesforce.com' : 'API secret'}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--t1);padding:10px;font-size:13px">
+    </div>`;
+    }
+  }
+
+  document.getElementById('intg-modal-title').textContent = `Connect ${def.emoji} ${def.name}`;
+  document.getElementById('intg-modal-type').value = intgType;
+  document.getElementById('intg-modal-fields').innerHTML = fieldsHtml;
+  document.getElementById('intg-modal-error').style.display = 'none';
+  document.getElementById('intg-modal').style.display = 'flex';
+}
+
+function closeConnectModal() {
+  document.getElementById('intg-modal').style.display = 'none';
+}
+
+async function submitIntegration() {
+  const intgType = document.getElementById('intg-modal-type').value;
+  const apiKey = document.getElementById('intg-api-key')?.value?.trim();
+  const apiSecret = document.getElementById('intg-api-secret')?.value?.trim();
+  const fieldMap = document.getElementById('intg-field-map')?.value?.trim();
+  const errEl = document.getElementById('intg-modal-error');
+
+  errEl.style.display = 'none';
+  const btn = document.getElementById('intg-modal-submit');
+  btn.textContent = 'Connecting...';
+  btn.disabled = true;
+
+  try {
+    let body = { action: 'connect', session_token: SESSION_TOKEN };
+    if (intgType === 'companycam') {
+      body = { ...body, access_token: apiKey };
+    } else if (intgType === 'custom_webhook') {
+      const webhookKey = `wh-${Date.now().toString(36)}`;
+      body = {
+        ...body,
+        crm_type: 'custom_webhook',
+        webhook_url: `${API}/roofing-integration-webhook/${webhookKey}`,
+        custom_field_map: fieldMap ? JSON.parse(fieldMap) : {},
+        api_key: webhookKey,
+      };
+    } else {
+      body = {
+        ...body,
+        crm_type: intgType,
+        api_key: apiKey,
+        api_secret: apiSecret || undefined,
+        webhook_url: apiSecret && intgType === 'salesforce' ? apiSecret : undefined,
+        access_token: (intgType === 'leap' || intgType === 'salesforce') ? apiKey : undefined,
+      };
+    }
+
+    const fn = intgType === 'companycam' ? 'roofing-integration-companycam' : 'roofing-integration-crm';
+    const res = await api(fn, body);
+
+    if (res.ok) {
+      closeConnectModal();
+      toast(`${intgType} connected!`, 'success');
+      loadIntegrations();
+      if (intgType === 'custom_webhook' && res.webhook_url) {
+        setTimeout(() => {
+          toast(`Webhook URL: ${res.webhook_url}`, 'info');
+        }, 1500);
+      }
+    } else {
+      errEl.textContent = res.error || 'Connection failed. Check your credentials.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Invalid JSON in field mapping or network error.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Connect';
+    btn.disabled = false;
+  }
+}
+
+async function disconnectIntegration(intgType) {
+  if (!confirm(`Disconnect ${intgType}? Synced data stays in your portal.`)) return;
+
+  const fn = intgType === 'companycam' ? 'roofing-integration-companycam' : 'roofing-integration-crm';
+  await api(fn, { action: 'disconnect', session_token: SESSION_TOKEN, crm_type: intgType });
+  toast(`${intgType} disconnected`, 'info');
+  loadIntegrations();
+}
+
 // --- TAB SWITCHING ---
 function switchTab(tab) {
-  const tabs = ['home','jobs','new-job','supps','team'];
+  const tabs = ['home','jobs','new-job','supps','team','integrations'];
   tabs.forEach(t => {
     document.getElementById('tab-' + t).style.display = t === tab ? 'block' : 'none';
     const btn = document.getElementById('tab-btn-' + t);
@@ -784,6 +1007,7 @@ function switchTab(tab) {
   if (tab === 'supps') loadSupplements();
   if (tab === 'team') loadTeam();
   if (tab === 'home') loadOverview();
+  if (tab === 'integrations') loadIntegrations();
 }
 
 // --- API HELPER ---

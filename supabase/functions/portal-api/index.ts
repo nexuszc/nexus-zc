@@ -153,7 +153,8 @@ Deno.serve(async (req) => {
         documentsRes,
         paymentsRes,
         messagesRes,
-        monitoringRes
+        monitoringRes,
+        integrationsRes
       ] = await Promise.all([
         supabase.from("portal_activities").select("*").eq("job_id", jobId).eq("visible_to_homeowner", true).order("created_at", { ascending: false }).limit(20),
         supabase.from("portal_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
@@ -162,7 +163,8 @@ Deno.serve(async (req) => {
         supabase.from("portal_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("portal_payments").select("*").eq("job_id", jobId).order("due_date", { ascending: true }),
         supabase.from("portal_messages").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(50),
-        supabase.from("roof_monitoring").select("*").eq("job_id", jobId).maybeSingle()
+        supabase.from("roof_monitoring").select("*").eq("job_id", jobId).maybeSingle(),
+        supabase.from("contractor_integrations").select("integration_type, status, last_sync_at").eq("contractor_id", job.contractor_id).eq("status", "active")
       ]);
 
       const progressMap: Record<string, number> = {
@@ -197,7 +199,8 @@ Deno.serve(async (req) => {
         documents: documentsRes.data || [],
         payments: paymentsRes.data || [],
         messages: (messagesRes.data || []).reverse(),
-        monitoring: monitoringRes.data
+        monitoring: monitoringRes.data,
+        integration_sources: (integrationsRes.data || []).map((i: Record<string, unknown>) => i.integration_type)
       }), { headers: corsHeaders });
     }
 

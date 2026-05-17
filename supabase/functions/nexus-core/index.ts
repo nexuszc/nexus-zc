@@ -1449,6 +1449,30 @@ Deno.serve(async (_req) => {
       }).catch(() => {});
     }
 
+    // INTEGRATION SYNC — every 3 cycles (~90 min): fire CompanyCam + CRM syncs for active integrations
+    if (cycleNumber % 3 === 0) {
+      const { data: activeIntegrations } = await supabase
+        .from("contractor_integrations")
+        .select("contractor_id, integration_type")
+        .eq("status", "active");
+
+      for (const intg of activeIntegrations || []) {
+        if (intg.integration_type === "companycam") {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-integration-companycam`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "sync", contractor_id: intg.contractor_id })
+          }).catch(() => {});
+        } else if (["acculynx","jobnimbus","leap","roofr","improveit360","salesforce"].includes(intg.integration_type)) {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-integration-crm`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "sync", contractor_id: intg.contractor_id, crm_type: intg.integration_type })
+          }).catch(() => {});
+        }
+      }
+    }
+
     // CONTENT MACHINE — Voiceover: belt-and-suspenders catch for any approved scripts missing MP3
     {
       const { data: pendingVoiceovers } = await supabase
