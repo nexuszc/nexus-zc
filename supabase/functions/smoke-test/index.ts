@@ -17,7 +17,7 @@ interface HealthCheckResult {
   status: 'pass' | 'fail' | 'warn';
   duration_ms: number;
   message?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 interface HealthCheckResponse {
@@ -42,26 +42,39 @@ interface ErrorResponse {
 }
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// UTILITIES
 // ============================================================================
 
 /**
- * CORS headers for all responses
+ * Structured logging utility
  */
-function getCorsHeaders(): HeadersInit {
+function log(level: 'info' | 'warn' | 'error', message: string, meta?: Record<string, unknown>): void {
+  const logEntry = {
+    level,
+    message,
+    function: FUNCTION_NAME,
+    timestamp: new Date().toISOString(),
+    ...meta,
+  };
+  console.log(JSON.stringify(logEntry));
+}
+
+/**
+ * Get CORS headers for responses
+ */
+function getCorsHeaders(): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
-    'Access-Control-Max-Age': '86400',
   };
 }
 
 /**
- * Create a JSON response with CORS headers
+ * Create a JSON response with proper headers
  */
-function createJsonResponse(data: any, status = 200): Response {
-  return new Response(JSON.stringify(data), {
+function createJsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: {
       'Content-Type': 'application/json',
@@ -70,26 +83,12 @@ function createJsonResponse(data: any, status = 200): Response {
   });
 }
 
-/**
- * Structured logging function
- */
-function log(level: 'info' | 'warn' | 'error', message: string, metadata?: Record<string, any>) {
-  const logEntry = {
-    level,
-    message,
-    function: FUNCTION_NAME,
-    timestamp: new Date().toISOString(),
-    ...metadata,
-  };
-  console.log(JSON.stringify(logEntry));
-}
-
 // ============================================================================
-// HEALTH CHECK FUNCTIONS
+// HEALTH CHECKS
 // ============================================================================
 
 /**
- * Check Deno runtime environment
+ * Check runtime environment
  */
 async function checkRuntime(): Promise<HealthCheckResult> {
   const start = performance.now();
@@ -103,9 +102,9 @@ async function checkRuntime(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        deno_version: denoVersion,
-        v8_version: v8Version,
-        typescript_version: typescriptVersion,
+        deno: denoVersion,
+        v8: v8Version,
+        typescript: typescriptVersion,
       },
     };
   } catch (error) {
@@ -124,13 +123,12 @@ async function checkRuntime(): Promise<HealthCheckResult> {
 async function checkEnvironment(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
     const missingVars: string[] = [];
 
-    for (const envVar of requiredEnvVars) {
-      const value = Deno.env.get(envVar);
-      if (!value) {
-        missingVars.push(envVar);
+    for (const varName of requiredVars) {
+      if (!Deno.env.get(varName)) {
+        missingVars.push(varName);
       }
     }
 
@@ -140,9 +138,6 @@ async function checkEnvironment(): Promise<HealthCheckResult> {
         status: 'fail',
         duration_ms: performance.now() - start,
         message: `Missing required environment variables: ${missingVars.join(', ')}`,
-        details: {
-          missing_vars: missingVars,
-        },
       };
     }
 
@@ -151,7 +146,8 @@ async function checkEnvironment(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        env_vars_present: requiredEnvVars.length,
+        variables_checked: requiredVars.length,
+        all_present: true,
       },
     };
   } catch (error) {
@@ -171,20 +167,20 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'supabase_client',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Supabase credentials not available',
+        message: 'Missing Supabase credentials',
       };
     }
 
-    const client = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!client) {
+    if (!supabase) {
       return {
         name: 'supabase_client',
         status: 'fail',
@@ -199,7 +195,6 @@ async function checkSupabaseClient(): Promise<HealthCheckResult> {
       duration_ms: performance.now() - start,
       details: {
         client_initialized: true,
-        supabase_url: supabaseUrl,
       },
     };
   } catch (error) {
@@ -226,25 +221,21 @@ async function checkDatabase(): Promise<HealthCheckResult> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: 'Database credentials not available',
+        message: 'Missing database credentials',
       };
     }
 
-    const client = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to check database connectivity
-    const { data, error } = await client.from('profiles').select('count').limit(1).maybeSingle();
+    // Execute a simple query to verify connectivity
+    const { error } = await supabase.from('users').select('id').limit(1);
 
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 is "no rows returned" which is acceptable
+    if (error) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - start,
-        message: error.message,
-        details: {
-          error_code: error.code,
-        },
+        message: `Database query failed: ${error.message}`,
       };
     }
 
@@ -253,8 +244,7 @@ async function checkDatabase(): Promise<HealthCheckResult> {
       status: 'pass',
       duration_ms: performance.now() - start,
       details: {
-        connected: true,
-        query_executed: true,
+        connection_successful: true,
       },
     };
   } catch (error) {
@@ -275,19 +265,17 @@ async function checkJsonSerialization(): Promise<HealthCheckResult> {
   try {
     const testObject = {
       string: 'test',
-      number: 123,
+      number: 42,
       boolean: true,
-      null_value: null,
+      null: null,
       array: [1, 2, 3],
-      nested: {
-        key: 'value',
-      },
+      nested: { key: 'value' },
     };
 
     const serialized = JSON.stringify(testObject);
     const deserialized = JSON.parse(serialized);
 
-    if (JSON.stringify(testObject) !== JSON.stringify(deserialized)) {
+    if (JSON.stringify(deserialized) !== serialized) {
       return {
         name: 'json_serialization',
         status: 'fail',
@@ -515,4 +503,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const duration = performance.now() - requestStart;
     log('info', 'Request completed', {
       status: response.status,
-      duration_
+      duration_ms: Math.round(duration * 100) / 100,
+    });
+
+    return response;
+  } catch (error) {
+    const duration = performance.now() - requestStart;
+    log('error', 'Unhandled error in main handler', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration_ms: Math.round(duration * 100) / 100,
+    });
