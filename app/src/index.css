@@ -119,9 +119,9 @@
     }
   }
 
-  /* ── Mobile 44px touch targets ── */
+  /* ── Mobile 44px touch targets (whale cards only) ── */
   @media (max-width: 640px) {
-    button {
+    .whale-actions button {
       min-height: 44px;
     }
   }

@@ -314,7 +314,7 @@ function WhaleQueue({ whales, onModal, onAction, onToast }) {
   if (!whales.length) return null
 
   return (
-    <div className="mb-6 bg-[#080f10] border border-cyan-500/20 rounded-xl overflow-hidden">
+    <div className="w-full mb-6 bg-[#080f10] border border-cyan-500/20 rounded-xl overflow-hidden">
       <button
         onClick={() => setCollapsed(c => !c)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-cyan-500/5 transition-colors"
@@ -327,7 +327,7 @@ function WhaleQueue({ whales, onModal, onAction, onToast }) {
         <span className="text-gray-600 text-sm">{collapsed ? '▾' : '▴'}</span>
       </button>
       {!collapsed && (
-        <div className="px-4 pb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="px-4 pb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {whales.map(p => (
             <WhaleCard key={p.id} p={p} onModal={onModal} onAction={onAction} onToast={onToast} />
           ))}
