@@ -152,17 +152,18 @@ JSON: {"improvements": ["...", "...", "..."], "script_changes": ["..."]}
     insights
   });
 
-  await sendTelegram(
-    `📞 *Voice Learning Report — Week of ${oneWeekAgo.split("T")[0]}*\n\n` +
-    `*Calls:* ${calls.length} made | ${answered.length} answered\n` +
-    `*Answer rate:* ${Math.round(answered.length / calls.length * 100)}%\n` +
-    `*Conversions:* ${converted.length} (${Math.round(converted.length / calls.length * 100)}%)\n` +
-    `*Revenue:* $${revenue.toLocaleString()}\n\n` +
-    `*Best opener:* ${bestOpener.name} (${Math.round(bestOpener.rate * 100)}%)\n` +
-    `*Best time:* ${bestHour.hour}:00\n\n` +
-    `*This week's improvements:*\n` +
-    (insights.improvements || []).map((i: string) => `• ${i}`).join("\n")
-  );
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly voice learning visible in System tab
+  // await sendTelegram(
+  //   `📞 *Voice Learning Report — Week of ${oneWeekAgo.split("T")[0]}*\n\n` +
+  //   `*Calls:* ${calls.length} made | ${answered.length} answered\n` +
+  //   `*Answer rate:* ${Math.round(answered.length / calls.length * 100)}%\n` +
+  //   `*Conversions:* ${converted.length} (${Math.round(converted.length / calls.length * 100)}%)\n` +
+  //   `*Revenue:* $${revenue.toLocaleString()}\n\n` +
+  //   `*Best opener:* ${bestOpener.name} (${Math.round(bestOpener.rate * 100)}%)\n` +
+  //   `*Best time:* ${bestHour.hour}:00\n\n` +
+  //   `*This week's improvements:*\n` +
+  //   (insights.improvements || []).map((i: string) => `• ${i}`).join("\n")
+  // );
 
   return Response.json({ ok: true, calls_analyzed: calls.length, revenue });
 });

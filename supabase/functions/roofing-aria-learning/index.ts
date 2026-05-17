@@ -99,15 +99,12 @@ Deno.serve(async (req) => {
   }
 
   if (reports.length > 0) {
-    const reportText = reports.map(r =>
-      `*${r.call_type}*: ${r.calls_made} calls, ${Math.round((r.conversion_rate as number) * 100)}% conversion`
-    ).join("\n");
-
-    await tg(
-      `📞 *Roofing Aria Weekly Learning*\n\n` +
-      `${reportText}\n\n` +
-      `Scripts updated automatically.`
-    );
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly aria learning visible in System tab
+    // await tg(
+    //   `📞 *Roofing Aria Weekly Learning*\n\n` +
+    //   `${reportText}\n\n` +
+    //   `Scripts updated automatically.`
+    // );
   }
 
   return Response.json({ ok: true, reports });

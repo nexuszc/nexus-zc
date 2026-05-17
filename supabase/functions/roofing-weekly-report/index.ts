@@ -136,19 +136,20 @@ Respond ONLY with valid JSON, no markdown:
     .map((a, idx) => `${idx + 1}. ${a}`)
     .join("\n");
 
-  await sendTelegram(
-    `📊 *Roofing OS Weekly Intelligence Report*\n` +
-    `Week of ${weekStart}\n\n` +
-    `*Revenue:* $${weekRevenue.toLocaleString()}\n` +
-    `*Contracts signed:* ${contractsSigned}\n` +
-    `*Supplements approved:* ${supplementsApproved}\n` +
-    `*Supplement revenue:* $${supplementRevenue.toLocaleString()}\n` +
-    `*Storms detected:* ${storms.length}\n` +
-    `*AI call conversions:* ${ariaConversions}\n\n` +
-    (insightsText ? `*Key Insights:*\n${insightsText}\n\n` : "") +
-    (actionsText ? `*Next Week Actions:*\n${actionsText}\n\n` : "") +
-    `*Next week forecast:* $${(intelligence.next_week_forecast || 0).toLocaleString()}`
-  );
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly roofing report visible in System tab
+  // await sendTelegram(
+  //   `📊 *Roofing OS Weekly Intelligence Report*\n` +
+  //   `Week of ${weekStart}\n\n` +
+  //   `*Revenue:* $${weekRevenue.toLocaleString()}\n` +
+  //   `*Contracts signed:* ${contractsSigned}\n` +
+  //   `*Supplements approved:* ${supplementsApproved}\n` +
+  //   `*Supplement revenue:* $${supplementRevenue.toLocaleString()}\n` +
+  //   `*Storms detected:* ${storms.length}\n` +
+  //   `*AI call conversions:* ${ariaConversions}\n\n` +
+  //   (insightsText ? `*Key Insights:*\n${insightsText}\n\n` : "") +
+  //   (actionsText ? `*Next Week Actions:*\n${actionsText}\n\n` : "") +
+  //   `*Next week forecast:* $${(intelligence.next_week_forecast || 0).toLocaleString()}`
+  // );
 
   return Response.json({
     ok: true,

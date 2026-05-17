@@ -136,14 +136,23 @@ Deno.serve(async (req) => {
       } catch { /* ignore */ }
 
       if (!gate.permanent && gate.next_allowed_at) {
-        await supabase.from("aria_call_queue").insert({
-          call_type, contact_phone, contact_name, contact_type,
-          job_id: job_id || null, language, metadata,
-          fire_at: gate.next_allowed_at,
-          recipient_timezone: gate.recipient_timezone || "America/Denver",
-          queue_reason: gate.reason,
-          status: "queued"
-        });
+        const { data: existingQueued } = await supabase
+          .from("aria_call_queue")
+          .select("id")
+          .eq("contact_phone", contact_phone)
+          .eq("status", "queued")
+          .maybeSingle();
+
+        if (!existingQueued) {
+          await supabase.from("aria_call_queue").insert({
+            call_type, contact_phone, contact_name, contact_type,
+            job_id: job_id || null, language, metadata,
+            fire_at: gate.next_allowed_at,
+            recipient_timezone: gate.recipient_timezone || "America/Denver",
+            queue_reason: gate.reason,
+            status: "queued"
+          });
+        }
       }
 
       return Response.json({

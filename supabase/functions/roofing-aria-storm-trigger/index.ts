@@ -78,23 +78,32 @@ Deno.serve(async (req) => {
     const gate = await gateRes.json().catch(() => ({ allowed: true }));
 
     if (!gate.allowed && !gate.permanent) {
-      await supabase.from("aria_call_queue").insert({
-        call_type: "storm_alert",
-        contact_phone: job.homeowner_phone,
-        contact_name: job.homeowner_name,
-        contact_type: "previous_customer",
-        job_id: job.id,
-        metadata: {
-          property_address: job.property_address,
-          hail_size: String(hail_size),
-          storm_date: storm_date || new Date().toISOString(),
-          portal_link: portalLink
-        },
-        fire_at: gate.next_allowed_at,
-        recipient_timezone: gate.recipient_timezone || "America/Denver",
-        queue_reason: gate.reason,
-        status: "queued"
-      });
+      const { data: existingQueued } = await supabase
+        .from("aria_call_queue")
+        .select("id")
+        .eq("contact_phone", job.homeowner_phone)
+        .eq("status", "queued")
+        .maybeSingle();
+
+      if (!existingQueued) {
+        await supabase.from("aria_call_queue").insert({
+          call_type: "storm_alert",
+          contact_phone: job.homeowner_phone,
+          contact_name: job.homeowner_name,
+          contact_type: "previous_customer",
+          job_id: job.id,
+          metadata: {
+            property_address: job.property_address,
+            hail_size: String(hail_size),
+            storm_date: storm_date || new Date().toISOString(),
+            portal_link: portalLink
+          },
+          fire_at: gate.next_allowed_at,
+          recipient_timezone: gate.recipient_timezone || "America/Denver",
+          queue_reason: gate.reason,
+          status: "queued"
+        });
+      }
       results.push({ homeowner: job.homeowner_name || "Unknown", phone: job.homeowner_phone, queued: false });
       continue;
     }

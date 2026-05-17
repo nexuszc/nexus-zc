@@ -381,7 +381,8 @@ async function generateWeeklyReport(supabase: any, telegramChatId: string | null
     abilities_used: abilityCounts,
   });
 
-  if (telegramChatId) await sendTelegram(telegramChatId, report);
+  // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly system report visible in System tab (weekly_reports table)
+  // if (telegramChatId) await sendTelegram(telegramChatId, report);
 }
 
 async function sendTelegram(chatId: string, text: string): Promise<void> {

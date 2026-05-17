@@ -143,31 +143,9 @@ Format as numbered list. Be direct and data-driven. No generic advice.`
 
     const duration = Date.now() - startMs;
 
-    // Send full report to Telegram
-    const reportParts = [
-      `📊 *Weekly Marketing Report — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}*\n`,
-      `*Content Generated:*\n` +
-      `📝 Blog posts: ${blogPosts} | FB drafts: ${fbPosts}\n` +
-      `✅ Approved: ${contentApproved} | 📤 Published: ${contentPublished} | ⏳ Pending: ${contentPending}\n`,
-      `*Outreach:*\n` +
-      `✉️ Emails sent: ${emailsSent}\n` +
-      `📱 SMS sent: ${smsSent}\n` +
-      `📞 Aria calls: ${ariaCallsTotal} (${ariaConversionRate}% converted)\n`,
-      `*Community:*\n` +
-      `💬 Posts approved: ${communityApproved} | Pending: ${communityPending}\n` +
-      `Reddit: ${communityPosts.filter((p: any) => p.platform === "reddit").length} | FB Groups: ${communityPosts.filter((p: any) => p.platform === "facebook_groups").length}\n`,
-      `*Results:*\n` +
-      `🏗️ New contractors: ${newSignups}\n` +
-      `🤝 Referrals: ${referralsGenerated} generated, ${referralConversions} converted\n` +
-      `💰 Supplement revenue approved: $${supplementRevenue.toLocaleString()}\n` +
-      `⛈️ Storm events: ${hailEvents.length}\n`,
-      `*3 Improvement Proposals:*\n${proposals}`
-    ];
-
-    for (const part of reportParts) {
-      await tg(part);
-      await new Promise(r => setTimeout(r, 500));
-    }
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly marketing report visible in Content tab
+    // const reportParts = [...];
+    // for (const part of reportParts) { await tg(part); }
 
     await supabase.from("system_heartbeats").insert({
       function_name: "roofing-weekly-marketing-report",
@@ -186,7 +164,8 @@ Format as numbered list. Be direct and data-driven. No generic advice.`
       error_message: msg,
       checked_at: new Date().toISOString()
     }).catch(() => {});
-    await tg(`❌ *Weekly Marketing Report Error*\n${msg}`);
+    // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab via system_heartbeats
+    // await tg(`❌ *Weekly Marketing Report Error*\n${msg}`);
     return Response.json({ ok: false, error: msg }, { status: 500 });
   }
 });
