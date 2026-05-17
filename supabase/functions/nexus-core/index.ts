@@ -31,6 +31,24 @@ async function ai(prompt: string, maxTokens = 1500): Promise<string> {
   return data.content?.[0]?.text || "";
 }
 
+async function aiHaiku(prompt: string, maxTokens = 400): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
+
 async function tg(text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
@@ -473,7 +491,7 @@ Respond with JSON only (no markdown, no backticks):
 }`;
 
   try {
-    const response = await ai(prompt, 1800);
+    const response = await ai(prompt, 800);
     return JSON.parse(response.replace(/```json|```/g, "").trim());
   } catch {
     return {
@@ -505,9 +523,9 @@ async function act(decisions: Awaited<ReturnType<typeof think>>, state: Awaited<
       if (action.type === "research") {
         const results = await search(action.instruction);
         if (results) {
-          const insight = await ai(
+          const insight = await aiHaiku(
             `Summarize the key actionable insight from this research in 2-3 sentences:\n\nTopic: ${action.instruction}\n\nResults:\n${results}`,
-            400
+            300
           );
           await supabase.from("knowledge_base").insert({
             topic: action.instruction.slice(0, 100),
@@ -825,7 +843,7 @@ ${state.tasks.slice(0, 4).map((t: { content: string }) => `- ${(t.content || "")
 ACTIVE CLIENTS (${state.clients.length} total):
 ${state.clients.slice(0, 3).map((c: { name: string; health_score: number }) => `- ${c.name} (health: ${c.health_score || "?"})`).join("\n") || "None"}`;
 
-    const nextList = await ai(nextPrompt, 500);
+    const nextList = await aiHaiku(nextPrompt, 400);
 
     const allDoneText = newDoneLines.length > 0
       ? `\n${newDoneLines.join("\n")}`
@@ -904,9 +922,35 @@ Deno.serve(async (_req) => {
     const state = await observe().then(r => { logHeartbeat("nexus-core:observe", "ok", Date.now() - _t); return r; })
       .catch(e => { logHeartbeat("nexus-core:observe", "error", Date.now() - _t, String(e)); throw e; });
 
-    _t = Date.now();
-    const decisions = await think(state, selfModel, cycleNumber).then(r => { logHeartbeat("nexus-core:think", "ok", Date.now() - _t); return r; })
-      .catch(e => { logHeartbeat("nexus-core:think", "error", Date.now() - _t, String(e)); throw e; });
+    // Skip think() AI call when state is unchanged (saves ~$0.05 per skipped cycle)
+    const stateHash = `${state.errors.length}:${state.tasks.length}:${state.improvements.length}:${state.clients.length}`;
+    const { data: lastHashEntry } = await supabase
+      .from("nexus_audit_log")
+      .select("action_detail, created_at")
+      .eq("action_type", "cycle_state_hash")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const stateUnchanged = lastHashEntry?.action_detail === stateHash &&
+      lastHashEntry?.created_at &&
+      (Date.now() - new Date(lastHashEntry.created_at).getTime()) < 60 * 60 * 1000;
+
+    let decisions: Awaited<ReturnType<typeof think>>;
+    if (stateUnchanged) {
+      decisions = {
+        observations: ["State unchanged since last cycle"],
+        judgment: "no build this cycle",
+        actions: [],
+        reflection: "Think() skipped — state hash unchanged",
+        summary: "Idle cycle — state unchanged"
+      };
+      logHeartbeat("nexus-core:think", "ok", 0);
+    } else {
+      _t = Date.now();
+      decisions = await think(state, selfModel, cycleNumber).then(r => { logHeartbeat("nexus-core:think", "ok", Date.now() - _t); return r; })
+        .catch(e => { logHeartbeat("nexus-core:think", "error", Date.now() - _t, String(e)); throw e; });
+      await log("cycle_state_hash", stateHash);
+    }
 
     _t = Date.now();
     const actionsExecuted = await act(decisions, state).then(r => { logHeartbeat("nexus-core:act", "ok", Date.now() - _t); return r; })
