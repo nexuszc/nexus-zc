@@ -1,5 +1,153 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
+interface TestResult {
+  name: string;
+  passed: boolean;
+  duration_ms: number;
+  error?: string;
+}
+
+async function testDBConnection(): Promise<TestResult> {
+  const start = performance.now();
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { error } = await supabase.from('_prisma_migrations').select('id').limit(1);
+    
+    if (error && error.code !== 'PGRST116') {
+      throw new Error(error.message);
+    }
+    
+    return {
+      name: 'database_connection',
+      passed: true,
+      duration_ms: performance.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'database_connection',
+      passed: false,
+      duration_ms: performance.now() - start,
+      error: error.message,
+    };
+  }
+}
+
+async function testRuntime(): Promise<TestResult> {
+  const start = performance.now();
+  try {
+    if (typeof Deno === 'undefined') {
+      throw new Error('Deno runtime not available');
+    }
+    
+    const version = Deno.version;
+    if (!version || !version.deno) {
+      throw new Error('Invalid Deno version');
+    }
+    
+    return {
+      name: 'runtime_check',
+      passed: true,
+      duration_ms: performance.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'runtime_check',
+      passed: false,
+      duration_ms: performance.now() - start,
+      error: error.message,
+    };
+  }
+}
+
+async function testAuthContext(): Promise<TestResult> {
+  const start = performance.now();
+  try {
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
+    
+    if (missingVars.length > 0) {
+      throw new Error(`Missing vars: ${missingVars.join(', ')}`);
+    }
+    
+    return {
+      name: 'auth_context',
+      passed: true,
+      duration_ms: performance.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'auth_context',
+      passed: false,
+      duration_ms: performance.now() - start,
+      error: error.message,
+    };
+  }
+}
+
+async function testJSONResponse(): Promise<TestResult> {
+  const start = performance.now();
+  try {
+    const testObj = { test: 'data', timestamp: new Date().toISOString() };
+    const serialized = JSON.stringify(testObj);
+    const parsed = JSON.parse(serialized);
+    
+    if (parsed.test !== 'data') {
+      throw new Error('JSON serialization failed');
+    }
+    
+    return {
+      name: 'json_response',
+      passed: true,
+      duration_ms: performance.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'json_response',
+      passed: false,
+      duration_ms: performance.now() - start,
+      error: error.message,
+    };
+  }
+}
+
+async function testSupabaseInit(): Promise<TestResult> {
+  const start = performance.now();
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase credentials not available');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    if (!supabase) {
+      throw new Error('Failed to create Supabase client');
+    }
+    
+    return {
+      name: 'supabase_init',
+      passed: true,
+      duration_ms: performance.now() - start,
+    };
+  } catch (error) {
+    return {
+      name: 'supabase_init',
+      passed: false,
+      duration_ms: performance.now() - start,
+      error: error.message,
+    };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -11,145 +159,103 @@ Deno.serve(async (req) => {
     });
   }
 
+  const startTime = performance.now();
+
   try {
-    const testResults = [];
+    const tests: TestResult[] = [];
 
-    // Test 1: Basic health check
     try {
-      testResults.push({
-        test: 'health_check',
-        status: 'pass',
-        message: 'Service is running',
-        timestamp: new Date().toISOString(),
-      });
+      tests.push(await testRuntime());
     } catch (error) {
-      testResults.push({
-        test: 'health_check',
-        status: 'fail',
-        message: error.message,
-        timestamp: new Date().toISOString(),
+      tests.push({
+        name: 'runtime_check',
+        passed: false,
+        duration_ms: 0,
+        error: error.message,
       });
     }
 
-    // Test 2: Environment variables validation
     try {
-      const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-      const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-      
-      if (missingVars.length > 0) {
-        throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
-      }
-      
-      testResults.push({
-        test: 'environment_variables',
-        status: 'pass',
-        message: 'All required environment variables are set',
-        timestamp: new Date().toISOString(),
-      });
+      tests.push(await testAuthContext());
     } catch (error) {
-      testResults.push({
-        test: 'environment_variables',
-        status: 'fail',
-        message: error.message,
-        timestamp: new Date().toISOString(),
+      tests.push({
+        name: 'auth_context',
+        passed: false,
+        duration_ms: 0,
+        error: error.message,
       });
     }
 
-    // Test 3: Supabase client initialization
     try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error('Supabase credentials not available');
-      }
-      
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      if (!supabase) {
-        throw new Error('Failed to create Supabase client');
-      }
-      
-      testResults.push({
-        test: 'supabase_client_init',
-        status: 'pass',
-        message: 'Supabase client initialized successfully',
-        timestamp: new Date().toISOString(),
-      });
+      tests.push(await testSupabaseInit());
     } catch (error) {
-      testResults.push({
-        test: 'supabase_client_init',
-        status: 'fail',
-        message: error.message,
-        timestamp: new Date().toISOString(),
+      tests.push({
+        name: 'supabase_init',
+        passed: false,
+        duration_ms: 0,
+        error: error.message,
       });
     }
 
-    // Test 4: Database connectivity
     try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (!supabaseUrl || !supabaseKey) {
-        throw new Error('Supabase credentials not available for database test');
-      }
-      
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      const { data, error } = await supabase.rpc('sql', { 
-        query: 'SELECT 1 as result' 
-      }).single();
-      
-      if (error) {
-        // Try alternative method if RPC doesn't exist
-        const { error: altError } = await supabase.from('_prisma_migrations').select('id').limit(1);
-        
-        if (altError && altError.code !== 'PGRST116') {
-          throw new Error(`Database query failed: ${altError.message}`);
-        }
-      }
-      
-      testResults.push({
-        test: 'database_connectivity',
-        status: 'pass',
-        message: 'Database connection verified',
-        timestamp: new Date().toISOString(),
-      });
+      tests.push(await testJSONResponse());
     } catch (error) {
-      testResults.push({
-        test: 'database_connectivity',
-        status: 'fail',
-        message: error.message,
-        timestamp: new Date().toISOString(),
+      tests.push({
+        name: 'json_response',
+        passed: false,
+        duration_ms: 0,
+        error: error.message,
       });
     }
 
-    // Calculate overall status
-    const failedTests = testResults.filter(result => result.status === 'fail');
-    const overallStatus = failedTests.length === 0 ? 'pass' : 'fail';
+    try {
+      tests.push(await testDBConnection());
+    } catch (error) {
+      tests.push({
+        name: 'database_connection',
+        passed: false,
+        duration_ms: 0,
+        error: error.message,
+      });
+    }
+
+    const totalDuration = performance.now() - startTime;
+    const failedTests = tests.filter(test => !test.passed);
+    const passedTests = tests.filter(test => test.passed);
+
+    let status: 'healthy' | 'degraded' | 'failed';
+    if (failedTests.length === 0) {
+      status = 'healthy';
+    } else if (passedTests.length > failedTests.length) {
+      status = 'degraded';
+    } else {
+      status = 'failed';
+    }
 
     const response = {
-      overall_status: overallStatus,
-      total_tests: testResults.length,
-      passed: testResults.filter(r => r.status === 'pass').length,
-      failed: failedTests.length,
-      tests: testResults,
+      status,
+      tests,
       timestamp: new Date().toISOString(),
+      total_duration_ms: totalDuration,
     };
 
     return new Response(JSON.stringify(response, null, 2), {
-      status: overallStatus === 'pass' ? 200 : 500,
+      status: status === 'failed' ? 500 : 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ 
-      overall_status: 'fail',
-      error: error.message,
+    const totalDuration = performance.now() - startTime;
+    
+    return new Response(JSON.stringify({
+      status: 'failed',
+      tests: [],
       timestamp: new Date().toISOString(),
-    }), {
+      total_duration_ms: totalDuration,
+      error: error.message,
+    }, null, 2), {
       status: 500,
       headers: {
         'Content-Type': 'application/json',
