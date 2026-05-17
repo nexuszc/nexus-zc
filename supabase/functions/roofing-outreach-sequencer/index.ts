@@ -1,12 +1,12 @@
-// roofing-outreach-sequencer v14
+// roofing-outreach-sequencer v15
 // 7-touch branching narrative sequence + funnel stage tracking
 //
-// Touch 1  Day 0  email: "Your homeowners are calling too much"
-// Touch 2  Day 2  email: "47 calls. One installation."
-// Touch 3  Day 3  voice drop (skip if branch=cold)
-// Touch 4  Day 4  email: "What Sarah saw instead of calling"
-// Touch 5  Day 5  voice drop (skip if branch=cold/ghost)
-// Touch 6  Day 7  email: "Last note"
+// Touch 1  Day  0   email: "Your homeowners are calling too much"
+// Touch 2  Day  2   email: "47 calls. One installation."
+// Touch 3  Day  4   voice drop (skip if branch=cold)
+// Touch 4  Day  7   email: "What Sarah saw instead of calling"
+// Touch 5  Day  11  voice drop (skip if branch=cold/ghost)
+// Touch 6  Day  15  email: "Last note"
 //
 // Branches:
 //   standard → normal schedule
@@ -410,8 +410,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Touch 3 — Day 3: voice drop (skip if cold)
-        if (day === 2 && daysSinceStart >= 3) {
+        // Touch 3 — Day 4: voice drop (skip if cold)
+        if (day === 2 && daysSinceStart >= 4) {
           if (currentBranch !== "cold" && prospect.phone) {
             await fireVoiceDrop(prospect, 3);
             voiceDrops++;
@@ -423,8 +423,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Touch 4 — Day 4
-        if (day === 3 && daysSinceStart >= 4) {
+        // Touch 4 — Day 7
+        if (day === 3 && daysSinceStart >= 7) {
           const logId = await logTouch(prospect.id as string, "email_4", 4, null, "Touch 4 — portal");
           const { subject, html: baseHtml } = emailTouch4(prospect);
           const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
@@ -439,8 +439,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Touch 5 — Day 5: voice drop (skip if cold or ghost)
-        if (day === 4 && daysSinceStart >= 5) {
+        // Touch 5 — Day 11: voice drop (skip if cold or ghost)
+        if (day === 4 && daysSinceStart >= 11) {
           const skipVoice = currentBranch === "cold" || currentBranch === "ghost";
           if (!skipVoice && prospect.phone) {
             await fireVoiceDrop(prospect, 5);
@@ -453,8 +453,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Touch 6 — Day 7: final email
-        if (day === 5 && daysSinceStart >= 7) {
+        // Touch 6 — Day 15: final email
+        if (day === 5 && daysSinceStart >= 15) {
           const logId = await logTouch(prospect.id as string, "email_6", 6, null, "Touch 6 — final");
           const { subject, html: baseHtml } = emailTouch6(prospect);
           const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
