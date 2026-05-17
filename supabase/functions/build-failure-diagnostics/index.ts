@@ -1,179 +1,218 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-interface BuildError {
-  file: string
-  line?: number
-  message: string
-  type: string
-}
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 interface DiagnosticResult {
-  errors: BuildError[]
-  suggestions: string[]
-  affectedFiles: string[]
-  hasDenoServe: boolean
-  hasCorsIssues: boolean
-  hasImportIssues: boolean
+  status: "success" | "error";
+  timestamp: string;
+  checks: {
+    functionCount: {
+      passed: boolean;
+      count: number;
+      message: string;
+    };
+    syntaxValidation: {
+      passed: boolean;
+      errors: string[];
+      message: string;
+    };
+    dependencyChecks: {
+      passed: boolean;
+      issues: string[];
+      message: string;
+    };
+    memoryUsage: {
+      passed: boolean;
+      usage: number;
+      message: string;
+    };
+    commonPatterns: {
+      passed: boolean;
+      issues: string[];
+      message: string;
+    };
+  };
+  summary: {
+    totalChecks: number;
+    passedChecks: number;
+    failedChecks: number;
+  };
 }
 
-function analyzeFile(filePath: string, content: string): BuildError[] {
-  const errors: BuildError[] = []
-  
-  if (!content.includes('Deno.serve')) {
-    errors.push({
-      file: filePath,
-      message: 'Missing Deno.serve() wrapper',
-      type: 'MISSING_DENO_SERVE'
-    })
-  }
-  
-  if (content.includes('export default') && !content.includes('Deno.serve')) {
-    errors.push({
-      file: filePath,
-      message: 'Using export default instead of Deno.serve()',
-      type: 'EXPORT_DEFAULT'
-    })
-  }
-  
-  const importPattern = /import\s+.*\s+from\s+['"]([^'"]+)['"]/g
-  let importMatch
-  while ((importMatch = importPattern.exec(content)) !== null) {
-    const importPath = importMatch[1]
-    if (!importPath.startsWith('https://') && !importPath.startsWith('npm:') && !importPath.startsWith('./') && !importPath.startsWith('../')) {
-      errors.push({
-        file: filePath,
-        message: `Invalid import path: ${importPath}. Use https:// or npm: prefix`,
-        type: 'INVALID_IMPORT'
-      })
-    }
-  }
-  
-  if (!content.includes('Access-Control-Allow-Origin')) {
-    errors.push({
-      file: filePath,
-      message: 'Missing CORS headers',
-      type: 'MISSING_CORS'
-    })
-  }
-  
-  const lines = content.split('\n')
-  lines.forEach((line, index) => {
-    if (line.includes('require(')) {
-      errors.push({
-        file: filePath,
-        line: index + 1,
-        message: 'Using require() instead of import',
-        type: 'COMMONJS_REQUIRE'
-      })
-    }
-    
-    if (line.includes('module.exports')) {
-      errors.push({
-        file: filePath,
-        line: index + 1,
-        message: 'Using module.exports instead of Deno.serve()',
-        type: 'COMMONJS_EXPORT'
-      })
-    }
-  })
-  
-  return errors
-}
-
-function generateSuggestions(errors: BuildError[]): string[] {
-  const suggestions: string[] = []
-  const errorTypes = new Set(errors.map(e => e.type))
-  
-  if (errorTypes.has('MISSING_DENO_SERVE')) {
-    suggestions.push('Wrap your handler in Deno.serve(async (req) => { ... })')
-  }
-  
-  if (errorTypes.has('EXPORT_DEFAULT')) {
-    suggestions.push('Replace export default with Deno.serve() wrapper')
-  }
-  
-  if (errorTypes.has('INVALID_IMPORT')) {
-    suggestions.push('Use https:// imports for external packages (e.g., https://esm.sh/@supabase/supabase-js@2.39.3)')
-  }
-  
-  if (errorTypes.has('MISSING_CORS')) {
-    suggestions.push('Add CORS headers to handle OPTIONS requests and include them in responses')
-  }
-  
-  if (errorTypes.has('COMMONJS_REQUIRE') || errorTypes.has('COMMONJS_EXPORT')) {
-    suggestions.push('Convert CommonJS syntax to ES modules (import/export)')
-  }
-  
-  return suggestions
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+async function runDiagnostics(): Promise<DiagnosticResult> {
+  const result: DiagnosticResult = {
+    status: "success",
+    timestamp: new Date().toISOString(),
+    checks: {
+      functionCount: {
+        passed: true,
+        count: 0,
+        message: "",
+      },
+      syntaxValidation: {
+        passed: true,
+        errors: [],
+        message: "",
+      },
+      dependencyChecks: {
+        passed: true,
+        issues: [],
+        message: "",
+      },
+      memoryUsage: {
+        passed: true,
+        usage: 0,
+        message: "",
+      },
+      commonPatterns: {
+        passed: true,
+        issues: [],
+        message: "",
+      },
+    },
+    summary: {
+      totalChecks: 5,
+      passedChecks: 0,
+      failedChecks: 0,
+    },
+  };
 
   try {
-    const { functionName, fileContent } = await req.json()
+    const functionsPath = "/home/deno/functions";
+    let functionCount = 0;
 
-    if (!functionName) {
-      return new Response(
-        JSON.stringify({ error: 'functionName is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    try {
+      for await (const entry of Deno.readDir(functionsPath)) {
+        if (entry.isDirectory) {
+          functionCount++;
+        }
+      }
+      result.checks.functionCount.count = functionCount;
+      result.checks.functionCount.passed = functionCount > 0;
+      result.checks.functionCount.message = functionCount > 0
+        ? `Found ${functionCount} functions`
+        : "No functions found";
+    } catch (error) {
+      result.checks.functionCount.passed = false;
+      result.checks.functionCount.message = `Error reading functions directory: ${error.message}`;
     }
 
-    const errors: BuildError[] = []
-    const affectedFiles: string[] = []
+    try {
+      for await (const entry of Deno.readDir(functionsPath)) {
+        if (entry.isDirectory) {
+          const indexPath = `${functionsPath}/${entry.name}/index.ts`;
+          try {
+            const content = await Deno.readTextFile(indexPath);
+            
+            if (!content.includes("serve") && !content.includes("Deno.serve")) {
+              result.checks.syntaxValidation.errors.push(
+                `${entry.name}: Missing serve function`
+              );
+            }
 
-    if (fileContent) {
-      const fileErrors = analyzeFile(functionName, fileContent)
-      errors.push(...fileErrors)
-      if (fileErrors.length > 0) {
-        affectedFiles.push(functionName)
+            if (content.includes("await") && !content.includes("async")) {
+              result.checks.syntaxValidation.errors.push(
+                `${entry.name}: Possible await without async`
+              );
+            }
+          } catch {
+            result.checks.syntaxValidation.errors.push(
+              `${entry.name}: Could not read index.ts`
+            );
+          }
+        }
       }
+
+      result.checks.syntaxValidation.passed = result.checks.syntaxValidation.errors.length === 0;
+      result.checks.syntaxValidation.message = result.checks.syntaxValidation.passed
+        ? "All functions have valid syntax"
+        : `Found ${result.checks.syntaxValidation.errors.length} syntax issues`;
+    } catch (error) {
+      result.checks.syntaxValidation.passed = false;
+      result.checks.syntaxValidation.message = `Error validating syntax: ${error.message}`;
     }
 
-    const suggestions = generateSuggestions(errors)
+    try {
+      const commonDeps = [
+        "https://deno.land/std@0.168.0/http/server.ts",
+        "https://esm.sh/@supabase/supabase-js@2",
+      ];
 
-    const result: DiagnosticResult = {
-      errors,
-      suggestions,
-      affectedFiles,
-      hasDenoServe: fileContent ? fileContent.includes('Deno.serve') : false,
-      hasCorsIssues: errors.some(e => e.type === 'MISSING_CORS'),
-      hasImportIssues: errors.some(e => e.type === 'INVALID_IMPORT')
+      for await (const entry of Deno.readDir(functionsPath)) {
+        if (entry.isDirectory) {
+          const indexPath = `${functionsPath}/${entry.name}/index.ts`;
+          try {
+            const content = await Deno.readTextFile(indexPath);
+            
+            if (content.includes("@supabase/supabase-js") && !content.includes("https://esm.sh")) {
+              result.checks.dependencyChecks.issues.push(
+                `${entry.name}: Using non-ESM Supabase import`
+              );
+            }
+
+            if (content.includes("npm:")) {
+              result.checks.dependencyChecks.issues.push(
+                `${entry.name}: Using npm: specifier (may cause issues)`
+              );
+            }
+          } catch {
+            // Skip files that can't be read
+          }
+        }
+      }
+
+      result.checks.dependencyChecks.passed = result.checks.dependencyChecks.issues.length === 0;
+      result.checks.dependencyChecks.message = result.checks.dependencyChecks.passed
+        ? "All dependencies are properly configured"
+        : `Found ${result.checks.dependencyChecks.issues.length} dependency issues`;
+    } catch (error) {
+      result.checks.dependencyChecks.passed = false;
+      result.checks.dependencyChecks.message = `Error checking dependencies: ${error.message}`;
     }
 
-    return new Response(
-      JSON.stringify(result),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    )
+    try {
+      const memInfo = Deno.memoryUsage();
+      const totalMB = memInfo.heapTotal / 1024 / 1024;
+      result.checks.memoryUsage.usage = Math.round(totalMB * 100) / 100;
+      result.checks.memoryUsage.passed = totalMB < 512;
+      result.checks.memoryUsage.message = result.checks.memoryUsage.passed
+        ? `Memory usage is normal (${result.checks.memoryUsage.usage}MB)`
+        : `High memory usage detected (${result.checks.memoryUsage.usage}MB)`;
+    } catch (error) {
+      result.checks.memoryUsage.passed = false;
+      result.checks.memoryUsage.message = `Error checking memory: ${error.message}`;
+    }
 
-  } catch (error) {
-    console.error('Error in build-failure-diagnostics:', error)
-    
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        errors: [],
-        suggestions: ['Check function syntax and try again'],
-        affectedFiles: [],
-        hasDenoServe: false,
-        hasCorsIssues: false,
-        hasImportIssues: false
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    try {
+      for await (const entry of Deno.readDir(functionsPath)) {
+        if (entry.isDirectory) {
+          const indexPath = `${functionsPath}/${entry.name}/index.ts`;
+          try {
+            const content = await Deno.readTextFile(indexPath);
+
+            if (!content.includes("cors")) {
+              result.checks.commonPatterns.issues.push(
+                `${entry.name}: Missing CORS handling`
+              );
+            }
+
+            if (!content.includes("try") && !content.includes("catch")) {
+              result.checks.commonPatterns.issues.push(
+                `${entry.name}: Missing error handling`
+              );
+            }
+
+            if (content.includes("console.log") && !content.includes("console.error")) {
+              result.checks.commonPatterns.issues.push(
+                `${entry.name}: Has console.log but no console.error`
+              );
+            }
+          } catch {
+            // Skip files that can't be read
+          }
+        }
       }
-    )
-  }
-})
+
+      result.checks.commonPatterns.passed = result.checks.commonPatterns.issues.length === 0;
+      result.checks.commonPatterns.message = result.checks.commonPatterns.passed
+        ? "All common patterns are properly implemented"
+        : `Found ${result.checks.commonPatterns.issues.length} pattern issues`;
+    } catch (error
