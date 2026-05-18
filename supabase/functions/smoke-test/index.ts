@@ -1,5 +1,15 @@
-// Supabase Edge Function: smoke-test
-// Comprehensive health check endpoint for system monitoring
+// supabase/functions/smoke-test/index.ts
+
+/**
+ * Smoke Test Edge Function
+ * 
+ * Performs comprehensive health checks on the Nexus system including:
+ * - Deno runtime verification
+ * - Environment configuration
+ * - Database connectivity
+ * - External service availability
+ * - Performance metrics
+ */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
@@ -27,21 +37,32 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime availability and version
+ * Check Deno runtime environment
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
+    const permissions = {
+      env: await Deno.permissions.query({ name: 'env' }),
+      net: await Deno.permissions.query({ name: 'net' }),
+      read: await Deno.permissions.query({ name: 'read' }),
+    };
+
+    const allGranted = Object.values(permissions).every(p => p.state === 'granted');
+
     return {
       name: 'deno_runtime',
-      status: 'pass',
+      status: allGranted ? 'pass' : 'warn',
       duration_ms: performance.now() - startTime,
-      message: 'Deno runtime operational',
+      message: allGranted ? 'Deno runtime operational' : 'Some permissions not granted',
       details: {
-        deno: version.deno,
-        v8: version.v8,
-        typescript: version.typescript,
+        deno_version: version.deno,
+        v8_version: version.v8,
+        typescript_version: version.typescript,
+        permissions: Object.fromEntries(
+          Object.entries(permissions).map(([k, v]) => [k, v.state])
+        ),
       },
     };
   } catch (error) {
@@ -49,13 +70,13 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
 
 /**
- * Check required environment variables
+ * Check environment configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -78,26 +99,20 @@ async function checkEnvironment(): Promise<HealthCheck> {
       }
     }
 
-    if (missing.length > 0) {
-      return {
-        name: 'environment',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
-        details: {
-          missing,
-          present,
-        },
-      };
-    }
+    const status = missing.length === 0 ? 'pass' : 'fail';
 
     return {
       name: 'environment',
-      status: 'pass',
+      status,
       duration_ms: performance.now() - startTime,
-      message: 'All required environment variables present',
+      message: missing.length === 0
+        ? 'All required environment variables present'
+        : `Missing required variables: ${missing.join(', ')}`,
       details: {
-        variables_checked: requiredVars.length,
+        required_vars: requiredVars,
+        present_count: present.length,
+        missing_count: missing.length,
+        missing_vars: missing,
       },
     };
   } catch (error) {
@@ -130,7 +145,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to check connectivity
+    // Perform a simple query to verify connectivity
     const { data, error } = await supabase
       .from('profiles')
       .select('id')
@@ -141,10 +156,10 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Database query failed: ${error.message}`,
+        message: 'Database query failed',
         details: {
+          error_message: error.message,
           error_code: error.code,
-          error_details: error.details,
         },
       };
     }
@@ -153,7 +168,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity operational',
+      message: 'Database connectivity confirmed',
       details: {
         query_successful: true,
       },
