@@ -189,6 +189,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-generator` | See function source for details | Internal |
 | `roofing-supplement-rebuttal` | See function source for details | Internal |
 | `roofing-supplement-tracker` | See function source for details | Internal |
+| `roofing-video-webhook` | See function source for details | Internal |
 | `roofing-voiceover-engine` | See function source for details | Internal |
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
@@ -405,11 +406,11 @@ Then productized and sold to other multi-business operators.
 **NEXT:**
 1. Fix smoke_test_failed error
 2. Fix Recurring Smoke Test Failures
-3. Add Conversation Context Memory
+3. Add Self-Learning Pattern Recognition
 4. Add memory consolidation ability
-5. Add Self-Learning Pattern Recognition
+5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
+7. Build Roofing OS go-to-market system
 8. Complete homeowner portal fixes and documentation
 
 ---
