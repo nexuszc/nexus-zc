@@ -244,6 +244,25 @@ Deno.serve(async (req) => {
     return Response.json({ allowed: true, bypass: 'test_number', recipient_timezone: 'America/Denver', call_type });
   }
 
+  // PERMANENT BLOCK — own infrastructure numbers (Retell + Twilio)
+  // These must never be called by Aria under any circumstances.
+  const OWN_NUMBERS = new Set(['17202921930', '7202921930', '17205006668', '7205006668']);
+  if (OWN_NUMBERS.has(cleanedPhone)) {
+    // Purge any queue entries for our own numbers so they don't re-fire
+    await supabase.from('aria_call_queue')
+      .delete()
+      .in('contact_phone', ['+17202921930', '+17205006668', '7202921930', '7205006668',
+                             '(720) 292-1930', '(720) 500-6668']);
+    return Response.json({
+      allowed: false,
+      reason: 'own_number',
+      reason_detail: 'Infrastructure number — calls to own numbers are permanently blocked.',
+      permanent: true,
+      recipient_timezone: 'America/Denver',
+      call_type
+    });
+  }
+
   const now = check_time ? new Date(check_time) : new Date();
   const timezone = getTimezone(contact_phone);
   const local = getLocalTimeParts(now, timezone);
