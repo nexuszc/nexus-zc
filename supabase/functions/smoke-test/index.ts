@@ -1,7 +1,5 @@
-// Smoke Test Edge Function for Nexus System
-// Provides comprehensive health checks and system diagnostics
-
-const FUNCTION_START_TIME = performance.now();
+// Smoke Test Edge Function for Nexus
+// Comprehensive health checks for edge function deployment
 
 interface HealthCheck {
   name: string;
@@ -24,8 +22,10 @@ interface SmokeTestResponse {
   };
 }
 
+const FUNCTION_START_TIME = performance.now();
+
 /**
- * Check Deno runtime availability
+ * Check Deno runtime availability and version
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -47,7 +47,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
@@ -60,22 +60,21 @@ async function checkEnvironment(): Promise<HealthCheck> {
   try {
     const requiredVars = [
       'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing: string[] = [];
-    for (const varName of requiredVars) {
-      if (!Deno.env.get(varName)) {
-        missing.push(varName);
-      }
-    }
+    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
+        message: 'Missing required environment variables',
+        details: {
+          missing_vars: missing,
+        },
       };
     }
 
@@ -83,9 +82,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
       name: 'environment',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'All required environment variables present',
+      message: 'Environment variables configured',
       details: {
-        checked: requiredVars.length,
+        vars_checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -112,11 +111,11 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not available',
+        message: 'Database credentials not configured',
       };
     }
 
-    // Simple connectivity test
+    // Simple connectivity test - check if we can reach the database
     const response = await fetch(`${supabaseUrl}/rest/v1/`, {
       method: 'HEAD',
       headers: {
@@ -128,9 +127,9 @@ async function checkDatabase(): Promise<HealthCheck> {
     if (!response.ok) {
       return {
         name: 'database',
-        status: 'warn',
+        status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database connection degraded',
+        message: 'Database not reachable',
         details: {
           status_code: response.status,
         },
@@ -141,7 +140,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity operational',
+      message: 'Database connectivity verified',
     };
   } catch (error) {
     return {
@@ -154,7 +153,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check external services connectivity
+ * Check external service connectivity
  */
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -303,7 +302,7 @@ async function runHealthChecks(): Promise<SmokeTestResponse> {
   };
 }
 
-export default Deno.serve(async (req) => {
+Deno.serve(async (req) => {
   try {
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
