@@ -1,8 +1,12 @@
-// Smoke test edge function for Nexus system health monitoring
-// Tests critical system components and external dependencies
+// Nexus Smoke Test Edge Function
+// Comprehensive health checks for Supabase Edge Functions
 
+// Record function start time for uptime calculation
 const FUNCTION_START_TIME = performance.now();
 
+/**
+ * Health check result interface
+ */
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
@@ -11,6 +15,9 @@ interface HealthCheck {
   details?: Record<string, unknown>;
 }
 
+/**
+ * Smoke test response interface
+ */
 interface SmokeTestResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -25,7 +32,7 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime is functioning
+ * Check Deno runtime availability and version
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -54,26 +61,26 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 }
 
 /**
- * Check environment variables are configured
+ * Check environment variables and configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = [
+    const requiredEnvVars = [
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
     const missing: string[] = [];
-    const configured: string[] = [];
+    const present: string[] = [];
 
-    for (const varName of requiredVars) {
-      const value = Deno.env.get(varName);
-      if (!value || value.trim() === '') {
-        missing.push(varName);
+    for (const envVar of requiredEnvVars) {
+      const value = Deno.env.get(envVar);
+      if (!value) {
+        missing.push(envVar);
       } else {
-        configured.push(varName);
+        present.push(envVar);
       }
     }
 
@@ -84,9 +91,8 @@ async function checkEnvironment(): Promise<HealthCheck> {
         duration_ms: performance.now() - startTime,
         message: `Missing required environment variables: ${missing.join(', ')}`,
         details: {
-          configured: configured.length,
-          missing: missing.length,
-          missing_vars: missing,
+          missing,
+          present,
         },
       };
     }
@@ -95,9 +101,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
       name: 'environment',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'All required environment variables configured',
+      message: 'All required environment variables present',
       details: {
-        configured: configured.length,
+        variables_checked: requiredEnvVars.length,
       },
     };
   } catch (error) {
@@ -128,7 +134,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    // Simple health check query
+    // Simple connectivity check - try to query system tables
     const response = await fetch(`${supabaseUrl}/rest/v1/`, {
       method: 'HEAD',
       headers: {
@@ -142,9 +148,10 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Database connection failed with status ${response.status}`,
+        message: 'Database connectivity failed',
         details: {
           status_code: response.status,
+          status_text: response.statusText,
         },
       };
     }
@@ -153,7 +160,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connection successful',
+      message: 'Database connectivity operational',
     };
   } catch (error) {
     return {
