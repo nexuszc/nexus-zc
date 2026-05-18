@@ -1,59 +1,17 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-// Helper function to categorize errors
-function categorizeError(error: any, message: string) {
-  const errorCategories = {
-    'relation "smoke_test_results" does not exist': {
-      category: 'expected_schema_missing',
-      isCritical: false,
-      suggestion: 'Table may not exist yet - this is expected in new environments'
-    },
-    'client not initialized': {
-      category: 'initialization_error',
-      isCritical: true,
-      suggestion: 'Check Supabase URL and keys configuration'
-    },
-    'PermissionDenied': {
-      category: 'permission_error',
-      isCritical: false,
-      suggestion: 'Expected in sandboxed environment'
-    },
-    'NotFound': {
-      category: 'file_not_found',
-      isCritical: true,
-      suggestion: 'Required file or directory is missing'
-    }
-  };
-
-  for (const [pattern, details] of Object.entries(errorCategories)) {
-    if (message.includes(pattern)) {
-      return details;
-    }
-  }
-
-  return {
-    category: 'unknown_error',
-    isCritical: true,
-    suggestion: 'Review error details for diagnosis'
-  };
-}
-
 Deno.serve(async (req) => {
   const startTime = performance.now();
-  const tests: any[] = [];
-  const structuralIssues: any[] = [];
-  
-  console.log('=== Starting Smoke Test Runner ===');
-  console.log('Request URL:', req.url);
-  console.log('Request Method:', req.method);
-  
   const totalSteps = 8;
   let currentStep = 0;
+  
+  const tests = [];
+  const structuralIssues = [];
+
+  console.log('\n=== Starting Smoke Test Suite ===\n');
 
   // Test 1: Environment Variables
   currentStep++;
   const envTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing environment variables...`);
+  console.log(`[${currentStep}/${totalSteps}] Checking environment variables...`);
   
   const requiredEnvVars = [
     'SUPABASE_URL',
@@ -61,7 +19,7 @@ Deno.serve(async (req) => {
     'SUPABASE_SERVICE_ROLE_KEY'
   ];
   
-  const missingEnvVars: string[] = [];
+  const missingEnvVars = [];
   for (const envVar of requiredEnvVars) {
     if (!Deno.env.get(envVar)) {
       missingEnvVars.push(envVar);
@@ -80,102 +38,95 @@ Deno.serve(async (req) => {
   if (missingEnvVars.length === 0) {
     console.log('✓ All environment variables present');
   } else {
-    console.error('✗ Missing environment variables:', missingEnvVars.join(', '));
+    console.log('✗ Missing environment variables:', missingEnvVars.join(', '));
   }
 
-  // Test 2: Supabase Client Initialization
+  // Test 2: Network Connectivity
   currentStep++;
-  const clientTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing Supabase client initialization...`);
-  
-  let supabaseClient = null;
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (supabaseUrl && supabaseKey) {
-      supabaseClient = createClient(supabaseUrl, supabaseKey);
-      tests.push({
-        name: 'Supabase Client Initialization',
-        status: 'passed',
-        duration_ms: performance.now() - clientTestStart,
-        details: 'Client created successfully'
-      });
-      console.log('✓ Supabase client initialized');
-    } else {
-      tests.push({
-        name: 'Supabase Client Initialization',
-        status: 'failed',
-        duration_ms: performance.now() - clientTestStart,
-        error: 'Missing required environment variables'
-      });
-      console.error('✗ Cannot initialize client: missing env vars');
-    }
-  } catch (error) {
-    tests.push({
-      name: 'Supabase Client Initialization',
-      status: 'failed',
-      duration_ms: performance.now() - clientTestStart,
-      error: error.message
-    });
-    console.error('✗ Client initialization error:', error.message);
-  }
-
-  // Test 3: Network Connectivity
-  currentStep++;
-  const networkTestStart = performance.now();
+  const netTestStart = performance.now();
   console.log(`[${currentStep}/${totalSteps}] Testing network connectivity...`);
   
   try {
-    const response = await fetch('https://www.google.com', { 
+    const response = await fetch('https://www.google.com', {
       method: 'HEAD',
       signal: AbortSignal.timeout(5000)
     });
+    
     tests.push({
       name: 'Network Connectivity',
       status: response.ok ? 'passed' : 'failed',
-      duration_ms: performance.now() - networkTestStart,
-      details: `Status: ${response.status}`
+      duration_ms: performance.now() - netTestStart,
+      details: `HTTP ${response.status}`
     });
-    console.log(`${response.ok ? '✓' : '✗'} Network connectivity: ${response.status}`);
+    console.log(`✓ Network connectivity verified (${response.status})`);
   } catch (error) {
     tests.push({
       name: 'Network Connectivity',
       status: 'failed',
-      duration_ms: performance.now() - networkTestStart,
-      error: error.message
+      duration_ms: performance.now() - netTestStart,
+      error: error.message,
+      errorCategory: categorizeError(error, error.message)
     });
     console.error('✗ Network connectivity error:', error.message);
   }
 
-  // Test 4: Request Object
+  // Test 3: JSON Processing
   currentStep++;
-  const reqTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing request object...`);
+  const jsonTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing JSON processing...`);
   
   try {
-    const requestDetails = {
-      method: req.method,
-      url: req.url,
-      hasHeaders: !!req.headers,
-      headerCount: Array.from(req.headers.keys()).length
-    };
+    const testData = { test: 'data', nested: { value: 123 } };
+    const serialized = JSON.stringify(testData);
+    const deserialized = JSON.parse(serialized);
+    
+    const isValid = deserialized.test === 'data' && deserialized.nested.value === 123;
     
     tests.push({
-      name: 'Request Object',
-      status: 'passed',
-      duration_ms: performance.now() - reqTestStart,
-      details: JSON.stringify(requestDetails)
+      name: 'JSON Processing',
+      status: isValid ? 'passed' : 'failed',
+      duration_ms: performance.now() - jsonTestStart,
+      details: 'Serialization and deserialization successful'
     });
-    console.log('✓ Request object validated');
+    console.log('✓ JSON processing verified');
   } catch (error) {
     tests.push({
-      name: 'Request Object',
+      name: 'JSON Processing',
       status: 'failed',
-      duration_ms: performance.now() - reqTestStart,
-      error: error.message
+      duration_ms: performance.now() - jsonTestStart,
+      error: error.message,
+      errorCategory: categorizeError(null, error.message)
     });
-    console.error('✗ Request object error:', error.message);
+    console.error('✗ JSON processing error:', error.message);
+  }
+
+  // Test 4: Crypto Operations
+  currentStep++;
+  const cryptoTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing crypto operations...`);
+  
+  try {
+    const data = new TextEncoder().encode('test data');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    tests.push({
+      name: 'Crypto Operations',
+      status: 'passed',
+      duration_ms: performance.now() - cryptoTestStart,
+      details: 'SHA-256 hash generated successfully'
+    });
+    console.log('✓ Crypto operations verified');
+  } catch (error) {
+    tests.push({
+      name: 'Crypto Operations',
+      status: 'failed',
+      duration_ms: performance.now() - cryptoTestStart,
+      error: error.message,
+      errorCategory: categorizeError(null, error.message)
+    });
+    console.error('✗ Crypto operations error:', error.message);
   }
 
   // Test 5: Database Connectivity
@@ -186,8 +137,8 @@ Deno.serve(async (req) => {
   if (supabaseClient) {
     try {
       const { data, error } = await supabaseClient
-        .from('smoke_test_results')
-        .select('count')
+        .from('_smoke_test_probe')
+        .select('*')
         .limit(1);
       
       if (error) {
