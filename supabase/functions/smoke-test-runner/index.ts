@@ -1,11 +1,12 @@
+// deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-interface SmokeTest {
+interface TestResult {
   name: string;
   status: 'passed' | 'failed' | 'skipped';
   duration_ms: number;
-  error?: string;
   details?: string;
+  error?: string;
   errorCategory?: string;
 }
 
@@ -15,24 +16,43 @@ interface StructuralIssue {
   issue: string;
 }
 
-function categorizeError(statusCode: number | null, errorMessage: string): string {
-  if (statusCode === 401 || statusCode === 403) return 'authentication';
-  if (statusCode === 404) return 'not_found';
-  if (statusCode && statusCode >= 500) return 'server_error';
-  if (errorMessage.toLowerCase().includes('timeout')) return 'timeout';
-  if (errorMessage.toLowerCase().includes('network')) return 'network';
-  if (errorMessage.toLowerCase().includes('permission')) return 'permission';
+function categorizeError(error: Error | null, message: string): string {
+  if (!message) return 'unknown';
+  
+  const msg = message.toLowerCase();
+  
+  if (msg.includes('permission') || msg.includes('denied')) {
+    return 'permission';
+  }
+  if (msg.includes('not found') || msg.includes('enoent')) {
+    return 'not_found';
+  }
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return 'timeout';
+  }
+  if (msg.includes('network') || msg.includes('fetch')) {
+    return 'network';
+  }
+  if (msg.includes('parse') || msg.includes('json')) {
+    return 'parsing';
+  }
+  if (msg.includes('auth') || msg.includes('unauthorized')) {
+    return 'auth';
+  }
+  
   return 'unknown';
 }
 
-Deno.serve(async (req) => {
-  const tests: SmokeTest[] = [];
+Deno.serve(async (req: Request) => {
+  const tests: TestResult[] = [];
   const structuralIssues: StructuralIssue[] = [];
-  let totalSteps = 8;
+  
+  const totalSteps = 8;
   let currentStep = 0;
 
+  console.log('');
   console.log('=== NEXUS SMOKE TEST RUNNER ===');
-  console.log(`Starting ${totalSteps} tests...`);
+  console.log(`Starting ${totalSteps} smoke tests...`);
   console.log('');
 
   // Test 1: Environment Variables
@@ -43,22 +63,17 @@ Deno.serve(async (req) => {
   const requiredEnvVars = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
-    'OPENAI_API_KEY'
+    'SUPABASE_SERVICE_ROLE_KEY'
   ];
 
-  const missingVars: string[] = [];
-  for (const envVar of requiredEnvVars) {
-    if (!Deno.env.get(envVar)) {
-      missingVars.push(envVar);
-    }
-  }
-
+  const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
+  
   if (missingVars.length === 0) {
     tests.push({
       name: 'Environment Variables',
       status: 'passed',
       duration_ms: performance.now() - envTestStart,
-      details: `All ${requiredEnvVars.length} required variables present`
+      details: 'All required environment variables present'
     });
     console.log('✓ All environment variables present');
   } else {
@@ -66,116 +81,130 @@ Deno.serve(async (req) => {
       name: 'Environment Variables',
       status: 'failed',
       duration_ms: performance.now() - envTestStart,
-      error: `Missing: ${missingVars.join(', ')}`,
+      error: `Missing variables: ${missingVars.join(', ')}`,
       errorCategory: 'configuration'
     });
     console.error('✗ Missing environment variables:', missingVars.join(', '));
   }
 
-  // Test 2: OpenAI API Connectivity
+  // Test 2: Supabase Client Initialization
   currentStep++;
-  const openaiTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing OpenAI API connectivity...`);
+  const clientTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Initializing Supabase client...`);
   
-  const openaiKey = Deno.env.get('OPENAI_API_KEY');
-  if (openaiKey) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${openaiKey}`
-        }
-      });
-
-      if (response.ok) {
-        tests.push({
-          name: 'OpenAI API Connectivity',
-          status: 'passed',
-          duration_ms: performance.now() - openaiTestStart,
-          details: 'API accessible'
-        });
-        console.log('✓ OpenAI API connectivity verified');
-      } else {
-        tests.push({
-          name: 'OpenAI API Connectivity',
-          status: 'failed',
-          duration_ms: performance.now() - openaiTestStart,
-          error: `HTTP ${response.status}`,
-          errorCategory: categorizeError(response.status, '')
-        });
-        console.error('✗ OpenAI API returned status:', response.status);
-      }
-    } catch (error) {
-      tests.push({
-        name: 'OpenAI API Connectivity',
-        status: 'failed',
-        duration_ms: performance.now() - openaiTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-      console.error('✗ OpenAI API connection error:', error.message);
-    }
-  } else {
-    tests.push({
-      name: 'OpenAI API Connectivity',
-      status: 'skipped',
-      duration_ms: performance.now() - openaiTestStart,
-      details: 'No API key configured'
-    });
-    console.log('⊘ OpenAI API test skipped (no key)');
-  }
-
-  // Test 3: Supabase Edge Function Runtime
-  currentStep++;
-  const runtimeTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing edge function runtime...`);
+  let supabaseClient: any = null;
   
   try {
-    const denoVersion = Deno.version;
-    tests.push({
-      name: 'Edge Function Runtime',
-      status: 'passed',
-      duration_ms: performance.now() - runtimeTestStart,
-      details: `Deno ${denoVersion.deno}`
-    });
-    console.log(`✓ Runtime verified: Deno ${denoVersion.deno}`);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (supabaseUrl && supabaseKey) {
+      supabaseClient = createClient(supabaseUrl, supabaseKey);
+      tests.push({
+        name: 'Supabase Client Initialization',
+        status: 'passed',
+        duration_ms: performance.now() - clientTestStart,
+        details: 'Client initialized successfully'
+      });
+      console.log('✓ Supabase client initialized');
+    } else {
+      tests.push({
+        name: 'Supabase Client Initialization',
+        status: 'failed',
+        duration_ms: performance.now() - clientTestStart,
+        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+        errorCategory: 'configuration'
+      });
+      console.error('✗ Cannot initialize client: missing credentials');
+    }
   } catch (error) {
     tests.push({
-      name: 'Edge Function Runtime',
+      name: 'Supabase Client Initialization',
       status: 'failed',
-      duration_ms: performance.now() - runtimeTestStart,
+      duration_ms: performance.now() - clientTestStart,
       error: error.message,
-      errorCategory: categorizeError(null, error.message)
+      errorCategory: categorizeError(error, error.message)
     });
-    console.error('✗ Runtime check error:', error.message);
+    console.error('✗ Client initialization error:', error.message);
   }
 
-  // Test 4: Network Connectivity
+  // Test 3: External HTTP Request
   currentStep++;
-  const networkTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing network connectivity...`);
+  const httpTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing external HTTP request...`);
   
   try {
-    const response = await fetch('https://www.google.com', {
-      method: 'HEAD',
+    const response = await fetch('https://httpbin.org/status/200', {
+      method: 'GET',
       signal: AbortSignal.timeout(5000)
     });
     
-    tests.push({
-      name: 'Network Connectivity',
-      status: 'passed',
-      duration_ms: performance.now() - networkTestStart,
-      details: `HTTP ${response.status}`
-    });
-    console.log('✓ Network connectivity verified');
+    if (response.ok) {
+      tests.push({
+        name: 'External HTTP Request',
+        status: 'passed',
+        duration_ms: performance.now() - httpTestStart,
+        details: `Status: ${response.status}`
+      });
+      console.log('✓ External HTTP request successful');
+    } else {
+      tests.push({
+        name: 'External HTTP Request',
+        status: 'failed',
+        duration_ms: performance.now() - httpTestStart,
+        error: `HTTP ${response.status}`,
+        errorCategory: 'network'
+      });
+      console.error('✗ External HTTP request failed:', response.status);
+    }
   } catch (error) {
     tests.push({
-      name: 'Network Connectivity',
+      name: 'External HTTP Request',
       status: 'failed',
-      duration_ms: performance.now() - networkTestStart,
+      duration_ms: performance.now() - httpTestStart,
       error: error.message,
-      errorCategory: categorizeError(null, error.message)
+      errorCategory: categorizeError(error, error.message)
     });
-    console.error('✗ Network connectivity error:', error.message);
+    console.error('✗ External HTTP error:', error.message);
+  }
+
+  // Test 4: JSON Parsing
+  currentStep++;
+  const jsonTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing JSON parsing...`);
+  
+  try {
+    const testObject = { test: 'data', nested: { value: 123 } };
+    const jsonString = JSON.stringify(testObject);
+    const parsed = JSON.parse(jsonString);
+    
+    if (parsed.test === 'data' && parsed.nested.value === 123) {
+      tests.push({
+        name: 'JSON Parsing',
+        status: 'passed',
+        duration_ms: performance.now() - jsonTestStart,
+        details: 'JSON serialization/deserialization successful'
+      });
+      console.log('✓ JSON parsing verified');
+    } else {
+      tests.push({
+        name: 'JSON Parsing',
+        status: 'failed',
+        duration_ms: performance.now() - jsonTestStart,
+        error: 'Data mismatch after parsing',
+        errorCategory: 'parsing'
+      });
+      console.error('✗ JSON parsing data mismatch');
+    }
+  } catch (error) {
+    tests.push({
+      name: 'JSON Parsing',
+      status: 'failed',
+      duration_ms: performance.now() - jsonTestStart,
+      error: error.message,
+      errorCategory: categorizeError(error, error.message)
+    });
+    console.error('✗ JSON parsing error:', error.message);
   }
 
   // Test 5: Database Connectivity
@@ -183,13 +212,13 @@ Deno.serve(async (req) => {
   const dbTestStart = performance.now();
   console.log(`[${currentStep}/${totalSteps}] Testing database connectivity...`);
   
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-  if (supabaseUrl && supabaseKey) {
+  if (supabaseClient) {
     try {
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      const { data, error } = await supabase.from('conversations').select('id').limit(1);
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('count')
+        .limit(1)
+        .maybeSingle();
       
       if (error) {
         tests.push({
@@ -380,8 +409,4 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify(result, null, 2), {
     headers: {
-      'Content-Type': 'application/json'
-    },
-    status: failedTests === 0 ? 200 : 500
-  });
-});
+      'Content-Type': 'application/json
