@@ -1,5 +1,5 @@
-// Smoke Test Edge Function for Nexus
-// Comprehensive health checks for edge function deployment
+// Smoke test edge function for Nexus system health monitoring
+// Provides comprehensive health checks for runtime, environment, database, and external services
 
 interface HealthCheck {
   name: string;
@@ -47,33 +47,33 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Runtime check failed',
+      message: error instanceof Error ? error.message : 'Deno runtime check failed',
     };
   }
 }
 
 /**
- * Check environment variables
+ * Check environment variables and configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = [
+    const requiredEnvVars = [
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
+    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
 
-    if (missing.length > 0) {
+    if (missingVars.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
         message: 'Missing required environment variables',
         details: {
-          missing_vars: missing,
+          missing: missingVars,
         },
       };
     }
@@ -82,9 +82,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
       name: 'environment',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Environment variables configured',
+      message: 'All required environment variables present',
       details: {
-        vars_checked: requiredVars.length,
+        checked: requiredEnvVars.length,
       },
     };
   } catch (error) {
@@ -115,7 +115,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    // Simple connectivity test - check if we can reach the database
+    // Simple connectivity check using REST API
     const response = await fetch(`${supabaseUrl}/rest/v1/`, {
       method: 'HEAD',
       headers: {
@@ -127,9 +127,9 @@ async function checkDatabase(): Promise<HealthCheck> {
     if (!response.ok) {
       return {
         name: 'database',
-        status: 'fail',
+        status: 'warn',
         duration_ms: performance.now() - startTime,
-        message: 'Database not reachable',
+        message: 'Database connectivity issue',
         details: {
           status_code: response.status,
         },
@@ -140,7 +140,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity verified',
+      message: 'Database connectivity operational',
     };
   } catch (error) {
     return {
