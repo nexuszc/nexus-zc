@@ -1,5 +1,9 @@
-// Smoke test edge function for Nexus system health monitoring
-// Provides comprehensive health checks for runtime, environment, database, and external services
+// Deno Deploy Edge Function for smoke testing
+// This function performs health checks on the Nexus system
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+const FUNCTION_START_TIME = performance.now();
 
 interface HealthCheck {
   name: string;
@@ -22,24 +26,22 @@ interface SmokeTestResponse {
   };
 }
 
-const FUNCTION_START_TIME = performance.now();
-
 /**
- * Check Deno runtime availability and version
+ * Check Deno runtime availability
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const version = Deno.version;
+    const version = Deno.version.deno;
     return {
       name: 'deno_runtime',
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'Deno runtime operational',
       details: {
-        deno: version.deno,
-        v8: version.v8,
-        typescript: version.typescript,
+        version,
+        typescript: Deno.version.typescript,
+        v8: Deno.version.v8,
       },
     };
   } catch (error) {
@@ -47,33 +49,33 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
 
 /**
- * Check environment variables and configuration
+ * Check environment configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredEnvVars = [
+    const requiredVars = [
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
+    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
 
-    if (missingVars.length > 0) {
+    if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
         message: 'Missing required environment variables',
         details: {
-          missing: missingVars,
+          missing,
         },
       };
     }
@@ -84,7 +86,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        checked: requiredEnvVars.length,
+        configured: requiredVars.length,
       },
     };
   } catch (error) {
@@ -115,23 +117,21 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    // Simple connectivity check using REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!response.ok) {
+    // Simple query to test connectivity
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('count', { count: 'exact', head: true });
+
+    if (error) {
       return {
         name: 'database',
-        status: 'warn',
+        status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database connectivity issue',
+        message: 'Database query failed',
         details: {
-          status_code: response.status,
+          error: error.message,
         },
       };
     }
