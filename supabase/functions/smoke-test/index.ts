@@ -1,6 +1,12 @@
-// Smoke Test Edge Function for Nexus
-// Comprehensive health checks for the Supabase environment
+// Nexus Smoke Test Edge Function
+// Comprehensive health check for all system components
 
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+// Record function start time for uptime calculations
+const FUNCTION_START_TIME = performance.now();
+
+// Type definitions
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
@@ -22,22 +28,14 @@ interface SmokeTestResponse {
   };
 }
 
-const FUNCTION_START_TIME = performance.now();
-
 /**
- * Check Deno runtime environment
+ * Check Deno runtime availability and version
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    const permissions = {
-      read: await Deno.permissions.query({ name: 'read' }),
-      write: await Deno.permissions.query({ name: 'write' }),
-      net: await Deno.permissions.query({ name: 'net' }),
-      env: await Deno.permissions.query({ name: 'env' }),
-    };
-
+    
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -47,12 +45,6 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
         deno: version.deno,
         v8: version.v8,
         typescript: version.typescript,
-        permissions: {
-          read: permissions.read.state,
-          write: permissions.write.state,
-          net: permissions.net.state,
-          env: permissions.env.state,
-        },
       },
     };
   } catch (error) {
@@ -60,44 +52,32 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
 
 /**
- * Check environment variables
+ * Check environment variables and configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredEnvVars = [
+    const requiredVars = [
       'SUPABASE_URL',
-      'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missingVars: string[] = [];
-    const presentVars: string[] = [];
-
-    for (const varName of requiredEnvVars) {
-      const value = Deno.env.get(varName);
-      if (!value) {
-        missingVars.push(varName);
-      } else {
-        presentVars.push(varName);
-      }
-    }
+    const missingVars = requiredVars.filter(varName => !Deno.env.get(varName));
 
     if (missingVars.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        message: 'Missing required environment variables',
         details: {
           missing: missingVars,
-          present: presentVars,
         },
       };
     }
@@ -106,9 +86,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
       name: 'environment',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'All required environment variables present',
+      message: 'Environment configuration valid',
       details: {
-        present: presentVars,
+        variables_checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -122,7 +102,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
 }
 
 /**
- * Check database connectivity
+ * Check database connectivity and basic query
  */
 async function checkDatabase(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -139,33 +119,38 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    // Simple health check query
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!response.ok) {
-      return {
-        name: 'database',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Database connection failed',
-        details: {
-          status_code: response.status,
-          status_text: response.statusText,
-        },
-      };
+    // Simple connectivity test - just try to query system time
+    const { data, error } = await supabase
+      .rpc('version')
+      .single();
+
+    if (error) {
+      // If version RPC doesn't exist, try a simpler approach
+      const { error: selectError } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(1);
+
+      if (selectError) {
+        return {
+          name: 'database',
+          status: 'fail',
+          duration_ms: performance.now() - startTime,
+          message: 'Database query failed',
+          details: {
+            error: selectError.message,
+          },
+        };
+      }
     }
 
     return {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connection successful',
+      message: 'Database connectivity operational',
     };
   } catch (error) {
     return {
