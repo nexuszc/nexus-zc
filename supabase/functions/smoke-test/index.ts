@@ -1,14 +1,12 @@
-// deno-lint-ignore-file no-explicit-any
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-const FUNCTION_START_TIME = performance.now();
+// Smoke Test Edge Function for Nexus
+// Comprehensive health checks for the Supabase environment
 
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
   duration_ms: number;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 interface SmokeTestResponse {
@@ -24,14 +22,22 @@ interface SmokeTestResponse {
   };
 }
 
+const FUNCTION_START_TIME = performance.now();
+
 /**
- * Check Deno runtime availability
+ * Check Deno runtime environment
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    
+    const permissions = {
+      read: await Deno.permissions.query({ name: 'read' }),
+      write: await Deno.permissions.query({ name: 'write' }),
+      net: await Deno.permissions.query({ name: 'net' }),
+      env: await Deno.permissions.query({ name: 'env' }),
+    };
+
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -41,6 +47,12 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
         deno: version.deno,
         v8: version.v8,
         typescript: version.typescript,
+        permissions: {
+          read: permissions.read.state,
+          write: permissions.write.state,
+          net: permissions.net.state,
+          env: permissions.env.state,
+        },
       },
     };
   } catch (error) {
@@ -59,33 +71,33 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = [
+    const requiredEnvVars = [
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing: string[] = [];
-    const present: string[] = [];
+    const missingVars: string[] = [];
+    const presentVars: string[] = [];
 
-    for (const varName of requiredVars) {
+    for (const varName of requiredEnvVars) {
       const value = Deno.env.get(varName);
       if (!value) {
-        missing.push(varName);
+        missingVars.push(varName);
       } else {
-        present.push(varName);
+        presentVars.push(varName);
       }
     }
 
-    if (missing.length > 0) {
+    if (missingVars.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
         details: {
-          missing,
-          present,
+          missing: missingVars,
+          present: presentVars,
         },
       };
     }
@@ -96,7 +108,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        present,
+        present: presentVars,
       },
     };
   } catch (error) {
@@ -123,27 +135,28 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing database credentials',
+        message: 'Database credentials not configured',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Simple health check query
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      method: 'HEAD',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+    });
 
-    // Simple query to check connectivity
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('count')
-      .limit(1)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is OK
+    if (!response.ok) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Database query failed: ${error.message}`,
+        message: 'Database connection failed',
         details: {
-          error_code: error.code,
+          status_code: response.status,
+          status_text: response.statusText,
         },
       };
     }
