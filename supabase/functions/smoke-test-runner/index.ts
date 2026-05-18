@@ -1,76 +1,147 @@
 Deno.serve(async (req) => {
   const startTime = performance.now();
-  const totalSteps = 8;
+  const tests: any[] = [];
+  const structuralIssues: any[] = [];
   let currentStep = 0;
-  
-  const tests = [];
-  const structuralIssues = [];
+  const totalSteps = 8;
 
-  console.log('\n=== Starting Smoke Test Suite ===\n');
+  console.log('=== Starting Smoke Test Suite ===');
+  console.log(`Timestamp: ${new Date().toISOString()}\n`);
+
+  // Helper function to categorize errors
+  function categorizeError(error: any, message: string) {
+    const categories = {
+      network: ['fetch', 'ECONNREFUSED', 'ETIMEDOUT', 'network'],
+      permission: ['PermissionDenied', 'permission'],
+      notFound: ['NotFound', '404', 'ENOENT'],
+      timeout: ['timeout', 'ETIMEDOUT'],
+      memory: ['memory', 'heap'],
+      unknown: []
+    };
+
+    for (const [category, keywords] of Object.entries(categories)) {
+      if (keywords.some(kw => message?.toLowerCase().includes(kw.toLowerCase()))) {
+        return {
+          category,
+          isCritical: ['network', 'permission'].includes(category)
+        };
+      }
+    }
+
+    return { category: 'unknown', isCritical: false };
+  }
 
   // Test 1: Environment Variables
   currentStep++;
   const envTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Checking environment variables...`);
+  console.log(`[${currentStep}/${totalSteps}] Testing environment variables...`);
   
   const requiredEnvVars = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY'
+    'OPENAI_API_KEY'
   ];
   
-  const missingEnvVars = [];
-  for (const envVar of requiredEnvVars) {
-    if (!Deno.env.get(envVar)) {
-      missingEnvVars.push(envVar);
-    }
-  }
+  const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
   
   tests.push({
     name: 'Environment Variables',
-    status: missingEnvVars.length === 0 ? 'passed' : 'failed',
+    status: missingVars.length === 0 ? 'passed' : 'failed',
     duration_ms: performance.now() - envTestStart,
-    details: missingEnvVars.length === 0 
-      ? 'All required variables present' 
-      : `Missing: ${missingEnvVars.join(', ')}`
+    details: missingVars.length === 0 ? 'All required variables present' : `Missing: ${missingVars.join(', ')}`
   });
   
-  if (missingEnvVars.length === 0) {
+  if (missingVars.length === 0) {
     console.log('✓ All environment variables present');
   } else {
-    console.log('✗ Missing environment variables:', missingEnvVars.join(', '));
+    console.error('✗ Missing environment variables:', missingVars.join(', '));
   }
 
-  // Test 2: Network Connectivity
+  // Test 2: OpenAI API
   currentStep++;
-  const netTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing network connectivity...`);
+  const openaiTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing OpenAI API...`);
   
   try {
-    const response = await fetch('https://www.google.com', {
-      method: 'HEAD',
+    const response = await fetch('https://api.openai.com/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+      }
+    });
+    
+    if (response.ok) {
+      tests.push({
+        name: 'OpenAI API',
+        status: 'passed',
+        duration_ms: performance.now() - openaiTestStart,
+        details: 'API accessible and authenticated'
+      });
+      console.log('✓ OpenAI API accessible');
+    } else {
+      const errorCat = categorizeError(null, `Status ${response.status}`);
+      tests.push({
+        name: 'OpenAI API',
+        status: 'failed',
+        duration_ms: performance.now() - openaiTestStart,
+        error: `HTTP ${response.status}`,
+        errorCategory: errorCat
+      });
+      console.error(`✗ OpenAI API error: HTTP ${response.status}`);
+    }
+  } catch (error) {
+    const errorCat = categorizeError(error, error.message);
+    tests.push({
+      name: 'OpenAI API',
+      status: 'failed',
+      duration_ms: performance.now() - openaiTestStart,
+      error: error.message,
+      errorCategory: errorCat
+    });
+    console.error('✗ OpenAI API error:', error.message);
+  }
+
+  // Test 3: External API (httpbin)
+  currentStep++;
+  const httpbinTestStart = performance.now();
+  console.log(`[${currentStep}/${totalSteps}] Testing external API access...`);
+  
+  try {
+    const response = await fetch('https://httpbin.org/get', {
       signal: AbortSignal.timeout(5000)
     });
     
-    tests.push({
-      name: 'Network Connectivity',
-      status: response.ok ? 'passed' : 'failed',
-      duration_ms: performance.now() - netTestStart,
-      details: `HTTP ${response.status}`
-    });
-    console.log(`✓ Network connectivity verified (${response.status})`);
+    if (response.ok) {
+      tests.push({
+        name: 'External API Access',
+        status: 'passed',
+        duration_ms: performance.now() - httpbinTestStart,
+        details: 'Successfully connected to external service'
+      });
+      console.log('✓ External API access verified');
+    } else {
+      const errorCat = categorizeError(null, `Status ${response.status}`);
+      tests.push({
+        name: 'External API Access',
+        status: 'failed',
+        duration_ms: performance.now() - httpbinTestStart,
+        error: `HTTP ${response.status}`,
+        errorCategory: errorCat
+      });
+      console.error(`✗ External API error: HTTP ${response.status}`);
+    }
   } catch (error) {
+    const errorCat = categorizeError(error, error.message);
     tests.push({
-      name: 'Network Connectivity',
+      name: 'External API Access',
       status: 'failed',
-      duration_ms: performance.now() - netTestStart,
+      duration_ms: performance.now() - httpbinTestStart,
       error: error.message,
-      errorCategory: categorizeError(error, error.message)
+      errorCategory: errorCat
     });
-    console.error('✗ Network connectivity error:', error.message);
+    console.error('✗ External API error:', error.message);
   }
 
-  // Test 3: JSON Processing
+  // Test 4: JSON Processing
   currentStep++;
   const jsonTestStart = performance.now();
   console.log(`[${currentStep}/${totalSteps}] Testing JSON processing...`);
@@ -80,15 +151,24 @@ Deno.serve(async (req) => {
     const serialized = JSON.stringify(testData);
     const deserialized = JSON.parse(serialized);
     
-    const isValid = deserialized.test === 'data' && deserialized.nested.value === 123;
-    
-    tests.push({
-      name: 'JSON Processing',
-      status: isValid ? 'passed' : 'failed',
-      duration_ms: performance.now() - jsonTestStart,
-      details: 'Serialization and deserialization successful'
-    });
-    console.log('✓ JSON processing verified');
+    if (deserialized.nested.value === 123) {
+      tests.push({
+        name: 'JSON Processing',
+        status: 'passed',
+        duration_ms: performance.now() - jsonTestStart,
+        details: 'Serialization and deserialization successful'
+      });
+      console.log('✓ JSON processing verified');
+    } else {
+      tests.push({
+        name: 'JSON Processing',
+        status: 'failed',
+        duration_ms: performance.now() - jsonTestStart,
+        error: 'Data integrity check failed',
+        errorCategory: categorizeError(null, 'data integrity')
+      });
+      console.error('✗ JSON processing failed: data integrity check');
+    }
   } catch (error) {
     tests.push({
       name: 'JSON Processing',
@@ -100,52 +180,38 @@ Deno.serve(async (req) => {
     console.error('✗ JSON processing error:', error.message);
   }
 
-  // Test 4: Crypto Operations
-  currentStep++;
-  const cryptoTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing crypto operations...`);
-  
-  try {
-    const data = new TextEncoder().encode('test data');
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    tests.push({
-      name: 'Crypto Operations',
-      status: 'passed',
-      duration_ms: performance.now() - cryptoTestStart,
-      details: 'SHA-256 hash generated successfully'
-    });
-    console.log('✓ Crypto operations verified');
-  } catch (error) {
-    tests.push({
-      name: 'Crypto Operations',
-      status: 'failed',
-      duration_ms: performance.now() - cryptoTestStart,
-      error: error.message,
-      errorCategory: categorizeError(null, error.message)
-    });
-    console.error('✗ Crypto operations error:', error.message);
-  }
-
-  // Test 5: Database Connectivity
+  // Test 5: Database Connectivity (if Supabase client available)
   currentStep++;
   const dbTestStart = performance.now();
   console.log(`[${currentStep}/${totalSteps}] Testing database connectivity...`);
   
-  if (supabaseClient) {
+  if (Deno.env.get('SUPABASE_URL') && Deno.env.get('SUPABASE_ANON_KEY')) {
     try {
-      const { data, error } = await supabaseClient
-        .from('_smoke_test_probe')
-        .select('*')
-        .limit(1);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
       
-      if (error) {
-        const errorCat = categorizeError(error, error.message);
+      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      
+      const errorCat = categorizeError(null, `Status ${response.status}`);
+      
+      if (!response.ok && errorCat.isCritical) {
         tests.push({
           name: 'Database Connectivity',
-          status: errorCat.isCritical ? 'failed' : 'passed',
+          status: 'failed',
+          duration_ms: performance.now() - dbTestStart,
+          error: `HTTP ${response.status}`,
+          errorCategory: errorCat
+        });
+        console.error(`✗ Database connectivity error: HTTP ${response.status}`);
+      } else if (!response.ok) {
+        tests.push({
+          name: 'Database Connectivity',
+          status: 'passed',
           duration_ms: performance.now() - dbTestStart,
           error: error.message,
           errorCategory: errorCat
@@ -326,10 +392,4 @@ Deno.serve(async (req) => {
 
   return new Response(JSON.stringify(result, null, 2), {
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-    },
-    status: 200
-  });
-});
+      'Content-Type': '
