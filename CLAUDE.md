@@ -182,6 +182,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-referral-engine` | See function source for details | Internal |
 | `roofing-self-improve` | See function source for details | Internal |
 | `roofing-seo-publisher` | See function source for details | Internal |
+| `roofing-shotstack-webhook` | See function source for details | Internal |
 | `roofing-social-poster` | See function source for details | Internal |
 | `roofing-storm-marketing` | See function source for details | Internal |
 | `roofing-supplement-analyzer` | See function source for details | Internal |
@@ -404,12 +405,12 @@ Then productized and sold to other multi-business operators.
 **NEXT:**
 1. Fix smoke_test_failed error
 2. Fix Recurring Smoke Test Failures
-3. Add Conversation Context Memory
+3. Add Self-Learning Pattern Recognition
 4. Add memory consolidation ability
-5. Add Self-Learning Pattern Recognition
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
+5. Add Conversation Context Memory
+6. Draft complete operating agreement for Nexus ZC LLC
+7. Build complete Roofing OS go-to-market system
+8. Complete homeowner portal fixes and deployment
 
 ---
 
