@@ -87,58 +87,53 @@ jobs:
 
       - name: Generate video
         run: |
-          DURATION=${{ env.DURATION }}
-          CTA_START=$(python3 -c "d=float('${DURATION}'); print(max(d-5, 5))")
-          HOOK_END=5
+          # Build filter.txt and video_params.sh entirely in Python — no shell escaping issues
+          python3 - << 'PYEOF'
+import os
 
-          if [ "$FORMAT" = "short" ]; then
-            W=1080; H=1920
-            HOOK_SZ=80; TITLE_SZ=60; CTA_SZ=70
-          else
-            W=1920; H=1080
-            HOOK_SZ=70; TITLE_SZ=60; CTA_SZ=60
-          fi
+fmt      = os.environ.get('FORMAT', 'short')
+font     = os.environ.get('FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+font_reg = os.environ.get('FONT_REG', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+duration = float(os.environ.get('DURATION', '60'))
 
-          # y-positions
-          CENTER_Y="(h-text_h)/2"
-          CTA_TEXT_Y="h*0.82"
-          CTA_SMALL_Y="h*0.91"
+if fmt == 'short':
+    w, h = 1080, 1920
+    hook_sz, title_sz, cta_sz = 80, 60, 70
+else:
+    w, h = 1920, 1080
+    hook_sz, title_sz, cta_sz = 70, 60, 60
+
+hook_end  = 5.0
+cta_start = max(duration - 5.0, 5.0)
+
+# Write shell vars for ffmpeg invocation
+with open('video_params.sh', 'w') as f:
+    f.write(f"W={w}\nH={h}\nDURATION={duration}\n")
+
+# Single-line filter — no newlines, no shell variable expansion inside
+fc = (
+    f"[0:v]"
+    f"drawtext=fontfile='{font}':textfile=hook.txt:fontsize={hook_sz}:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t\\,0\\,{hook_end})',"
+    f"drawtext=fontfile='{font}':textfile=title.txt:fontsize={title_sz}:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2:enable='between(t\\,{hook_end}\\,{cta_start})',"
+    f"drawbox=x=0:y=h*0.77:w=w:h=h*0.17:color=black@0.6:t=fill:enable='gte(t\\,{cta_start})',"
+    f"drawtext=fontfile='{font}':textfile=cta.txt:fontsize={cta_sz}:fontcolor=0x06b6d4:x=(w-text_w)/2:y=h*0.82:enable='gte(t\\,{cta_start})',"
+    f"drawtext=fontfile='{font_reg}':textfile=cta2.txt:fontsize=36:fontcolor=white@0.85:x=(w-text_w)/2:y=h*0.91:enable='gte(t\\,{cta_start})'"
+    f"[vout]"
+)
+
+with open('filter.txt', 'w') as f:
+    f.write(fc)
+
+print(f"Canvas: {w}x{h}  duration: {duration}s  cta_start: {cta_start}s")
+print(f"filter.txt written ({len(fc)} chars)")
+PYEOF
+
+          source video_params.sh
 
           ffmpeg -y \
             -f lavfi -i "color=c=black:size=${W}x${H}:rate=30:duration=${DURATION}" \
             -i audio.mp3 \
-            -filter_complex "
-              [0:v]
-              drawtext=
-                fontfile=${FONT}:
-                textfile=hook.txt:
-                fontsize=${HOOK_SZ}:fontcolor=white:
-                x=(w-text_w)/2:y=${CENTER_Y}:
-                enable='between(t,0,${HOOK_END})',
-              drawtext=
-                fontfile=${FONT}:
-                textfile=title.txt:
-                fontsize=${TITLE_SZ}:fontcolor=white:
-                x=(w-text_w)/2:y=${CENTER_Y}:
-                enable='between(t,${HOOK_END},${CTA_START})',
-              drawbox=
-                x=0:y=h*0.77:w=w:h=h*0.17:
-                color=black@0.6:t=fill:
-                enable='gte(t,${CTA_START})',
-              drawtext=
-                fontfile=${FONT}:
-                textfile=cta.txt:
-                fontsize=${CTA_SZ}:fontcolor=0x06b6d4:
-                x=(w-text_w)/2:y=${CTA_TEXT_Y}:
-                enable='gte(t,${CTA_START})',
-              drawtext=
-                fontfile=${FONT_REG}:
-                textfile=cta2.txt:
-                fontsize=36:fontcolor=white@0.85:
-                x=(w-text_w)/2:y=${CTA_SMALL_Y}:
-                enable='gte(t,${CTA_START})'
-              [vout]
-            " \
+            -filter_complex_script filter.txt \
             -map "[vout]" \
             -map 1:a \
             -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p \
