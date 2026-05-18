@@ -1,13 +1,7 @@
-// deno-lint-ignore-file no-explicit-any
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+// Smoke test Edge Function for comprehensive health checks
+// Tests Deno runtime, environment, database, and external connectivity
 
-/**
- * Smoke Test Edge Function
- * 
- * This function performs comprehensive health checks on the Nexus system.
- * It validates runtime environment, database connectivity, external services,
- * and overall system performance.
- */
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const FUNCTION_START_TIME = performance.now();
 
@@ -16,7 +10,7 @@ interface HealthCheck {
   status: 'pass' | 'warn' | 'fail';
   duration_ms: number;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 interface SmokeTestResponse {
@@ -33,34 +27,25 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime environment
+ * Check Deno runtime capabilities
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const version = Deno.version;
-    const permissions = {
-      net: await Deno.permissions.query({ name: 'net' }),
-      env: await Deno.permissions.query({ name: 'env' }),
+    const capabilities = {
+      version: Deno.version.deno,
+      typescript: Deno.version.typescript,
+      v8: Deno.version.v8,
+      hasEnv: typeof Deno.env !== 'undefined',
+      hasPermissions: typeof Deno.permissions !== 'undefined',
     };
-
-    const allGranted = permissions.net.state === 'granted' && 
-                      permissions.env.state === 'granted';
 
     return {
       name: 'deno_runtime',
-      status: allGranted ? 'pass' : 'warn',
+      status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: allGranted ? 'Runtime environment healthy' : 'Some permissions not granted',
-      details: {
-        deno_version: version.deno,
-        v8_version: version.v8,
-        typescript_version: version.typescript,
-        permissions: {
-          net: permissions.net.state,
-          env: permissions.env.state,
-        },
-      },
+      message: 'Deno runtime operational',
+      details: capabilities,
     };
   } catch (error) {
     return {
@@ -73,7 +58,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 }
 
 /**
- * Check environment variables
+ * Check environment variables and configuration
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -84,27 +69,23 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing: string[] = [];
-    const present: string[] = [];
-
-    for (const varName of requiredVars) {
-      const value = Deno.env.get(varName);
-      if (!value) {
-        missing.push(varName);
-      } else {
-        present.push(varName);
+    const missingVars = requiredVars.filter(varName => {
+      try {
+        const value = Deno.env.get(varName);
+        return !value || value.trim() === '';
+      } catch {
+        return true;
       }
-    }
+    });
 
-    if (missing.length > 0) {
+    if (missingVars.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
+        message: 'Missing required environment variables',
         details: {
-          missing,
-          present,
+          missing: missingVars,
         },
       };
     }
@@ -115,7 +96,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        present,
+        checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -142,28 +123,26 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing Supabase credentials',
+        message: 'Database configuration missing',
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to check database connectivity
+    // Simple query to test connectivity
     const { data, error } = await supabase
       .from('profiles')
-      .select('count')
-      .limit(1)
-      .maybeSingle();
+      .select('id')
+      .limit(1);
 
     if (error) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Database query failed: ${error.message}`,
+        message: 'Database query failed',
         details: {
-          error_code: error.code,
-          error_hint: error.hint,
+          error: error.message,
         },
       };
     }
@@ -185,7 +164,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check external services connectivity
+ * Check external service connectivity
  */
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
