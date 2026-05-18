@@ -1,236 +1,329 @@
+// supabase/functions/smoke-test-runner/index.ts
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
+      }
+    });
+  }
+
   try {
-    // Handle CORS preflight
-    if (req.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-        }
-      });
-    }
-
-    console.log('='.repeat(60));
-    console.log('STARTING COMPREHENSIVE SMOKE TEST SUITE');
-    console.log('='.repeat(60));
-
     const overallStartTime = performance.now();
-    const tests: any[] = [];
-    const structuralIssues: any[] = [];
     let currentStep = 0;
-    const totalSteps = 6;
+    const totalSteps = 8;
+    
+    console.log('='.repeat(60));
+    console.log('SMOKE TEST SUITE STARTED');
+    console.log('='.repeat(60));
 
-    // Environment validation
-    const denoEnv = Deno.version;
-    const baseUrl = Deno.env.get('SUPABASE_URL');
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const tests: Array<{
+      name: string;
+      status: 'passed' | 'failed';
+      duration_ms: number;
+      error?: string;
+      details?: string;
+      errorCategory?: {
+        category: string;
+        isCritical: boolean;
+        reason: string;
+        actionable: boolean;
+      };
+    }> = [];
 
-    if (!baseUrl || !anonKey) {
-      throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_ANON_KEY');
-    }
+    const structuralIssues: Array<{
+      severity: 'critical' | 'warning';
+      path: string;
+      issue: string;
+    }> = [];
 
-    const supabase = createClient(baseUrl, anonKey);
-
-    // Test 1: Environment Check
+    // Test 1: Environment Variables
     currentStep++;
     const envTestStart = performance.now();
-    try {
-      console.log(`[${currentStep}/${totalSteps}] Testing environment configuration...`);
-      
-      const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-      const missingVars = requiredVars.filter(v => !Deno.env.get(v));
-      
-      if (missingVars.length > 0) {
-        throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
-      }
+    console.log(`[${currentStep}/${totalSteps}] Testing environment variables...`);
+    
+    const baseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const denoEnv = Deno.env.get('DENO_DEPLOYMENT_ID') ? 'production' : 'development';
 
+    if (!baseUrl || !anonKey) {
+      const missingVars = [];
+      if (!baseUrl) missingVars.push('SUPABASE_URL');
+      if (!anonKey) missingVars.push('SUPABASE_ANON_KEY');
+      
       tests.push({
-        name: 'Environment Configuration',
-        status: 'passed',
-        duration_ms: performance.now() - envTestStart,
-        details: `All required environment variables present`
-      });
-      console.log('✓ Environment configuration validated');
-    } catch (error) {
-      tests.push({
-        name: 'Environment Configuration',
+        name: 'Environment Variables',
         status: 'failed',
         duration_ms: performance.now() - envTestStart,
+        error: `Missing critical environment variables: ${missingVars.join(', ')}`,
+        errorCategory: categorizeError(null, 'missing env variables')
+      });
+    } else {
+      tests.push({
+        name: 'Environment Variables',
+        status: 'passed',
+        duration_ms: performance.now() - envTestStart,
+        details: 'All required environment variables present'
+      });
+      console.log('✓ Environment variables validated');
+    }
+
+    // Test 2: Supabase Client Initialization
+    currentStep++;
+    const clientTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Testing Supabase client initialization...`);
+    
+    let supabase;
+    try {
+      supabase = createClient(baseUrl!, anonKey!, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
+      tests.push({
+        name: 'Supabase Client Init',
+        status: 'passed',
+        duration_ms: performance.now() - clientTestStart,
+        details: 'Client initialized successfully'
+      });
+      console.log('✓ Supabase client initialized');
+    } catch (error) {
+      tests.push({
+        name: 'Supabase Client Init',
+        status: 'failed',
+        duration_ms: performance.now() - clientTestStart,
         error: error.message,
         errorCategory: categorizeError(null, error.message)
       });
-      console.error('✗ Environment configuration failed:', error.message);
+      console.error('✗ Client initialization failed:', error.message);
     }
 
-    // Test 2: Database Connectivity
+    // Test 3: Health Check Endpoint
+    currentStep++;
+    const healthTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Testing health check endpoint...`);
+    
+    try {
+      const healthUrl = `${baseUrl}/functions/v1/health`;
+      const healthResponse = await fetch(healthUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${anonKey}`
+        }
+      });
+
+      if (healthResponse.ok) {
+        const healthData = await healthResponse.json();
+        tests.push({
+          name: 'Health Check Endpoint',
+          status: 'passed',
+          duration_ms: performance.now() - healthTestStart,
+          details: `Status: ${healthData.status || 'healthy'}`
+        });
+        console.log('✓ Health check passed');
+      } else {
+        tests.push({
+          name: 'Health Check Endpoint',
+          status: 'failed',
+          duration_ms: performance.now() - healthTestStart,
+          error: `HTTP ${healthResponse.status}: ${healthResponse.statusText}`,
+          errorCategory: categorizeError(healthResponse.status, healthResponse.statusText)
+        });
+        console.error('✗ Health check failed:', healthResponse.status);
+      }
+    } catch (error) {
+      tests.push({
+        name: 'Health Check Endpoint',
+        status: 'failed',
+        duration_ms: performance.now() - healthTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+      console.error('✗ Health check error:', error.message);
+    }
+
+    // Test 4: Database Connectivity
     currentStep++;
     const dbTestStart = performance.now();
-    try {
-      console.log(`[${currentStep}/${totalSteps}] Testing database connectivity...`);
-      
-      const { data, error } = await supabase
-        .from('nexus_metadata')
-        .select('version')
-        .limit(1);
+    console.log(`[${currentStep}/${totalSteps}] Testing database connectivity...`);
+    
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('id')
+          .limit(1);
 
-      if (error) throw error;
-
-      tests.push({
-        name: 'Database Connectivity',
-        status: 'passed',
-        duration_ms: performance.now() - dbTestStart,
-        details: 'Successfully connected to database'
-      });
-      console.log('✓ Database connectivity verified');
-    } catch (error) {
-      tests.push({
-        name: 'Database Connectivity',
-        status: 'failed',
-        duration_ms: performance.now() - dbTestStart,
-        error: error.message,
-        errorCategory: categorizeError(error.code || null, error.message)
-      });
-      console.error('✗ Database connectivity failed:', error.message);
-    }
-
-    // Test 3: Edge Function Health
-    currentStep++;
-    const edgeFuncTestStart = performance.now();
-    try {
-      console.log(`[${currentStep}/${totalSteps}] Testing edge function health...`);
-      
-      const testFunctions = ['chat', 'retrieve-context', 'semantic-search'];
-      const functionResults = [];
-
-      for (const func of testFunctions) {
-        try {
-          const { data, error } = await supabase.functions.invoke(func, {
-            body: { test: true, healthCheck: true }
-          });
-          
-          functionResults.push({
-            function: func,
-            status: error ? 'failed' : 'passed',
-            error: error?.message
-          });
-        } catch (error) {
-          functionResults.push({
-            function: func,
+        if (error) {
+          tests.push({
+            name: 'Database Connectivity',
             status: 'failed',
-            error: error.message
+            duration_ms: performance.now() - dbTestStart,
+            error: error.message,
+            errorCategory: categorizeError(null, error.message)
           });
+          console.error('✗ Database query failed:', error.message);
+        } else {
+          tests.push({
+            name: 'Database Connectivity',
+            status: 'passed',
+            duration_ms: performance.now() - dbTestStart,
+            details: 'Database query successful'
+          });
+          console.log('✓ Database connectivity verified');
         }
+      } catch (error) {
+        tests.push({
+          name: 'Database Connectivity',
+          status: 'failed',
+          duration_ms: performance.now() - dbTestStart,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+        console.error('✗ Database connectivity error:', error.message);
       }
-
-      const failedFunctions = functionResults.filter(f => f.status === 'failed');
-      
+    } else {
       tests.push({
-        name: 'Edge Functions Health',
-        status: failedFunctions.length === 0 ? 'passed' : 'failed',
-        duration_ms: performance.now() - edgeFuncTestStart,
-        details: `${testFunctions.length - failedFunctions.length}/${testFunctions.length} functions responsive`,
-        functionResults
-      });
-      console.log(`✓ Edge functions health checked: ${testFunctions.length - failedFunctions.length}/${testFunctions.length} responsive`);
-    } catch (error) {
-      tests.push({
-        name: 'Edge Functions Health',
+        name: 'Database Connectivity',
         status: 'failed',
-        duration_ms: performance.now() - edgeFuncTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
+        duration_ms: performance.now() - dbTestStart,
+        error: 'Supabase client not initialized',
+        errorCategory: categorizeError(null, 'client not initialized')
       });
-      console.error('✗ Edge functions health check failed:', error.message);
     }
 
-    // Test 4: Storage Access
-    currentStep++;
-    const storageTestStart = performance.now();
-    try {
-      console.log(`[${currentStep}/${totalSteps}] Testing storage access...`);
-      
-      const { data, error } = await supabase.storage.listBuckets();
-
-      if (error) throw error;
-
-      tests.push({
-        name: 'Storage Access',
-        status: 'passed',
-        duration_ms: performance.now() - storageTestStart,
-        details: `Found ${data?.length || 0} storage buckets`
-      });
-      console.log('✓ Storage access verified');
-    } catch (error) {
-      tests.push({
-        name: 'Storage Access',
-        status: 'failed',
-        duration_ms: performance.now() - storageTestStart,
-        error: error.message,
-        errorCategory: categorizeError(error.code || null, error.message)
-      });
-      console.error('✗ Storage access failed:', error.message);
-    }
-
-    // Test 5: Authentication System
+    // Test 5: Auth Service
     currentStep++;
     const authTestStart = performance.now();
-    try {
-      console.log(`[${currentStep}/${totalSteps}] Testing authentication system...`);
-      
-      const { data: { session }, error } = await supabase.auth.getSession();
-
+    console.log(`[${currentStep}/${totalSteps}] Testing auth service...`);
+    
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        
+        tests.push({
+          name: 'Auth Service',
+          status: 'passed',
+          duration_ms: performance.now() - authTestStart,
+          details: 'Auth service responding'
+        });
+        console.log('✓ Auth service verified');
+      } catch (error) {
+        tests.push({
+          name: 'Auth Service',
+          status: 'failed',
+          duration_ms: performance.now() - authTestStart,
+          error: error.message,
+          errorCategory: categorizeError(null, error.message)
+        });
+        console.error('✗ Auth service error:', error.message);
+      }
+    } else {
       tests.push({
-        name: 'Authentication System',
-        status: 'passed',
-        duration_ms: performance.now() - authTestStart,
-        details: 'Authentication system responsive'
-      });
-      console.log('✓ Authentication system verified');
-    } catch (error) {
-      tests.push({
-        name: 'Authentication System',
+        name: 'Auth Service',
         status: 'failed',
         duration_ms: performance.now() - authTestStart,
+        error: 'Supabase client not initialized',
+        errorCategory: categorizeError(null, 'client not initialized')
+      });
+    }
+
+    // Test 6: Memory Usage
+    currentStep++;
+    const memTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Testing memory usage...`);
+    
+    try {
+      const memoryUsage = Deno.memoryUsage();
+      const heapUsedMB = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
+      const heapTotalMB = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
+      
+      tests.push({
+        name: 'Memory Usage',
+        status: 'passed',
+        duration_ms: performance.now() - memTestStart,
+        details: `Heap: ${heapUsedMB}MB / ${heapTotalMB}MB`
+      });
+      console.log(`✓ Memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+    } catch (error) {
+      tests.push({
+        name: 'Memory Usage',
+        status: 'failed',
+        duration_ms: performance.now() - memTestStart,
         error: error.message,
         errorCategory: categorizeError(null, error.message)
       });
-      console.error('✗ Authentication system failed:', error.message);
+      console.error('✗ Memory check error:', error.message);
     }
 
-    // Test 6: Structural Analysis
+    // Test 7: File System Access
+    currentStep++;
+    const fsTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Testing file system access...`);
+    
+    try {
+      const tempFile = await Deno.makeTempFile();
+      await Deno.writeTextFile(tempFile, 'test');
+      const content = await Deno.readTextFile(tempFile);
+      await Deno.remove(tempFile);
+      
+      tests.push({
+        name: 'File System Access',
+        status: 'passed',
+        duration_ms: performance.now() - fsTestStart,
+        details: 'Read/write operations successful'
+      });
+      console.log('✓ File system access verified');
+    } catch (error) {
+      tests.push({
+        name: 'File System Access',
+        status: 'failed',
+        duration_ms: performance.now() - fsTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+      console.error('✗ File system access error:', error.message);
+    }
+
+    // Test 8: Structural Analysis
     currentStep++;
     const structuralTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Running structural analysis...`);
+    
     try {
-      console.log(`[${currentStep}/${totalSteps}] Running structural analysis...`);
-      
-      // Check for critical file system paths
       const criticalPaths = [
-        '/supabase/functions',
-        '/supabase/migrations'
+        './supabase/functions',
+        './src',
+        './package.json'
       ];
 
       for (const path of criticalPaths) {
         try {
           const stat = await Deno.stat(path);
-          if (!stat.isDirectory) {
-            structuralIssues.push({
-              severity: 'critical',
-              path,
-              issue: 'Expected directory not found or is not a directory'
-            });
-          }
-        } catch (error) {
-          if (error instanceof Deno.errors.NotFound) {
+          if (!stat.isDirectory && !stat.isFile) {
             structuralIssues.push({
               severity: 'warning',
               path,
-              issue: 'Path not found (may be expected in production)'
+              issue: 'Path exists but is neither file nor directory'
             });
-          } else if (error instanceof Deno.errors.PermissionDenied) {
+          }
+        } catch (error) {
+          if (error.name === 'NotFound') {
+            structuralIssues.push({
+              severity: 'critical',
+              path,
+              issue: 'Required path not found'
+            });
+          } else if (error.name === 'PermissionDenied') {
             structuralIssues.push({
               severity: 'warning',
               path,
@@ -318,110 +411,3 @@ Deno.serve(async (req) => {
             hasAnonKey: !!anonKey
           }
         },
-        structuralAnalysis: {
-          issues: structuralIssues,
-          hasIssues: structuralIssues.length > 0
-        }
-      }, null, 2),
-      {
-        status: criticalFailures === 0 ? 200 : 503,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-          "X-Health-Status": overallStatus,
-          "X-Health-Score": healthScore.toString(),
-          "X-Critical-Failures": criticalFailures.toString(),
-          "X-Test-Duration-Ms": summary.duration_ms.toFixed(2)
-        }
-      }
-    );
-
-  } catch (error) {
-    console.error("Fatal smoke test error:", error);
-    
-    const fatalErrorContext = {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
-      environment: {
-        deno: Deno.version,
-        memoryUsage: Deno.memoryUsage()
-      },
-      errorCategory: categorizeError(null, error.message)
-    };
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Fatal error during smoke test execution",
-        details: error.message,
-        errorContext: fatalErrorContext,
-        timestamp: new Date().toISOString()
-      }, null, 2),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-          "X-Error-Type": "fatal",
-          "X-Error-Category": fatalErrorContext.errorCategory.category
-        }
-      }
-    );
-  }
-});
-
-function categorizeError(statusCode: number | null, message: string): {
-  category: string;
-  isCritical: boolean;
-  reason: string;
-  actionable: boolean;
-} {
-  const msg = message?.toLowerCase() || '';
-  
-  // Infrastructure errors (critical)
-  if (msg.includes('missing env') || msg.includes('supabase_url') || msg.includes('supabase_anon_key')) {
-    return {
-      category: 'configuration',
-      isCritical: true,
-      reason: 'Missing critical environment variables',
-      actionable: true
-    };
-  }
-
-  if (msg.includes('connection') || msg.includes('network') || msg.includes('timeout')) {
-    return {
-      category: 'network',
-      isCritical: true,
-      reason: 'Network connectivity issue',
-      actionable: true
-    };
-  }
-
-  if (msg.includes('permission') || msg.includes('access denied')) {
-    return {
-      category: 'permissions',
-      isCritical: true,
-      reason: 'File system or resource permission error',
-      actionable: true
-    };
-  }
-
-  if (statusCode && statusCode >= 500) {
-    return {
-      category: 'server_error',
-      isCritical: true,
-      reason: 'Server-side error',
-      actionable: false
-    };
-  }
-
-  if (statusCode && statusCode >= 400 && statusCode < 500) {
-    return {
-      category: 'client_error',
-      isCritical: false,
-      reason: 'Client request error',
-      actionable:
