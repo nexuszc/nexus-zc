@@ -447,31 +447,23 @@ ${state.reflections.map((r: { observation: string; learned: string }) =>
 ABILITIES ALREADY PROPOSED/LIVE/REJECTED IN LAST 7 DAYS (do not re-propose these):
 ${state.recentProposals.join(", ") || "None"}
 
-JUDGMENT FILTER — apply this strictly before proposing any trigger_build action:
-Q1: Would Zach immediately notice value if this didn't exist? (if no → skip it)
-Q2: Is this the single highest-value action right now? (fix errors → serve clients → core improvements → new features)
-Q3: Can this be built reliably without hallucinating file paths or breaking existing code?
-
-All three must be YES to justify a trigger_build.
-
 RULES:
 1. Fix errors before building new things
-2. Only 1 trigger_build per cycle
-3. Every action must serve a directive
-4. Research before building complex systems
-5. Simple improvements > complex ones
-6. Never repeat what's already in rejected patterns
-7. Before proposing any ability, check if a similar one (by name or description) already exists in the last 7 days in nexus_ability_proposals — if so, skip it entirely. Do not propose duplicates.
+2. Every action must serve a directive
+3. Research before building complex systems
+4. Simple improvements > complex ones
+5. Never repeat what's already in rejected patterns
+6. Before proposing any ability, check if a similar one (by name or description) already exists in the last 7 days in nexus_ability_proposals — if so, skip it entirely. Do not propose duplicates.
+7. DO NOT propose trigger_build — builds are only triggered by explicit commands from Zach, never autonomously.
 
 AVAILABLE ACTIONS:
 - research: search web for specific topic, save insight
 - identify_improvement: analyze state and identify one self-improvement
 - save_insight: save an observation to knowledge base
 - update_health: update client health scores
-- trigger_build: trigger nexus-build with a specific instruction (1 per cycle, judgment filter required)
 - send_alert: send Zach an important alert
 
-Choose 2-3 actions max. Only 1 trigger_build allowed. Include your judgment reasoning.
+Choose 2-3 actions max. Include your judgment reasoning.
 
 Respond with JSON only (no markdown, no backticks):
 {
@@ -506,7 +498,7 @@ Respond with JSON only (no markdown, no backticks):
 
 // ── ACT ───────────────────────────────────────────────────────────────────────
 
-async function act(decisions: Awaited<ReturnType<typeof think>>, state: Awaited<ReturnType<typeof observe>>) {
+async function act(decisions: Awaited<ReturnType<typeof think>>, state: Awaited<ReturnType<typeof observe>>, allowBuild = false) {
   const actions = [...(decisions.actions || [])].sort((a, b) => a.priority - b.priority);
   let buildTriggered = false;
   let actionsExecuted = 0;
@@ -611,6 +603,12 @@ Respond with JSON only (no backticks):
       }
 
       else if (action.type === "trigger_build" && !buildTriggered) {
+        // Hard guard: builds only fire when explicitly commanded (build_instruction in request body).
+        // Autonomous cycles never build — this prevents random Telegram build notifications.
+        if (!allowBuild) {
+          await log("build_skipped", `Auto-build blocked (not explicitly commanded): ${action.instruction}`);
+          continue;
+        }
         buildTriggered = true;
 
         fetch(`${SUPABASE_URL}/functions/v1/nexus-build`, {
@@ -902,8 +900,12 @@ ${nextList.trim()}`;
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
+  const body = await req.json().catch(() => ({}));
+  // allowBuild: only true when an explicit build_instruction is passed in the request body.
+  // Cron cycles post with no body — they never get allowBuild=true.
+  const allowBuild = !!(body.build_instruction || body.allow_build);
 
   const { count } = await supabase
     .from("nexus_agent_cycles")
@@ -953,7 +955,7 @@ Deno.serve(async (_req) => {
     }
 
     _t = Date.now();
-    const actionsExecuted = await act(decisions, state).then(r => { logHeartbeat("nexus-core:act", "ok", Date.now() - _t); return r; })
+    const actionsExecuted = await act(decisions, state, allowBuild).then(r => { logHeartbeat("nexus-core:act", "ok", Date.now() - _t); return r; })
       .catch(e => { logHeartbeat("nexus-core:act", "error", Date.now() - _t, String(e)); throw e; });
 
     _t = Date.now();
