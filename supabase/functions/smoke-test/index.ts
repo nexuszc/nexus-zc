@@ -1,258 +1,28 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-// ============================================================================
-// TYPES AND INTERFACES
-// ============================================================================
+const DATABASE_QUERY_TIMEOUT = 5000;
+const FUNCTION_START_TIME = performance.now();
 
 interface HealthCheck {
   name: string;
-  status: 'pass' | 'fail' | 'warn';
+  status: 'pass' | 'warn' | 'fail';
   duration_ms: number;
-  message?: string;
+  message: string;
   details?: Record<string, unknown>;
 }
 
-interface HealthCheckResponse {
+interface SmokeTestResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
-  version: string;
-  environment: string;
-  uptime_ms: number;
   checks: HealthCheck[];
-  metadata: {
-    deno_version: string;
-    region: string;
-    function_name: string;
+  summary: {
+    total: number;
+    passed: number;
+    warnings: number;
+    failed: number;
+    total_duration_ms: number;
   };
 }
-
-interface ErrorResponse {
-  error: string;
-  message: string;
-  timestamp: string;
-  path: string;
-  details?: Record<string, unknown>;
-}
-
-interface RequestValidation {
-  valid: boolean;
-  error?: string;
-}
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const FUNCTION_NAME = 'smoke-test';
-const FUNCTION_VERSION = '1.0.0';
-const FUNCTION_START_TIME = performance.now();
-
-// Request validation constants
-const MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
-const ALLOWED_METHODS = ['GET', 'POST', 'OPTIONS'];
-const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'https://nexus.app',
-  /^https:\/\/.*\.nexus\.app$/,
-];
-
-// Health check configuration
-const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds
-const DATABASE_QUERY_TIMEOUT = 3000; // 3 seconds
-
-// ============================================================================
-// LOGGING UTILITIES
-// ============================================================================
-
-/**
- * Structured logging function
- */
-function log(
-  level: 'info' | 'warn' | 'error' | 'debug',
-  message: string,
-  context?: Record<string, unknown>
-): void {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
-    function: FUNCTION_NAME,
-    message,
-    ...context,
-  };
-  console.log(JSON.stringify(logEntry));
-}
-
-// ============================================================================
-// VALIDATION UTILITIES
-// ============================================================================
-
-/**
- * Validate incoming request
- */
-function validateRequest(req: Request): RequestValidation {
-  const method = req.method;
-  const url = new URL(req.url);
-
-  // Check HTTP method
-  if (!ALLOWED_METHODS.includes(method)) {
-    return {
-      valid: false,
-      error: `Method ${method} not allowed. Allowed methods: ${ALLOWED_METHODS.join(', ')}`,
-    };
-  }
-
-  // Check origin for non-GET requests
-  if (method !== 'GET' && method !== 'OPTIONS') {
-    const origin = req.headers.get('origin');
-    if (!origin) {
-      return {
-        valid: false,
-        error: 'Origin header required for non-GET requests',
-      };
-    }
-
-    const isAllowedOrigin = ALLOWED_ORIGINS.some((allowed) => {
-      if (typeof allowed === 'string') {
-        return origin === allowed;
-      }
-      return allowed.test(origin);
-    });
-
-    if (!isAllowedOrigin) {
-      return {
-        valid: false,
-        error: `Origin ${origin} not allowed`,
-      };
-    }
-  }
-
-  // Check content-length for POST requests
-  if (method === 'POST') {
-    const contentLength = req.headers.get('content-length');
-    if (contentLength && parseInt(contentLength) > MAX_REQUEST_SIZE) {
-      return {
-        valid: false,
-        error: `Request body too large. Maximum size: ${MAX_REQUEST_SIZE} bytes`,
-      };
-    }
-  }
-
-  return { valid: true };
-}
-
-/**
- * Validate health check result structure
- */
-function validateHealthCheckResult(
-  check: unknown,
-  checkName: string
-): check is HealthCheck {
-  if (!check || typeof check !== 'object') {
-    log('error', 'Health check result is not an object', { checkName });
-    return false;
-  }
-
-  const c = check as Record<string, unknown>;
-
-  if (typeof c.name !== 'string') {
-    log('error', 'Health check missing valid name', { checkName });
-    return false;
-  }
-
-  if (!['pass', 'fail', 'warn'].includes(c.status as string)) {
-    log('error', 'Health check has invalid status', { checkName, status: c.status });
-    return false;
-  }
-
-  if (typeof c.duration_ms !== 'number' || c.duration_ms < 0) {
-    log('error', 'Health check has invalid duration', { checkName, duration: c.duration_ms });
-    return false;
-  }
-
-  return true;
-}
-
-/**
- * Sanitize health check result to prevent injection
- */
-function sanitizeHealthCheck(check: HealthCheck): HealthCheck {
-  return {
-    name: String(check.name).substring(0, 100),
-    status: check.status,
-    duration_ms: Math.round(check.duration_ms * 100) / 100,
-    message: check.message ? String(check.message).substring(0, 500) : undefined,
-    details: check.details ? sanitizeObject(check.details) : undefined,
-  };
-}
-
-/**
- * Sanitize object recursively
- */
-function sanitizeObject(obj: Record<string, unknown>, depth = 0): Record<string, unknown> {
-  if (depth > 5) return {}; // Prevent deep recursion
-
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const sanitizedKey = String(key).substring(0, 100);
-    
-    if (value === null || value === undefined) {
-      sanitized[sanitizedKey] = value;
-    } else if (typeof value === 'string') {
-      sanitized[sanitizedKey] = value.substring(0, 1000);
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      sanitized[sanitizedKey] = value;
-    } else if (Array.isArray(value)) {
-      sanitized[sanitizedKey] = value.slice(0, 100).map((item) =>
-        typeof item === 'object' && item !== null
-          ? sanitizeObject(item as Record<string, unknown>, depth + 1)
-          : item
-      );
-    } else if (typeof value === 'object') {
-      sanitized[sanitizedKey] = sanitizeObject(value as Record<string, unknown>, depth + 1);
-    }
-  }
-  return sanitized;
-}
-
-// ============================================================================
-// RESPONSE UTILITIES
-// ============================================================================
-
-/**
- * Create JSON response with appropriate headers
- */
-function createJsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data, null, 2), {
-    status,
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'X-Function-Version': FUNCTION_VERSION,
-    },
-  });
-}
-
-/**
- * Handle OPTIONS preflight requests
- */
-function handleOptions(): Response {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': ALLOWED_METHODS.join(', '),
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
-}
-
-// ============================================================================
-// HEALTH CHECK IMPLEMENTATIONS
-// ============================================================================
 
 /**
  * Check Deno runtime health
@@ -260,13 +30,35 @@ function handleOptions(): Response {
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    // Basic runtime checks
-    const memoryUsage = Deno.memoryUsage();
-    const hasRequiredAPIs = typeof Deno.serve === 'function' &&
-      typeof Deno.env === 'object' &&
-      typeof performance === 'object';
+    // Check Deno version availability
+    if (!Deno.version) {
+      return {
+        name: 'deno_runtime',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Deno version information unavailable',
+      };
+    }
 
-    if (!hasRequiredAPIs) {
+    // Check memory usage
+    const memoryUsage = Deno.memoryUsage();
+    if (!memoryUsage) {
+      return {
+        name: 'deno_runtime',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Memory usage information unavailable',
+      };
+    }
+
+    // Check critical APIs
+    const criticalAPIs = [
+      typeof Deno.env !== 'undefined',
+      typeof fetch === 'function',
+      typeof performance !== 'undefined',
+    ];
+
+    if (!criticalAPIs.every(Boolean)) {
       return {
         name: 'deno_runtime',
         status: 'fail',
@@ -494,4 +286,177 @@ async function checkPerformance(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const uptime = performance.now() - FUNCTION_START_TIME;
-    const memoryUsage = Deno.memoryUs
+    const memoryUsage = Deno.memoryUsage();
+    const memoryMB = memoryUsage.heapUsed / 1024 / 1024;
+
+    // Determine performance status
+    let status: 'pass' | 'warn' | 'fail' = 'pass';
+    const issues: string[] = [];
+
+    if (memoryMB > 128) {
+      status = 'warn';
+      issues.push('High memory usage');
+    }
+
+    if (uptime > 300000) { // 5 minutes
+      status = 'warn';
+      issues.push('Long uptime may indicate stale instance');
+    }
+
+    return {
+      name: 'performance',
+      status,
+      duration_ms: performance.now() - startTime,
+      message: issues.length > 0 ? issues.join(', ') : 'Performance metrics nominal',
+      details: {
+        uptime_ms: Math.round(uptime),
+        memory_mb: Math.round(memoryMB * 100) / 100,
+        heap_total_mb: Math.round((memoryUsage.heapTotal / 1024 / 1024) * 100) / 100,
+        external_mb: Math.round((memoryUsage.external / 1024 / 1024) * 100) / 100,
+      },
+    };
+  } catch (error) {
+    return {
+      name: 'performance',
+      status: 'warn',
+      duration_ms: performance.now() - startTime,
+      message: error instanceof Error ? error.message : 'Performance check failed',
+    };
+  }
+}
+
+/**
+ * Run all health checks
+ */
+async function runHealthChecks(): Promise<SmokeTestResponse> {
+  const overallStartTime = performance.now();
+  
+  // Run all checks in parallel
+  const checks = await Promise.all([
+    checkDenoRuntime(),
+    checkEnvironment(),
+    checkDatabase(),
+    checkExternalServices(),
+    checkPerformance(),
+  ]);
+
+  // Calculate summary
+  const passed = checks.filter(c => c.status === 'pass').length;
+  const warnings = checks.filter(c => c.status === 'warn').length;
+  const failed = checks.filter(c => c.status === 'fail').length;
+
+  // Determine overall status
+  let overallStatus: 'healthy' | 'degraded' | 'unhealthy';
+  if (failed > 0) {
+    overallStatus = 'unhealthy';
+  } else if (warnings > 0) {
+    overallStatus = 'degraded';
+  } else {
+    overallStatus = 'healthy';
+  }
+
+  return {
+    status: overallStatus,
+    timestamp: new Date().toISOString(),
+    checks,
+    summary: {
+      total: checks.length,
+      passed,
+      warnings,
+      failed,
+      total_duration_ms: Math.round((performance.now() - overallStartTime) * 100) / 100,
+    },
+  };
+}
+
+Deno.serve(async (req) => {
+  try {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        },
+      });
+    }
+
+    // Only accept GET requests for smoke test
+    if (req.method !== 'GET') {
+      return new Response(
+        JSON.stringify({ error: 'Method not allowed' }),
+        {
+          status: 405,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+          },
+        }
+      );
+    }
+
+    // Run all health checks
+    const result = await runHealthChecks();
+
+    // Determine HTTP status code based on health
+    let httpStatus: number;
+    switch (result.status) {
+      case 'healthy':
+        httpStatus = 200;
+        break;
+      case 'degraded':
+        httpStatus = 200; // Still operational
+        break;
+      case 'unhealthy':
+        httpStatus = 503; // Service unavailable
+        break;
+      default:
+        httpStatus = 500;
+    }
+
+    return new Response(
+      JSON.stringify(result, null, 2),
+      {
+        status: httpStatus,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Smoke test error:', error);
+    
+    const errorResponse: SmokeTestResponse = {
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      checks: [{
+        name: 'smoke_test',
+        status: 'fail',
+        duration_ms: 0,
+        message: error instanceof Error ? error.message : 'Unknown error occurred',
+      }],
+      summary: {
+        total: 1,
+        passed: 0,
+        warnings: 0,
+        failed: 1,
+        total_duration_ms: 0,
+      },
+    };
+
+    return new Response(
+      JSON.stringify(errorResponse, null, 2),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    );
+  }
+});
