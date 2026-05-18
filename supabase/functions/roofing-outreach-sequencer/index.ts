@@ -1,21 +1,7 @@
-// roofing-outreach-sequencer v15
-// 7-touch branching narrative sequence + funnel stage tracking
-//
-// Touch 1  Day  0   email: "Your homeowners are calling too much"
-// Touch 2  Day  2   email: "47 calls. One installation."
-// Touch 3  Day  4   voice drop (skip if branch=cold)
-// Touch 4  Day  7   email: "What Sarah saw instead of calling"
-// Touch 5  Day  11  voice drop (skip if branch=cold/ghost)
-// Touch 6  Day  15  email: "Last note"
-//
-// Branches:
-//   standard → normal schedule
-//   hot      → opens>=3, not clicked → skip to Touch 4 immediately
-//   cold     → no opens after Touch 2 → skip voice drops
-//   ghost    → no opens after Touch 4 → skip Touch 5, go to Touch 6
-//   whale    → clicked → pause sequence, queue Aria warm call
-//
-// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
+// roofing-outreach-sequencer v16
+// Email System v2: 9-touch story arc, tier-based smart frequency
+// Sources: email_sequences (state), email_templates (copy), roofing_prospects (engagement signals)
+// Tiers: cold / warm / hot / dead
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -24,18 +10,39 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x7E]/g, "").trim();
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const EMAIL_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-email-tracker`;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-const CLICK_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-click-tracker`;
-const EMAIL_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-email-tracker`;
+// GAPS[tier][N] = days to wait after sending touch N before touch N+1 (N is 1-indexed, maps to array index directly)
+// Index 0 = gap before first touch (always 0 = send immediately on enrollment)
+const GAPS: Record<string, number[]> = {
+  hot:  [0, 1, 2, 3, 3, 4, 7, 7, 14],
+  warm: [0, 3, 5, 7, 7, 7, 8, 9,  7],
+  cold: [0, 4, 6, 7, 8, 9, 5, 9,  0],
+};
+const MAX_TOUCHES = 9;
 
-function trackerUrl(prospectId: string, touch: number, dest: "portal" | "website"): string {
-  return `${CLICK_TRACKER_BASE}?pid=${prospectId}&touch=${touch}&dest=${dest}`;
+function firstName(name: string | null | undefined): string {
+  return (name || "").split(" ")[0] || "there";
 }
 
-function firstName(name: string | null): string {
-  return (name || "").split(" ")[0] || "there";
+function gapDays(tier: string, touchJustSent: number): number {
+  const gaps = GAPS[tier] ?? GAPS.cold;
+  return gaps[touchJustSent] ?? 7;
+}
+
+function evaluateTier(
+  prospect: { clicked?: boolean; total_opens?: number } | undefined,
+  currentTier: string,
+  currentTouch: number
+): string {
+  if (!prospect) return currentTier;
+  if (prospect.clicked) return "hot";
+  if ((prospect.total_opens ?? 0) >= 3) return "warm";
+  // No opens after touch 3 → dead
+  if (currentTouch >= 3 && (prospect.total_opens ?? 0) === 0) return "dead";
+  return currentTier;
 }
 
 async function tg(text: string) {
@@ -56,8 +63,8 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <ops@nexuszc.com>",
-        reply_to: "zach@nexuszc.com",
+        from: "Zach Curtis <zach@roofingos.dev>",
+        reply_to: "zach@roofingos.dev",
         to: [to],
         subject,
         html,
@@ -76,22 +83,20 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
 }
 
 async function logTouch(
-  prospectId: string,
-  touchType: string,
+  prospectId: string | null,
   touchNumber: number,
-  subject: string | null,
-  body: string | null,
-  resendEmailId?: string | null
+  subject: string,
+  bodySnippet: string,
 ): Promise<string | null> {
+  if (!prospectId) return null;
   try {
     const { data } = await supabase.from("roofing_outreach_log").insert({
       prospect_id: prospectId,
-      touch_type: touchType,
+      touch_type: "email",
       touch_number: touchNumber,
       direction: "outbound",
-      subject: subject || "",
-      body: body || "",
-      resend_email_id: resendEmailId || null,
+      subject,
+      body: bodySnippet,
     }).select("id").single();
     return data?.id || null;
   } catch (e) {
@@ -100,176 +105,24 @@ async function logTouch(
   }
 }
 
-// ── FUNNEL STAGE TRACKING ──────────────────────────────────────────────────────
-
-function deriveFunnelStage(prospect: Record<string, unknown>): string {
-  if (prospect.outcome === "dead") return "dead";
-  if (prospect.outcome === "booked" || prospect.outcome === "signed_up") return "signed_up";
-  if (prospect.demo_booked_at) return "demo_booked";
-  if (prospect.clicked) return "hot";
-  if ((prospect.total_opens as number || 0) >= 2) return "engaged";
-  if ((prospect.sequence_day as number || 0) >= 1 || (prospect.call_attempts as number || 0) >= 1) return "contacted";
-  return "new_lead";
-}
-
-async function advanceFunnelStage(
-  prospectId: string,
-  currentStage: string,
-  newStage: string,
-  reason: string
-): Promise<void> {
-  if (currentStage === newStage) return;
-  await supabase.from("roofing_prospects").update({
-    funnel_stage: newStage,
-    funnel_stage_updated_at: new Date().toISOString(),
-  }).eq("id", prospectId);
-  await supabase.from("funnel_stage_history").insert({
-    prospect_id: prospectId,
-    from_stage: currentStage,
-    to_stage: newStage,
-    reason,
-  }).catch(() => {});
-}
-
-// ── VOICE DROP ─────────────────────────────────────────────────────────────────
-
-async function fireVoiceDrop(
-  prospect: Record<string, unknown>,
-  touchNumber: number
-): Promise<void> {
-  if (!prospect.phone) return;
-  const fn = firstName(prospect.owner_name as string);
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        call_type: "voice_drop",
-        contact_phone: prospect.phone,
-        contact_name: prospect.owner_name,
-        contact_type: "prospect",
-        language: "en",
-        metadata: {
-          contractor_name: prospect.company_name,
-          first_name: fn,
-          touch_number: touchNumber,
-        },
-      }),
-    });
-  } catch { /* non-fatal */ }
-}
-
-// ── EMAIL TEMPLATES ────────────────────────────────────────────────────────────
-
-function emailTouch1(prospect: Record<string, unknown>): { subject: string; html: string } {
-  const fn = firstName(prospect.owner_name as string);
-  const link = trackerUrl(prospect.id as string, 1, "portal");
-  const lines = [
-    `Hey ${fn} —`,
-    ``,
-    `Zach Curtis here, founder of Roofing OS.`,
-    ``,
-    `Quick question — how many times did a homeowner call you during an installation last week?`,
-    ``,
-    `We built something that makes those calls stop completely.`,
-    ``,
-    `Homeowners see their house from satellite, their job progress in real time, their insurance status in plain English. Aria — our AI — answers their questions 24 hours a day.`,
-    ``,
-    `They stop calling because they already know everything.`,
-    ``,
-    `Takes 30 seconds to see it:`,
-    link,
-    ``,
-    `Full product at roofingos.dev. Starts at $49/month. No contract.`,
-    ``,
-    `Zach`,
-    `Founder, Roofing OS`,
-  ].join("\n");
-  return {
-    subject: "Your homeowners are calling too much",
-    html: `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">${lines.replace(/\n/g, "<br>")}</div>`,
-  };
-}
-
-function emailTouch2(prospect: Record<string, unknown>): { subject: string; html: string } {
-  const fn = firstName(prospect.owner_name as string);
-  const link = trackerUrl(prospect.id as string, 2, "portal");
-  const html = `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">
-<p>Hey ${fn} —</p>
-<p>Marcus runs a 6-man crew in Denver.</p>
-<p>Last August he did a full replacement on a 3,200 sq ft home in Lakewood.</p>
-<p>His homeowner called 47 times during the 3-day installation.</p>
-<p>47 times.</p>
-<p>"Where are you?" — 11 calls<br>
-"When will you be done?" — 9 calls<br>
-"Did you find more damage?" — 8 calls<br>
-"What's happening with my insurance?" — 19 calls</p>
-<p>On day 2, Marcus answered a call mid-install, lost track of a flashing detail, and had to reshingle an entire valley.</p>
-<p>$2,400 in labor. Half a day gone.</p>
-<p>His homeowner didn't mean any harm. She just didn't know what was happening.</p>
-<p>That's the problem we solve.</p>
-<p><a href="${link}" style="color:#3b82f6;">See what Sarah sees instead →</a></p>
-</div>`;
-  return { subject: "47 calls. One installation.", html };
-}
-
-function emailTouch4(prospect: Record<string, unknown>): { subject: string; html: string } {
-  const fn = firstName(prospect.owner_name as string);
-  const link = trackerUrl(prospect.id as string, 4, "portal");
-  const html = `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">
-<p>Hey ${fn} —</p>
-<p>Sarah is a homeowner in Aurora.</p>
-<p>When her contractor started her job, she got a text with a link.</p>
-<p>She opened it and saw her house from satellite. She saw photos of her roof — before, during, after tear-off — as they were taken.</p>
-<p>She saw her State Farm claim status in plain English. Not insurance jargon. Plain English.</p>
-<p>When she had a question at 9pm — she typed it into the portal. Aria answered in 11 seconds.</p>
-<p>She never called her contractor once.</p>
-<p>Her contractor finished the job without a single interruption.</p>
-<p>That contractor now sends every homeowner this link the moment he creates a job. It takes him 30 seconds. It costs him $49 a month.</p>
-<p><a href="${link}" style="color:#3b82f6;">See exactly what Sarah saw →</a></p>
-</div>`;
-  return { subject: "What Sarah saw instead of calling", html };
-}
-
-function emailTouch6(prospect: Record<string, unknown>): { subject: string; html: string } {
-  const fn = firstName(prospect.owner_name as string);
-  const link = trackerUrl(prospect.id as string, 6, "portal");
-  const html = `<div style="font-family:Arial,sans-serif;max-width:580px;line-height:1.7;color:#333;">
-<p>Hey ${fn} —</p>
-<p>Last one from me.</p>
-<p>If your homeowners ever stop calling during installations on their own — you found a better solution.</p>
-<p>If not — we stop them for $49/month.</p>
-<p><a href="${link}" style="color:#3b82f6;">See it in 30 seconds →</a></p>
-</div>`;
-  return { subject: "Last note", html };
-}
-
-// ── BRANCH DETECTION ───────────────────────────────────────────────────────────
-
-function detectBranch(prospect: Record<string, unknown>, day: number): string | null {
-  if (prospect.clicked) return "whale";
-  const opens = (prospect.total_opens as number) || 0;
-  const branch = (prospect.sequence_branch as string) || "standard";
-  if (opens >= 3 && branch !== "hot" && branch !== "whale") return "hot";
-  if (day >= 2 && opens === 0 && branch === "standard") return "cold";
-  if (day >= 4 && opens === 0 && branch !== "ghost" && branch !== "whale") return "ghost";
-  return null;
-}
-
-// ── MAIN ───────────────────────────────────────────────────────────────────────
-
 Deno.serve(async (req) => {
+  try {
   let body: Record<string, unknown> = {};
-  try { body = await req.json(); } catch { /* empty body — fine */ }
+  try { body = await req.json(); } catch { /* empty body fine */ }
 
-  if (body.test) return Response.json({ ok: true, message: "roofing-outreach-sequencer ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-outreach-sequencer v16 ready" });
 
   if (body.debug_email) {
     try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: "Zach Curtis <ops@nexuszc.com>", to: [body.debug_email], subject: "Resend test", html: "<p>test</p>" }),
+        body: JSON.stringify({
+          from: "Zach Curtis <zach@roofingos.dev>",
+          to: [body.debug_email],
+          subject: "Resend test — roofing-outreach-sequencer v16",
+          html: "<p>Sequencer v16 test email. If you see this, Resend is working.</p>",
+        }),
       });
       return Response.json({ ok: true, resend_status: res.status, resend_response: await res.json() });
     } catch (e) {
@@ -279,223 +132,158 @@ Deno.serve(async (req) => {
 
   const startMs = Date.now();
   const now = new Date();
-  const nowIso = now.toISOString();
-  let enrolled = 0, emailsSent = 0, voiceDrops = 0, errors = 0;
+  let emailsSent = 0, errors = 0, skipped = 0;
 
-  // ── STEP A — Enroll new prospects ──────────────────────────────────────────
-  try {
-    const { data: toEnroll } = await supabase
-      .from("roofing_prospects")
-      .select("id")
-      .eq("in_sequence", false)
-      .not("email", "is", null)
-      .is("outcome", null)
-      .eq("clicked", false);
+  // ── Fetch sequences due for next touch ─────────────────────────────────────
+  const { data: dueSequences, error: seqErr } = await supabase
+    .from("email_sequences")
+    .select("id, prospect_id, prospect_email, prospect_name, current_touch, tier, status")
+    .eq("status", "active")
+    .neq("unsubscribed", true)
+    .lte("next_touch_at", now.toISOString())
+    .lt("current_touch", MAX_TOUCHES)
+    .limit(50);
 
-    for (const p of toEnroll || []) {
-      try {
-        await supabase.from("roofing_prospects").update({
-          in_sequence: true,
-          sequence_started_at: nowIso,
-          sequence_day: 0,
-          sequence_branch: "standard",
-          sequence_paused: false,
-        }).eq("id", p.id);
-        enrolled++;
-      } catch (e) {
-        console.error("Enroll error:", e);
-        errors++;
-      }
-    }
-  } catch (err) {
-    console.error("Enrollment step failed:", err);
-    errors++;
+  if (seqErr) {
+    try { await supabase.from("system_heartbeats").insert({ function_name: "roofing-outreach-sequencer", status: "error", response_ms: Date.now() - startMs, error_message: seqErr.message, recorded_at: now.toISOString() }); } catch { /* non-fatal */ }
+    return Response.json({ ok: false, error: seqErr.message }, { status: 500 });
   }
 
-  // ── STEP B — Process active sequences ─────────────────────────────────────
-  try {
-    const { data: active } = await supabase
-      .from("roofing_prospects")
-      .select("id, owner_name, company_name, email, phone, sequence_started_at, sequence_day, sequence_branch, sequence_paused, total_opens, clicked, outcome, funnel_stage, call_attempts, demo_booked_at")
-      .eq("in_sequence", true)
-      .eq("sequence_paused", false)
-      .is("outcome", null)
-      .not("email", "is", null);
-
-    for (const prospect of active || []) {
-      try {
-        const day = (prospect.sequence_day as number) ?? 0;
-        const branch = (prospect.sequence_branch as string) || "standard";
-        const currentFunnelStage = (prospect.funnel_stage as string) || "new_lead";
-
-        // Detect branch transitions
-        const newBranch = detectBranch(prospect, day);
-        if (newBranch && newBranch !== branch) {
-          await supabase.from("roofing_prospects")
-            .update({ sequence_branch: newBranch })
-            .eq("id", prospect.id);
-          (prospect as Record<string, unknown>).sequence_branch = newBranch;
-
-          if (newBranch === "whale") {
-            await supabase.from("roofing_prospects")
-              .update({ sequence_paused: true, in_sequence: false })
-              .eq("id", prospect.id);
-            await fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify({
-                call_type: "whale_warm_followup",
-                contact_phone: prospect.phone,
-                contact_name: prospect.owner_name,
-                contact_type: "prospect",
-                language: "en",
-                metadata: { contractor_name: prospect.company_name },
-              }),
-            }).catch(() => {});
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, "hot", "whale_branch_detected").catch(() => {});
-            continue;
-          }
-
-          if (newBranch === "hot") {
-            if (day < 4) {
-              const logId = await logTouch(prospect.id as string, "email_4_hot", 4, null, "Hot branch — skipping to touch 4");
-              const { subject, html: baseHtml } = emailTouch4(prospect);
-              const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
-              const emailId = await sendEmail(prospect.email as string, subject, html);
-              if (emailId) {
-                if (logId) await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
-                await supabase.from("roofing_prospects").update({ sequence_day: 4, last_touch_at: nowIso }).eq("id", prospect.id);
-                emailsSent++;
-                (prospect as Record<string, unknown>).sequence_day = 4;
-                await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_hot_branch").catch(() => {});
-              } else errors++;
-              continue;
-            }
-          }
-        }
-
-        const currentBranch = (prospect.sequence_branch as string) || "standard";
-        const started = new Date(prospect.sequence_started_at || nowIso);
-        const daysSinceStart = (now.getTime() - started.getTime()) / (1000 * 60 * 60 * 24);
-
-        // Touch 1 — Day 0
-        if (day === 0 && daysSinceStart >= 0) {
-          const logId = await logTouch(prospect.id as string, "email_1", 1, null, "Touch 1");
-          const { subject, html: baseHtml } = emailTouch1(prospect);
-          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
-          const emailId = await sendEmail(prospect.email as string, subject, html);
-          if (emailId) {
-            if (logId) await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
-            await supabase.from("roofing_prospects").update({ sequence_day: 1, last_touch_at: nowIso }).eq("id", prospect.id);
-            emailsSent++;
-            (prospect as Record<string, unknown>).sequence_day = 1;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_1_sent").catch(() => {});
-          } else errors++;
-          continue;
-        }
-
-        // Touch 2 — Day 2
-        if (day === 1 && daysSinceStart >= 2) {
-          const logId = await logTouch(prospect.id as string, "email_2", 2, null, "Touch 2 — story");
-          const { subject, html: baseHtml } = emailTouch2(prospect);
-          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
-          const emailId = await sendEmail(prospect.email as string, subject, html);
-          if (emailId) {
-            if (logId) await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
-            await supabase.from("roofing_prospects").update({ sequence_day: 2, last_touch_at: nowIso }).eq("id", prospect.id);
-            emailsSent++;
-            (prospect as Record<string, unknown>).sequence_day = 2;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_2_sent").catch(() => {});
-          } else errors++;
-          continue;
-        }
-
-        // Touch 3 — Day 4: voice drop (skip if cold)
-        if (day === 2 && daysSinceStart >= 4) {
-          if (currentBranch !== "cold" && prospect.phone) {
-            await fireVoiceDrop(prospect, 3);
-            voiceDrops++;
-            await logTouch(prospect.id as string, "voice_drop_3", 3, null, "Touch 3 voice drop");
-          }
-          await supabase.from("roofing_prospects").update({ sequence_day: 3, last_touch_at: nowIso }).eq("id", prospect.id);
-          (prospect as Record<string, unknown>).sequence_day = 3;
-          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_3_voice_drop").catch(() => {});
-          continue;
-        }
-
-        // Touch 4 — Day 7
-        if (day === 3 && daysSinceStart >= 7) {
-          const logId = await logTouch(prospect.id as string, "email_4", 4, null, "Touch 4 — portal");
-          const { subject, html: baseHtml } = emailTouch4(prospect);
-          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
-          const emailId = await sendEmail(prospect.email as string, subject, html);
-          if (emailId) {
-            if (logId) await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
-            await supabase.from("roofing_prospects").update({ sequence_day: 4, last_touch_at: nowIso }).eq("id", prospect.id);
-            emailsSent++;
-            (prospect as Record<string, unknown>).sequence_day = 4;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_4_sent").catch(() => {});
-          } else errors++;
-          continue;
-        }
-
-        // Touch 5 — Day 11: voice drop (skip if cold or ghost)
-        if (day === 4 && daysSinceStart >= 11) {
-          const skipVoice = currentBranch === "cold" || currentBranch === "ghost";
-          if (!skipVoice && prospect.phone) {
-            await fireVoiceDrop(prospect, 5);
-            voiceDrops++;
-            await logTouch(prospect.id as string, "voice_drop_5", 5, null, "Touch 5 voice drop");
-          }
-          await supabase.from("roofing_prospects").update({ sequence_day: 5, last_touch_at: nowIso }).eq("id", prospect.id);
-          (prospect as Record<string, unknown>).sequence_day = 5;
-          await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_5_voice_drop").catch(() => {});
-          continue;
-        }
-
-        // Touch 6 — Day 15: final email
-        if (day === 5 && daysSinceStart >= 15) {
-          const logId = await logTouch(prospect.id as string, "email_6", 6, null, "Touch 6 — final");
-          const { subject, html: baseHtml } = emailTouch6(prospect);
-          const html = logId ? baseHtml.replace("</div>", `${pixelHtml(logId)}</div>`) : baseHtml;
-          const emailId = await sendEmail(prospect.email as string, subject, html);
-          if (emailId) {
-            if (logId) await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId, subject }).eq("id", logId);
-            await supabase.from("roofing_prospects").update({
-              sequence_day: 6,
-              in_sequence: false,
-              last_touch_at: nowIso,
-            }).eq("id", prospect.id);
-            emailsSent++;
-            (prospect as Record<string, unknown>).sequence_day = 6;
-            await advanceFunnelStage(prospect.id as string, currentFunnelStage, deriveFunnelStage(prospect), "touch_6_sent").catch(() => {});
-          } else errors++;
-          continue;
-        }
-
-      } catch (err) {
-        console.error("Prospect processing error:", err);
-        errors++;
-      }
-    }
-  } catch (err) {
-    console.error("Sequence processing failed:", err);
-    errors++;
+  if (!dueSequences?.length) {
+    try { await supabase.from("system_heartbeats").insert({ function_name: "roofing-outreach-sequencer", status: "ok", response_ms: Date.now() - startMs, metadata: { emailsSent: 0, skipped: 0, errors: 0, message: "no sequences due" }, recorded_at: now.toISOString() }); } catch { /* non-fatal */ }
+    return Response.json({ ok: true, emails_sent: 0, errors: 0, message: "no sequences due", duration_ms: Date.now() - startMs });
   }
 
-  // MOVED_TO_DASHBOARD [date: 2026-05-17]: outreach sequencer stats visible in Pipeline tab
-  // if (body.notify_on_complete && (enrolled > 0 || emailsSent > 0)) { await tg(`...`); }
+  // ── Fetch all templates once ────────────────────────────────────────────────
+  const { data: templates } = await supabase
+    .from("email_templates")
+    .select("touch_number, subject, body_html, body_text")
+    .order("touch_number");
 
-  try {
-    await supabase.from("system_heartbeats").insert({
-      function_name: "roofing-outreach-sequencer",
-      status: errors > 0 ? "error" : "ok",
-      response_ms: Date.now() - startMs,
-      error_message: errors > 0 ? `${errors} errors` : null,
-      metadata: { enrolled, emailsSent, voiceDrops, errors },
-      recorded_at: nowIso,
-    });
-  } catch { /* ignore */ }
+  const templateMap = new Map<number, { subject: string; body_html: string; body_text: string }>();
+  for (const t of templates || []) {
+    if (t.touch_number) templateMap.set(t.touch_number, t);
+  }
 
-  return Response.json({ ok: true, enrolled, emails_sent: emailsSent, voice_drops: voiceDrops, errors, duration_ms: Date.now() - startMs });
+  // ── Batch-fetch prospect engagement signals ─────────────────────────────────
+  const prospectIds = [...new Set(dueSequences.map(s => s.prospect_id).filter(Boolean))];
+  const { data: prospects } = prospectIds.length
+    ? await supabase.from("roofing_prospects").select("id, clicked, total_opens").in("id", prospectIds)
+    : { data: [] };
+
+  const prospectMap = new Map<string, { clicked: boolean; total_opens: number }>();
+  for (const p of prospects || []) prospectMap.set(p.id, p);
+
+  // ── Process each due sequence ───────────────────────────────────────────────
+  for (const seq of dueSequences) {
+    try {
+      const prospect = seq.prospect_id ? prospectMap.get(seq.prospect_id) : undefined;
+      const currentTouch = seq.current_touch ?? 0;
+      let tier = evaluateTier(prospect, seq.tier || "cold", currentTouch);
+
+      if (tier === "dead") {
+        await supabase.from("email_sequences").update({
+          status: "dead",
+          tier: "dead",
+          completed_at: now.toISOString(),
+        }).eq("id", seq.id);
+        skipped++;
+        continue;
+      }
+
+      if (tier !== seq.tier) {
+        await supabase.from("email_sequences").update({ tier }).eq("id", seq.id);
+      }
+
+      const nextTouch = currentTouch + 1;
+      const template = templateMap.get(nextTouch);
+
+      if (!template) {
+        console.error(`No template for touch ${nextTouch} — skipping sequence ${seq.id}`);
+        errors++;
+        continue;
+      }
+
+      const fn = firstName(seq.prospect_name);
+      const companyName = seq.prospect_name || "your company";
+      const prospectId = seq.prospect_id || seq.id;
+
+      let htmlBody = (template.body_html || `<p>${template.body_text}</p>`)
+        .replace(/\[firstName\]/gi, fn)
+        .replace(/\[companyName\]/gi, companyName)
+        .replace(/\[prospectId\]/gi, prospectId);
+
+      const subject = template.subject
+        .replace(/\[firstName\]/gi, fn)
+        .replace(/\[companyName\]/gi, companyName);
+
+      // Pre-log the touch to get a tracking pixel ID
+      const logId = await logTouch(
+        seq.prospect_id,
+        nextTouch,
+        subject,
+        (template.body_text || "").slice(0, 500),
+      );
+      if (logId) {
+        const pixel = pixelHtml(logId);
+        htmlBody = htmlBody.includes("</body>")
+          ? htmlBody.replace("</body>", `${pixel}</body>`)
+          : htmlBody + pixel;
+      }
+
+      const emailId = await sendEmail(seq.prospect_email, subject, htmlBody);
+
+      if (emailId) {
+        if (logId) {
+          await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId }).eq("id", logId);
+        }
+
+        const isLastTouch = nextTouch >= MAX_TOUCHES;
+        const nextTouchAt = isLastTouch
+          ? null
+          : new Date(now.getTime() + gapDays(tier, nextTouch) * 24 * 60 * 60 * 1000).toISOString();
+
+        await supabase.from("email_sequences").update({
+          current_touch: nextTouch,
+          tier,
+          next_touch_at: nextTouchAt,
+          status: isLastTouch ? "completed" : "active",
+          completed_at: isLastTouch ? now.toISOString() : null,
+        }).eq("id", seq.id);
+
+        emailsSent++;
+      } else {
+        // Clean up the pre-logged touch if send failed
+        if (logId) await supabase.from("roofing_outreach_log").delete().eq("id", logId);
+        errors++;
+      }
+
+      // Brief pause between sends to respect Resend rate limits
+      await new Promise(r => setTimeout(r, 300));
+
+    } catch (err) {
+      console.error("Sequence processing error:", seq.id, err);
+      errors++;
+    }
+  }
+
+  if (errors > 0) {
+    await tg(`⚠️ roofing-outreach-sequencer: ${errors} send errors (${emailsSent} sent ok)`);
+  }
+
+  try { await supabase.from("system_heartbeats").insert({ function_name: "roofing-outreach-sequencer", status: errors > 0 ? "error" : "ok", response_ms: Date.now() - startMs, error_message: errors > 0 ? `${errors} send errors` : null, metadata: { emailsSent, errors, skipped, due: dueSequences.length }, recorded_at: now.toISOString() }); } catch { /* non-fatal */ }
+
+  return Response.json({
+    ok: true,
+    emails_sent: emailsSent,
+    errors,
+    skipped,
+    due: dueSequences.length,
+    duration_ms: Date.now() - startMs,
+  });
+
+  } catch (fatal) {
+    console.error("roofing-outreach-sequencer fatal:", fatal);
+    return Response.json({ ok: false, error: String(fatal) }, { status: 500 });
+  }
 });
