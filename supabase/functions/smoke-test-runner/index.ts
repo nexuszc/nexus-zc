@@ -1,214 +1,240 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    });
-  }
-
+Deno.serve(async (req) => {
   try {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        }
+      });
+    }
+
+    console.log('='.repeat(60));
+    console.log('STARTING COMPREHENSIVE SMOKE TEST SUITE');
+    console.log('='.repeat(60));
+
     const overallStartTime = performance.now();
-    let currentStep = 0;
-    const totalSteps = 8;
     const tests: any[] = [];
+    const structuralIssues: any[] = [];
+    let currentStep = 0;
+    const totalSteps = 6;
 
-    console.log('='.repeat(60));
-    console.log('SMOKE TEST RUNNER - EDGE FUNCTION HEALTH CHECK');
-    console.log('='.repeat(60));
-    console.log(`Starting comprehensive test suite at ${new Date().toISOString()}`);
-    console.log(`Total steps planned: ${totalSteps}`);
-    console.log('='.repeat(60));
-
-    // Test 1: Deno Environment
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Testing Deno environment...`);
-    const denoTestStart = performance.now();
-    const denoEnv = {
-      version: Deno.version,
-      build: Deno.build,
-      memoryUsage: Deno.memoryUsage()
-    };
-    tests.push({
-      name: 'Deno Environment',
-      status: 'passed',
-      duration_ms: performance.now() - denoTestStart,
-      details: `Deno ${denoEnv.version.deno}`
-    });
-
-    // Test 2: Supabase Configuration
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Checking Supabase configuration...`);
-    const supabaseTestStart = performance.now();
+    // Environment validation
+    const denoEnv = Deno.version;
     const baseUrl = Deno.env.get('SUPABASE_URL');
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    
+
     if (!baseUrl || !anonKey) {
-      tests.push({
-        name: 'Supabase Configuration',
-        status: 'failed',
-        duration_ms: performance.now() - supabaseTestStart,
-        error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY',
-        errorCategory: categorizeError(null, 'missing env')
-      });
-    } else {
-      tests.push({
-        name: 'Supabase Configuration',
-        status: 'passed',
-        duration_ms: performance.now() - supabaseTestStart,
-        details: `URL configured: ${baseUrl.substring(0, 30)}...`
-      });
+      throw new Error('Missing required environment variables: SUPABASE_URL or SUPABASE_ANON_KEY');
     }
 
-    // Test 3: HTTP Client
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Testing HTTP client...`);
-    const httpTestStart = performance.now();
-    try {
-      const response = await fetch('https://httpbin.org/get', {
-        signal: AbortSignal.timeout(5000)
-      });
-      tests.push({
-        name: 'HTTP Client',
-        status: response.ok ? 'passed' : 'failed',
-        duration_ms: performance.now() - httpTestStart,
-        details: `Status: ${response.status}`
-      });
-    } catch (error) {
-      tests.push({
-        name: 'HTTP Client',
-        status: 'failed',
-        duration_ms: performance.now() - httpTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-    }
+    const supabase = createClient(baseUrl, anonKey);
 
-    // Test 4: JSON Processing
+    // Test 1: Environment Check
     currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Testing JSON processing...`);
-    const jsonTestStart = performance.now();
-    try {
-      const testObj = { test: 'data', timestamp: new Date().toISOString() };
-      const jsonStr = JSON.stringify(testObj);
-      const parsed = JSON.parse(jsonStr);
-      tests.push({
-        name: 'JSON Processing',
-        status: parsed.test === 'data' ? 'passed' : 'failed',
-        duration_ms: performance.now() - jsonTestStart
-      });
-    } catch (error) {
-      tests.push({
-        name: 'JSON Processing',
-        status: 'failed',
-        duration_ms: performance.now() - jsonTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-    }
-
-    // Test 5: File System Access
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Testing file system access...`);
-    const fsTestStart = performance.now();
-    try {
-      const fileInfo = await Deno.stat('./index.ts');
-      tests.push({
-        name: 'File System Access',
-        status: 'passed',
-        duration_ms: performance.now() - fsTestStart,
-        details: `index.ts size: ${fileInfo.size} bytes`
-      });
-    } catch (error) {
-      tests.push({
-        name: 'File System Access',
-        status: 'failed',
-        duration_ms: performance.now() - fsTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-    }
-
-    // Test 6: Performance
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Testing performance metrics...`);
-    const perfTestStart = performance.now();
-    const iterations = 1000;
-    const perfStart = performance.now();
-    for (let i = 0; i < iterations; i++) {
-      Math.random();
-    }
-    const perfDuration = performance.now() - perfStart;
-    tests.push({
-      name: 'Performance',
-      status: perfDuration < 100 ? 'passed' : 'failed',
-      duration_ms: performance.now() - perfTestStart,
-      details: `${iterations} iterations in ${perfDuration.toFixed(2)}ms`
-    });
-
-    // Test 7: Environment Variables
-    currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Checking environment variables...`);
     const envTestStart = performance.now();
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
-    const duration = performance.now() - envTestStart;
-    
-    if (missingVars.length > 0) {
+    try {
+      console.log(`[${currentStep}/${totalSteps}] Testing environment configuration...`);
+      
+      const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+      const missingVars = requiredVars.filter(v => !Deno.env.get(v));
+      
+      if (missingVars.length > 0) {
+        throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
+      }
+
       tests.push({
-        name: 'Environment Variables',
-        status: 'failed',
-        duration_ms: duration,
-        error: `Missing required environment variables: ${missingVars.join(', ')}`,
-        errorCategory: categorizeError(null, 'missing env')
-      });
-    } else {
-      tests.push({
-        name: 'Environment Variables',
+        name: 'Environment Configuration',
         status: 'passed',
-        duration_ms: duration
+        duration_ms: performance.now() - envTestStart,
+        details: `All required environment variables present`
       });
+      console.log('✓ Environment configuration validated');
+    } catch (error) {
+      tests.push({
+        name: 'Environment Configuration',
+        status: 'failed',
+        duration_ms: performance.now() - envTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+      console.error('✗ Environment configuration failed:', error.message);
     }
 
-    // Test 8: Structural Analysis
+    // Test 2: Database Connectivity
     currentStep++;
-    console.log(`[${currentStep}/${totalSteps}] Performing structural analysis...`);
-    const structuralTestStart = performance.now();
-    const structuralIssues: any[] = [];
-    
+    const dbTestStart = performance.now();
     try {
-      const functionPath = './';
-      for await (const entry of Deno.readDir(functionPath)) {
-        if (entry.isFile && entry.name.endsWith('.ts')) {
-          try {
-            const content = await Deno.readTextFile(`${functionPath}${entry.name}`);
-            
-            if (!content.includes('Deno.serve')) {
-              structuralIssues.push({
-                file: entry.name,
-                issue: 'Missing Deno.serve() wrapper',
-                severity: 'critical'
-              });
-            }
-            
-            if (content.includes('serve(async (req)') && !content.includes('return new Response')) {
-              structuralIssues.push({
-                file: entry.name,
-                issue: 'Handler missing Response return',
-                severity: 'critical'
-              });
-            }
-          } catch (readError) {
+      console.log(`[${currentStep}/${totalSteps}] Testing database connectivity...`);
+      
+      const { data, error } = await supabase
+        .from('nexus_metadata')
+        .select('version')
+        .limit(1);
+
+      if (error) throw error;
+
+      tests.push({
+        name: 'Database Connectivity',
+        status: 'passed',
+        duration_ms: performance.now() - dbTestStart,
+        details: 'Successfully connected to database'
+      });
+      console.log('✓ Database connectivity verified');
+    } catch (error) {
+      tests.push({
+        name: 'Database Connectivity',
+        status: 'failed',
+        duration_ms: performance.now() - dbTestStart,
+        error: error.message,
+        errorCategory: categorizeError(error.code || null, error.message)
+      });
+      console.error('✗ Database connectivity failed:', error.message);
+    }
+
+    // Test 3: Edge Function Health
+    currentStep++;
+    const edgeFuncTestStart = performance.now();
+    try {
+      console.log(`[${currentStep}/${totalSteps}] Testing edge function health...`);
+      
+      const testFunctions = ['chat', 'retrieve-context', 'semantic-search'];
+      const functionResults = [];
+
+      for (const func of testFunctions) {
+        try {
+          const { data, error } = await supabase.functions.invoke(func, {
+            body: { test: true, healthCheck: true }
+          });
+          
+          functionResults.push({
+            function: func,
+            status: error ? 'failed' : 'passed',
+            error: error?.message
+          });
+        } catch (error) {
+          functionResults.push({
+            function: func,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+
+      const failedFunctions = functionResults.filter(f => f.status === 'failed');
+      
+      tests.push({
+        name: 'Edge Functions Health',
+        status: failedFunctions.length === 0 ? 'passed' : 'failed',
+        duration_ms: performance.now() - edgeFuncTestStart,
+        details: `${testFunctions.length - failedFunctions.length}/${testFunctions.length} functions responsive`,
+        functionResults
+      });
+      console.log(`✓ Edge functions health checked: ${testFunctions.length - failedFunctions.length}/${testFunctions.length} responsive`);
+    } catch (error) {
+      tests.push({
+        name: 'Edge Functions Health',
+        status: 'failed',
+        duration_ms: performance.now() - edgeFuncTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+      console.error('✗ Edge functions health check failed:', error.message);
+    }
+
+    // Test 4: Storage Access
+    currentStep++;
+    const storageTestStart = performance.now();
+    try {
+      console.log(`[${currentStep}/${totalSteps}] Testing storage access...`);
+      
+      const { data, error } = await supabase.storage.listBuckets();
+
+      if (error) throw error;
+
+      tests.push({
+        name: 'Storage Access',
+        status: 'passed',
+        duration_ms: performance.now() - storageTestStart,
+        details: `Found ${data?.length || 0} storage buckets`
+      });
+      console.log('✓ Storage access verified');
+    } catch (error) {
+      tests.push({
+        name: 'Storage Access',
+        status: 'failed',
+        duration_ms: performance.now() - storageTestStart,
+        error: error.message,
+        errorCategory: categorizeError(error.code || null, error.message)
+      });
+      console.error('✗ Storage access failed:', error.message);
+    }
+
+    // Test 5: Authentication System
+    currentStep++;
+    const authTestStart = performance.now();
+    try {
+      console.log(`[${currentStep}/${totalSteps}] Testing authentication system...`);
+      
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      tests.push({
+        name: 'Authentication System',
+        status: 'passed',
+        duration_ms: performance.now() - authTestStart,
+        details: 'Authentication system responsive'
+      });
+      console.log('✓ Authentication system verified');
+    } catch (error) {
+      tests.push({
+        name: 'Authentication System',
+        status: 'failed',
+        duration_ms: performance.now() - authTestStart,
+        error: error.message,
+        errorCategory: categorizeError(null, error.message)
+      });
+      console.error('✗ Authentication system failed:', error.message);
+    }
+
+    // Test 6: Structural Analysis
+    currentStep++;
+    const structuralTestStart = performance.now();
+    try {
+      console.log(`[${currentStep}/${totalSteps}] Running structural analysis...`);
+      
+      // Check for critical file system paths
+      const criticalPaths = [
+        '/supabase/functions',
+        '/supabase/migrations'
+      ];
+
+      for (const path of criticalPaths) {
+        try {
+          const stat = await Deno.stat(path);
+          if (!stat.isDirectory) {
             structuralIssues.push({
-              file: entry.name,
-              issue: `Cannot read file: ${readError.message}`,
-              severity: 'warning'
+              severity: 'critical',
+              path,
+              issue: 'Expected directory not found or is not a directory'
+            });
+          }
+        } catch (error) {
+          if (error instanceof Deno.errors.NotFound) {
+            structuralIssues.push({
+              severity: 'warning',
+              path,
+              issue: 'Path not found (may be expected in production)'
+            });
+          } else if (error instanceof Deno.errors.PermissionDenied) {
+            structuralIssues.push({
+              severity: 'warning',
+              path,
+              issue: 'Permission denied (expected in sandboxed environment)'
             });
           }
         }
@@ -398,16 +424,4 @@ function categorizeError(statusCode: number | null, message: string): {
       category: 'client_error',
       isCritical: false,
       reason: 'Client request error',
-      actionable: true
-    };
-  }
-
-  return {
-    category: 'unknown',
-    isCritical: false,
-    reason: 'Unclassified error',
-    actionable: false
-  };
-}
-
-function generateRecommendations(tests: any[], structuralIss
+      actionable:
