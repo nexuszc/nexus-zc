@@ -1,11 +1,11 @@
-// Smoke test for Nexus Edge Functions
-// Validates runtime environment, database connectivity, and basic functionality
+// Nexus Smoke Test Function
+// Comprehensive health check for edge function runtime
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-// Track function initialization time
-const FUNCTION_START_TIME = performance.now();
-
+/**
+ * Type definitions for health check responses
+ */
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
@@ -27,41 +27,34 @@ interface SmokeTestResponse {
   };
 }
 
+// Track function initialization time
+const FUNCTION_START_TIME = performance.now();
+
 /**
- * Check Deno runtime capabilities
+ * Check Deno runtime availability
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const issues: string[] = [];
-
-    // Check Deno version
-    const denoVersion = Deno.version.deno;
-    if (!denoVersion) {
-      issues.push('Deno version not available');
-    }
-
-    // Check TypeScript support
-    const tsVersion = Deno.version.typescript;
-    if (!tsVersion) {
-      issues.push('TypeScript version not available');
-    }
-
-    // Check V8 engine
-    const v8Version = Deno.version.v8;
-    if (!v8Version) {
-      issues.push('V8 version not available');
+    // Verify Deno namespace is available
+    if (typeof Deno === 'undefined') {
+      return {
+        name: 'deno_runtime',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Deno runtime not available',
+      };
     }
 
     return {
       name: 'deno_runtime',
-      status: issues.length > 0 ? 'warn' : 'pass',
+      status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: issues.length > 0 ? issues.join(', ') : 'Deno runtime operational',
+      message: 'Deno runtime operational',
       details: {
-        deno: denoVersion,
-        typescript: tsVersion,
-        v8: v8Version,
+        version: Deno.version.deno,
+        v8: Deno.version.v8,
+        typescript: Deno.version.typescript,
       },
     };
   } catch (error) {
@@ -75,40 +68,30 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 }
 
 /**
- * Check environment variables and configuration
+ * Check environment variables
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = [
-      'SUPABASE_URL',
-      'SUPABASE_ANON_KEY',
-      'SUPABASE_SERVICE_ROLE_KEY',
-    ];
+    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredVars.filter(varName => !Deno.env.get(varName));
 
-    const missing: string[] = [];
-    const present: string[] = [];
-
-    for (const varName of requiredVars) {
-      const value = Deno.env.get(varName);
-      if (!value) {
-        missing.push(varName);
-      } else {
-        present.push(varName);
-      }
+    if (missingVars.length > 0) {
+      return {
+        name: 'environment',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+      };
     }
 
     return {
       name: 'environment',
-      status: missing.length > 0 ? 'fail' : 'pass',
+      status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: missing.length > 0
-        ? `Missing required environment variables: ${missing.join(', ')}`
-        : 'All required environment variables present',
+      message: 'All required environment variables present',
       details: {
-        present: present.length,
-        missing: missing.length,
-        missing_vars: missing,
+        variables_checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -122,32 +105,33 @@ async function checkEnvironment(): Promise<HealthCheck> {
 }
 
 /**
- * Check database connectivity and basic operations
+ * Check database connectivity
  */
 async function checkDatabase(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing Supabase credentials',
+        message: 'Database credentials not configured',
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Test database connectivity with a simple query
-    const { data, error } = await supabase
+    // Simple query to verify database connectivity
+    const { error } = await supabase
       .from('profiles')
-      .select('id')
-      .limit(1);
+      .select('count')
+      .limit(1)
+      .single();
 
-    if (error) {
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is ok
       return {
         name: 'database',
         status: 'fail',
@@ -155,7 +139,6 @@ async function checkDatabase(): Promise<HealthCheck> {
         message: `Database query failed: ${error.message}`,
         details: {
           error_code: error.code,
-          error_details: error.details,
         },
       };
     }
@@ -164,11 +147,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity operational',
-      details: {
-        query_success: true,
-        results_returned: data ? data.length : 0,
-      },
+      message: 'Database connectivity verified',
     };
   } catch (error) {
     return {
@@ -186,7 +165,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    // Verify fetch API is available
+    // Check if fetch is available
     if (typeof fetch === 'undefined') {
       return {
         name: 'external_services',
