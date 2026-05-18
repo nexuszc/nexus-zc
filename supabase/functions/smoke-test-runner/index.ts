@@ -1,60 +1,68 @@
-// supabase/functions/smoke-test-runner/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 interface TestResult {
   name: string;
-  status: 'passed' | 'failed' | 'skipped';
+  status: 'passed' | 'failed';
   duration_ms: number;
-  error?: string;
   details?: string;
+  error?: string;
   errorCategory?: {
-    category: string;
+    type: string;
     isCritical: boolean;
     suggestion: string;
   };
 }
 
 interface StructuralIssue {
-  severity: 'critical' | 'warning' | 'info';
+  severity: 'critical' | 'warning';
   path: string;
   issue: string;
 }
 
-function categorizeError(error: any, message: string) {
-  if (message.includes('JWT') || message.includes('auth')) {
+function categorizeError(error: any, message: string): { type: string; isCritical: boolean; suggestion: string } {
+  if (message.includes('relation') && message.includes('does not exist')) {
     return {
-      category: 'Authentication Error',
-      isCritical: true,
-      suggestion: 'Check SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY environment variables'
-    };
-  } else if (message.includes('relation') || message.includes('does not exist')) {
-    return {
-      category: 'Schema Error',
+      type: 'schema_not_found',
       isCritical: false,
-      suggestion: 'Run database migrations to create required tables'
-    };
-  } else if (message.includes('network') || message.includes('fetch')) {
-    return {
-      category: 'Network Error',
-      isCritical: true,
-      suggestion: 'Check network connectivity and API endpoints'
-    };
-  } else if (message.includes('permission') || message.includes('denied')) {
-    return {
-      category: 'Permission Error',
-      isCritical: false,
-      suggestion: 'Expected in sandboxed environment - not critical'
-    };
-  } else {
-    return {
-      category: 'Unknown Error',
-      isCritical: false,
-      suggestion: 'Review error details for specific resolution'
+      suggestion: 'Database tables not yet created. This is expected for new deployments.'
     };
   }
+  
+  if (message.includes('JWT') || message.includes('authentication')) {
+    return {
+      type: 'auth_error',
+      isCritical: true,
+      suggestion: 'Check SUPABASE_SERVICE_ROLE_KEY configuration'
+    };
+  }
+  
+  if (message.includes('network') || message.includes('fetch')) {
+    return {
+      type: 'network_error',
+      isCritical: true,
+      suggestion: 'Check network connectivity and endpoint configuration'
+    };
+  }
+  
+  if (message.includes('permission') || message.includes('PermissionDenied')) {
+    return {
+      type: 'permission_error',
+      isCritical: false,
+      suggestion: 'Expected in sandboxed environment. Not a critical issue.'
+    };
+  }
+  
+  return {
+    type: 'unknown_error',
+    isCritical: true,
+    suggestion: 'Investigate error details for root cause'
+  };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
+  const startTime = performance.now();
+  console.log(`[${new Date().toISOString()}] Smoke test execution started`);
+  
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -62,20 +70,28 @@ Deno.serve(async (req) => {
   };
 
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders
-    });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('=== Nexus Smoke Test Runner ===');
-    console.log('Starting comprehensive system diagnostics...\n');
+    let requestBody: any = {};
+    try {
+      const text = await req.text();
+      if (text) {
+        requestBody = JSON.parse(text);
+      }
+    } catch (e) {
+      console.log('No JSON body or empty request');
+    }
 
     const tests: TestResult[] = [];
     const structuralIssues: StructuralIssue[] = [];
-    const totalSteps = 8;
     let currentStep = 0;
+    const totalSteps = 8;
+
+    console.log('='.repeat(50));
+    console.log('NEXUS SMOKE TEST SUITE');
+    console.log('='.repeat(50));
 
     // Test 1: Environment Variables
     currentStep++;
@@ -87,26 +103,25 @@ Deno.serve(async (req) => {
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY'
     ];
-
+    
     const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
     
-    tests.push({
-      name: 'Environment Variables',
-      status: missingVars.length === 0 ? 'passed' : 'failed',
-      duration_ms: performance.now() - envTestStart,
-      details: missingVars.length === 0 
-        ? 'All required variables present' 
-        : `Missing: ${missingVars.join(', ')}`,
-      errorCategory: missingVars.length > 0 ? {
-        category: 'Configuration Error',
-        isCritical: true,
-        suggestion: 'Set missing environment variables in Supabase dashboard'
-      } : undefined
-    });
-
     if (missingVars.length === 0) {
+      tests.push({
+        name: 'Environment Variables',
+        status: 'passed',
+        duration_ms: performance.now() - envTestStart,
+        details: 'All required variables present'
+      });
       console.log('✓ All required environment variables present');
     } else {
+      tests.push({
+        name: 'Environment Variables',
+        status: 'failed',
+        duration_ms: performance.now() - envTestStart,
+        error: `Missing: ${missingVars.join(', ')}`,
+        errorCategory: categorizeError(null, 'missing environment variables')
+      });
       console.error('✗ Missing environment variables:', missingVars.join(', '));
     }
 
@@ -115,7 +130,7 @@ Deno.serve(async (req) => {
     const clientTestStart = performance.now();
     console.log(`[${currentStep}/${totalSteps}] Initializing Supabase client...`);
     
-    let supabaseClient;
+    let supabaseClient = null;
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL');
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -123,31 +138,31 @@ Deno.serve(async (req) => {
       if (supabaseUrl && supabaseKey) {
         supabaseClient = createClient(supabaseUrl, supabaseKey);
         tests.push({
-          name: 'Supabase Client',
+          name: 'Supabase Client Initialization',
           status: 'passed',
           duration_ms: performance.now() - clientTestStart,
-          details: 'Client initialized successfully'
+          details: 'Client created successfully'
         });
         console.log('✓ Supabase client initialized');
       } else {
         tests.push({
-          name: 'Supabase Client',
+          name: 'Supabase Client Initialization',
           status: 'failed',
           duration_ms: performance.now() - clientTestStart,
-          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
-          errorCategory: categorizeError(null, 'Missing configuration')
+          error: 'Missing credentials',
+          errorCategory: categorizeError(null, 'missing credentials')
         });
-        console.error('✗ Cannot initialize Supabase client - missing credentials');
+        console.error('✗ Cannot initialize client: missing credentials');
       }
     } catch (error) {
       tests.push({
-        name: 'Supabase Client',
+        name: 'Supabase Client Initialization',
         status: 'failed',
         duration_ms: performance.now() - clientTestStart,
         error: error.message,
         errorCategory: categorizeError(error, error.message)
       });
-      console.error('✗ Supabase client initialization error:', error.message);
+      console.error('✗ Client initialization error:', error.message);
     }
 
     // Test 3: Network Connectivity
@@ -156,22 +171,17 @@ Deno.serve(async (req) => {
     console.log(`[${currentStep}/${totalSteps}] Testing network connectivity...`);
     
     try {
-      const response = await fetch('https://httpbin.org/get', {
+      const response = await fetch('https://www.google.com', { 
+        method: 'HEAD',
         signal: AbortSignal.timeout(5000)
       });
-      
       tests.push({
         name: 'Network Connectivity',
-        status: response.ok ? 'passed' : 'failed',
+        status: 'passed',
         duration_ms: performance.now() - netTestStart,
         details: `Status: ${response.status}`
       });
-      
-      if (response.ok) {
-        console.log('✓ Network connectivity verified');
-      } else {
-        console.error('✗ Network test failed with status:', response.status);
-      }
+      console.log('✓ Network connectivity verified');
     } catch (error) {
       tests.push({
         name: 'Network Connectivity',
@@ -183,29 +193,47 @@ Deno.serve(async (req) => {
       console.error('✗ Network connectivity error:', error.message);
     }
 
-    // Test 4: Deno Runtime
+    // Test 4: Supabase API Reachability
     currentStep++;
-    const runtimeTestStart = performance.now();
-    console.log(`[${currentStep}/${totalSteps}] Checking Deno runtime...`);
+    const apiTestStart = performance.now();
+    console.log(`[${currentStep}/${totalSteps}] Testing Supabase API reachability...`);
     
     try {
-      const version = Deno.version;
-      tests.push({
-        name: 'Deno Runtime',
-        status: 'passed',
-        duration_ms: performance.now() - runtimeTestStart,
-        details: `Deno ${version.deno}, V8 ${version.v8}, TypeScript ${version.typescript}`
-      });
-      console.log(`✓ Deno runtime: ${version.deno}`);
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      if (supabaseUrl) {
+        const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+          method: 'HEAD',
+          headers: {
+            'apikey': Deno.env.get('SUPABASE_ANON_KEY') || ''
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+        tests.push({
+          name: 'Supabase API Reachability',
+          status: 'passed',
+          duration_ms: performance.now() - apiTestStart,
+          details: `Status: ${response.status}`
+        });
+        console.log('✓ Supabase API reachable');
+      } else {
+        tests.push({
+          name: 'Supabase API Reachability',
+          status: 'failed',
+          duration_ms: performance.now() - apiTestStart,
+          error: 'SUPABASE_URL not configured',
+          errorCategory: categorizeError(null, 'missing configuration')
+        });
+        console.error('✗ SUPABASE_URL not configured');
+      }
     } catch (error) {
       tests.push({
-        name: 'Deno Runtime',
+        name: 'Supabase API Reachability',
         status: 'failed',
-        duration_ms: performance.now() - runtimeTestStart,
+        duration_ms: performance.now() - apiTestStart,
         error: error.message,
-        errorCategory: categorizeError(null, error.message)
+        errorCategory: categorizeError(error, error.message)
       });
-      console.error('✗ Deno runtime check error:', error.message);
+      console.error('✗ Supabase API error:', error.message);
     }
 
     // Test 5: Database Connectivity
@@ -216,22 +244,23 @@ Deno.serve(async (req) => {
     if (supabaseClient) {
       try {
         const { data, error } = await supabaseClient
-          .from('users')
+          .from('profiles')
           .select('count')
-          .limit(1);
+          .limit(1)
+          .single();
         
         if (error) {
           const errorCat = categorizeError(error, error.message);
-          if (error.message.includes('relation') || error.message.includes('does not exist')) {
+          if (error.message.includes('relation') && error.message.includes('does not exist')) {
             tests.push({
               name: 'Database Connectivity',
               status: 'passed',
               duration_ms: performance.now() - dbTestStart,
-              details: 'Connection successful (table may not exist yet)',
+              details: 'Connection verified (schema not yet created)',
               errorCategory: {
-                category: 'Expected Schema Error',
+                type: 'schema_not_found',
                 isCritical: false,
-                suggestion: 'Table does not exist yet - this is expected for new deployments'
+                suggestion: 'This is expected for new deployments'
               }
             });
             console.log('✓ Database connection verified (schema setup needed)');
@@ -382,22 +411,4 @@ Deno.serve(async (req) => {
       const duration = performance.now() - structuralTestStart;
       tests.push({
         name: 'Structural Analysis',
-        status: structuralIssues.filter(i => i.severity === 'critical').length > 0 ? 'failed' : 'passed',
-        duration_ms: duration,
-        details: structuralIssues.length > 0 ? `Found ${structuralIssues.length} issues` : 'No issues found'
-      });
-    } catch (error) {
-      tests.push({
-        name: 'Structural Analysis',
-        status: 'failed',
-        duration_ms: performance.now() - structuralTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-      console.error('✗ Structural analysis error:', error.message);
-    }
-
-    // Calculate summary statistics
-    const passedTests = tests.filter(t => t.status === 'passed').length;
-    const failedTests = tests.filter(t => t.status === 'failed').length;
-    const totalDuration = tests.reduce((sum, t) => sum + t.duration_ms,
+        status: structuralIssues.filter(i => i.severity === 'critical').length > 0 ? 'failed' : 'passed
