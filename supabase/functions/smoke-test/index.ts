@@ -1,13 +1,14 @@
-// Supabase Edge Function: Smoke Test
-// Comprehensive health check for Nexus system components
+// deno-lint-ignore-file no-explicit-any
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-// Types
+const FUNCTION_START_TIME = performance.now();
+
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
   duration_ms: number;
   message: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, any>;
 }
 
 interface SmokeTestResponse {
@@ -23,38 +24,23 @@ interface SmokeTestResponse {
   };
 }
 
-// Track function start time for uptime calculation
-const FUNCTION_START_TIME = performance.now();
-
 /**
  * Check Deno runtime availability
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    // Check basic Deno APIs
-    const hasPermissions = typeof Deno.permissions !== 'undefined';
-    const hasEnv = typeof Deno.env !== 'undefined';
     const version = Deno.version;
-
-    if (!hasPermissions || !hasEnv) {
-      return {
-        name: 'deno_runtime',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Deno runtime APIs unavailable',
-      };
-    }
-
+    
     return {
       name: 'deno_runtime',
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'Deno runtime operational',
       details: {
-        deno_version: version.deno,
-        v8_version: version.v8,
-        typescript_version: version.typescript,
+        deno: version.deno,
+        v8: version.v8,
+        typescript: version.typescript,
       },
     };
   } catch (error) {
@@ -68,7 +54,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 }
 
 /**
- * Check environment configuration
+ * Check environment variables
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -79,31 +65,27 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missingVars: string[] = [];
-    const presentVars: string[] = [];
+    const missing: string[] = [];
+    const present: string[] = [];
 
     for (const varName of requiredVars) {
-      try {
-        const value = Deno.env.get(varName);
-        if (value) {
-          presentVars.push(varName);
-        } else {
-          missingVars.push(varName);
-        }
-      } catch {
-        missingVars.push(varName);
+      const value = Deno.env.get(varName);
+      if (!value) {
+        missing.push(varName);
+      } else {
+        present.push(varName);
       }
     }
 
-    if (missingVars.length > 0) {
+    if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        message: `Missing required environment variables: ${missing.join(', ')}`,
         details: {
-          missing: missingVars,
-          present: presentVars,
+          missing,
+          present,
         },
       };
     }
@@ -114,7 +96,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        variables_checked: requiredVars.length,
+        present,
       },
     };
   } catch (error) {
@@ -141,28 +123,27 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not configured',
+        message: 'Missing database credentials',
       };
     }
 
-    // Simple health check query
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!response.ok) {
+    // Simple query to check connectivity
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('count')
+      .limit(1)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" which is OK
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database connection failed',
+        message: `Database query failed: ${error.message}`,
         details: {
-          status_code: response.status,
-          status_text: response.statusText,
+          error_code: error.code,
         },
       };
     }
@@ -184,7 +165,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check external services connectivity
+ * Check external service connectivity
  */
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
