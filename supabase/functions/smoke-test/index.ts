@@ -1,11 +1,11 @@
-// Nexus Smoke Test Function
-// Comprehensive health check for edge function runtime
+// Nexus Smoke Test Edge Function
+// Comprehensive health check for all system components
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-/**
- * Type definitions for health check responses
- */
+// Global start time for uptime calculation
+const FUNCTION_START_TIME = performance.now();
+
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
@@ -27,34 +27,33 @@ interface SmokeTestResponse {
   };
 }
 
-// Track function initialization time
-const FUNCTION_START_TIME = performance.now();
-
 /**
- * Check Deno runtime availability
+ * Check Deno runtime environment
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    // Verify Deno namespace is available
-    if (typeof Deno === 'undefined') {
-      return {
-        name: 'deno_runtime',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Deno runtime not available',
-      };
-    }
+    const version = Deno.version;
+    const permissions = {
+      env: await Deno.permissions.query({ name: 'env' }),
+      net: await Deno.permissions.query({ name: 'net' }),
+      read: await Deno.permissions.query({ name: 'read' }),
+    };
+
+    const allGranted = Object.values(permissions).every(p => p.state === 'granted');
 
     return {
       name: 'deno_runtime',
-      status: 'pass',
+      status: allGranted ? 'pass' : 'warn',
       duration_ms: performance.now() - startTime,
-      message: 'Deno runtime operational',
+      message: allGranted ? 'Deno runtime operational' : 'Some permissions not granted',
       details: {
-        version: Deno.version.deno,
-        v8: Deno.version.v8,
-        typescript: Deno.version.typescript,
+        deno_version: version.deno,
+        typescript_version: version.typescript,
+        v8_version: version.v8,
+        permissions: Object.fromEntries(
+          Object.entries(permissions).map(([k, v]) => [k, v.state])
+        ),
       },
     };
   } catch (error) {
@@ -73,8 +72,14 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-    const missingVars = requiredVars.filter(varName => !Deno.env.get(varName));
+    const requiredEnvVars = [
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+
+    const missingVars = requiredEnvVars.filter(
+      varName => !Deno.env.get(varName)
+    );
 
     if (missingVars.length > 0) {
       return {
@@ -82,16 +87,32 @@ async function checkEnvironment(): Promise<HealthCheck> {
         status: 'fail',
         duration_ms: performance.now() - startTime,
         message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        details: {
+          missing_variables: missingVars,
+        },
       };
     }
 
+    // Check optional but recommended variables
+    const optionalVars = [
+      'OPENAI_API_KEY',
+      'ANTHROPIC_API_KEY',
+    ];
+
+    const missingOptional = optionalVars.filter(
+      varName => !Deno.env.get(varName)
+    );
+
     return {
       name: 'environment',
-      status: 'pass',
+      status: missingOptional.length > 0 ? 'warn' : 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'All required environment variables present',
+      message: missingOptional.length > 0
+        ? `Optional variables missing: ${missingOptional.join(', ')}`
+        : 'All environment variables configured',
       details: {
-        variables_checked: requiredVars.length,
+        required_vars_present: requiredEnvVars.length,
+        optional_vars_missing: missingOptional,
       },
     };
   } catch (error) {
@@ -111,7 +132,7 @@ async function checkDatabase(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       return {
@@ -124,14 +145,13 @@ async function checkDatabase(): Promise<HealthCheck> {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Simple query to verify database connectivity
-    const { error } = await supabase
-      .from('profiles')
-      .select('count')
-      .limit(1)
-      .single();
+    // Test basic query
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('id')
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is ok
+    if (error) {
       return {
         name: 'database',
         status: 'fail',
@@ -139,6 +159,7 @@ async function checkDatabase(): Promise<HealthCheck> {
         message: `Database query failed: ${error.message}`,
         details: {
           error_code: error.code,
+          error_details: error.details,
         },
       };
     }
@@ -148,6 +169,9 @@ async function checkDatabase(): Promise<HealthCheck> {
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'Database connectivity verified',
+      details: {
+        query_successful: true,
+      },
     };
   } catch (error) {
     return {
