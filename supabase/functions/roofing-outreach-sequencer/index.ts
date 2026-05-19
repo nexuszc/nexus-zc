@@ -1,7 +1,8 @@
-// roofing-outreach-sequencer v16
-// Email System v2: 9-touch story arc, tier-based smart frequency
+// roofing-outreach-sequencer v17
+// Email System v2: 9-touch story arc + warm bonus "why I built this", tier-based smart frequency
 // Sources: email_sequences (state), email_templates (copy), roofing_prospects (engagement signals)
 // Tiers: cold / warm / hot / dead
+// Warm bonus: template 11 fires between touch 3→4 for warm/hot prospects with 2+ opens
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -22,6 +23,7 @@ const GAPS: Record<string, number[]> = {
   cold: [0, 4, 6, 7, 8, 9, 5, 9,  0,  0],
 };
 const MAX_TOUCHES = 10;
+const WARM_BONUS_TEMPLATE = 11;
 
 function firstName(name: string | null | undefined): string {
   return (name || "").split(" ")[0] || "there";
@@ -120,7 +122,7 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* empty body fine */ }
 
-  if (body.test) return Response.json({ ok: true, message: "roofing-outreach-sequencer v16 ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-outreach-sequencer v17 ready" });
 
   if (body.debug_email) {
     try {
@@ -130,8 +132,8 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: "Zach Curtis <zach@nexuszc.com>",
           to: [body.debug_email],
-          subject: "Resend test — roofing-outreach-sequencer v16",
-          html: "<p>Sequencer v16 test email. If you see this, Resend is working.</p>",
+          subject: "Resend test — roofing-outreach-sequencer v17",
+          html: "<p>Sequencer v17 test email. If you see this, Resend is working.</p>",
         }),
       });
       return Response.json({ ok: true, resend_status: res.status, resend_response: await res.json() });
@@ -147,7 +149,7 @@ Deno.serve(async (req) => {
   // ── Fetch sequences due for next touch ─────────────────────────────────────
   const { data: dueSequences, error: seqErr } = await supabase
     .from("email_sequences")
-    .select("id, prospect_id, prospect_email, prospect_name, current_touch, tier, status")
+    .select("id, prospect_id, prospect_email, prospect_name, current_touch, tier, status, warm_bonus_sent")
     .eq("status", "active")
     .neq("unsubscribed", true)
     .lte("next_touch_at", now.toISOString())
@@ -206,10 +208,21 @@ Deno.serve(async (req) => {
       }
 
       const nextTouch = currentTouch + 1;
-      const template = templateMap.get(nextTouch);
+
+      // Warm bonus: "why I built this" fires between touch 3→4 for engaged prospects
+      const totalOpens = prospect?.total_opens ?? 0;
+      const isWarmBonus = (
+        nextTouch === 4 &&
+        (tier === "warm" || tier === "hot") &&
+        totalOpens >= 2 &&
+        !seq.warm_bonus_sent
+      );
+      const templateKey = isWarmBonus ? WARM_BONUS_TEMPLATE : nextTouch;
+
+      const template = templateMap.get(templateKey);
 
       if (!template) {
-        console.error(`No template for touch ${nextTouch} — skipping sequence ${seq.id}`);
+        console.error(`No template for touch ${templateKey} — skipping sequence ${seq.id}`);
         errors++;
         continue;
       }
@@ -230,7 +243,7 @@ Deno.serve(async (req) => {
       // Pre-log the touch to get a tracking pixel ID
       const logId = await logTouch(
         seq.prospect_id,
-        nextTouch,
+        templateKey,
         subject,
         (template.body_text || "").slice(0, 500),
       );
@@ -255,18 +268,30 @@ Deno.serve(async (req) => {
           await supabase.from("roofing_prospects").update({ lead_score: engScore }).eq("id", seq.prospect_id).catch(() => {});
         }
 
-        const isLastTouch = nextTouch >= MAX_TOUCHES;
-        const nextTouchAt = isLastTouch
-          ? null
-          : new Date(now.getTime() + gapDays(tier, nextTouch) * 24 * 60 * 60 * 1000).toISOString();
+        if (isWarmBonus) {
+          // Warm bonus sent: stay at current_touch=3 so next run fires touch 4 normally
+          const nextTouchAt = new Date(now.getTime() + gapDays(tier, 3) * 24 * 60 * 60 * 1000).toISOString();
+          await supabase.from("email_sequences").update({
+            current_touch: 3,
+            tier,
+            warm_bonus_sent: true,
+            next_touch_at: nextTouchAt,
+            status: "active",
+          }).eq("id", seq.id);
+        } else {
+          const isLastTouch = nextTouch >= MAX_TOUCHES;
+          const nextTouchAt = isLastTouch
+            ? null
+            : new Date(now.getTime() + gapDays(tier, nextTouch) * 24 * 60 * 60 * 1000).toISOString();
 
-        await supabase.from("email_sequences").update({
-          current_touch: nextTouch,
-          tier,
-          next_touch_at: nextTouchAt,
-          status: isLastTouch ? "completed" : "active",
-          completed_at: isLastTouch ? now.toISOString() : null,
-        }).eq("id", seq.id);
+          await supabase.from("email_sequences").update({
+            current_touch: nextTouch,
+            tier,
+            next_touch_at: nextTouchAt,
+            status: isLastTouch ? "completed" : "active",
+            completed_at: isLastTouch ? now.toISOString() : null,
+          }).eq("id", seq.id);
+        }
 
         emailsSent++;
       } else {
