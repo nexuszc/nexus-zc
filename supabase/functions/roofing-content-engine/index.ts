@@ -1,6 +1,7 @@
-// roofing-content-engine v2
+// roofing-content-engine v3
 // YouTube-first content system — pulls from content_topics, generates scripts,
 // queues for dashboard approval. 5 shorts + 1 long per run.
+// v3: YOUTUBE_DESCRIPTION_FOOTER appended to all long-form descriptions
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,6 +10,30 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
+
+// ── YOUTUBE DESCRIPTION FOOTER ────────────────────────────────────────────────
+// Appended to every AI-generated long-form description for consistent CTAs + SEO
+
+const YOUTUBE_DESCRIPTION_FOOTER = `
+
+---
+Try Roofing OS free for 14 days → https://roofingos.dev
+No contract. No setup fees. Cancel anytime.
+
+🏠 What is Roofing OS?
+Roofing OS is a $49/month homeowner portal that gives your clients live job updates, photos, insurance status, and messaging — so they stop calling you during jobs.
+
+✅ Live portal link sent in seconds
+✅ Insurance claim status visible to homeowner
+✅ Auto photo uploads from your crew
+✅ 5-star reviews and referrals built in
+
+See it live: https://roofingos.dev/portal/DEMO2026ROOFINGOS
+
+Questions? Reply in comments or email zach@roofingos.dev
+
+---
+#RoofingOS #RoofingContractor #InsuranceRestoration #RoofingBusiness #HailDamage #RoofingTips #ContractorLife #RoofingCompany #RoofingCRM #HomeownerPortal`;
 
 // ── PROMPTS ───────────────────────────────────────────────────────────────────
 
@@ -129,7 +154,7 @@ async function generateScript(topic: { title: string; pain_point: string; format
 Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
-    if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v2 ready" });
+    if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v3 ready" });
 
     const startMs = Date.now();
 
@@ -196,7 +221,7 @@ Deno.serve(async (req) => {
           script: parsed.script,
           hook_text: parsed.hook_text,
           thumbnail_text: parsed.thumbnail_text,
-          seo_description: parsed.description || null,
+          seo_description: parsed.description ? parsed.description + YOUTUBE_DESCRIPTION_FOOTER : null,
           tags: parsed.tags || [],
           format: topic.format,
           pain_point: topic.pain_point,
