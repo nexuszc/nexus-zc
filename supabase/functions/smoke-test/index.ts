@@ -1,11 +1,7 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-// Record function start time for uptime tracking
+// Global initialization
 const FUNCTION_START_TIME = performance.now();
 
-/**
- * Type definitions
- */
+// Types
 interface HealthCheck {
   name: string;
   status: 'pass' | 'warn' | 'fail';
@@ -34,7 +30,6 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -51,7 +46,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
@@ -68,14 +63,22 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing = requiredEnvVars.filter(key => !Deno.env.get(key));
+    const missing: string[] = [];
+    for (const envVar of requiredEnvVars) {
+      if (!Deno.env.get(envVar)) {
+        missing.push(envVar);
+      }
+    }
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
+        message: 'Missing required environment variables',
+        details: {
+          missing,
+        },
       };
     }
 
@@ -113,22 +116,23 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Simple connectivity check - just verify we can reach the database
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      method: 'HEAD',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+    });
 
-    // Simple query to check connectivity
-    const { error } = await supabase
-      .from('profiles')
-      .select('id')
-      .limit(1);
-
-    if (error) {
+    if (!response.ok) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database query failed',
+        message: 'Database connectivity check failed',
         details: {
-          error: error.message,
+          status_code: response.status,
         },
       };
     }
@@ -299,7 +303,10 @@ async function runHealthChecks(): Promise<SmokeTestResponse> {
   };
 }
 
-Deno.serve(async (req) => {
+/**
+ * Main request handler
+ */
+async function handler(req: Request): Promise<Response> {
   const { method } = req;
   
   if (method === 'OPTIONS') {
@@ -376,4 +383,7 @@ Deno.serve(async (req) => {
       }
     );
   }
-});
+}
+
+// Deno.serve entry point
+Deno.serve((req) => handler(req));
