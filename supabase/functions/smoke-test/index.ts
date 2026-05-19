@@ -1,11 +1,21 @@
-// Smoke test function for Nexus system health monitoring
-// Performs comprehensive health checks on the Supabase Edge Function environment
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+/**
+ * Smoke Test Function
+ * Performs comprehensive health checks for the Nexus Edge Function environment
+ */
 
 const FUNCTION_START_TIME = performance.now();
 
-/**
- * Response format for smoke test results
- */
+interface HealthCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  duration_ms: number;
+  message: string;
+  details?: Record<string, any>;
+}
+
 interface SmokeTestResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -20,23 +30,14 @@ interface SmokeTestResponse {
 }
 
 /**
- * Individual health check result
- */
-interface HealthCheck {
-  name: string;
-  status: 'pass' | 'warn' | 'fail';
-  duration_ms: number;
-  message: string;
-  details?: Record<string, unknown>;
-}
-
-/**
- * Check Deno runtime availability
+ * Check Deno runtime health
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
+    const build = Deno.build;
+    
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -46,6 +47,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
         deno: version.deno,
         v8: version.v8,
         typescript: version.typescript,
+        target: build.target,
       },
     };
   } catch (error) {
@@ -59,20 +61,26 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 }
 
 /**
- * Check environment configuration
+ * Check environment variables
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const requiredVars = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+
     const missing: string[] = [];
     const present: string[] = [];
 
-    for (const envVar of requiredEnvVars) {
-      if (Deno.env.get(envVar)) {
-        present.push(envVar);
+    for (const varName of requiredVars) {
+      const value = Deno.env.get(varName);
+      if (!value) {
+        missing.push(varName);
       } else {
-        missing.push(envVar);
+        present.push(varName);
       }
     }
 
@@ -81,10 +89,10 @@ async function checkEnvironment(): Promise<HealthCheck> {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Required environment variables missing',
+        message: `Missing required environment variables: ${missing.join(', ')}`,
         details: {
           missing,
-          present: present.length,
+          present,
         },
       };
     }
@@ -95,7 +103,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        env_vars_checked: requiredEnvVars.length,
+        variables_checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -122,27 +130,28 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not configured',
+        message: 'Missing Supabase credentials',
       };
     }
 
-    // Simple connectivity check
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!response.ok) {
+    // Simple query to test connectivity
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('count')
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is OK
       return {
         name: 'database',
         status: 'warn',
         duration_ms: performance.now() - startTime,
-        message: 'Database connectivity degraded',
+        message: 'Database query returned error',
         details: {
-          status_code: response.status,
+          error: error.message,
+          code: error.code,
         },
       };
     }
@@ -164,7 +173,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check external service connectivity
+ * Check external services connectivity
  */
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
