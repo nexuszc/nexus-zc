@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 19, 2026 — v9
+# Last updated: May 19, 2026 — v8
 
 ---
 
@@ -401,18 +401,8 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 19, 2026)
 
-**DONE (May 18-19 sessions — Exposure Spec v1 + Content System):**
-- Auto-Close System v1 (8 phases): email open → Aria call → demo link → portal banner → signup
-- Phase 1: Landing page full rebuild (7 story sections, mobile-first, SEO meta, blog section)
-- Phase 2: Email templates 1-4 upgraded; warm bonus touch 11 ("why I built this") for 2+ openers; sequencer v17
-- Phase 3: 14 new YouTube topics + 6 story arc topics inserted
-- Phase 4: YOUTUBE_DESCRIPTION_FOOTER constant in content-engine v4
-- Phase 5: SEO baked into Phase 1 HTML
-- Content engine v4: 7 shorts + 1 long per run (was 5+1); max_tokens fixed to 400 for shorts
-- Video generator: duration capped at 30s (shorts) / 180s (long-form)
-- Daily content cron at 14:00 UTC replaces MWF schedule
-- is_test_account bypass for zach@nexuszc.com churn alerts
-- Removed non-existent roofing-financial from QA smoke tests
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -421,7 +411,8 @@ Then productized and sold to other multi-business operators.
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
+7. Build Roofing OS go-to-market system and landing page
+8. Stabilize client health metrics (Brian 65, Denver Pro Roofing 50)
 
 ---
 
