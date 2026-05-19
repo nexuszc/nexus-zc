@@ -114,20 +114,40 @@ Deno.serve(async () => {
   // 7. Verify recent fixes actually worked
   await verifyRecentFixes(supabase, healthResults, telegramChatId);
 
-  // 8. Identify new improvements via Claude
-  const usagePatterns = await analyzeUsage(supabase);
-  const improvements = await identifyImprovements(healthResults, usagePatterns, detectedPatterns, patterns || []);
+  // 8. Identify new improvements via Claude — skip if system is clean
+  const hasErrors = degraded.length > 0 || detectedPatterns.length > 0;
+  const { data: lastSnapshot } = await supabase
+    .from("nexus_health")
+    .select("error_count")
+    .gt("recorded_at", new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString())
+    .gt("error_count", 0)
+    .limit(1)
+    .maybeSingle();
+  const hadErrors = !!lastSnapshot;
 
-  for (const improvement of improvements) {
-    const { data: existing } = await supabase
+  let improvements: any[] = [];
+  if (hasErrors || hadErrors) {
+    const usagePatterns = await analyzeUsage(supabase);
+    improvements = await identifyImprovements(healthResults, usagePatterns, detectedPatterns, patterns || []);
+
+    const { count: pendingImprovements } = await supabase
       .from("nexus_improvements")
-      .select("id")
-      .ilike("title", `%${improvement.title}%`)
-      .in("status", ["pending", "in_dev"])
-      .maybeSingle();
+      .select("id", { count: "exact", head: true })
+      .in("status", ["pending", "in_dev"]);
 
-    if (!existing) {
-      await supabase.from("nexus_improvements").insert(improvement);
+    if ((pendingImprovements || 0) < 20) {
+      for (const improvement of improvements) {
+        const { data: existing } = await supabase
+          .from("nexus_improvements")
+          .select("id")
+          .ilike("title", `%${improvement.title}%`)
+          .in("status", ["pending", "in_dev"])
+          .maybeSingle();
+
+        if (!existing) {
+          await supabase.from("nexus_improvements").insert(improvement);
+        }
+      }
     }
   }
 
@@ -329,7 +349,7 @@ Return only the JSON array. No markdown.`;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: prompt }] }),
   });
   const data = await res.json();
   const text = data?.content?.[0]?.text || "[]";

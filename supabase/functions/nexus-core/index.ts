@@ -483,7 +483,7 @@ Respond with JSON only (no markdown, no backticks):
 }`;
 
   try {
-    const response = await ai(prompt, 800);
+    const response = await ai(prompt, 700);
     return JSON.parse(response.replace(/```json|```/g, "").trim());
   } catch {
     return {
@@ -555,7 +555,7 @@ Respond with JSON only (no backticks):
   "evidence": "why this is needed"
 }`;
 
-        const result = await ai(improvPrompt, 600);
+        const result = await ai(improvPrompt, 400);
         const improvement = JSON.parse(result.replace(/```json|```/g, "").trim());
 
         const { data: existing } = await supabase
@@ -565,7 +565,12 @@ Respond with JSON only (no backticks):
           .eq("status", "proposed")
           .single();
 
-        if (!existing) {
+        const { count: pendingCount } = await supabase
+          .from("nexus_self_improvements")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "proposed");
+
+        if (!existing && (pendingCount || 0) < 20) {
           await supabase.from("nexus_self_improvements").insert(improvement);
           await log("improvement_identified", `Identified: ${improvement.title}`);
           actionsExecuted++;
@@ -924,8 +929,15 @@ Deno.serve(async (req) => {
     const state = await observe().then(r => { logHeartbeat("nexus-core:observe", "ok", Date.now() - _t); return r; })
       .catch(e => { logHeartbeat("nexus-core:observe", "error", Date.now() - _t, String(e)); throw e; });
 
-    // Skip think() AI call when state is unchanged (saves ~$0.05 per skipped cycle)
-    const stateHash = `${state.errors.length}:${state.tasks.length}:${state.improvements.length}:${state.clients.length}`;
+    // State hash — includes roofing signals so idle cycles skip think() + act() entirely
+    const stateHash = JSON.stringify({
+      errors: state.errors.length,
+      tasks: state.tasks.length,
+      improvements: state.improvements.length,
+      clients: state.clients.length,
+      pendingApprovals: state.pendingApprovals.length,
+      liveAbilities: state.liveAbilities.length
+    });
     const { data: lastHashEntry } = await supabase
       .from("nexus_audit_log")
       .select("action_detail, created_at")
@@ -935,24 +947,19 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const stateUnchanged = lastHashEntry?.action_detail === stateHash &&
       lastHashEntry?.created_at &&
-      (Date.now() - new Date(lastHashEntry.created_at).getTime()) < 60 * 60 * 1000;
+      (Date.now() - new Date(lastHashEntry.created_at).getTime()) < 4 * 60 * 60 * 1000;
+
+    if (stateUnchanged) {
+      // Skip think + act + reflect entirely — nothing changed, save the Claude call
+      await logHeartbeat("nexus-core", "ok", Date.now() - startTime);
+      return Response.json({ ok: true, cycle: cycleNumber, skipped: true, reason: "state unchanged" });
+    }
 
     let decisions: Awaited<ReturnType<typeof think>>;
-    if (stateUnchanged) {
-      decisions = {
-        observations: ["State unchanged since last cycle"],
-        judgment: "no build this cycle",
-        actions: [],
-        reflection: "Think() skipped — state hash unchanged",
-        summary: "Idle cycle — state unchanged"
-      };
-      logHeartbeat("nexus-core:think", "ok", 0);
-    } else {
-      _t = Date.now();
-      decisions = await think(state, selfModel, cycleNumber).then(r => { logHeartbeat("nexus-core:think", "ok", Date.now() - _t); return r; })
-        .catch(e => { logHeartbeat("nexus-core:think", "error", Date.now() - _t, String(e)); throw e; });
-      await log("cycle_state_hash", stateHash);
-    }
+    _t = Date.now();
+    decisions = await think(state, selfModel, cycleNumber).then(r => { logHeartbeat("nexus-core:think", "ok", Date.now() - _t); return r; })
+      .catch(e => { logHeartbeat("nexus-core:think", "error", Date.now() - _t, String(e)); throw e; });
+    await log("cycle_state_hash", stateHash);
 
     _t = Date.now();
     const actionsExecuted = await act(decisions, state, allowBuild).then(r => { logHeartbeat("nexus-core:act", "ok", Date.now() - _t); return r; })
