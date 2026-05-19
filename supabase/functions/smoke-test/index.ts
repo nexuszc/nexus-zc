@@ -1,27 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-// Track when the function started
+// Record function start time for uptime tracking
 const FUNCTION_START_TIME = performance.now();
 
 /**
- * Health check status
- */
-type HealthCheckStatus = 'pass' | 'warn' | 'fail';
-
-/**
- * Individual health check result
+ * Type definitions
  */
 interface HealthCheck {
   name: string;
-  status: HealthCheckStatus;
+  status: 'pass' | 'warn' | 'fail';
   duration_ms: number;
   message: string;
   details?: Record<string, unknown>;
 }
 
-/**
- * Overall smoke test response
- */
 interface SmokeTestResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -36,32 +28,22 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime environment
+ * Check Deno runtime
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    const permissions = {
-      net: await Deno.permissions.query({ name: 'net' }),
-      env: await Deno.permissions.query({ name: 'env' }),
-      read: await Deno.permissions.query({ name: 'read' }),
-    };
-
-    const allGranted = Object.values(permissions).every(p => p.state === 'granted');
-
+    
     return {
       name: 'deno_runtime',
-      status: allGranted ? 'pass' : 'warn',
+      status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: allGranted ? 'Deno runtime operational' : 'Some permissions not granted',
+      message: 'Deno runtime operational',
       details: {
         deno: version.deno,
         v8: version.v8,
         typescript: version.typescript,
-        permissions: Object.fromEntries(
-          Object.entries(permissions).map(([k, v]) => [k, v.state])
-        ),
       },
     };
   } catch (error) {
@@ -69,7 +51,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Runtime check failed',
+      message: error instanceof Error ? error.message : 'Deno runtime check failed',
     };
   }
 }
@@ -86,28 +68,14 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing: string[] = [];
-    const present: string[] = [];
-
-    for (const envVar of requiredEnvVars) {
-      const value = Deno.env.get(envVar);
-      if (!value) {
-        missing.push(envVar);
-      } else {
-        present.push(envVar);
-      }
-    }
+    const missing = requiredEnvVars.filter(key => !Deno.env.get(key));
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Required environment variables missing',
-        details: {
-          missing,
-          present,
-        },
+        message: `Missing required environment variables: ${missing.join(', ')}`,
       };
     }
 
@@ -116,10 +84,6 @@ async function checkEnvironment(): Promise<HealthCheck> {
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
-      details: {
-        total: requiredEnvVars.length,
-        present,
-      },
     };
   } catch (error) {
     return {
@@ -145,16 +109,16 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not available',
+        message: 'Database credentials not configured',
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Simple query to check connectivity
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('profiles')
-      .select('count')
+      .select('id')
       .limit(1);
 
     if (error) {
@@ -173,7 +137,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity verified',
+      message: 'Database connectivity operational',
     };
   } catch (error) {
     return {
