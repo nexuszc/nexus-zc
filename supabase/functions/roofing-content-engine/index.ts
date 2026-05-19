@@ -1,7 +1,8 @@
-// roofing-content-engine v3
+// roofing-content-engine v4
 // YouTube-first content system — pulls from content_topics, generates scripts,
-// queues for dashboard approval. 5 shorts + 1 long per run.
+// queues for dashboard approval. 7 shorts + 1 long per run.
 // v3: YOUTUBE_DESCRIPTION_FOOTER appended to all long-form descriptions
+// v4: 7 shorts per run (was 5)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -119,7 +120,7 @@ async function generateScript(topic: { title: string; pain_point: string; format
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: topic.format === "short" ? 150 : 2000,
+        max_tokens: topic.format === "short" ? 400 : 2000,
         system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
         messages: [{
           role: "user",
@@ -181,7 +182,7 @@ Deno.serve(async (req) => {
       (t: { topic_hash: string }) => !usedHashes.has(t.topic_hash) && !generatedHashes.has(t.topic_hash)
     );
 
-    const shorts = unused.filter((t: { format: string }) => t.format === "short").slice(0, 5);
+    const shorts = unused.filter((t: { format: string }) => t.format === "short").slice(0, 7);
     const longs  = unused.filter((t: { format: string }) => t.format === "long").slice(0, 1);
     const toGenerate = [...shorts, ...longs];
 
