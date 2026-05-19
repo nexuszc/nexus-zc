@@ -45,18 +45,32 @@ Deno.serve(async (req) => {
 
       const { data: log } = await supabase
         .from("roofing_outreach_log")
-        .select("id, prospect_id, open_count, first_opened_at, touch_number")
+        .select("id, prospect_id, open_count, first_opened_at, touch_number, created_at")
         .eq("id", lid)
         .maybeSingle();
 
       if (!log) return;
 
+      // Bot detection: opens within 3 seconds of send = scanner/prefetch, not a human
+      const timeSinceSend = log.created_at
+        ? (Date.now() - new Date(log.created_at).getTime())
+        : 99999;
+
+      if (timeSinceSend < 3000) {
+        await supabase.from("roofing_outreach_log")
+          .update({ bot_open: true })
+          .eq("id", lid);
+        return; // Don't count, don't alert
+      }
+
+      const openTimeSecs = Math.round(timeSinceSend / 1000);
       const newCount = (log.open_count || 0) + 1;
       const isFirstOpen = !log.first_opened_at;
 
       await supabase.from("roofing_outreach_log").update({
         opened: true,
         open_count: newCount,
+        open_time_seconds: isFirstOpen ? openTimeSecs : undefined,
         first_opened_at: isFirstOpen ? now : log.first_opened_at,
         last_opened_at: now,
         opened_at: isFirstOpen ? now : undefined,
