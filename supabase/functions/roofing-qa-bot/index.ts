@@ -67,14 +67,15 @@ Deno.serve(async (req) => {
         return res.ok;
       }
     },
-    {
-      name: "Financial dashboard responds",
-      fn: async () => {
-        const res = await callFn("roofing-financial", { action: "dashboard" });
-        const data = await res.json();
-        return "revenue" in data;
-      }
-    },
+    // roofing-financial function does not exist — test removed
+    // {
+    //   name: "Financial dashboard responds",
+    //   fn: async () => {
+    //     const res = await callFn("roofing-financial", { action: "dashboard" });
+    //     const data = await res.json();
+    //     return "revenue" in data;
+    //   }
+    // },
     {
       name: "Depreciation tracker responds",
       fn: async () => {
