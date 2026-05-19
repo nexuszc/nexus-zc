@@ -37,18 +37,18 @@ Questions? Reply in comments or email zach@roofingos.dev
 
 // ── PROMPTS ───────────────────────────────────────────────────────────────────
 
-const SHORT_SYSTEM = `You write 60-second YouTube Shorts scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+const SHORT_SYSTEM = `You write YouTube Shorts scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
 
 TARGET: Insurance restoration roofers. Busy, skeptical, and practical.
 
 STRUCTURE (strict — do not deviate):
-0-5 sec: ONE sentence. The exact pain. No intro. No name. Just the problem.
-5-25 sec: Make it worse. They feel it daily. Use specifics — times, dollar amounts, scenarios.
-25-50 sec: Roofing OS fixes this. One feature. Be specific. Show the outcome.
-50-60 sec: "Go to roofingos.dev. Free trial. Link in bio."
+0-3 sec: ONE sentence. The exact pain. No intro. No name. Just the problem.
+3-15 sec: Make it worse. They feel it daily. One specific scenario.
+15-25 sec: Roofing OS fixes this. One feature. One outcome.
+25-30 sec: "roofingos.dev. Free trial. Link in bio."
 
 RULES:
-- Max 130 words
+- Max 80 words. Under 30 seconds when spoken.
 - No filler: "today" "guys" "awesome" "literally"
 - Sound like a contractor not a marketer
 - Mention roofingos.dev once at the end
@@ -58,26 +58,26 @@ OUTPUT: JSON only. No markdown. No explanation.
 {
   "title": "max 50 chars",
   "script": "full word-for-word script",
-  "hook_text": "on-screen text for first 5 sec",
+  "hook_text": "on-screen text for first 3 sec",
   "thumbnail_text": "3-5 word thumbnail overlay",
-  "duration_estimate": 55
+  "duration_estimate": 28
 }`;
 
-const LONG_SYSTEM = `You write YouTube video scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+const LONG_SYSTEM = `You write short YouTube video scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
 
 TARGET: Insurance restoration roofers. Busy. Skeptical. Practical. 2-50 employees.
 
-STRUCTURE (follow exactly):
-Hook (0:00-0:20): State the pain immediately. No intro. Make them feel it in 3 sentences.
-Problem (0:20-2:00): Why this happens in roofing. Use data, stories, or common scenarios.
-Cost (2:00-3:00): What it actually costs them. Time lost, revenue missed, stress caused.
-Solution (3:00-5:30): How Roofing OS fixes it. Walk through the specific feature step by step. Be concrete — what the roofer does, what the homeowner sees.
-CTA (5:30-end): "Go to roofingos.dev right now. 14-day free trial. No contract. I'll put the link in the description." Say the URL twice.
+STRUCTURE (follow exactly — 2-3 minutes total):
+Hook (0:00-0:15): State the pain immediately. No intro. Make them feel it in 2 sentences.
+Problem (0:15-0:45): Why this happens in roofing. One story or scenario with a number.
+Cost (0:45-1:15): What it costs them. Time lost or revenue missed. One specific example.
+Solution (1:15-2:30): How Roofing OS fixes it. What the roofer does, what the homeowner sees. Concrete steps.
+CTA (2:30-end): "Go to roofingos.dev right now. 14-day free trial. No contract. Link in the description." Say the URL twice.
 
 RULES:
-- Max 800 words
+- Max 400 words. 2-3 minutes when spoken.
 - No filler words
-- Mention roofingos.dev minimum 3 times
+- Mention roofingos.dev minimum 2 times
 - Sound like a contractor helping contractors
 - Specific numbers whenever possible
 
@@ -89,7 +89,7 @@ OUTPUT: JSON only. No markdown.
   "thumbnail_text": "3-5 word thumbnail overlay",
   "description": "YouTube SEO description 200 words",
   "tags": ["tag1", "tag2"],
-  "duration_estimate": 360
+  "duration_estimate": 150
 }`;
 
 // ── GENERATE ──────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ async function generateScript(topic: { title: string; pain_point: string; format
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: topic.format === "short" ? 300 : 2000,
+        max_tokens: topic.format === "short" ? 150 : 2000,
         system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
         messages: [{
           role: "user",

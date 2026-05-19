@@ -50,9 +50,11 @@ jobs:
       - name: Download audio
         run: |
           wget -q -O audio.mp3 "$AUDIO_URL"
-          DURATION=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 audio.mp3)
+          RAW_DURATION=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 audio.mp3)
+          MAX_DURATION=$([ "$FORMAT" = "short" ] && echo "30" || echo "180")
+          DURATION=$(python3 -c "print(min(float('$RAW_DURATION'), $MAX_DURATION))")
           echo "DURATION=$DURATION" >> $GITHUB_ENV
-          echo "Audio downloaded — duration: ${DURATION}s"
+          echo "Audio downloaded — raw: ${RAW_DURATION}s → capped to: ${DURATION}s (max: ${MAX_DURATION}s for format: $FORMAT)"
 
       - name: Prepare text files
         run: |
