@@ -401,8 +401,15 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 18, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE (May 18 session):**
+- Auto-Close System v1 (8 phases): email open → Aria call → demo link → portal banner → signup
+- Exposure Spec v1 (all phases):
+  - Phase 1: Landing page full rebuild (7 story sections, mobile-first, SEO meta, blog section)
+  - Phase 2: Email templates 1-4 upgraded; warm bonus touch 11 ("why I built this") for 2+ openers; sequencer v17
+  - Phase 3: 14 new YouTube topics across CO/TX/FL/Midwest pain point angles
+  - Phase 4: YOUTUBE_DESCRIPTION_FOOTER constant in content-engine v3
+  - Phase 5: SEO baked into Phase 1 HTML
+- Content engine triggered manually — 6 scripts generated (5 shorts + 1 long), pending_approval in dashboard. 14 new Exposure Spec topics queued for next runs (engine processes oldest-first, ~2-3 more cycles to exhaust the new pool).
 
 **NEXT:**
 1. Fix smoke_test_failed error
