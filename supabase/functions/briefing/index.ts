@@ -192,6 +192,24 @@ Deno.serve(async (_req) => {
         ).join("\n")
       : "";
 
+    // Roofing OS intelligence (last 24h)
+    const [roofingOpensRes, ariaCallsRes] = await Promise.all([
+      supabase.from("roofing_outreach_log")
+        .select("prospect_id, open_count, touch_number")
+        .eq("bot_open", false)
+        .not("first_opened_at", "is", null)
+        .gte("first_opened_at", new Date(Date.now() - 86400000).toISOString())
+        .limit(20),
+      supabase.from("roofing_aria_calls")
+        .select("contact_name, call_type, outcome, appointment_booked")
+        .gte("created_at", new Date(Date.now() - 86400000).toISOString())
+        .limit(10),
+    ]);
+    const roofingOpensCount = (roofingOpensRes.data || []).length;
+    const ariaCallsToday = (ariaCallsRes.data || []) as Array<{ outcome: string; appointment_booked: boolean }>;
+    const ariaBooked = ariaCallsToday.filter(c => c.appointment_booked).length;
+    const ariaInterested = ariaCallsToday.filter(c => c.outcome === "interested").length;
+
     // ----- 5. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -255,6 +273,9 @@ Deno.serve(async (_req) => {
       improvementsSummary,
       knowledgeContext,
       weeklySummary,
+      (roofingOpensCount > 0 || ariaCallsToday.length > 0)
+        ? `ROOFING OS (last 24h):\n- Real email opens: ${roofingOpensCount}\n- Aria calls: ${ariaCallsToday.length} (${ariaBooked} booked, ${ariaInterested} interested)${roofingOpensCount >= 3 ? "\n- HOT: check aria_call_queue, multiple openers ready to call" : ""}`
+        : "",
     ].filter(Boolean).join("\n\n");
 
     // ----- 6. Generate briefing via Claude (with fallback) -----
@@ -271,6 +292,7 @@ Pending improvements: ${JSON.stringify((pendingImprovements.data || []).slice(0,
 Active projects: ${JSON.stringify(activeProjects.data || [])}
 Stale clients (no activity 5+ days): ${JSON.stringify(staleClients.data || [])}
 ${weeklySummary ? `Last week: ${weeklySummary}` : ""}
+Roofing OS (last 24h): opens=${roofingOpensCount}, aria_calls=${ariaCallsToday.length}, booked=${ariaBooked}, interested=${ariaInterested}
 
 Generate a briefing in this EXACT format:
 
@@ -290,6 +312,9 @@ Generate a briefing in this EXACT format:
 
 *🔧 System:*
 [Pending auto-fix approvals, function health issues, improvements queued]
+
+*🏠 Roofing OS:*
+[Real email opens today, Aria call results, top prospect to follow up now. Skip if nothing.]
 
 *💡 Zach, one thing:*
 [One strategic observation or nudge based on patterns you see. This is where you act like a real COO — notice what he's avoiding, what's slipping, what opportunity he should grab.]

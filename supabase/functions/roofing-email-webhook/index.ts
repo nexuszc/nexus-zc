@@ -74,6 +74,42 @@ Deno.serve(async (req) => {
       }
     }
 
+    else if (type === "email.replied") {
+      await supabase.from("roofing_outreach_log").update({
+        replied: true,
+        replied_at: now,
+      }).eq("id", log.id);
+
+      if (log.prospect_id) {
+        // Stop the sequence — they replied, no more automated emails
+        await supabase.from("email_sequences").update({
+          status: "replied",
+        }).eq("prospect_id", log.prospect_id);
+
+        const { data: prospect } = await supabase
+          .from("roofing_prospects")
+          .select("owner_name, company_name, email, phone")
+          .eq("id", log.prospect_id)
+          .maybeSingle();
+
+        if (prospect) {
+          await tg(
+            `💬 *Email Reply — Touch ${log.touch_number}*\n\n` +
+            `*${prospect.owner_name || "Unknown"} — ${prospect.company_name || ""}*\n` +
+            `📧 ${prospect.email || ""}\n` +
+            `📞 ${prospect.phone || "no phone"}\n\n` +
+            `They replied to touch ${log.touch_number}. Sequence paused.\n` +
+            `Reply to them within the hour.`
+          );
+          await supabase.from("roofing_prospects").update({
+            funnel_stage: "engaged",
+            funnel_stage_updated_at: now,
+            last_activity_at: now,
+          }).eq("id", log.prospect_id);
+        }
+      }
+    }
+
     else if (type === "email.bounced") {
       await supabase.from("roofing_outreach_log").update({ bounced: true }).eq("id", log.id);
 

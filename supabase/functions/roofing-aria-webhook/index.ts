@@ -133,6 +133,13 @@ async function triggerPostCallActions(
         fire_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       });
     }
+    // Send demo link for email opener calls where link wasn't sent during call
+    if ((callRecord.call_type as string) === "email_open_trigger" && !(callRecord.sms_sent_during_call as boolean)) {
+      await sendSMS(
+        callRecord.contact_phone as string,
+        `Hey! Great connecting. Here's a quick look at what Roofing OS does for roofing contractors: https://roofingos.dev/?ref=aria — Zach`
+      );
+    }
 
   } else if (outcome === "not_interested" || outcome === "hostile") {
     await supabase.from("nexus_unsubscribes").insert({
@@ -221,7 +228,8 @@ Deno.serve(async (req) => {
 
     case "agent_spoke": {
       const content = (body.transcript_object?.content || "").toLowerCase();
-      if ((content.includes("texting you") || content.includes("sending you a link")) && !callRecord.sms_sent_during_call) {
+      const linkTrigger = content.includes("texting you") || content.includes("sending you a link") || content.includes("demo link") || content.includes("roofingos.dev");
+      if (linkTrigger && !callRecord.sms_sent_during_call) {
         if (callRecord.job_id) {
           const { data: session } = await supabase
             .from("homeowner_sessions")
@@ -234,7 +242,11 @@ Deno.serve(async (req) => {
             await supabase.from("roofing_aria_calls").update({ portal_link_sent: true, sms_sent_during_call: true }).eq("id", callRecord.id);
           }
         } else {
-          await sendSMS(callRecord.contact_phone, `Thanks for your interest in our roofing services. We'll follow up shortly to confirm your inspection.`);
+          const isEmailOpener = (callRecord.call_type as string) === "email_open_trigger";
+          const smsBody = isEmailOpener
+            ? `Hey! Glad you opened our email. Here's a quick look at Roofing OS: https://roofingos.dev/?ref=aria — Zach`
+            : `Thanks for your interest in our roofing services. We'll follow up shortly to confirm your inspection.`;
+          await sendSMS(callRecord.contact_phone as string, smsBody);
           await supabase.from("roofing_aria_calls").update({ sms_sent_during_call: true }).eq("id", callRecord.id);
         }
       }

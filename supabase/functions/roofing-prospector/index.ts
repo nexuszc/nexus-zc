@@ -57,7 +57,7 @@ async function scrapeContactFromWebsite(url: string): Promise<{ email: string | 
   }
 }
 
-async function extractLeadInfo(result: { title: string; link: string; snippet: string }): Promise<{
+async function extractLeadInfo(result: { title: string; link: string; snippet: string }, queryCity = "Denver, CO"): Promise<{
   company_name: string;
   website: string;
   email: string | null;
@@ -68,6 +68,8 @@ async function extractLeadInfo(result: { title: string; link: string; snippet: s
   const skipDomains = ["yelp.com", "bbb.org", "angi.com", "homeadvisor.com", "thumbtack.com",
     "facebook.com", "google.com", "yellowpages.com", "houzz.com", "nextdoor.com"];
   if (skipDomains.some(d => result.link.includes(d))) return null;
+
+  const city = queryCity;
 
   // Try snippet first (fast)
   const phoneMatch = result.snippet.match(/\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/);
@@ -89,7 +91,7 @@ async function extractLeadInfo(result: { title: string; link: string; snippet: s
     .trim()
     .slice(0, 100);
 
-  return { company_name, website: result.link, email, phone, city: "Denver" };
+  return { company_name, website: result.link, email, phone, city };
 }
 
 async function scoreLead(lead: { company_name: string; website: string; snippet: string }): Promise<{
@@ -159,11 +161,32 @@ Deno.serve(async (_req) => {
   let skippedLowScore = 0;
 
   const denverQueries = [
+    // Colorado
     "roofing contractor Denver CO residential reviews",
     "roofing company Aurora Colorado insurance claims",
     "roof repair Lakewood CO small business",
     "roofer Englewood Colorado residential",
-    "roofing contractor Centennial CO"
+    "roofing contractor Centennial CO",
+    "roofing company Colorado Springs CO hail damage",
+    "roofer Fort Collins Colorado residential",
+    "roofing contractor Thornton CO storm damage",
+    // Texas
+    "roofing contractor Dallas TX residential hail",
+    "roofer Houston TX storm damage insurance",
+    "roofing company San Antonio TX residential",
+    "roofer Fort Worth TX residential reviews",
+    "roofing contractor Austin TX small business",
+    // Florida
+    "roofing contractor Orlando FL residential",
+    "roofer Tampa FL storm damage reviews",
+    "roofing company Jacksonville FL residential",
+    // Midwest
+    "roofing contractor Kansas City MO residential",
+    "roofer Omaha NE storm damage",
+    "roofing contractor Minneapolis MN residential",
+    "roofer St Louis MO residential insurance",
+    "roofing contractor Oklahoma City OK hail damage",
+    "roofer Wichita KS storm damage residential",
   ];
 
   const hailCities = await checkHailZones();
@@ -172,8 +195,11 @@ Deno.serve(async (_req) => {
 
   for (const query of allQueries) {
     const results = await searchRoofers(query);
+    // Extract "City STATE" from query for city field
+    const cityMatch = query.match(/([A-Za-z]+(?:\s[A-Za-z]+)?)\s+([A-Z]{2})\b/);
+    const queryCity = cityMatch ? `${cityMatch[1]}, ${cityMatch[2]}` : "Denver, CO";
     for (const result of results) {
-      const leadInfo = await extractLeadInfo(result);
+      const leadInfo = await extractLeadInfo(result, queryCity);
       if (!leadInfo) continue;
 
       // Require email — roofing-outreach is email-only
@@ -208,7 +234,7 @@ Deno.serve(async (_req) => {
 
       const isHailZone = hailCities.some(city => query.includes(city.split(",")[0]));
 
-      await supabase.from("roofing_prospects").insert({
+      const { data: newProspect } = await supabase.from("roofing_prospects").insert({
         company_name: leadInfo.company_name,
         email: leadInfo.email,
         phone: leadInfo.phone,
@@ -223,7 +249,20 @@ Deno.serve(async (_req) => {
         tech_sophistication: score.tech_sophistication,
         status: "researched",
         next_touch_at: new Date().toISOString()
-      });
+      }).select("id").single();
+
+      // Auto-enroll in email sequence
+      if (newProspect?.id) {
+        await supabase.from("email_sequences").insert({
+          prospect_id: newProspect.id,
+          prospect_email: leadInfo.email,
+          prospect_name: leadInfo.company_name,
+          current_touch: 0,
+          tier: score.score >= 70 ? "warm" : "cold",
+          status: "active",
+          next_touch_at: new Date().toISOString(),
+        }).catch(() => {});
+      }
 
       newProspects.push(leadInfo.company_name);
     }

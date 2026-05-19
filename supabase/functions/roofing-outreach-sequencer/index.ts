@@ -17,11 +17,11 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 // GAPS[tier][N] = days to wait after sending touch N before touch N+1 (N is 1-indexed, maps to array index directly)
 // Index 0 = gap before first touch (always 0 = send immediately on enrollment)
 const GAPS: Record<string, number[]> = {
-  hot:  [0, 1, 2, 3, 3, 4, 7, 7, 14],
-  warm: [0, 3, 5, 7, 7, 7, 8, 9,  7],
-  cold: [0, 4, 6, 7, 8, 9, 5, 9,  0],
+  hot:  [0, 1, 2, 3, 3, 4, 7, 7, 14, 14],
+  warm: [0, 3, 5, 7, 7, 7, 8, 9,  7,  7],
+  cold: [0, 4, 6, 7, 8, 9, 5, 9,  0,  0],
 };
-const MAX_TOUCHES = 9;
+const MAX_TOUCHES = 10;
 
 function firstName(name: string | null | undefined): string {
   return (name || "").split(" ")[0] || "there";
@@ -32,6 +32,16 @@ function gapDays(tier: string, touchJustSent: number): number {
   return gaps[touchJustSent] ?? 7;
 }
 
+function scoreProspect(openCount: number, clicked: boolean, touchNumber: number, tier: string): number {
+  let score = 0;
+  if (clicked) score += 40;
+  score += Math.min(openCount * 10, 30);
+  if (tier === "hot") score += 20;
+  else if (tier === "warm") score += 10;
+  score -= touchNumber * 2;
+  return Math.max(0, Math.min(100, score));
+}
+
 function evaluateTier(
   prospect: { clicked?: boolean; total_opens?: number } | undefined,
   currentTier: string,
@@ -39,7 +49,7 @@ function evaluateTier(
 ): string {
   if (!prospect) return currentTier;
   if (prospect.clicked) return "hot";
-  if ((prospect.total_opens ?? 0) >= 3) return "warm";
+  if ((prospect.total_opens ?? 0) >= 1) return "warm"; // accelerate on first open
   // No opens after touch 3 → dead
   if (currentTouch >= 3 && (prospect.total_opens ?? 0) === 0) return "dead";
   return currentTier;
@@ -236,6 +246,13 @@ Deno.serve(async (req) => {
       if (emailId) {
         if (logId) {
           await supabase.from("roofing_outreach_log").update({ resend_email_id: emailId }).eq("id", logId);
+        }
+
+        // Update prospect engagement score
+        if (seq.prospect_id) {
+          const p = seq.prospect_id ? prospectMap.get(seq.prospect_id) : undefined;
+          const engScore = scoreProspect(p?.total_opens ?? 0, p?.clicked ?? false, nextTouch, tier);
+          await supabase.from("roofing_prospects").update({ lead_score: engScore }).eq("id", seq.prospect_id).catch(() => {});
         }
 
         const isLastTouch = nextTouch >= MAX_TOUCHES;

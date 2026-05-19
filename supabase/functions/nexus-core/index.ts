@@ -1394,6 +1394,7 @@ Deno.serve(async (req) => {
         .in("status", ["queued", "pending"])
         .lte("fire_at", queueNow)
         .lt("attempt_count", maxAttempts)
+        .order("priority_score", { ascending: false })
         .order("fire_at", { ascending: true })
         .limit(5);
 
