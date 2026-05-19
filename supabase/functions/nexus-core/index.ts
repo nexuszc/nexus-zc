@@ -981,13 +981,6 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
-    // Every cycle: advance nexus follow-up sequences
-    fetch(`${SUPABASE_URL}/functions/v1/nexus-follow-up`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SERVICE_KEY}` },
-      body: JSON.stringify({})
-    }).catch(() => {});
-
     // Every 8th cycle (~4 hours): proactive prospecting scan
     if (cycleNumber % 8 === 0) {
       (async () => {
