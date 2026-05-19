@@ -398,10 +398,16 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 17, 2026)
+## CURRENT BUILD PRIORITIES (as of May 18, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE (May 18 session):**
+- Auto-Close System v1 (8 phases): email open → Aria call → demo link → portal banner → signup
+- Exposure Spec v1 (all phases):
+  - Phase 1: Landing page full rebuild (7 story sections, mobile-first, SEO meta, blog section)
+  - Phase 2: Email templates 1-4 upgraded; warm bonus touch 11 ("why I built this") for 2+ openers; sequencer v17
+  - Phase 3: 14 new YouTube topics across CO/TX/FL/Midwest pain point angles
+  - Phase 4: YOUTUBE_DESCRIPTION_FOOTER constant in content-engine v3
+  - Phase 5: SEO baked into Phase 1 HTML
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -410,8 +416,7 @@ Then productized and sold to other multi-business operators.
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system with public landing page
-8. Complete homeowner portal fixes and remaining items
+7. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
 
 ---
 
