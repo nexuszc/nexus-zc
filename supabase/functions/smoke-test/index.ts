@@ -1,5 +1,5 @@
 // Smoke Test Edge Function
-// Comprehensive health and connectivity checks for the Nexus system
+// Comprehensive health check for Nexus system components
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
@@ -27,13 +27,12 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime availability and version
+ * Check Deno runtime availability
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -50,13 +49,13 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Runtime check failed',
+      message: error instanceof Error ? error.message : 'Deno runtime check failed',
     };
   }
 }
 
 /**
- * Check environment variables and configuration
+ * Check environment variables
  */
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -67,16 +66,27 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
+    const missing: string[] = [];
+    const present: string[] = [];
+
+    for (const varName of requiredVars) {
+      const value = Deno.env.get(varName);
+      if (!value) {
+        missing.push(varName);
+      } else {
+        present.push(varName);
+      }
+    }
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing required environment variables',
+        message: `Missing required environment variables: ${missing.join(', ')}`,
         details: {
-          missing_vars: missing,
+          missing,
+          present,
         },
       };
     }
@@ -86,6 +96,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
+      details: {
+        present,
+      },
     };
   } catch (error) {
     return {
@@ -111,16 +124,16 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not configured',
+        message: 'Missing database credentials',
       };
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Perform a simple query to verify connectivity
+    // Simple query to test connectivity
     const { data, error } = await supabase
-      .from('conversations')
-      .select('id')
+      .from('profiles')
+      .select('count')
       .limit(1);
 
     if (error) {
@@ -128,9 +141,10 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database query failed',
+        message: `Database query failed: ${error.message}`,
         details: {
           error: error.message,
+          code: error.code,
         },
       };
     }
@@ -139,7 +153,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connection successful',
+      message: 'Database connectivity operational',
     };
   } catch (error) {
     return {
@@ -152,12 +166,11 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check external service connectivity
+ * Check external services connectivity
  */
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    // Check if fetch API is available
     if (typeof fetch === 'undefined') {
       return {
         name: 'external_services',
@@ -301,29 +314,33 @@ async function runHealthChecks(): Promise<SmokeTestResponse> {
   };
 }
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 Deno.serve(async (req) => {
   try {
+    const { method } = req;
+
     // Handle CORS preflight
-    if (req.method === 'OPTIONS') {
+    if (method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
+        headers: corsHeaders,
       });
     }
 
     // Only accept GET requests for smoke test
-    if (req.method !== 'GET') {
+    if (method !== 'GET') {
       return new Response(
         JSON.stringify({ error: 'Method not allowed' }),
         {
           status: 405,
           headers: {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
+            ...corsHeaders,
           },
         }
       );
@@ -354,8 +371,8 @@ Deno.serve(async (req) => {
         status: httpStatus,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
+          ...corsHeaders,
         },
       }
     );
@@ -386,7 +403,7 @@ Deno.serve(async (req) => {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          ...corsHeaders,
         },
       }
     );
