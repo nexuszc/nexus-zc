@@ -1,7 +1,5 @@
-// Smoke Test Edge Function
-// Comprehensive health check for Nexus system components
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+// Smoke test edge function for Nexus
+// Validates core system functionality
 
 const FUNCTION_START_TIME = performance.now();
 
@@ -66,27 +64,16 @@ async function checkEnvironment(): Promise<HealthCheck> {
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing: string[] = [];
-    const present: string[] = [];
-
-    for (const varName of requiredVars) {
-      const value = Deno.env.get(varName);
-      if (!value) {
-        missing.push(varName);
-      } else {
-        present.push(varName);
-      }
-    }
+    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missing.join(', ')}`,
+        message: 'Missing required environment variables',
         details: {
-          missing,
-          present,
+          missing_vars: missing,
         },
       };
     }
@@ -97,7 +84,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        present,
+        checked_vars: requiredVars.length,
       },
     };
   } catch (error) {
@@ -124,27 +111,27 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing database credentials',
+        message: 'Database credentials not configured',
       };
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Simple connectivity test using REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+      method: 'HEAD',
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+    });
 
-    // Simple query to test connectivity
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('count')
-      .limit(1);
-
-    if (error) {
+    if (!response.ok) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Database query failed: ${error.message}`,
+        message: 'Database connectivity check failed',
         details: {
-          error: error.message,
-          code: error.code,
+          status_code: response.status,
         },
       };
     }
@@ -171,6 +158,7 @@ async function checkDatabase(): Promise<HealthCheck> {
 async function checkExternalServices(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
+    // Check if fetch is available
     if (typeof fetch === 'undefined') {
       return {
         name: 'external_services',
@@ -314,38 +302,17 @@ async function runHealthChecks(): Promise<SmokeTestResponse> {
   };
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
 Deno.serve(async (req) => {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
-    const { method } = req;
-
-    // Handle CORS preflight
-    if (method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders,
-      });
-    }
-
-    // Only accept GET requests for smoke test
-    if (method !== 'GET') {
-      return new Response(
-        JSON.stringify({ error: 'Method not allowed' }),
-        {
-          status: 405,
-          headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders,
-          },
-        }
-      );
-    }
-
     // Run all health checks
     const result = await runHealthChecks();
 
@@ -368,12 +335,12 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify(result, null, 2),
       {
-        status: httpStatus,
         headers: {
+          ...corsHeaders,
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
-          ...corsHeaders,
         },
+        status: httpStatus,
       }
     );
   } catch (error) {
@@ -400,11 +367,11 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify(errorResponse, null, 2),
       {
-        status: 500,
         headers: {
-          'Content-Type': 'application/json',
           ...corsHeaders,
+          'Content-Type': 'application/json',
         },
+        status: 500,
       }
     );
   }
