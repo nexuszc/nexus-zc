@@ -189,6 +189,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-supplement-generator` | See function source for details | Internal |
 | `roofing-supplement-rebuttal` | See function source for details | Internal |
 | `roofing-supplement-tracker` | See function source for details | Internal |
+| `roofing-unsubscribe` | See function source for details | Internal |
 | `roofing-video-webhook` | See function source for details | Internal |
 | `roofing-voiceover-engine` | See function source for details | Internal |
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
@@ -400,14 +401,8 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 18, 2026)
 
-**DONE (May 18 session):**
-- Auto-Close System v1 (8 phases): email open → Aria call → demo link → portal banner → signup
-- Exposure Spec v1 (all phases):
-  - Phase 1: Landing page full rebuild (7 story sections, mobile-first, SEO meta, blog section)
-  - Phase 2: Email templates 1-4 upgraded; warm bonus touch 11 ("why I built this") for 2+ openers; sequencer v17
-  - Phase 3: 14 new YouTube topics across CO/TX/FL/Midwest pain point angles
-  - Phase 4: YOUTUBE_DESCRIPTION_FOOTER constant in content-engine v3
-  - Phase 5: SEO baked into Phase 1 HTML
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -416,7 +411,8 @@ Then productized and sold to other multi-business operators.
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
+7. Build Roofing OS go-to-market system and landing page
+8. Complete homeowner portal fixes and deployment
 
 ---
 
