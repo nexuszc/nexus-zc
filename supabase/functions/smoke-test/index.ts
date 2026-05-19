@@ -1,15 +1,27 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
+// Track when the function started
 const FUNCTION_START_TIME = performance.now();
 
+/**
+ * Health check status
+ */
+type HealthCheckStatus = 'pass' | 'warn' | 'fail';
+
+/**
+ * Individual health check result
+ */
 interface HealthCheck {
   name: string;
-  status: 'pass' | 'warn' | 'fail';
+  status: HealthCheckStatus;
   duration_ms: number;
   message: string;
   details?: Record<string, unknown>;
 }
 
+/**
+ * Overall smoke test response
+ */
 interface SmokeTestResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -24,22 +36,32 @@ interface SmokeTestResponse {
 }
 
 /**
- * Check Deno runtime availability
+ * Check Deno runtime environment
  */
 async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
-    
+    const permissions = {
+      net: await Deno.permissions.query({ name: 'net' }),
+      env: await Deno.permissions.query({ name: 'env' }),
+      read: await Deno.permissions.query({ name: 'read' }),
+    };
+
+    const allGranted = Object.values(permissions).every(p => p.state === 'granted');
+
     return {
       name: 'deno_runtime',
-      status: 'pass',
+      status: allGranted ? 'pass' : 'warn',
       duration_ms: performance.now() - startTime,
-      message: 'Deno runtime operational',
+      message: allGranted ? 'Deno runtime operational' : 'Some permissions not granted',
       details: {
         deno: version.deno,
         v8: version.v8,
         typescript: version.typescript,
+        permissions: Object.fromEntries(
+          Object.entries(permissions).map(([k, v]) => [k, v.state])
+        ),
       },
     };
   } catch (error) {
@@ -58,22 +80,33 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
 async function checkEnvironment(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
-    const requiredVars = [
+    const requiredEnvVars = [
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
     ];
 
-    const missing = requiredVars.filter(varName => !Deno.env.get(varName));
+    const missing: string[] = [];
+    const present: string[] = [];
+
+    for (const envVar of requiredEnvVars) {
+      const value = Deno.env.get(envVar);
+      if (!value) {
+        missing.push(envVar);
+      } else {
+        present.push(envVar);
+      }
+    }
 
     if (missing.length > 0) {
       return {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: `Missing environment variables: ${missing.join(', ')}`,
+        message: 'Required environment variables missing',
         details: {
           missing,
+          present,
         },
       };
     }
@@ -84,7 +117,8 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        variables_checked: requiredVars.length,
+        total: requiredEnvVars.length,
+        present,
       },
     };
   } catch (error) {
@@ -111,7 +145,7 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing database credentials',
+        message: 'Database credentials not available',
       };
     }
 
@@ -121,17 +155,16 @@ async function checkDatabase(): Promise<HealthCheck> {
     const { data, error } = await supabase
       .from('profiles')
       .select('count')
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is fine
+    if (error) {
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: error.message,
+        message: 'Database query failed',
         details: {
-          error_code: error.code,
+          error: error.message,
         },
       };
     }
@@ -140,7 +173,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity operational',
+      message: 'Database connectivity verified',
     };
   } catch (error) {
     return {
@@ -303,13 +336,17 @@ async function runHealthChecks(): Promise<SmokeTestResponse> {
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  const { method } = req;
+  
+  if (method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    });
   }
 
   try {
@@ -336,8 +373,8 @@ Deno.serve(async (req) => {
       JSON.stringify(result, null, 2),
       {
         headers: {
-          ...corsHeaders,
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
         },
         status: httpStatus,
@@ -368,8 +405,8 @@ Deno.serve(async (req) => {
       JSON.stringify(errorResponse, null, 2),
       {
         headers: {
-          ...corsHeaders,
           'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
         },
         status: 500,
       }
