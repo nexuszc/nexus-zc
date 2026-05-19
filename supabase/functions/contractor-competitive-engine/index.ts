@@ -117,7 +117,7 @@ Keep it under 200 words total.`;
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'Roofing OS Intelligence <intel@roofingos.dev>',
+          from: 'Roofing OS Intelligence <intel@nexuszc.com>',
           to: contractor.owner_email,
           subject: `Your market this week — ${contractor.primary_zip}`,
           html: `

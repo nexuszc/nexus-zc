@@ -84,7 +84,7 @@ async function fireBundle(bundleId: string) {
           method: "POST",
           headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "Roofing OS Alert <alerts@roofingos.dev>",
+            from: "Roofing OS Alert <alerts@nexuszc.com>",
             to: item.recipient_email,
             subject: emailTemplate?.title || "Storm Damage Alert for Your Area",
             html: body

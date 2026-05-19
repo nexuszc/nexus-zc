@@ -132,7 +132,7 @@ Alert Zach (alert_zach: true) only if:
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@roofingos.dev>",
+        from: "Zach Curtis <zach@nexuszc.com>",
         to: prospect.email,
         subject: decision.response_email.subject,
         text: responseBody

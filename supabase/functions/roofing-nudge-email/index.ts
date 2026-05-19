@@ -57,8 +57,8 @@ See the homeowner portal →</a></p>
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Zach Curtis <zach@roofingos.dev>",
-      reply_to: "zach@roofingos.dev",
+      from: "Zach Curtis <zach@nexuszc.com>",
+      reply_to: "zach@nexuszc.com",
       to: prospect.email,
       subject: subject || defaultSubject,
       html: html || defaultHtml,

@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'Roofing OS <reports@roofingos.dev>',
+          from: 'Roofing OS <reports@nexuszc.com>',
           to: contractor.owner_email,
           subject: roiMultiple > 5
             ? `Your Roofing OS ROI this month: ${Math.round(roiMultiple)}x`

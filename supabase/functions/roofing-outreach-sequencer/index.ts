@@ -63,8 +63,8 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@roofingos.dev>",
-        reply_to: "zach@roofingos.dev",
+        from: "Zach Curtis <zach@nexuszc.com>",
+        reply_to: "zach@nexuszc.com",
         to: [to],
         subject,
         html,
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Zach Curtis <zach@roofingos.dev>",
+          from: "Zach Curtis <zach@nexuszc.com>",
           to: [body.debug_email],
           subject: "Resend test — roofing-outreach-sequencer v16",
           html: "<p>Sequencer v16 test email. If you see this, Resend is working.</p>",

@@ -71,7 +71,7 @@ function generateAuditEmailHTML(
       <a href="https://roofingos.dev/?audit=multi" class="cta">Run My Full Audit →</a>
     </div>
     <p style="color:#94a3b8; font-size:12px; margin-top:32px;">
-      Zach Curtis — Roofing OS — zach@roofingos.dev<br>
+      Zach Curtis — Roofing OS — zach@nexuszc.com<br>
       <a href="https://roofingos.dev/unsubscribe" style="color:#94a3b8;">Unsubscribe</a>
     </p>
   </div>
@@ -297,7 +297,7 @@ Respond ONLY with valid JSON, no markdown:
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: 'Zach at Roofing OS <zach@roofingos.dev>',
+      from: 'Zach at Roofing OS <zach@nexuszc.com>',
       to: email,
       subject: `Your supplement audit: ${property_address}`,
       html: generateAuditEmailHTML(audit, property_address, name || '')

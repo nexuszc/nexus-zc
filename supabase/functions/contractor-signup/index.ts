@@ -237,7 +237,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Zach Curtis <zach@roofingos.dev>',
+        from: 'Zach Curtis <zach@nexuszc.com>',
         to: owner_email,
         subject: `Welcome to Roofing OS — here's how to get started`,
         html: generateWelcomeEmail(contractor)

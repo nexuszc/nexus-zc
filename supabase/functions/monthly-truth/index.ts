@@ -25,7 +25,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from: 'Roofing OS <reports@roofingos.dev>', to, subject, html })
+    body: JSON.stringify({ from: 'Roofing OS <reports@nexuszc.com>', to, subject, html })
   }).catch(() => {});
 }
 
