@@ -412,7 +412,7 @@ Then productized and sold to other multi-business operators.
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
 7. Build Roofing OS go-to-market system and landing page
-8. Complete homeowner portal fixes and documentation
+8. Stabilize Denver Pro Roofing client (health: 50)
 
 ---
 
