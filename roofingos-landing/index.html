@@ -4,7 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Roofing OS — Homeowner Portal for Roofing Contractors</title>
-<meta name="description" content="Give every homeowner a live portal. Photos, insurance updates, and Aria. $49/month.">
+<meta name="description" content="Give every homeowner a live portal. They track their own job. You stop answering calls during installations. $49/month, 14-day free trial.">
+<meta property="og:title" content="Your homeowners stop calling you during installations.">
+<meta property="og:description" content="Roofing OS gives every homeowner a live portal. Insurance status, crew photos, install dates — automatically. $49/month.">
+<meta property="og:image" content="https://roofingos.dev/og-image.png">
+<meta property="og:url" content="https://roofingos.dev">
+<meta name="twitter:card" content="summary_large_image">
 <script src="https://js.stripe.com/v3/"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,6 +20,8 @@
     --border: #1e1e2e;
     --blue: #3b82f6;
     --blue-light: #60a5fa;
+    --cyan: #06b6d4;
+    --cyan-dark: #0891b2;
     --green: #22c55e;
     --red: #ef4444;
     --text: #f8fafc;
@@ -25,19 +32,19 @@
   /* NAV */
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 14px 24px; background: rgba(10,10,15,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
-  .logo em { color: var(--blue); font-style: normal; }
-  .nav-cta { background: var(--blue); color: white; text-decoration: none; padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 700; white-space: nowrap; animation: ctaPulse 3s ease infinite; }
-  @keyframes ctaPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); } 50% { box-shadow: 0 0 0 6px rgba(59,130,246,0); } }
+  .logo em { color: var(--cyan); font-style: normal; }
+  .nav-cta { background: var(--cyan); color: white; text-decoration: none; padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 700; white-space: nowrap; animation: ctaPulse 3s ease infinite; }
+  @keyframes ctaPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.4); } 50% { box-shadow: 0 0 0 6px rgba(6,182,212,0); } }
 
   /* HERO */
   .hero { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 60px; max-width: 1100px; margin: 0 auto; padding: 100px 24px 60px; }
   @media (max-width: 768px) { .hero { grid-template-columns: 1fr; padding-top: 80px; text-align: center; } .phone-wrap { display: flex; justify-content: center; } }
-  .hero-copy h1 { font-size: clamp(36px, 5vw, 60px); font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 24px; }
-  .hero-copy h1 em { font-style: normal; color: var(--blue); }
+  .hero-copy h1 { font-size: clamp(36px, 5vw, 56px); font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 24px; }
+  .hero-copy h1 em { font-style: normal; color: var(--cyan); }
   .hero-copy p { color: var(--muted); font-size: 17px; line-height: 1.7; margin-bottom: 32px; max-width: 480px; }
   @media (max-width: 768px) { .hero-copy p { margin: 0 auto 32px; } }
-  .hero-cta { display: inline-block; background: var(--blue); color: white; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 8px 30px rgba(59,130,246,0.35); transition: transform 0.15s, box-shadow 0.15s; }
-  .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(59,130,246,0.45); }
+  .hero-cta { display: inline-block; background: var(--cyan); color: white; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 8px 30px rgba(6,182,212,0.35); transition: transform 0.15s, box-shadow 0.15s; }
+  .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(6,182,212,0.45); }
   .hero-sub-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
 
   /* PHONE MOCKUP */
@@ -61,13 +68,13 @@
   .portal-addr { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; }
   .portal-status-badge { display: inline-block; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: var(--green); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 100px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
   .portal-body { padding: 10px 12px; background: #0a0a13; }
-  .aria-msg { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; }
+  .aria-msg { background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; }
   .aria-msg-header { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
-  .aria-icon { width: 16px; height: 16px; background: var(--blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; flex-shrink: 0; color: white; font-weight: 700; }
-  .aria-msg-name { font-size: 9px; font-weight: 700; color: var(--blue-light); }
+  .aria-icon { width: 16px; height: 16px; background: var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; flex-shrink: 0; color: white; font-weight: 700; }
+  .aria-msg-name { font-size: 9px; font-weight: 700; color: var(--cyan); }
   .aria-msg-text { font-size: 10px; color: rgba(255,255,255,0.8); line-height: 1.4; }
   .act-item { display: flex; gap: 7px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: flex-start; }
-  .act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); margin-top: 3px; flex-shrink: 0; }
+  .act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); margin-top: 3px; flex-shrink: 0; }
   .act-text { font-size: 10px; color: rgba(255,255,255,0.65); line-height: 1.4; }
   .act-text strong { color: rgba(255,255,255,0.95); display: block; }
   .ins-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin: 10px 0; }
@@ -84,27 +91,45 @@
   .p1 { background: linear-gradient(135deg, #1a3a5c, #0f2040); }
   .p2 { background: linear-gradient(135deg, #2d1b00, #4a2e00); }
   .p3 { background: linear-gradient(135deg, #1a2a1a, #0d1a0d); }
-  .portal-aria-btn { width: 100%; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.28); border-radius: 8px; padding: 8px 12px; color: var(--blue-light); font-size: 11px; font-weight: 600; text-align: center; margin-top: 10px; }
+  .portal-aria-btn { width: 100%; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.28); border-radius: 8px; padding: 8px 12px; color: var(--cyan); font-size: 11px; font-weight: 600; text-align: center; margin-top: 10px; }
 
   /* SECTIONS */
   section { padding: 80px 24px; }
   .section-inner { max-width: 1000px; margin: 0 auto; }
-  .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--blue); margin-bottom: 12px; }
-  .section-title { font-size: clamp(28px, 4.5vw, 48px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 16px; }
+  .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cyan); margin-bottom: 12px; }
+  .section-title { font-size: clamp(28px, 4.5vw, 44px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 16px; }
   .section-sub { color: var(--muted); font-size: 17px; max-width: 520px; line-height: 1.6; }
 
-  /* MOMENT CARDS */
-  .moments-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 48px; }
-  @media (max-width: 768px) { .moments-grid { grid-template-columns: 1fr; } }
-  .moment-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
-  .moment-img { height: 160px; display: flex; align-items: center; justify-content: center; position: relative; }
-  .moment-img.satellite { background: linear-gradient(135deg, #1e3a5f, #0f2040); font-size: 48px; }
-  .moment-img.photos { background: linear-gradient(135deg, #1a2e1a, #0d1a0d); flex-direction: column; gap: 4px; }
-  .moment-img.insurance { background: linear-gradient(135deg, #1f1a2e, #120d1a); }
-  .moment-badge { position: absolute; top: 10px; right: 10px; background: var(--green); color: black; font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.06em; }
-  .moment-body { padding: 20px; }
-  .moment-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
-  .moment-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  /* PAIN CARDS */
+  .pain-card { background: #16161f; border-radius: 12px; padding: 20px; margin-bottom: 16px; border-left: 3px solid var(--red); }
+  .pain-card p { color: var(--text); font-size: 16px; margin: 0; line-height: 1.6; }
+
+  /* HOW IT WORKS */
+  .step { display: flex; gap: 20px; margin-bottom: 32px; align-items: flex-start; }
+  .step-num { background: var(--cyan); color: white; font-weight: 800; font-size: 18px; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step h3 { color: var(--text); font-size: 18px; font-weight: 700; margin: 0 0 8px; }
+  .step p { color: var(--muted); font-size: 15px; margin: 0; line-height: 1.6; }
+
+  /* SARAH PORTAL MOCKUP */
+  .sarah-portal { background: #1e293b; border-radius: 16px; overflow: hidden; margin-bottom: 32px; }
+  .sarah-portal-header { padding: 16px 20px; border-bottom: 1px solid #334155; }
+  .sarah-portal-header .name { font-weight: 700; color: white; font-size: 16px; }
+  .sarah-portal-header .addr { color: #64748b; font-size: 14px; }
+  .sarah-portal-body { padding: 20px; }
+  .sarah-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .sarah-row:last-child { margin-bottom: 0; }
+  .sarah-check { color: var(--green); font-size: 20px; flex-shrink: 0; }
+  .sarah-arrow { color: var(--cyan); font-size: 20px; flex-shrink: 0; }
+  .sarah-row .title { color: white; font-size: 14px; font-weight: 600; }
+  .sarah-row .sub { color: #64748b; font-size: 12px; margin-top: 2px; }
+
+  /* FOUNDER QUOTE */
+  .founder-card { background: #1e293b; border-radius: 16px; padding: 32px; border-left: 4px solid var(--cyan); }
+  .founder-card blockquote { color: white; font-size: 17px; line-height: 1.7; margin: 0 0 24px; font-style: italic; }
+  .founder-meta { display: flex; align-items: center; gap: 12px; }
+  .founder-avatar { width: 48px; height: 48px; background: var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; font-size: 18px; flex-shrink: 0; }
+  .founder-name { color: white; font-weight: 700; font-size: 15px; }
+  .founder-title { color: #64748b; font-size: 13px; }
 
   /* COMPARISON */
   .comparison { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; margin-top: 48px; max-width: 780px; margin-left: auto; margin-right: auto; }
@@ -142,15 +167,15 @@
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
   .field input, .field select, .field textarea { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s; width: 100%; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue); }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--cyan); }
   .field input::placeholder, .field textarea::placeholder { color: rgba(148,163,184,0.5); }
   .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; cursor: pointer; }
   .field select option { background: #1e293b; color: var(--text); }
   .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
   #card-element { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 13px 14px; transition: border-color 0.15s; }
-  #card-element.StripeElement--focus { border-color: var(--blue); }
-  .signup-btn { width: 100%; background: var(--blue); color: white; border: none; border-radius: 10px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; font-family: inherit; transition: background 0.15s, transform 0.1s; margin-top: 8px; box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
-  .signup-btn:hover { background: #2563eb; }
+  #card-element.StripeElement--focus { border-color: var(--cyan); }
+  .signup-btn { width: 100%; background: var(--cyan); color: white; border: none; border-radius: 10px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; font-family: inherit; transition: background 0.15s, transform 0.1s; margin-top: 8px; box-shadow: 0 8px 24px rgba(6,182,212,0.3); }
+  .signup-btn:hover { background: var(--cyan-dark); }
   .signup-btn:active { transform: scale(0.99); }
   .signup-btn:disabled { background: #334155; cursor: not-allowed; box-shadow: none; }
   .signup-trust { display: flex; justify-content: center; gap: 20px; margin-top: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
@@ -161,16 +186,16 @@
 
   /* PRICING */
   .pricing-header { text-align: center; margin-bottom: 48px; }
-  .pricing-header h2 { font-size: clamp(28px, 4.5vw, 48px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 12px; }
+  .pricing-header h2 { font-size: clamp(28px, 4.5vw, 44px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 12px; }
   .pricing-header p { color: var(--muted); font-size: 16px; line-height: 1.6; max-width: 480px; margin: 0 auto; }
   .pricing-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 24px; max-width: 900px; margin: 0 auto; align-items: start; }
   @media (max-width: 720px) { .pricing-grid { grid-template-columns: 1fr; } }
   .pricing-card { border-radius: 20px; padding: 36px 32px; position: relative; }
-  .pricing-card.featured { background: var(--surface); border: 1.5px solid var(--blue); box-shadow: 0 0 40px rgba(59,130,246,0.1); }
+  .pricing-card.featured { background: var(--surface); border: 1.5px solid var(--cyan); box-shadow: 0 0 40px rgba(6,182,212,0.1); }
   .pricing-card.secondary { background: var(--card); border: 1px solid var(--border); }
   @media (max-width: 720px) { .pricing-card.secondary { order: 2; } .pricing-card.featured { order: 1; } }
   .pricing-badge { display: inline-block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 20px; }
-  .pricing-badge.popular { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: var(--blue-light); }
+  .pricing-badge.popular { background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); }
   .pricing-badge.enterprise { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); color: var(--muted); }
   .pricing-price { font-size: 52px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
   .pricing-card.secondary .pricing-price { font-size: 40px; }
@@ -183,8 +208,8 @@
   .pricing-card.secondary .pricing-features li { font-size: 13px; color: var(--muted); }
   .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; font-size: 13px; margin-top: 1px; }
   .pricing-cta { display: block; text-align: center; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; text-decoration: none; border: none; font-family: inherit; transition: all 0.15s; width: 100%; }
-  .pricing-cta.primary { background: var(--blue); color: white; box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
-  .pricing-cta.primary:hover { background: #2563eb; transform: translateY(-1px); }
+  .pricing-cta.primary { background: var(--cyan); color: white; box-shadow: 0 8px 24px rgba(6,182,212,0.3); }
+  .pricing-cta.primary:hover { background: var(--cyan-dark); transform: translateY(-1px); }
   .pricing-cta.secondary-btn { background: transparent; color: var(--text); border: 1px solid var(--border); }
   .pricing-cta.secondary-btn:hover { border-color: var(--muted); }
   .pricing-footnote { text-align: center; font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
@@ -207,6 +232,15 @@
   details[open] summary::after { content: '−'; }
   details p { color: var(--muted); font-size: 15px; line-height: 1.7; padding-bottom: 20px; }
 
+  /* BLOG */
+  .blog-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 32px; }
+  @media (max-width: 720px) { .blog-grid { grid-template-columns: 1fr; } }
+  .blog-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-decoration: none; display: block; transition: border-color 0.15s; }
+  .blog-card:hover { border-color: var(--cyan); }
+  .blog-card-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin-bottom: 8px; }
+  .blog-card-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.4; }
+  .blog-card-date { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
   /* FOOTER */
   footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
   footer a { color: var(--muted); text-decoration: none; }
@@ -220,13 +254,13 @@
   <a href="#signup" class="nav-cta">$49/month — Get Started</a>
 </nav>
 
-<!-- HERO -->
+<!-- HERO — "What's the point?" -->
 <div class="hero">
   <div class="hero-copy">
     <h1>Your homeowners stop calling you<br><em>during installations.</em></h1>
-    <p>Give every homeowner a live portal. They see your crew working, their photos, their insurance status, and Aria — their AI assistant on call 24/7. They never have to call you to find out what's happening.</p>
+    <p>Give every homeowner a live portal. They see their crew, their photos, their insurance status — in real time. They stop calling because they don't need to.</p>
     <a href="#signup" class="hero-cta">Get your portal — $49/month →</a>
-    <div class="hero-sub-note">14-day free trial · No charge until day 15</div>
+    <div class="hero-sub-note">14-day free trial · No contract · Setup in 5 minutes</div>
   </div>
 
   <div class="phone-wrap">
@@ -250,7 +284,7 @@
                 <div class="aria-icon">✦</div>
                 <div class="aria-msg-name">Aria · 9:14am</div>
               </div>
-              <div class="aria-msg-text">Good morning, Sarah — your crew arrived at 7:15am and tear-off is complete. You're on track to have a new roof by 4pm today.</div>
+              <div class="aria-msg-text">Good morning, Sarah — your crew arrived at 7:15am and tear-off is complete. You're on track for a new roof by 4pm today.</div>
             </div>
             <div class="act-item">
               <div class="act-dot"></div>
@@ -258,7 +292,7 @@
             </div>
             <div class="act-item">
               <div class="act-dot" style="background:#f59e0b;"></div>
-              <div class="act-text"><strong>Supplement submitted</strong>$3,847 requested from Allstate. Pending review.</div>
+              <div class="act-text"><strong>Supplement submitted</strong>$3,847 requested from Allstate. Pending.</div>
             </div>
             <div class="act-item">
               <div class="act-dot" style="background:var(--green);"></div>
@@ -290,60 +324,127 @@
   </div>
 </div>
 
-<!-- SECTION 1: What they see -->
-<section style="background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
-  <div class="section-inner" style="text-align: center;">
-    <div class="section-label">What your homeowner sees</div>
-    <h2 class="section-title">Three moments that make them trust you completely</h2>
-    <p class="section-sub" style="margin: 0 auto;">They don't know what's happening up there. Now they do.</p>
-    <div class="moments-grid">
-      <div class="moment-card">
-        <div class="moment-img satellite">
-          <span>🛰️</span>
-          <div class="moment-badge">Their House</div>
-        </div>
-        <div class="moment-body">
-          <div class="moment-title">Their house, from satellite</div>
-          <div class="moment-desc">Portal opens with their property's satellite view. Immediately personal — they recognize their house and know this is real.</div>
-        </div>
-      </div>
-      <div class="moment-card">
-        <div class="moment-img photos">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;width:80%;">
-            <div style="aspect-ratio:1;background:rgba(255,255,255,0.07);border-radius:4px;"></div>
-            <div style="aspect-ratio:1;background:rgba(255,255,255,0.09);border-radius:4px;"></div>
-            <div style="aspect-ratio:1;background:rgba(255,255,255,0.05);border-radius:4px;"></div>
-            <div style="aspect-ratio:1;background:rgba(255,255,255,0.08);border-radius:4px;"></div>
-          </div>
-          <div class="moment-badge">LIVE</div>
-        </div>
-        <div class="moment-body">
-          <div class="moment-title">Photos as your crew works</div>
-          <div class="moment-desc">Every photo shows up live. They watch the job happen. They screenshot it and text their neighbors about you.</div>
-        </div>
-      </div>
-      <div class="moment-card">
-        <div class="moment-img insurance">
-          <div style="text-align:center;width:80%;">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">Insurance Claim</div>
-            <div style="font-size:24px;font-weight:900;color:var(--green);">$22,400</div>
-            <div style="display:inline-block;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:var(--green);font-size:9px;font-weight:700;padding:2px 8px;border-radius:100px;margin-top:6px;">APPROVED</div>
-          </div>
-        </div>
-        <div class="moment-body">
-          <div class="moment-title">Insurance in plain English</div>
-          <div class="moment-desc">No adjuster-speak. Just: approved, pending, requested — and what it means for them. They stop being confused and anxious.</div>
-        </div>
-      </div>
+<!-- PROBLEM — "How does this help ME?" -->
+<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:680px;margin:0 auto;">
+    <div class="section-label">You know this feeling</div>
+    <h2 class="section-title">The calls that cost you money.</h2>
+
+    <div class="pain-card">
+      <p>📱 Your crew is on the roof. Your homeowner texts for the fourth time: <em>"When are you coming?"</em></p>
     </div>
+
+    <div class="pain-card">
+      <p>📞 Your adjuster approved the claim. You call the homeowner to schedule. No answer. Two days go by. They got three more bids.</p>
+    </div>
+
+    <div class="pain-card">
+      <p>💸 Your homeowner called the adjuster directly. Got confused. Pulled the claim. You lost a $4,000 supplement.</p>
+    </div>
+
+    <p style="color:var(--muted);font-size:16px;margin-top:24px;line-height:1.7;">
+      These aren't bad homeowners. They're just uninformed.<br>
+      And when they can't reach you, they call whoever they can.
+    </p>
   </div>
 </section>
 
-<!-- SECTION 2: What you stop doing -->
+<!-- HOW IT WORKS — "How does it work?" + "Do I have to set anything up?" -->
 <section>
-  <div class="section-inner" style="text-align: center;">
+  <div style="max-width:680px;margin:0 auto;">
+    <div class="section-label">Setup</div>
+    <h2 class="section-title">Three steps. That's it.</h2>
+    <p style="color:var(--muted);font-size:16px;margin:0 0 40px;line-height:1.6;">No complicated setup. No training your crew. No new software to learn.</p>
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <h3>You create a job</h3>
+        <p>Type the homeowner's name, address, and email. Takes 60 seconds. Or call our number and say it out loud — we create the job automatically.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <h3>Your homeowner gets a link</h3>
+        <p>We email them a portal link instantly. No app to download. No password. Just a link that works on any phone.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <h3>They track everything themselves</h3>
+        <p>Insurance status. Crew photos. Install date. Supplement updates. All of it — without calling you once.</p>
+      </div>
+    </div>
+
+    <a href="#signup" style="display:block;background:var(--cyan);color:white;padding:16px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 8px 24px rgba(6,182,212,0.3);">
+      See it live — free demo →
+    </a>
+  </div>
+</section>
+
+<!-- SARAH'S STORY — "What do other roofers think?" -->
+<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:680px;margin:0 auto;">
+    <div class="section-label">Real job, real portal</div>
+    <h2 class="section-title">Here's what your homeowner sees.</h2>
+    <p style="color:var(--muted);font-size:16px;margin:0 0 32px;line-height:1.6;">This is a real portal from a real job.</p>
+
+    <div class="sarah-portal">
+      <div class="sarah-portal-header">
+        <div class="name">Sarah Johnson</div>
+        <div class="addr">4821 Timberline Dr, Aurora CO</div>
+      </div>
+      <div class="sarah-portal-body">
+        <div class="sarah-row">
+          <div class="sarah-check">✓</div>
+          <div>
+            <div class="title">Claim approved</div>
+            <div class="sub">Allstate · $22,400 approved</div>
+          </div>
+        </div>
+        <div class="sarah-row">
+          <div class="sarah-check">✓</div>
+          <div>
+            <div class="title">Materials ordered</div>
+            <div class="sub">GAF Timberline HDZ Charcoal</div>
+          </div>
+        </div>
+        <div class="sarah-row">
+          <div class="sarah-arrow">→</div>
+          <div>
+            <div class="title">Installation: Thursday</div>
+            <div class="sub">Crew arrives 7am</div>
+          </div>
+        </div>
+        <div class="sarah-row">
+          <div class="sarah-arrow">📸</div>
+          <div>
+            <div class="title">14 photos from your crew</div>
+            <div class="sub">Updated today at 9:14am</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p style="color:var(--muted);font-size:16px;line-height:1.7;margin:0 0 24px;">
+      Sarah got this link the day her contractor opened her file. She never called once. Her contractor closed the job, got a 5-star review, and two referrals from her neighbors.
+    </p>
+
+    <a href="https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS" style="display:block;background:#1e293b;color:var(--cyan);padding:14px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;text-align:center;border:1px solid var(--cyan);">
+      See the full demo portal →
+    </a>
+  </div>
+</section>
+
+<!-- COMPARISON — "How does this help ME?" (visual) -->
+<section>
+  <div class="section-inner" style="text-align:center;">
     <div class="section-label">The job gets easier</div>
-    <h2 class="section-title">What you stop doing the day you start</h2>
+    <h2 class="section-title">What you stop doing the day you start.</h2>
     <div class="comparison">
       <div class="comp-side bad">
         <div class="comp-head red"><span>✗</span> Without it</div>
@@ -365,11 +466,30 @@
   </div>
 </section>
 
-<!-- SECTION 3: Everything handled -->
-<section style="background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+<!-- FOUNDER STORY — "What do other roofers think?" -->
+<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:680px;margin:0 auto;">
+    <div class="founder-card">
+      <blockquote>
+        "I built Roofing OS because I watched good roofers lose supplements, lose jobs, and lose their minds to homeowner calls. Not because they were bad contractors — because homeowners had no way to track what was happening.<br><br>
+        One portal link fixes all of it. I wish I had this 5 years ago."
+      </blockquote>
+      <div class="founder-meta">
+        <div class="founder-avatar">Z</div>
+        <div>
+          <div class="founder-name">Zach Curtis</div>
+          <div class="founder-title">Founder, Roofing OS</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES — "How does it work?" (detail) -->
+<section>
   <div class="section-inner">
     <div class="section-label">What's included at $49/month</div>
-    <h2 class="section-title">Everything is handled</h2>
+    <h2 class="section-title">Everything is handled.</h2>
     <p class="section-sub">One job that impresses a homeowner pays for the year.</p>
     <div class="check-grid">
       <div class="check-item">
@@ -401,15 +521,13 @@
 </section>
 
 <!-- PRICING -->
-<section id="pricing" style="background: var(--bg);">
+<section id="pricing" style="background:var(--bg);">
   <div class="section-inner">
     <div class="pricing-header">
       <h2>Start with the portal.<br>Add everything else when you're ready.</h2>
       <p>Most contractors start at $49. The portal pays for itself on the first job when your homeowners stop calling.</p>
     </div>
     <div class="pricing-grid">
-
-      <!-- OPTION 1: THE PORTAL -->
       <div class="pricing-card featured">
         <div class="pricing-badge popular">Most Popular</div>
         <div class="pricing-price">$49<sub>/mo</sub></div>
@@ -428,8 +546,6 @@
         <a href="#signup" class="pricing-cta primary">Get your portal — $49/month →</a>
         <div class="pricing-footnote">No contract. Cancel anytime.<br>Setup takes 4 minutes.</div>
       </div>
-
-      <!-- OPTION 2: FULL ROOFING OS -->
       <div class="pricing-card secondary">
         <div class="pricing-badge enterprise">Enterprise</div>
         <div class="pricing-price">Custom<sub></sub></div>
@@ -452,7 +568,6 @@
         <button class="pricing-cta secondary-btn" onclick="openContactModal()">Contact Sales</button>
         <div class="pricing-footnote">We build around your existing workflow.<br>No rip and replace.</div>
       </div>
-
     </div>
   </div>
 </section>
@@ -493,11 +608,11 @@
     </div>
     <div class="signup-error" id="c-error"></div>
     <button class="signup-btn" id="c-btn" onclick="submitContact()" style="margin-top:4px;">Send →</button>
-    <div class="pricing-footnote" style="margin-top:12px;">Or email directly: <a href="mailto:zach@roofingos.dev" style="color:var(--blue-light);">zach@roofingos.dev</a></div>
+    <div class="pricing-footnote" style="margin-top:12px;">Or email directly: <a href="mailto:zach@roofingos.dev" style="color:var(--cyan);">zach@roofingos.dev</a></div>
   </div>
 </div>
 
-<!-- SIGNUP -->
+<!-- SIGNUP — keep exactly -->
 <section id="signup">
   <div class="signup-card">
     <div class="signup-title">Get your homeowner portal</div>
@@ -547,33 +662,57 @@
   </div>
 </section>
 
-<!-- FAQ -->
+<!-- FAQ — "Quick answers" — all 5 questions -->
 <section>
-  <div style="text-align:center; margin-bottom: 40px; max-width: 680px; margin-left: auto; margin-right: auto;">
-    <h2 class="section-title">Questions</h2>
+  <div style="text-align:center;margin-bottom:40px;max-width:680px;margin-left:auto;margin-right:auto;">
+    <div class="section-label">FAQ</div>
+    <h2 class="section-title">Quick answers.</h2>
   </div>
   <div class="faq-wrap">
     <details>
-      <summary>Do my homeowners need to download an app?</summary>
-      <p>No. They get a text with a link. They tap it and their portal opens in their browser — no account, no password, no app download. It works on any phone. Most homeowners open it within 5 minutes of the first text.</p>
+      <summary>How long does setup take?</summary>
+      <p>5 minutes. Create your account, create your first job, send the link to your homeowner. That's it. No training. No onboarding calls. No learning curve. If you can text, you can use Roofing OS.</p>
+    </details>
+    <details>
+      <summary>Does my homeowner need to download an app?</summary>
+      <p>No. It's a link. Works on any phone, any browser. They tap it and they're in. No account. No password. No app store. Most homeowners open it within 5 minutes of the first text.</p>
+    </details>
+    <details>
+      <summary>Do I have to update it manually?</summary>
+      <p>No. Connect your existing tools — CompanyCam, AccuLynx, JobNimbus — and the portal updates automatically. Or update it yourself in 10 seconds from your phone. Either way, your homeowner stays informed.</p>
     </details>
     <details>
       <summary>What is Aria?</summary>
-      <p>Aria is an AI assistant built for roofing. At the $49/month tier, she handles text chat inside the homeowner portal — answering questions about job status, insurance, documents, and next steps 24/7. She's always disclosed as AI. She gets smarter every week from real conversations.</p>
+      <p>Aria is an AI assistant built for roofing. She answers homeowner questions 24/7 inside the portal — insurance status, job timeline, what's happening and why. She's always disclosed as AI. She gets smarter every week from real conversations.</p>
     </details>
     <details>
-      <summary>How does the 14-day trial work?</summary>
-      <p>You enter your card but we don't charge it for 14 days. Run it on real jobs. If you don't love it, cancel before day 14 and owe nothing. After that it's $49/month, billed monthly, cancel anytime with no penalty.</p>
+      <summary>What if I don't like it?</summary>
+      <p>Cancel anytime. No contract. 14-day free trial — you don't pay anything until day 15. Text or call Zach directly at <a href="tel:+17205006668" style="color:var(--cyan);">(720) 500-6668</a> if you want to talk before signing up.</p>
     </details>
     <details>
-      <summary>Can I upgrade to the full AI supplement and voice system later?</summary>
-      <p>Yes. When you're ready for AI-powered supplement documentation, Aria outbound voice calls, storm detection, and full job automation — the upgrade is one click from your dashboard. Most contractors start at $49 and upgrade after seeing their first supplement recovered.</p>
+      <summary>How much does it cost?</summary>
+      <p>$49/month. That's it. No setup fee. No per-job fee. No hidden charges. Unlimited jobs, unlimited homeowners. The portal pays for itself the first time a homeowner stops calling during an installation.</p>
     </details>
   </div>
 </section>
 
+<!-- BLOG — "For roofing contractors" -->
+<section style="background:#0f172a;border-top:1px solid var(--border);">
+  <div class="section-inner">
+    <div class="section-label">For roofing contractors</div>
+    <h2 class="section-title" style="margin-bottom:8px;">Latest from Roofing OS</h2>
+    <p style="color:var(--muted);font-size:15px;margin-bottom:8px;">Supplements, homeowners, storm strategy — written for people on job sites.</p>
+    <div class="blog-grid" id="blog-grid">
+      <!-- populated by JS -->
+    </div>
+    <p style="text-align:center;margin-top:24px;">
+      <a href="/blog" style="color:var(--cyan);font-size:14px;font-weight:600;text-decoration:none;">View all articles →</a>
+    </p>
+  </div>
+</section>
+
 <footer>
-  Roofing OS — Denver, CO &nbsp;·&nbsp; <a href="mailto:zach@roofingos.dev">zach@roofingos.dev</a>
+  Roofing OS — Denver, CO &nbsp;·&nbsp; <a href="mailto:zach@roofingos.dev">zach@roofingos.dev</a> &nbsp;·&nbsp; <a href="tel:+17205006668">(720) 500-6668</a>
 </footer>
 
 <script>
@@ -654,7 +793,7 @@ async function initStripe() {
       }
     });
     cardElement.mount('#card-element');
-  } catch { /* Stripe unavailable — form submits without payment */ }
+  } catch { /* Stripe unavailable */ }
 }
 
 async function submitSignup() {
@@ -722,6 +861,25 @@ async function submitSignup() {
   }
 }
 
+async function loadBlogPosts() {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/roofing_content?select=title,blog_url,created_at&type=eq.blog&status=eq.published&order=created_at.desc&limit=3`,
+      { headers: { 'apikey': ANON_KEY } }
+    );
+    const posts = await res.json();
+    const grid = document.getElementById('blog-grid');
+    if (!grid || !Array.isArray(posts) || posts.length === 0) return;
+    grid.innerHTML = posts.map(p => `
+      <a class="blog-card" href="${p.blog_url || '/blog'}" target="_blank" rel="noopener">
+        <div class="blog-card-label">Roofing OS</div>
+        <div class="blog-card-title">${p.title || 'Untitled'}</div>
+        <div class="blog-card-date">${p.created_at ? new Date(p.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
+      </a>
+    `).join('');
+  } catch { /* blog section stays empty */ }
+}
+
 // Pause scroll animation on touch
 const portalScroll = document.getElementById('portalScroll');
 if (portalScroll) {
@@ -732,6 +890,7 @@ if (portalScroll) {
 }
 
 initStripe();
+loadBlogPosts();
 </script>
 </body>
 </html>
