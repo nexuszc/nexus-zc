@@ -1,5 +1,4 @@
-// Smoke test edge function for Nexus
-// Validates core system functionality
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 const FUNCTION_START_TIME = performance.now();
 
@@ -31,6 +30,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
   const startTime = performance.now();
   try {
     const version = Deno.version;
+    
     return {
       name: 'deno_runtime',
       status: 'pass',
@@ -47,7 +47,7 @@ async function checkDenoRuntime(): Promise<HealthCheck> {
       name: 'deno_runtime',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'Deno runtime check failed',
+      message: error instanceof Error ? error.message : 'Runtime check failed',
     };
   }
 }
@@ -71,9 +71,9 @@ async function checkEnvironment(): Promise<HealthCheck> {
         name: 'environment',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing required environment variables',
+        message: `Missing environment variables: ${missing.join(', ')}`,
         details: {
-          missing_vars: missing,
+          missing,
         },
       };
     }
@@ -84,7 +84,7 @@ async function checkEnvironment(): Promise<HealthCheck> {
       duration_ms: performance.now() - startTime,
       message: 'All required environment variables present',
       details: {
-        checked_vars: requiredVars.length,
+        variables_checked: requiredVars.length,
       },
     };
   } catch (error) {
@@ -111,27 +111,27 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database credentials not configured',
+        message: 'Missing database credentials',
       };
     }
 
-    // Simple connectivity test using REST API
-    const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (!response.ok) {
+    // Simple query to check connectivity
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('count')
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is fine
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database connectivity check failed',
+        message: error.message,
         details: {
-          status_code: response.status,
+          error_code: error.code,
         },
       };
     }
