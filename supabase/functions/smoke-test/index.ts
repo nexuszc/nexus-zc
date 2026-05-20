@@ -1,299 +1,4 @@
-Deno.serve(async (req) => {
-  const startTime = performance.now();
-  
-  try {
-    logger.info('Smoke test request received', {
-      method: req.method,
-      url: req.url,
-    });
-
-    // Only allow GET requests
-    if (req.method !== 'GET') {
-      logger.warn('Method not allowed', { method: req.method });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Method not allowed',
-          message: 'Only GET requests are supported',
-        }),
-        {
-          status: 405,
-          headers: {
-            'Content-Type': 'application/json',
-            'Allow': 'GET',
-          },
-        }
-      );
-    }
-
-    // Run smoke tests with timeout protection
-    const timeoutMs = 30000; // 30 second timeout
-    const testPromise = runSmokeTests();
-    const timeoutPromise = new Promise<SmokeTestResult>((_, reject) =>
-      setTimeout(() => reject(new Error('Smoke tests timed out')), timeoutMs)
-    );
-
-    let result: SmokeTestResult;
-    try {
-      result = await Promise.race([testPromise, timeoutPromise]);
-    } catch (timeoutError) {
-      logger.error('Smoke tests timed out', timeoutError);
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Smoke tests timed out',
-          message: 'Tests exceeded maximum execution time',
-          duration_ms: performance.now() - startTime,
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 504,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // Validate result structure
-    if (!result || typeof result !== 'object') {
-      logger.error('Invalid test result structure', { result });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Invalid test result',
-          message: 'Smoke tests returned invalid result structure',
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // Determine HTTP status code based on test results
-    let statusCode = 200;
-    if (result.overall_status === 'fail') {
-      statusCode = 503; // Service Unavailable
-    } else if (result.overall_status === 'warn') {
-      statusCode = 200; // OK but with warnings
-    }
-
-    logger.info('Returning smoke test results', {
-      status: result.overall_status,
-      statusCode,
-      duration_ms: result.duration_ms,
-    });
-
-    return new Response(JSON.stringify(result), {
-      status: statusCode,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'X-Test-Duration': String(result.duration_ms),
-        'X-Test-Status': result.overall_status,
-      },
-    });
-  } catch (error) {
-    logger.error('Unhandled error in smoke test handler', error);
-    
-    const errorResponse = {
-      success: false,
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'An unexpected error occurred',
-      stack: error instanceof Error ? error.stack : undefined,
-      duration_ms: performance.now() - startTime,
-      timestamp: new Date().toISOString(),
-    };
-
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-/**
- * Logger utility with structured logging
- */
-const logger = {
-  info: (message: string, meta?: Record<string, unknown>) => {
-    console.log(JSON.stringify({
-      level: 'info',
-      message,
-      timestamp: new Date().toISOString(),
-      ...meta,
-    }));
-  },
-  warn: (message: string, meta?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({
-      level: 'warn',
-      message,
-      timestamp: new Date().toISOString(),
-      ...meta,
-    }));
-  },
-  error: (message: string, error?: unknown, meta?: Record<string, unknown>) => {
-    console.error(JSON.stringify({
-      level: 'error',
-      message,
-      error: error instanceof Error ? {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      } : String(error),
-      timestamp: new Date().toISOString(),
-      ...meta,
-    }));
-  },
-};
-
-/**
- * Type definitions
- */
-interface HealthCheck {
-  name: string;
-  status: 'pass' | 'fail' | 'warn';
-  duration_ms: number;
-  message: string;
-  details?: Record<string, unknown>;
-  error?: string;
-}
-
-interface SmokeTestResult {
-  success: boolean;
-  timestamp: string;
-  duration_ms: number;
-  checks: HealthCheck[];
-  overall_status: 'pass' | 'fail' | 'warn';
-  environment: string;
-  version: string;
-  service_dependencies: {
-    database: boolean;
-    edge_functions: boolean;
-    external_services: boolean;
-  };
-}
-
-/**
- * Check database connectivity
- */
-async function checkDatabase(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting database connectivity check');
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !supabaseKey) {
-      logger.warn('Database credentials not configured');
-      return {
-        name: 'database',
-        status: 'warn',
-        duration_ms: performance.now() - startTime,
-        message: 'Database credentials not configured',
-        details: {
-          supabase_url_present: !!supabaseUrl,
-          supabase_key_present: !!supabaseKey,
-        },
-      };
-    }
-
-    // Test basic database connectivity with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        logger.warn('Database connectivity check failed', {
-          status: response.status,
-          statusText: response.statusText,
-        });
-        return {
-          name: 'database',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: `Database returned status ${response.status}`,
-          details: {
-            status: response.status,
-            statusText: response.statusText,
-          },
-        };
-      }
-
-      logger.info('Database connectivity check passed');
-      return {
-        name: 'database',
-        status: 'pass',
-        duration_ms: performance.now() - startTime,
-        message: 'Database is accessible',
-        details: {
-          status: response.status,
-        },
-      };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        logger.error('Database connectivity check timed out');
-        return {
-          name: 'database',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: 'Database connectivity check timed out',
-          error: 'Request timeout after 5 seconds',
-        };
-      }
-      throw fetchError;
-    }
-  } catch (error) {
-    logger.error('Database check failed', error);
-    return {
-      name: 'database',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Database connectivity check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check authentication system
- */
-async function checkAuthentication(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting authentication check');
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      logger.warn('Authentication credentials not configured');
-      return {
-        name: 'authentication',
-        status: 'warn',
-        duration_ms: performance.now() - startTime,
-        message: 'Authentication credentials not configured',
-      };
-    }
-
-    // Test auth endpoint availability with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
+${supabaseUrl}/auth/v1/health`, {
         method: 'GET',
         headers: {
           'apikey': supabaseAnonKey,
@@ -500,4 +205,280 @@ async function checkEdgeFunctions(): Promise<HealthCheck> {
       logger.warn('Not running in Deno runtime');
       return {
         name: 'edge_functions',
-        status
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Not running in Deno runtime environment',
+        error: 'Deno runtime not detected',
+      };
+    }
+
+    if (!hasDenoServe) {
+      logger.warn('Deno.serve not available');
+      return {
+        name: 'edge_functions',
+        status: 'warn',
+        duration_ms: performance.now() - startTime,
+        message: 'Deno.serve function not available',
+        details: {
+          runtime: 'deno',
+          serve_available: false,
+        },
+      };
+    }
+
+    logger.info('Edge function availability check passed');
+    return {
+      name: 'edge_functions',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'Edge function runtime is operational',
+      details: {
+        runtime: 'deno',
+        serve_available: true,
+      },
+    };
+  } catch (error) {
+    logger.error('Edge function availability check failed', error);
+    return {
+      name: 'edge_functions',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: 'Edge function availability check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Check Supabase client connectivity
+ */
+async function checkSupabaseClient(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  logger.info('Starting Supabase client connectivity check');
+  
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      logger.error('Supabase configuration missing');
+      return {
+        name: 'supabase_client',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Supabase configuration not available',
+        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      // Test the REST API endpoint
+      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        logger.warn('Supabase client returned error', {
+          status: response.status,
+        });
+        return {
+          name: 'supabase_client',
+          status: 'warn',
+          duration_ms: performance.now() - startTime,
+          message: `Supabase client returned status ${response.status}`,
+          details: {
+            status: response.status,
+          },
+        };
+      }
+
+      logger.info('Supabase client connectivity check passed');
+      return {
+        name: 'supabase_client',
+        status: 'pass',
+        duration_ms: performance.now() - startTime,
+        message: 'Supabase client is connected and operational',
+        details: {
+          status: response.status,
+        },
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        logger.error('Supabase client check timed out');
+        return {
+          name: 'supabase_client',
+          status: 'fail',
+          duration_ms: performance.now() - startTime,
+          message: 'Supabase client check timed out',
+          error: 'Request timeout after 5 seconds',
+        };
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    logger.error('Supabase client connectivity check failed', error);
+    return {
+      name: 'supabase_client',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: 'Supabase client connectivity check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Check database connectivity with detailed error handling
+ */
+async function checkDatabaseConnectivity(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  logger.info('Starting database connectivity check');
+  
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      logger.error('Database configuration missing');
+      return {
+        name: 'database_connectivity',
+        status: 'fail',
+        duration_ms: performance.now() - startTime,
+        message: 'Database configuration not available',
+        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+      };
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      // Execute a simple query to test database connectivity
+      const response = await fetch(`${supabaseUrl}/rest/v1/rpc/version`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseServiceKey,
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Even if the RPC doesn't exist, a proper connection should return a structured error
+      if (response.status === 404) {
+        // 404 means the endpoint was reached but RPC doesn't exist - connection is good
+        logger.info('Database connectivity check passed (endpoint reached)');
+        return {
+          name: 'database_connectivity',
+          status: 'pass',
+          duration_ms: performance.now() - startTime,
+          message: 'Database connection is operational',
+          details: {
+            status: response.status,
+            note: 'Connection verified via REST API',
+          },
+        };
+      }
+
+      if (!response.ok && response.status >= 500) {
+        logger.error('Database returned server error', {
+          status: response.status,
+        });
+        return {
+          name: 'database_connectivity',
+          status: 'fail',
+          duration_ms: performance.now() - startTime,
+          message: `Database returned server error ${response.status}`,
+          details: {
+            status: response.status,
+          },
+        };
+      }
+
+      logger.info('Database connectivity check passed');
+      return {
+        name: 'database_connectivity',
+        status: 'pass',
+        duration_ms: performance.now() - startTime,
+        message: 'Database connection is operational',
+        details: {
+          status: response.status,
+        },
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        logger.error('Database connectivity check timed out');
+        return {
+          name: 'database_connectivity',
+          status: 'fail',
+          duration_ms: performance.now() - startTime,
+          message: 'Database connectivity check timed out',
+          error: 'Request timeout after 10 seconds',
+        };
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    logger.error('Database connectivity check failed', error);
+    return {
+      name: 'database_connectivity',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: 'Database connectivity check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Aggregates all health checks and determines overall system health
+ */
+async function performHealthChecks(): Promise<SmokeTestResult> {
+  const startTime = performance.now();
+  logger.info('Starting comprehensive smoke test');
+
+  try {
+    // Run all health checks in parallel for efficiency
+    const checks = await Promise.all([
+      checkEnvironment(),
+      checkEdgeFunctions(),
+      checkDatabase(),
+      checkAuthentication(),
+      checkSupabaseClient(),
+      checkDatabaseConnectivity(),
+      checkExternalServices(),
+    ]);
+
+    const totalDuration = performance.now() - startTime;
+
+    // Determine overall status
+    const hasFailures = checks.some(check => check.status === 'fail');
+    const hasWarnings = checks.some(check => check.status === 'warn');
+    
+    let overallStatus: 'pass' | 'warn' | 'fail';
+    if (hasFailures) {
+      overallStatus = 'fail';
+    } else if (hasWarnings) {
+      overallStatus = 'warn';
+    } else {
+      overallStatus = 'pass';
+    }
+
+    const result: SmokeTestResult = {
+      status: overallStatus,
+      timestamp
