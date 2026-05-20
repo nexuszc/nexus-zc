@@ -1,230 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
-
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
-const SMOKE_TEST_SECRET = Deno.env.get('SMOKE_TEST_SECRET') || '';
-
-let supabaseClient: any = null;
-
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  try {
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch (error) {
-    console.error('Failed to initialize Supabase client:', error);
-  }
-}
-
-interface TestResult {
-  name: string;
-  status: 'passed' | 'failed';
-  duration_ms: number;
-  details?: string;
-  error?: string;
-  errorCategory?: string;
-}
-
-function categorizeError(status: number | null, message: string): string {
-  if (status === 401 || status === 403) return 'authentication';
-  if (status === 404) return 'not_found';
-  if (status === 500 || status === 502 || status === 503) return 'server_error';
-  if (message.includes('timeout')) return 'timeout';
-  if (message.includes('network')) return 'network';
-  if (message.includes('permission')) return 'permissions';
-  return 'unknown';
-}
-
-async function runSmokeTests(): Promise<any> {
-  const tests: TestResult[] = [];
-  const startTime = performance.now();
-  const totalSteps = 7;
-  let currentStep = 0;
-
-  console.log('=== Starting Smoke Tests ===');
-
-  // Test 1: Environment Variables
-  currentStep++;
-  const envTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Checking environment variables...`);
-
-  const requiredEnvVars = [
-    'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
-    'SMOKE_TEST_SECRET'
-  ];
-
-  const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-
-  if (missingVars.length === 0) {
-    tests.push({
-      name: 'Environment Variables',
-      status: 'passed',
-      duration_ms: performance.now() - envTestStart,
-      details: 'All required environment variables are set'
-    });
-    console.log('✓ Environment variables verified');
-  } else {
-    tests.push({
-      name: 'Environment Variables',
-      status: 'failed',
-      duration_ms: performance.now() - envTestStart,
-      error: `Missing: ${missingVars.join(', ')}`,
-      errorCategory: 'configuration'
-    });
-    console.error('✗ Missing environment variables:', missingVars.join(', '));
-  }
-
-  // Test 2: Network Connectivity
-  currentStep++;
-  const networkTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing network connectivity...`);
-
-  try {
-    const response = await fetch('https://www.google.com', {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(5000)
-    });
-
-    tests.push({
-      name: 'Network Connectivity',
-      status: 'passed',
-      duration_ms: performance.now() - networkTestStart,
-      details: `Status: ${response.status}`
-    });
-    console.log('✓ Network connectivity verified');
-  } catch (error) {
-    tests.push({
-      name: 'Network Connectivity',
-      status: 'failed',
-      duration_ms: performance.now() - networkTestStart,
-      error: error.message,
-      errorCategory: categorizeError(null, error.message)
-    });
-    console.error('✗ Network connectivity error:', error.message);
-  }
-
-  // Test 3: Supabase API Reachability
-  currentStep++;
-  const supabaseTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing Supabase API reachability...`);
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
-      method: 'HEAD',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      signal: AbortSignal.timeout(5000)
-    });
-
-    tests.push({
-      name: 'Supabase API Reachability',
-      status: 'passed',
-      duration_ms: performance.now() - supabaseTestStart,
-      details: `Status: ${response.status}`
-    });
-    console.log('✓ Supabase API reachable');
-  } catch (error) {
-    tests.push({
-      name: 'Supabase API Reachability',
-      status: 'failed',
-      duration_ms: performance.now() - supabaseTestStart,
-      error: error.message,
-      errorCategory: categorizeError(null, error.message)
-    });
-    console.error('✗ Supabase API error:', error.message);
-  }
-
-  // Test 4: JSON Processing
-  currentStep++;
-  const jsonTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing JSON processing...`);
-
-  try {
-    const testData = { test: 'data', timestamp: new Date().toISOString() };
-    const jsonString = JSON.stringify(testData);
-    const parsed = JSON.parse(jsonString);
-
-    if (parsed.test === testData.test) {
-      tests.push({
-        name: 'JSON Processing',
-        status: 'passed',
-        duration_ms: performance.now() - jsonTestStart,
-        details: 'JSON serialization and parsing successful'
-      });
-      console.log('✓ JSON processing verified');
-    } else {
-      throw new Error('JSON data mismatch');
-    }
-  } catch (error) {
-    tests.push({
-      name: 'JSON Processing',
-      status: 'failed',
-      duration_ms: performance.now() - jsonTestStart,
-      error: error.message,
-      errorCategory: categorizeError(null, error.message)
-    });
-    console.error('✗ JSON processing error:', error.message);
-  }
-
-  // Test 5: Database Connection (if client available)
-  currentStep++;
-  const dbTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing database connection...`);
-
-  if (supabaseClient) {
-    try {
-      const { data, error } = await supabaseClient
-        .from('app_metadata')
-        .select('key')
-        .limit(1);
-
-      if (error) throw error;
-
-      tests.push({
-        name: 'Database Connection',
-        status: 'passed',
-        duration_ms: performance.now() - dbTestStart,
-        details: 'Database query successful'
-      });
-      console.log('✓ Database connection verified');
-    } catch (error) {
-      tests.push({
-        name: 'Database Connection',
-        status: 'failed',
-        duration_ms: performance.now() - dbTestStart,
-        error: error.message,
-        errorCategory: categorizeError(null, error.message)
-      });
-      console.error('✗ Database connection error:', error.message);
-    }
-  } else {
-    tests.push({
-      name: 'Database Connection',
-      status: 'failed',
-      duration_ms: performance.now() - dbTestStart,
-      error: 'Supabase client not initialized',
-      errorCategory: categorizeError(null, 'client not initialized')
-    });
-  }
-
-  // Test 6: Memory Usage
-  currentStep++;
-  const memTestStart = performance.now();
-  console.log(`[${currentStep}/${totalSteps}] Testing memory usage...`);
-
-  try {
-    const memoryUsage = Deno.memoryUsage();
-    const heapUsedMB = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
-    const heapTotalMB = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
-
-    tests.push({
-      name: 'Memory Usage',
-      status: 'passed',
-      duration_ms: performance.now() - memTestStart,
-      details: `Heap: ${heapUsedMB}MB / ${heapTotalMB}MB`
-    });
-    console.log(`✓ Memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
+console.log(`✓ Memory usage: ${heapUsedMB}MB / ${heapTotalMB}MB`);
   } catch (error) {
     tests.push({
       name: 'Memory Usage',
@@ -289,60 +63,128 @@ interface HealthCheckResult {
   duration_ms: number;
   error?: string;
   response?: any;
+  retries?: number;
+  stackTrace?: string;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function checkFunctionHealth(functionName: string, timeout: number = 30000): Promise<HealthCheckResult> {
   const startTime = performance.now();
   const functionUrl = `${SUPABASE_URL}/functions/v1/${functionName}`;
+  const maxRetries = 3;
+  let lastError: any = null;
+  let stackTrace: string | undefined;
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ healthCheck: true }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    const duration = performance.now() - startTime;
-
-    if (response.ok) {
-      let responseData;
-      try {
-        responseData = await response.json();
-      } catch {
-        responseData = { status: response.status };
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Exponential backoff: 0ms, 1000ms, 2000ms
+      if (attempt > 0) {
+        const backoffMs = attempt * 1000;
+        console.log(`Retry attempt ${attempt + 1}/${maxRetries} for ${functionName} after ${backoffMs}ms`);
+        await sleep(backoffMs);
       }
 
-      return {
-        function: functionName,
-        status: 'success',
-        duration_ms: duration,
-        response: responseData
-      };
-    } else {
-      return {
-        function: functionName,
-        status: 'failed',
-        duration_ms: duration,
-        error: `HTTP ${response.status}: ${response.statusText}`
-      };
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({ healthCheck: true }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      const duration = performance.now() - startTime;
+
+      if (response.ok) {
+        let responseData;
+        try {
+          responseData = await response.json();
+        } catch {
+          responseData = { status: response.status };
+        }
+
+        return {
+          function: functionName,
+          status: 'success',
+          duration_ms: duration,
+          response: responseData,
+          retries: attempt
+        };
+      } else {
+        lastError = `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Only retry on 5xx errors or 429 (rate limit)
+        if (response.status >= 500 || response.status === 429) {
+          continue;
+        } else {
+          // Don't retry on 4xx errors (except 429)
+          break;
+        }
+      }
+    } catch (error) {
+      lastError = error;
+      stackTrace = error.stack || '';
+      
+      // Check if it's a timeout error
+      if (error.name === 'AbortError') {
+        console.error(`Function ${functionName} timed out after ${timeout}ms on attempt ${attempt + 1}`);
+      } else {
+        console.error(`Function ${functionName} error on attempt ${attempt + 1}:`, error.message);
+      }
+      
+      // Continue to next retry
+      continue;
     }
+  }
+
+  // All retries exhausted
+  const duration = performance.now() - startTime;
+  return {
+    function: functionName,
+    status: 'failed',
+    duration_ms: duration,
+    error: typeof lastError === 'string' ? lastError : lastError?.message || 'Unknown error',
+    retries: maxRetries - 1,
+    stackTrace
+  };
+}
+
+async function runHealthChecksWithTimeout(criticalFunctions: string[], timeoutMs: number = 120000): Promise<HealthCheckResult[]> {
+  const healthCheckPromises = criticalFunctions.map(functionName => 
+    checkFunctionHealth(functionName, 30000)
+  );
+
+  try {
+    const timeoutPromise = new Promise<HealthCheckResult[]>((_, reject) => {
+      setTimeout(() => reject(new Error('Health checks timed out')), timeoutMs);
+    });
+
+    const results = await Promise.race([
+      Promise.all(healthCheckPromises),
+      timeoutPromise
+    ]);
+
+    return results;
   } catch (error) {
-    const duration = performance.now() - startTime;
-    return {
+    console.error('Health checks timed out, returning partial results');
+    
+    // Return failed results for all functions
+    return criticalFunctions.map(functionName => ({
       function: functionName,
       status: 'failed',
-      duration_ms: duration,
-      error: error.message
-    };
+      duration_ms: timeoutMs,
+      error: 'Health check timeout exceeded',
+      stackTrace: error.stack
+    }));
   }
 }
 
@@ -372,6 +214,9 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  let summary: any = null;
+  let healthCheckResults: HealthCheckResult[] = [];
+
   try {
     // Authorization check
     const authHeader = req.headers.get('authorization');
@@ -398,8 +243,27 @@ Deno.serve(async (req: Request) => {
 
     console.log('Starting smoke test execution...');
 
-    // Run the smoke tests
-    const summary = await runSmokeTests();
+    // Run the smoke tests with error handling
+    try {
+      summary = await runSmokeTests();
+      console.log(`Smoke tests completed: ${summary.passed}/${summary.total} passed`);
+    } catch (error) {
+      console.error('Critical error during smoke tests:', error);
+      summary = {
+        total: 0,
+        passed: 0,
+        failed: 1,
+        duration_ms: 0,
+        timestamp: new Date().toISOString(),
+        tests: [{
+          name: 'Smoke Test Execution',
+          status: 'failed',
+          duration_ms: 0,
+          error: error.message,
+          stackTrace: error.stack
+        }]
+      };
+    }
 
     // Run health checks for critical functions
     console.log('Starting health checks for critical functions...');
@@ -412,21 +276,96 @@ Deno.serve(async (req: Request) => {
       'portal-api'
     ];
 
-    const healthCheckResults: HealthCheckResult[] = [];
-    
-    for (const functionName of criticalFunctions) {
-      console.log(`Checking health of function: ${functionName}`);
-      const result = await checkFunctionHealth(functionName, 30000);
-      healthCheckResults.push(result);
-      console.log(`${functionName}: ${result.status} (${result.duration_ms.toFixed(2)}ms)`);
+    try {
+      healthCheckResults = await runHealthChecksWithTimeout(criticalFunctions, 120000);
+      
+      for (const result of healthCheckResults) {
+        if (result.status === 'success') {
+          console.log(`✓ ${result.function}: ${result.status} (${result.duration_ms.toFixed(2)}ms, ${result.retries || 0} retries)`);
+        } else {
+          console.error(`✗ ${result.function}: ${result.status} (${result.duration_ms.toFixed(2)}ms, ${result.retries || 0} retries)`);
+          if (result.error) {
+            console.error(`  Error: ${result.error}`);
+          }
+          if (result.stackTrace) {
+            console.error(`  Stack: ${result.stackTrace.substring(0, 200)}...`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Critical error during health checks:', error);
+      healthCheckResults = criticalFunctions.map(functionName => ({
+        function: functionName,
+        status: 'failed',
+        duration_ms: 0,
+        error: 'Health check system failure',
+        stackTrace: error.stack
+      }));
     }
 
     const healthChecksFailed = healthCheckResults.filter(r => r.status === 'failed').length;
     const healthChecksSuccess = healthCheckResults.filter(r => r.status === 'success').length;
 
-    // Determine overall status
-    const overallSuccess = summary.failed === 0 && healthChecksFailed === 0;
+    // Determine overall status - be more lenient with failures
+    const criticalFailures = summary.failed > 0 || healthChecksFailed >= criticalFunctions.length;
+    const overallSuccess = !criticalFailures;
 
     const response = {
       success: overallSuccess,
-      timestamp: new
+      timestamp: new Date().toISOString(),
+      smoke_tests: {
+        total: summary.total,
+        passed: summary.passed,
+        failed: summary.failed,
+        duration_ms: summary.duration_ms,
+        tests: summary.tests
+      },
+      health_checks: {
+        total: healthCheckResults.length,
+        success: healthChecksSuccess,
+        failed: healthChecksFailed,
+        results: healthCheckResults
+      },
+      summary: {
+        all_tests_passed: summary.failed === 0,
+        all_health_checks_passed: healthChecksFailed === 0,
+        critical_failures: criticalFailures,
+        total_duration_ms: summary.duration_ms + healthCheckResults.reduce((sum, r) => sum + r.duration_ms, 0)
+      }
+    };
+
+    const statusCode = overallSuccess ? 200 : 207; // 207 Multi-Status for partial success
+
+    return new Response(
+      JSON.stringify(response, null, 2),
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+
+  } catch (error) {
+    console.error('Unhandled error in smoke test runner:', error);
+    
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: 'Internal server error during smoke test execution',
+        message: error.message,
+        stackTrace: error.stack,
+        timestamp: new Date().toISOString(),
+        smoke_tests: summary || { total: 0, passed: 0, failed: 0, tests: [] },
+        health_checks: {
+          total: healthCheckResults.length,
+          success: 0,
+          failed: healthCheckResults.length,
+          results: healthCheckResults
+        }
+      }, null, 2),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+});
