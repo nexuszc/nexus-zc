@@ -410,9 +410,9 @@ Then productized and sold to other multi-business operators.
 3. Add Self-Learning Pattern Recognition
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
-6. Draft complete operating agreement for Nexus ZC LLC
-7. Build complete Roofing OS go-to-market system
-8. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
+6. Draft operating agreement for Nexus ZC LLC
+7. Build Roofing OS go-to-market system and landing page
+8. Complete homeowner portal fixes and documentation
 
 ---
 
