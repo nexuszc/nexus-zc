@@ -1,212 +1,69 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
-const FUNCTION_START_TIME = performance.now();
-
-/**
- * Type definitions
- */
+// Types
 interface HealthCheck {
   name: string;
-  status: 'pass' | 'warn' | 'fail';
+  status: 'pass' | 'fail' | 'warn';
   duration_ms: number;
   message: string;
-  details?: Record<string, unknown>;
   error?: string;
+  details?: Record<string, unknown>;
 }
 
-interface SmokeTestResponse {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+interface SmokeTestResult {
+  success: boolean;
   timestamp: string;
+  duration_ms: number;
   checks: HealthCheck[];
-  summary: {
-    total: number;
-    passed: number;
-    warnings: number;
-    failed: number;
-    total_duration_ms: number;
-  };
+  overall_status: 'pass' | 'fail' | 'warn';
 }
 
-/**
- * Logger utility with structured output
- */
+// Logger utility
 const logger = {
-  info: (message: string, data?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
+  info: (message: string, meta?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, data?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
-  },
-  error: (message: string, error?: unknown, data?: Record<string, unknown>) => {
-    console.error(JSON.stringify({
-      level: 'error',
-      message,
-      error: error instanceof Error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      } : String(error),
-      ...data,
-      timestamp: new Date().toISOString(),
+  error: (message: string, error?: unknown) => {
+    console.error(JSON.stringify({ 
+      level: 'error', 
+      message, 
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString() 
     }));
+  },
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
   },
 };
 
 /**
- * Safe timeout wrapper for async operations
+ * Timeout wrapper for promises
  */
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  timeoutMessage: string
+  errorMessage: string
 ): Promise<T> {
-  let timeoutId: number | undefined;
+  let timeoutId: number;
   
-  const timeoutPromise = new Promise<T>((_, reject) => {
+  const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new Error(timeoutMessage));
+      reject(new Error(errorMessage));
     }, timeoutMs);
   });
 
   try {
     const result = await Promise.race([promise, timeoutPromise]);
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    clearTimeout(timeoutId!);
     return result;
   } catch (error) {
-    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    clearTimeout(timeoutId!);
     throw error;
   }
 }
 
 /**
- * Check Deno runtime availability and version
- */
-async function checkDenoRuntime(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting Deno runtime check');
-  
-  try {
-    const version = Deno.version;
-    const hasRequiredAPIs = typeof Deno.serve === 'function' &&
-                           typeof Deno.env === 'object' &&
-                           typeof performance === 'object';
-
-    if (!hasRequiredAPIs) {
-      logger.error('Missing required Deno APIs', null, { version });
-      return {
-        name: 'deno_runtime',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Required Deno APIs not available',
-        details: { version },
-        error: 'Missing Deno.serve, Deno.env, or performance API',
-      };
-    }
-
-    logger.info('Deno runtime check passed', { version });
-    return {
-      name: 'deno_runtime',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'Deno runtime operational',
-      details: {
-        deno: version.deno,
-        v8: version.v8,
-        typescript: version.typescript,
-      },
-    };
-  } catch (error) {
-    logger.error('Deno runtime check failed', error);
-    return {
-      name: 'deno_runtime',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Deno runtime check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check environment variables and configuration
- */
-async function checkEnvironment(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting environment check');
-  
-  try {
-    const requiredVars = [
-      'SUPABASE_URL',
-      'SUPABASE_ANON_KEY',
-      'SUPABASE_SERVICE_ROLE_KEY',
-    ];
-
-    const missingVars = requiredVars.filter(varName => {
-      try {
-        const value = Deno.env.get(varName);
-        return !value || value.trim().length === 0;
-      } catch {
-        return true;
-      }
-    });
-
-    if (missingVars.length > 0) {
-      logger.error('Missing required environment variables', null, { missingVars });
-      return {
-        name: 'environment',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
-        details: {
-          missing_variables: missingVars,
-          total_required: requiredVars.length,
-        },
-        error: 'Configuration incomplete',
-      };
-    }
-
-    // Validate URL format
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      if (supabaseUrl) {
-        new URL(supabaseUrl);
-      }
-    } catch (urlError) {
-      logger.error('Invalid SUPABASE_URL format', urlError);
-      return {
-        name: 'environment',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Invalid SUPABASE_URL format',
-        error: urlError instanceof Error ? urlError.message : String(urlError),
-      };
-    }
-
-    logger.info('Environment check passed', { requiredVarsCount: requiredVars.length });
-    return {
-      name: 'environment',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'All required environment variables present',
-      details: {
-        variables_checked: requiredVars.length,
-        all_present: true,
-      },
-    };
-  } catch (error) {
-    logger.error('Environment check failed', error);
-    return {
-      name: 'environment',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Environment check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check database connectivity and basic operations
+ * Check database connectivity
  */
 async function checkDatabase(): Promise<HealthCheck> {
   const startTime = performance.now();
@@ -222,7 +79,7 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Missing Supabase credentials',
+        message: 'Missing database credentials',
         error: 'SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not configured',
       };
     }
@@ -244,43 +101,37 @@ async function checkDatabase(): Promise<HealthCheck> {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Failed to create Supabase client',
+        message: 'Failed to create database client',
         error: clientError instanceof Error ? clientError.message : String(clientError),
       };
     }
 
-    // Test basic database connectivity with timeout
+    // Test database connection with a simple query
     try {
-      const { data, error, status } = await withTimeout(
-        supabase.from('users').select('count', { count: 'exact', head: true }),
+      const { data, error } = await withTimeout(
+        supabase.from('users').select('count').limit(1).single(),
         5000,
         'Database query timeout after 5 seconds'
       );
 
       if (error) {
-        logger.error('Database query error', error, { status });
+        logger.error('Database query error', error);
         return {
           name: 'database',
           status: 'fail',
           duration_ms: performance.now() - startTime,
           message: 'Database query failed',
-          details: {
-            error_code: error.code,
-            error_hint: error.hint,
-            status,
-          },
           error: error.message,
         };
       }
 
-      logger.info('Database check passed', { status });
+      logger.info('Database check passed', { queryResult: data });
       return {
         name: 'database',
         status: 'pass',
         duration_ms: performance.now() - startTime,
-        message: 'Database connectivity operational',
+        message: 'Database connection operational',
         details: {
-          query_status: status,
           connection_verified: true,
         },
       };
@@ -480,4 +331,168 @@ async function checkExternalServices(): Promise<HealthCheck> {
       name: 'external_services',
       status: 'warn',
       duration_ms: performance.now() - startTime,
-      message: error instanceof Error ? error.message : 'External
+      message: error instanceof Error ? error.message : 'External service check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Check environment configuration
+ */
+async function checkEnvironment(): Promise<HealthCheck> {
+  const startTime = performance.now();
+  logger.info('Starting environment check');
+  
+  try {
+    const requiredEnvVars = [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+
+    const missingVars: string[] = [];
+    const presentVars: string[] = [];
+
+    for (const varName of requiredEnvVars) {
+      const value = Deno.env.get(varName);
+      if (!value) {
+        missingVars.push(varName);
+      } else {
+        presentVars.push(varName);
+      }
+    }
+
+    if (missingVars.length > 0) {
+      logger.warn('Missing environment variables', { missing: missingVars });
+      return {
+        name: 'environment',
+        status: 'warn',
+        duration_ms: performance.now() - startTime,
+        message: 'Some environment variables are missing',
+        details: {
+          missing: missingVars,
+          present: presentVars,
+        },
+      };
+    }
+
+    logger.info('Environment check passed');
+    return {
+      name: 'environment',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'All required environment variables configured',
+      details: {
+        configured_vars: presentVars.length,
+      },
+    };
+  } catch (error) {
+    logger.error('Environment check failed', error);
+    return {
+      name: 'environment',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: 'Environment check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Run all smoke tests
+ */
+async function runSmokeTests(): Promise<SmokeTestResult> {
+  const startTime = performance.now();
+  logger.info('Starting smoke tests');
+
+  const checks: HealthCheck[] = [];
+
+  // Run all checks in parallel
+  const [envCheck, dbCheck, authCheck, extCheck] = await Promise.all([
+    checkEnvironment(),
+    checkDatabase(),
+    checkAuthentication(),
+    checkExternalServices(),
+  ]);
+
+  checks.push(envCheck, dbCheck, authCheck, extCheck);
+
+  // Determine overall status
+  const hasFailure = checks.some(check => check.status === 'fail');
+  const hasWarning = checks.some(check => check.status === 'warn');
+  
+  let overallStatus: 'pass' | 'fail' | 'warn';
+  if (hasFailure) {
+    overallStatus = 'fail';
+  } else if (hasWarning) {
+    overallStatus = 'warn';
+  } else {
+    overallStatus = 'pass';
+  }
+
+  const duration = performance.now() - startTime;
+  
+  const result: SmokeTestResult = {
+    success: overallStatus === 'pass',
+    timestamp: new Date().toISOString(),
+    duration_ms: duration,
+    checks,
+    overall_status: overallStatus,
+  };
+
+  logger.info('Smoke tests completed', { 
+    overall_status: overallStatus,
+    duration_ms: duration,
+    checks_count: checks.length 
+  });
+
+  return result;
+}
+
+/**
+ * Main handler wrapped in Deno.serve
+ */
+Deno.serve(async (req: Request) => {
+  try {
+    logger.info('Smoke test handler invoked', { 
+      method: req.method,
+      url: req.url 
+    });
+
+    // Run smoke tests
+    const result = await runSmokeTests();
+
+    // Determine HTTP status code based on overall result
+    const statusCode = result.overall_status === 'fail' ? 503 : 200;
+
+    return new Response(
+      JSON.stringify(result, null, 2),
+      {
+        status: statusCode,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  } catch (error) {
+    logger.error('Smoke test handler error', error);
+    
+    const errorResponse = {
+      success: false,
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+      overall_status: 'fail',
+    };
+
+    return new Response(
+      JSON.stringify(errorResponse, null, 2),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  }
+});
