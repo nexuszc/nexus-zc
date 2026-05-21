@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v8
+# Last updated: May 21, 2026 — v9
 
 ---
 
@@ -121,7 +121,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-admin-api` | See function source for details | Internal |
 | `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
-| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
+| `nexus-core` | Consolidated brain: observe, think, act, reflect — 3x/day | Cron (0 1,13,19 * * *) + VPS + manual |
 | `nexus-diagnostic` | See function source for details | Internal |
 | `nexus-follow-up` | See function source for details | Internal |
 | `nexus-intake` | See function source for details | Internal |
@@ -409,17 +409,28 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- AE task system: magic link login, daily task generation, escalation to Zach, weekly performance report
+- Master system fix: briefing (test mode + AE try/catch), content-api (view grants), page-visit (create missing function)
+- Stale $49/month pricing fixed in terms.html and Pipeline.jsx email template
+- Duplicate community monitor cron deleted (was running 2x intended)
+- nexus_improvements backlog: archived 158 proposals >7 days, 73 remain
+- Community posts: competitor-recommending posts moved to pending; posts missing roofingos.dev URL updated
+- CLAUDE.md: nexus-core cron corrected (3x/day, not every 30 min)
 
-**NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
+**PENDING — needs Zach manually:**
+1. Reddit OAuth app: reddit.com/prefs/apps → create script app → 4 credentials → add to Supabase secrets
+2. LinkedIn access token → add to Supabase secrets (LINKEDIN_ACCESS_TOKEN)
+3. Facebook Page access token → add to Supabase secrets (FACEBOOK_PAGE_ACCESS_TOKEN)
+4. Twilio — verify active; Aria made 10 calls (5 no_answer, 0 errors) so it works, just no new leads
+5. Stripe secret key — verify STRIPE_SECRET_KEY is current (rotate if key was changed)
+6. YOUTUBE_API_KEY — needed for YouTube auto-upload cron
+
+**NEXT (technical):**
+1. Add Self-Learning Pattern Recognition
+2. Add memory consolidation ability
+3. Add Conversation Context Memory
+4. Draft operating agreement for Nexus ZC LLC
+5. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
