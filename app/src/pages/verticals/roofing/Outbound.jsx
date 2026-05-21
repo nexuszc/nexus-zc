@@ -96,10 +96,10 @@ export default function Outbound() {
     setPaused(pausePref?.value === 'true')
 
     // By state breakdown
-    const stateBreakdown: Record<string, { done: number; total: number }> = {}
+    const stateBreakdown = {}
     for (const s of STATES) stateBreakdown[s] = { done: 0, total: 0 }
     for (const c of queue) {
-      const state = (c.metadata as any)?.state
+      const state = c.metadata?.state
       if (state && stateBreakdown[state]) {
         stateBreakdown[state].total++
         if (['completed', 'voicemail', 'interested', 'not_interested'].includes(c.status)) {
@@ -244,8 +244,8 @@ export default function Outbound() {
         ) : (
           <div className="space-y-0">
             {recent.map((call, i) => {
-              const state = (call.metadata as any)?.state || '—'
-              const company = (call.metadata as any)?.company_name || ''
+              const state = call.metadata?.state || '—'
+              const company = call.metadata?.company_name || ''
               return (
                 <div key={i} className="flex items-center gap-3 py-2.5 border-b border-[#1e1e2e] last:border-0">
                   <span className="text-xs font-bold text-gray-500 w-6">{state}</span>

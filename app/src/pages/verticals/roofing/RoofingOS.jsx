@@ -6,6 +6,7 @@ import Calls           from './Calls'
 import Contractors     from './Contractors'
 import System          from './System'
 import Outbound        from './Outbound'
+import Exposure        from './Exposure'
 
 const TABS = [
   { key: 'overview',    label: 'Overview',     path: '/roofing' },
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'calls',       label: 'Calls',        path: '/roofing/calls' },
   { key: 'contractors', label: 'Contractors',  path: '/roofing/contractors' },
   { key: 'system',      label: 'System',       path: '/roofing/system' },
+  { key: 'exposure',    label: 'Exposure',     path: '/roofing/exposure' },
 ]
 
 function activeTab(pathname) {
@@ -25,6 +27,7 @@ function activeTab(pathname) {
   if (pathname.startsWith('/roofing/calls'))           return 'calls'
   if (pathname.startsWith('/roofing/contractors'))     return 'contractors'
   if (pathname.startsWith('/roofing/system'))          return 'system'
+  if (pathname.startsWith('/roofing/exposure'))        return 'exposure'
   return 'overview'
 }
 
@@ -69,6 +72,7 @@ export default function RoofingOS() {
       {tab === 'calls'       && <Calls />}
       {tab === 'contractors' && <Contractors />}
       {tab === 'system'      && <System />}
+      {tab === 'exposure'    && <Exposure />}
     </div>
   )
 }

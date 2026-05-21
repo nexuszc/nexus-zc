@@ -69,7 +69,9 @@ export default function App() {
             <Route path="/roofing/content" element={<RoofingOS />} />
             <Route path="/roofing/calls" element={<RoofingOS />} />
             <Route path="/roofing/contractors" element={<RoofingOS />} />
+            <Route path="/roofing/outbound" element={<RoofingOS />} />
             <Route path="/roofing/system" element={<RoofingOS />} />
+            <Route path="/roofing/exposure" element={<RoofingOS />} />
 
             {/* Legacy routes kept intact */}
             <Route path="/dashboard" element={<Dashboard />} />
