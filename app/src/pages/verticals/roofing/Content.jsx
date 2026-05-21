@@ -727,8 +727,26 @@ export default function Content() {
 
       ) : tab === 'partners' ? (
         <div>
+          {/* Pipeline stats */}
+          <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 mb-4">
+            <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Partnership Pipeline</div>
+            <div className="flex gap-5 flex-wrap">
+              {[
+                { label: 'Pending',  value: partners.filter(p => !p.sent_at).length,                             color: 'text-gray-300' },
+                { label: 'Sent',     value: partners.filter(p => p.sent_at && !p.replied_at).length,             color: 'text-amber-400' },
+                { label: 'Replied',  value: partners.filter(p => p.replied_at).length,                           color: 'text-green-400' },
+                { label: 'Active',   value: partners.filter(p => p.status === 'active').length,                  color: 'text-indigo-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="text-center min-w-[60px]">
+                  <div className={`text-xl font-black ${color}`}>{value}</div>
+                  <div className="text-[10px] text-gray-600 mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-600 mt-3">Estimated value of 1 partnership: 500+ signups</p>
+          </div>
           <p className="text-xs text-gray-500 mb-4">
-            Distribution partners — their audience is our customer. Copy email, send manually, mark done.
+            Their audience is our customer. Copy email → send → mark sent. One yes = hundreds of signups.
           </p>
           <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
             {partners.length === 0 ? (

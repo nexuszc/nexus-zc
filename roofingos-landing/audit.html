@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Free Supplement Audit — Roofing OS</title>
+<meta name="description" content="Find out how much money your carrier owes you. Free audit — Aria calls you in 5 minutes.">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#070d1a; color:white;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  min-height:100vh; display:flex; align-items:center;
+  justify-content:center; padding:20px;
+}
+.card {
+  max-width:480px; width:100%;
+  background:#0a1628; border-radius:16px;
+  padding:40px 32px; border:1px solid #1e3a5f;
+}
+.badge {
+  font-size:11px; color:#06b6d4; font-weight:700;
+  letter-spacing:0.08em; text-transform:uppercase;
+  margin-bottom:16px;
+}
+h1 { font-size:28px; font-weight:800; line-height:1.2; margin-bottom:12px; }
+.cyan { color:#06b6d4; }
+.sub {
+  color:#64748b; font-size:15px; line-height:1.6; margin-bottom:28px;
+}
+.stat-row {
+  display:flex; gap:16px; margin-bottom:28px;
+}
+.stat {
+  flex:1; background:#070d1a; border-radius:8px;
+  padding:12px; text-align:center; border:1px solid #0f1f35;
+}
+.stat-num { font-size:22px; font-weight:800; color:#06b6d4; }
+.stat-label { font-size:11px; color:#475569; margin-top:2px; }
+.field { margin-bottom:16px; }
+.field label {
+  display:block; font-size:13px; color:#64748b;
+  margin-bottom:6px; font-weight:500;
+}
+.field input {
+  width:100%; background:#070d1a; border:1px solid #1e3a5f;
+  border-radius:8px; padding:12px 14px; color:white;
+  font-size:15px; outline:none;
+}
+.field input:focus { border-color:#06b6d4; }
+.field input::placeholder { color:#334155; }
+.btn {
+  width:100%; background:#06b6d4; color:white;
+  border:none; border-radius:12px; padding:16px;
+  font-size:16px; font-weight:700; cursor:pointer;
+  margin-top:8px; transition:background 0.2s;
+}
+.btn:hover { background:#0891b2; }
+.btn:disabled { opacity:0.6; cursor:not-allowed; }
+.note {
+  text-align:center; color:#475569; font-size:12px; margin-top:12px;
+}
+.success {
+  display:none; text-align:center; padding:20px 0;
+}
+.success h2 { font-size:22px; font-weight:800; margin-bottom:8px; }
+.success p { color:#64748b; font-size:14px; }
+.back-link { display:block; text-align:center; margin-top:20px; color:#475569; font-size:13px; text-decoration:none; }
+.back-link:hover { color:#94a3b8; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="form-view">
+    <div class="badge">FREE · NO CREDIT CARD · 5 MINUTES</div>
+    <h1>Find out how much your carrier owes you.<span class="cyan"> Free.</span></h1>
+    <p class="sub">Enter your info. Aria calls you in 5 minutes with a free estimate of unclaimed supplement money on your last jobs. Average recovery: $4,200/job.</p>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="stat-num">$4,200</div>
+        <div class="stat-label">Avg recovery per job</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">5 min</div>
+        <div class="stat-label">Aria calls you back</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">$0</div>
+        <div class="stat-label">Cost of the audit</div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="name" placeholder="Mike Johnson" autocomplete="name" />
+    </div>
+    <div class="field">
+      <label>Company name</label>
+      <input type="text" id="company" placeholder="Johnson Roofing" autocomplete="organization" />
+    </div>
+    <div class="field">
+      <label>Mobile number (Aria calls this)</label>
+      <input type="tel" id="phone" placeholder="(720) 555-0100" autocomplete="tel" />
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="mike@johnsonroofing.com" autocomplete="email" />
+    </div>
+    <button class="btn" id="submit-btn" onclick="submitAudit()">
+      Get my free audit — Aria calls in 5 min →
+    </button>
+    <p class="note">No spam. Aria is AI and will say so. You can opt out anytime.</p>
+  </div>
+
+  <div class="success" id="success-view">
+    <div style="font-size:48px;margin-bottom:16px;">📞</div>
+    <h2>Aria is calling you now.</h2>
+    <p>Check your phone in the next 5 minutes.<br>
+    She'll walk through your recent jobs and<br>
+    estimate how much you're owed.</p>
+    <p style="margin-top:16px;color:#06b6d4;font-size:13px;">
+      Want to set up your free portal while you wait?<br>
+      <a href="https://roofingos.dev/dashboard" style="color:#06b6d4;font-weight:700;">roofingos.dev/dashboard →</a>
+    </p>
+  </div>
+
+  <a href="/" class="back-link">← Back to Roofing OS</a>
+</div>
+
+<script>
+async function submitAudit() {
+  const name    = document.getElementById('name').value.trim();
+  const company = document.getElementById('company').value.trim();
+  const phone   = document.getElementById('phone').value.trim();
+  const email   = document.getElementById('email').value.trim();
+
+  if (!name || !phone || !email) {
+    alert('Please fill in your name, phone, and email.');
+    return;
+  }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Requesting…';
+
+  try {
+    await fetch(
+      'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/roofing-supplement-analyzer',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'audit_request', name, company, phone, email, source: 'audit_page' })
+      }
+    );
+  } catch(e) {}
+
+  document.getElementById('form-view').style.display = 'none';
+  document.getElementById('success-view').style.display = 'block';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') submitAudit();
+});
+</script>
+</body>
+</html>

@@ -79,8 +79,12 @@ Deno.serve(async (req) => {
     plan = 'starter',
     referral_code,
     payment_method_id,
-    audit_lead_id
+    audit_lead_id,
+    ref_source,
+    utm_campaign,
   } = body;
+
+  const signupSource = ref_source || 'direct';
 
   if (!company_name || !owner_email) {
     return Response.json({ error: 'Company name and email required' }, { status: 400 });
@@ -199,7 +203,9 @@ Deno.serve(async (req) => {
       referral_code: referralCode,
       referred_by_contractor_id: referredBy,
       subdomain,
-      onboarding_step: 'account_created'
+      onboarding_step: 'account_created',
+      signup_source: signupSource,
+      signup_ref: utm_campaign || null,
     })
     .select()
     .single();
@@ -207,6 +213,16 @@ Deno.serve(async (req) => {
   if (!contractor) {
     return Response.json({ error: 'Failed to create account' }, { status: 500 });
   }
+
+  // Log signup source to roofing_captures
+  await supabase.from('roofing_captures').insert({
+    email: owner_email,
+    name: owner_name || '',
+    company: company_name,
+    phone: owner_phone || '',
+    ref_source: signupSource,
+    utm_campaign: utm_campaign || null,
+  }).catch(() => {});
 
   // Link from audit lead
   if (audit_lead_id) {
