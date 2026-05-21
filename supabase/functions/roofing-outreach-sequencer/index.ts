@@ -20,7 +20,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 const GAPS: Record<string, number[]> = {
   hot:  [0, 1, 2, 3, 3, 4, 7, 7, 14, 14],
   warm: [0, 3, 5, 7, 7, 7, 8, 9,  7,  7],
-  cold: [0, 4, 6, 7, 8, 9, 5, 9,  0,  0],
+  cold: [0, 2, 4, 7, 8, 9, 5, 9,  0,  0],
 };
 const MAX_TOUCHES = 10;
 const WARM_BONUS_TEMPLATE = 11;

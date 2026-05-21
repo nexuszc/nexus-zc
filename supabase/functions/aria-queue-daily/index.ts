@@ -1,7 +1,7 @@
-// aria-queue-daily v1
+// aria-queue-daily v2
 // Runs daily at 14:00 UTC (8am MT). Selects 100 callable prospects,
 // distributes across 6 states, inserts to aria_call_queue with TCPA-compliant fire_at.
-// State detection via phone area code (address column is null in roofing_prospects).
+// Auto-enrolls each prospect in cold email sequence (Email 1 fires 4h after Aria call).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -9,7 +9,6 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabase     = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// State config: area codes, UTC offset (summer DST), daily target
 const STATE_CONFIG: Record<string, { codes: string[]; utcOffset: number; target: number }> = {
   CO: { codes: ["303","720","719","970"],                                                              utcOffset: 6, target: 20 },
   TX: { codes: ["214","469","972","817","682","832","713","281","346","512","210","940","806"],        utcOffset: 5, target: 25 },
@@ -29,30 +28,23 @@ function getStateFromPhone(phone: string | null): string | null {
   return null;
 }
 
-// Distribute N calls across 9am-4:30pm local, return fire_at UTC string for item i
 function buildFireAt(utcOffset: number, index: number, total: number): string {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  // 9:00am local = UTC midnight + utcOffset hours + 9 hours
   const windowStartMinutes = (utcOffset + 9) * 60;
-  // 4:30pm local
   const windowEndMinutes   = (utcOffset + 16.5) * 60;
-  const windowSize         = windowEndMinutes - windowStartMinutes; // 450 min
+  const windowSize         = windowEndMinutes - windowStartMinutes;
   const interval           = total > 1 ? windowSize / (total - 1) : 0;
   const minutesFromMidnight = windowStartMinutes + index * interval;
   const fireAt = new Date(today.getTime() + minutesFromMidnight * 60000);
-  // If already past, push to tomorrow
-  if (fireAt <= new Date()) {
-    fireAt.setDate(fireAt.getDate() + 1);
-  }
+  if (fireAt <= new Date()) fireAt.setDate(fireAt.getDate() + 1);
   return fireAt.toISOString();
 }
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "aria-queue-daily v1 ready" });
+  if (body.test) return Response.json({ ok: true, message: "aria-queue-daily v2 ready" });
 
-  // Check pause flag
   const { data: pausePref } = await supabase
     .from("nexus_preferences")
     .select("value")
@@ -64,19 +56,16 @@ Deno.serve(async (req) => {
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split("T")[0];
 
-  // Get phones already queued today (avoid duplicates)
   const { data: alreadyQueued } = await supabase
     .from("aria_call_queue")
     .select("contact_phone")
     .gte("created_at", today.toISOString());
   const alreadyQueuedPhones = new Set((alreadyQueued || []).map(r => r.contact_phone));
 
-  // Pull callable prospects (not customer/unsubscribed/bounced)
   const { data: prospects } = await supabase
     .from("roofing_prospects")
-    .select("id, owner_name, phone, company_name, status")
+    .select("id, owner_name, phone, email, company_name, status")
     .not("status", "in", '("customer","unsubscribed","bounced")')
     .not("phone", "is", null)
     .limit(500);
@@ -85,7 +74,6 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, queued: 0, message: "No callable prospects found" });
   }
 
-  // Classify by state
   const byState: Record<string, typeof prospects> = { CO: [], TX: [], FL: [], GA: [], OH: [], IL: [] };
   for (const p of prospects) {
     if (alreadyQueuedPhones.has(p.phone)) continue;
@@ -94,26 +82,34 @@ Deno.serve(async (req) => {
   }
 
   const inserts: Record<string, unknown>[] = [];
+  const prospectMeta = new Map<string, { email: string | null; name: string; state: string; fire_at: string }>();
 
   for (const [state, cfg] of Object.entries(STATE_CONFIG)) {
     const pool = byState[state] || [];
     const count = Math.min(cfg.target, pool.length);
     const selected = pool.slice(0, count);
     selected.forEach((p, i) => {
+      const fireAt = buildFireAt(cfg.utcOffset, i, count);
       inserts.push({
-        contact_phone:      p.phone,
-        contact_name:       p.owner_name || p.company_name || "there",
-        contact_type:       "roofing_prospect",
-        call_type:          "cold_free_portal",
-        status:             "queued",
-        fire_at:            buildFireAt(cfg.utcOffset, i, count),
-        metadata:           { prospect_id: p.id, state, company_name: p.company_name },
+        contact_phone:  p.phone,
+        contact_name:   p.owner_name || p.company_name || "there",
+        contact_type:   "roofing_prospect",
+        call_type:      "cold_free_portal",
+        status:         "queued",
+        fire_at:        fireAt,
+        metadata:       { prospect_id: p.id, state, company_name: p.company_name },
+      });
+      prospectMeta.set(p.id, {
+        email:   p.email || null,
+        name:    p.owner_name || p.company_name || "there",
+        state,
+        fire_at: fireAt,
       });
     });
   }
 
   if (!inserts.length) {
-    return Response.json({ ok: true, queued: 0, message: "No new prospects to queue (all states at capacity or no prospects)" });
+    return Response.json({ ok: true, queued: 0, message: "No new prospects to queue" });
   }
 
   const { error } = await supabase.from("aria_call_queue").insert(inserts);
@@ -126,6 +122,49 @@ Deno.serve(async (req) => {
     Object.keys(STATE_CONFIG).map(s => [s, inserts.filter(i => (i.metadata as any).state === s).length])
   );
 
-  console.log(`aria-queue-daily: queued ${inserts.length} calls`, byStateCounts);
-  return Response.json({ ok: true, queued: inserts.length, by_state: byStateCounts });
+  // ── Auto-enroll in cold email sequence ───────────────────────────────────────
+  let emailsEnrolled = 0;
+  const emailable = [...prospectMeta.entries()].filter(([_, d]) => d.email);
+
+  if (emailable.length > 0) {
+    const emailList = emailable.map(([_, d]) => d.email!);
+
+    const { data: existing } = await supabase
+      .from("email_sequences")
+      .select("prospect_email")
+      .in("prospect_email", emailList)
+      .eq("completed", false)
+      .neq("unsubscribed", true)
+      .neq("status", "dead");
+
+    const alreadyEnrolled = new Set((existing || []).map(e => e.prospect_email));
+
+    const emailInserts = emailable
+      .filter(([_, d]) => !alreadyEnrolled.has(d.email!))
+      .map(([prospectId, d]) => ({
+        prospect_id:    prospectId,
+        prospect_email: d.email!,
+        prospect_name:  d.name,
+        market:         d.state,
+        current_touch:  0,
+        next_touch_at:  new Date(new Date(d.fire_at).getTime() + 4 * 60 * 60 * 1000).toISOString(),
+        tier:           "cold",
+        status:         "active",
+        enrolled_at:    new Date().toISOString(),
+        completed:      false,
+        unsubscribed:   false,
+      }));
+
+    if (emailInserts.length > 0) {
+      const { error: emailErr } = await supabase.from("email_sequences").insert(emailInserts);
+      if (emailErr) {
+        console.error("Email enrollment failed:", emailErr.message);
+      } else {
+        emailsEnrolled = emailInserts.length;
+      }
+    }
+  }
+
+  console.log(`aria-queue-daily: queued ${inserts.length} calls, enrolled ${emailsEnrolled} in email`, byStateCounts);
+  return Response.json({ ok: true, queued: inserts.length, by_state: byStateCounts, emails_enrolled: emailsEnrolled });
 });
