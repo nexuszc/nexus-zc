@@ -1,71 +1,96 @@
-import { corsHeaders } from "./cors.ts";
-
-type Handler = (req: Request) => Promise<Response> | Response;
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 interface ServeOptions {
-  handler: Handler;
-  timeoutMs?: number;
+  timeout?: number;
+  healthCheckPath?: string;
 }
 
-export function serveWithHealthCheck(options: ServeOptions) {
-  const { handler, timeoutMs = 30000 } = options;
+interface ErrorResponse {
+  error: string;
+  message: string;
+  timestamp: string;
+}
 
-  return Deno.serve(async (req: Request) => {
-    const url = new URL(req.url);
+type Handler = (req: Request) => Response | Promise<Response>;
 
-    if (url.pathname === "/health") {
-      return new Response(
-        JSON.stringify({ status: "healthy", timestamp: new Date().toISOString() }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+export function serveWithErrorHandling(
+  handler: Handler,
+  options: ServeOptions = {}
+): void {
+  const timeout = options.timeout || 30000;
+  const healthCheckPath = options.healthCheckPath || "/health";
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders,
-      });
-    }
-
+  serve(async (req: Request): Promise<Response> => {
     try {
+      if (!req || !(req instanceof Request)) {
+        throw new Error("Invalid request object");
+      }
+
+      const url = new URL(req.url);
+      
+      if (url.pathname === healthCheckPath) {
+        return new Response(
+          JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const timeoutPromise = new Promise<Response>((_, reject) => {
-        setTimeout(() => reject(new Error("Request timeout")), timeoutMs);
+        setTimeout(() => reject(new Error("Request timeout")), timeout);
       });
 
-      const handlerPromise = handler(req);
+      const handlerPromise = Promise.resolve(handler(req));
+
       const response = await Promise.race([handlerPromise, timeoutPromise]);
 
-      const responseHeaders = new Headers(response.headers);
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        if (!responseHeaders.has(key)) {
-          responseHeaders.set(key, value);
-        }
-      });
+      if (!response || !(response instanceof Response)) {
+        throw new Error("Handler did not return a valid Response object");
+      }
 
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: responseHeaders,
-      });
+      return response;
     } catch (error) {
-      console.error("Request handler error:", error);
+      console.error("Error in request handler:", error);
 
-      const errorMessage = error instanceof Error ? error.message : "Internal server error";
-      const statusCode = error instanceof Error && error.message === "Request timeout" ? 504 : 500;
+      const errorResponse: ErrorResponse = {
+        error: "Internal Server Error",
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+        timestamp: new Date().toISOString(),
+      };
 
-      return new Response(
-        JSON.stringify({
-          error: errorMessage,
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: statusCode,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   });
+}
+
+export function createJsonResponse(
+  data: unknown,
+  status: number = 200,
+  headers: Record<string, string> = {}
+): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+  });
+}
+
+export function createErrorResponse(
+  message: string,
+  status: number = 400
+): Response {
+  const errorResponse: ErrorResponse = {
+    error: status >= 500 ? "Internal Server Error" : "Bad Request",
+    message,
+    timestamp: new Date().toISOString(),
+  };
+
+  return createJsonResponse(errorResponse, status);
 }
