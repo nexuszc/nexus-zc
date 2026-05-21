@@ -60,8 +60,10 @@ Walk him through the demo portal — he's the homeowner's contractor:
 > You're inside in 30 seconds. Add your first job, we walk you through it."
 
 **If he asks about setup help:**
-> "Our onboarding is built into the dashboard — it walks you through adding your first job
-> step by step. If you get stuck, there's a chat button and I'm personally responsive within the hour."
+> "Our onboarding is built into the dashboard — the moment you log in with zero jobs,
+> it shows you a 3-field form: homeowner name, address, phone. That's it. Job created.
+> There's also a chat button in the bottom-right — Aria answers setup questions instantly.
+> If it escalates to pricing or upgrades, I get an alert and follow up personally."
 
 ---
 
