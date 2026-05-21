@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v8
+# Last updated: May 21, 2026 — v11
 
 ---
 
@@ -402,18 +402,40 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE (Build Spec v4 — All Phases 0–14 complete):**
+- Phase 0: Prereqs — photo system split (portal_photos), private→public storage bucket fix, cron job auth fixed (vault lookup)
+- Phase 1: Portal photo UX — phase selector (before/during/after/damage/material), privacy toggle, CompanyCam sync fixed
+- Phase 2: Job limit enforcement — 402 on free plan at 5 jobs, monetization_events logged, client-side gate in dashboard
+- Phase 3: Measurements bundle pricing — $25/1, $20/5, $17.50/10; supplement-jobs function with 3 tiers (package/aria_plus/full_recovery)
+- Phase 4: Upgrade page rewrite — upgrade.html with v4 pricing (Portal Pro $69, Aria $249, Supplement $99-$249, All In $2,499)
+- Phase 5: Landing page v2 — CompanyCam killer section, cancel table, free-forever messaging hardened
+- Phase 6: Community monitor v2 — confidence scoring (score×10), auto-approve ≥90, Telegram for score 80, pending for rest
+- Phase 7: Contractor support v2 — role context in Claude prompt, urgent keyword escalation
+- Phase 8: Supplement AI 3-tier — supplement-jobs edge function (package/aria_plus/full_recovery), dedup, monetization logging
+- Phase 9: Social poster fix — removed stale $49/mo messaging from Facebook posts
+- Phase 10: Community monitor bottleneck fix — 209 pending posts processed, confidence scoring deployed
+- Phase 11: Dashboard UX — first-time 4-field form, Aria support chat, signup flow, free plan contractor-signup
+- Phase 12: Nexus self-healing — revenue monitoring in nexus-core observe (MRR, churn risk, state hash), daily churn alert Telegram, roofing-self-improve saves proposals to nexus_roofing_proposals
+- Phase 13: Smoke test v3 — docs/smoke-test-v3.sh, 38/38 green, service_role grants fixed on v4 tables
+- Phase 14: CLAUDE.md v11 updated
 
-**NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Stabilize Denver Pro Roofing client (health: 50)
+**STATUS: Build spec v4 complete — ALL SYSTEMS GREEN (38/38)**
+
+**PENDING (manual / external):**
+1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
+2. Get 1ESX API key (1esx.com) — needed for Measurements product auto-fulfillment ($49/mo)
+3. Get CompanyCam API key (COMPANYCAM_API_KEY secret)
+4. Complete 10DLC campaign registration after brand approval
+5. Verify Stripe keys are live (sk_live_) not test — check at stripe.com/dashboard
+6. Create Stripe payment links for all 7 products (Portal Pro $69, Measurements $25, Aria $249, Supplement $99, Supplement+Aria $249, All In $2,499)
+7. Call hot prospects daily — use docs/larry-call-script.md
+8. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
+
+**NEXT (after first contractor signed):**
+- Onboard first contractor end-to-end: signup → demo → magic link → first job created
+- Monitor Aria support chat for real questions; tune KB accordingly
+- Get 1ESX API key to unlock auto-fulfillment on Measurements ($49/mo)
+- Watch nexus_roofing_proposals dashboard — approve/reject weekly AI proposals
 
 ---
 
