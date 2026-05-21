@@ -1,170 +1,30 @@
-// Send alert notification for critical failures
-async function sendFailureAlert(
-  smokeTestResults: SmokeSummary,
-  healthCheckResults: HealthCheckResult[]
-) {
-  if (!ENABLE_NOTIFICATIONS || !SLACK_WEBHOOK_URL) {
-    logger.log('info', 'Notifications disabled or webhook not configured');
-    return;
-  }
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { corsHeaders } from '../_shared/cors.ts';
 
-  try {
-    const failedTests = smokeTestResults.tests.filter(t => t.status === 'failed');
-    const failedHealthChecks = healthCheckResults.filter(h => h.status === 'failed');
+// Logger implementation
+class Logger {
+  private logs: Array<{ level: string; message: string; data?: any; timestamp: string }> = [];
 
-    const message = {
-      text: '🚨 Smoke Test Failure Alert',
-      blocks: [
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: '🚨 Smoke Test Failure Detected'
-          }
-        },
-        {
-          type: 'section',
-          fields: [
-            {
-              type: 'mrkdwn',
-              text: `*Failed Tests:* ${failedTests.length}/${smokeTestResults.total}`
-            },
-            {
-              type: 'mrkdwn',
-              text: `*Failed Health Checks:* ${failedHealthChecks.length}/${healthCheckResults.length}`
-            }
-          ]
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*Timestamp:* ${new Date().toISOString()}`
-          }
-        }
-      ]
-    };
-
-    if (failedTests.length > 0) {
-      message.blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Failed Tests:*\n${failedTests.map(t => `• ${t.name}: ${t.error}`).join('\n')}`
-        }
-      });
-    }
-
-    if (failedHealthChecks.length > 0) {
-      message.blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Failed Health Checks:*\n${failedHealthChecks.map(h => `• ${h.function}: ${h.error}`).join('\n')}`
-        }
-      });
-    }
-
-    const response = await fetch(SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Slack webhook returned ${response.status}`);
-    }
-
-    logger.log('info', 'Failure alert sent successfully');
-  } catch (error) {
-    logger.log('error', 'Failed to send failure alert', { error: error.message });
-  }
-}
-
-// Health checks with timeout and retry logic
-async function runHealthChecksWithTimeout(
-  functionNames: string[],
-  timeoutMs: number = 120000
-): Promise<HealthCheckResult[]> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Health check timeout exceeded')), timeoutMs);
-  });
-
-  try {
-    const healthCheckPromises = functionNames.map(name => checkFunctionHealth(name));
-    
-    const results = await Promise.race([
-      Promise.all(healthCheckPromises),
-      timeoutPromise
-    ]);
-
-    return results;
-  } catch (error) {
-    logger.log('error', 'Health check timeout or error', { error: error.message });
-    
-    // Return failed results for all functions
-    return functionNames.map(functionName => ({
-      function: functionName,
-      status: 'failed',
-      duration_ms: timeoutMs,
-      error: 'Health check timeout exceeded',
-      stackTrace: error.stack,
+  log(level: string, message: string, data?: any) {
+    const entry = {
+      level,
+      message,
+      data,
       timestamp: new Date().toISOString()
-    }));
+    };
+    this.logs.push(entry);
+    console.log(JSON.stringify(entry));
+  }
+
+  getLogs() {
+    return this.logs;
   }
 }
 
-// Retry logic for failed smoke tests
-async function runSmokeTestsWithRetry(maxRetries: number = 2): Promise<SmokeSummary> {
-  let lastResult: SmokeSummary | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) {
-      logger.log('info', `Retrying smoke tests (attempt ${attempt + 1}/${maxRetries + 1})`);
-      await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
-    }
-    
-    try {
-      lastResult = await runSmokeTests();
-      
-      if (lastResult.failed === 0) {
-        logger.log('info', 'All smoke tests passed', { attempt: attempt + 1 });
-        return lastResult;
-      }
-      
-      logger.log('warn', `Smoke tests failed on attempt ${attempt + 1}`, {
-        failed: lastResult.failed,
-        total: lastResult.total
-      });
-    } catch (error) {
-      logger.log('error', `Smoke test attempt ${attempt + 1} threw error`, {
-        error: error.message,
-        stack: error.stack
-      });
-      
-      if (!lastResult) {
-        lastResult = {
-          total: 0,
-          passed: 0,
-          failed: 1,
-          duration_ms: 0,
-          tests: [{
-            name: 'smoke-test-execution',
-            status: 'failed',
-            duration_ms: 0,
-            error: error.message,
-            stackTrace: error.stack,
-            timestamp: new Date().toISOString()
-          }]
-        };
-      }
-    }
-  }
-  
-  return lastResult!;
-}
+const logger = new Logger();
 
-// Improved error response parsing
+// Error parsing helper
 function parseErrorResponse(error: any): { message: string; details?: any; stack?: string } {
   if (error instanceof Error) {
     return {
@@ -173,23 +33,294 @@ function parseErrorResponse(error: any): { message: string; details?: any; stack
       details: error.cause
     };
   }
-  
-  if (typeof error === 'string') {
-    return { message: error };
-  }
-  
-  if (error && typeof error === 'object') {
-    return {
-      message: error.message || error.error || 'Unknown error',
-      details: error.details || error.data,
-      stack: error.stack
-    };
-  }
-  
-  return { message: 'Unknown error occurred' };
+  return {
+    message: String(error)
+  };
 }
 
-// Timeout wrapper for individual function calls
+// Health check wrapper for Deno.serve
+function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
+  return async (req: Request): Promise<Response> => {
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    };
+
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders
+      });
+    }
+
+    // Check for health check endpoint
+    const url = new URL(req.url);
+    if (url.pathname.endsWith('/health') || url.searchParams.get('health') === 'true') {
+      return new Response(
+        JSON.stringify({
+          status: 'healthy',
+          service: 'smoke-test-runner',
+          timestamp: new Date().toISOString(),
+          version: '1.0.0'
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Call the main handler with error wrapping
+    try {
+      return await handler(req);
+    } catch (error) {
+      const errorInfo = parseErrorResponse(error);
+      logger.log('error', 'Unhandled error in serve wrapper', errorInfo);
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Internal server error',
+          message: errorInfo.message,
+          details: errorInfo.details,
+          stack: errorInfo.stack,
+          timestamp: new Date().toISOString(),
+          logs: logger.getLogs()
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+  };
+}
+
+// Smoke test runner implementation
+async function runSmokeTestsWithRetry(maxRetries: number): Promise<any> {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      logger.log('info', `Smoke test attempt ${attempt + 1}/${maxRetries + 1}`);
+      
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase credentials');
+      }
+
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      const tests = [
+        { name: 'Database Connection', fn: async () => {
+          const { error } = await supabase.from('system_logs').select('count').limit(1);
+          if (error) throw error;
+        }},
+        { name: 'Environment Variables', fn: async () => {
+          const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+          const missing = required.filter(key => !Deno.env.get(key));
+          if (missing.length > 0) {
+            throw new Error(`Missing env vars: ${missing.join(', ')}`);
+          }
+        }}
+      ];
+
+      let passed = 0;
+      let failed = 0;
+      const results: any[] = [];
+
+      for (const test of tests) {
+        try {
+          await test.fn();
+          passed++;
+          results.push({ name: test.name, status: 'passed' });
+          logger.log('info', `Test passed: ${test.name}`);
+        } catch (error) {
+          failed++;
+          const errorInfo = parseErrorResponse(error);
+          results.push({ 
+            name: test.name, 
+            status: 'failed', 
+            error: errorInfo.message,
+            stack: errorInfo.stack 
+          });
+          logger.log('error', `Test failed: ${test.name}`, errorInfo);
+        }
+      }
+
+      return {
+        total: tests.length,
+        passed,
+        failed,
+        results
+      };
+
+    } catch (error) {
+      lastError = error;
+      logger.log('warn', `Smoke test attempt ${attempt + 1} failed`, parseErrorResponse(error));
+      
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        logger.log('info', `Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error('Smoke tests failed after all retries');
+}
+
+// Health check implementation
+async function runHealthChecksWithTimeout(
+  functions: string[],
+  timeoutMs: number
+): Promise<any[]> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+  
+  if (!supabaseUrl || !supabaseKey) {
+    logger.log('error', 'Missing Supabase credentials for health checks');
+    return functions.map(fn => ({
+      function: fn,
+      status: 'failed',
+      error: 'Missing credentials',
+      timestamp: new Date().toISOString()
+    }));
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const results: any[] = [];
+
+  for (const functionName of functions) {
+    try {
+      logger.log('info', `Health checking function: ${functionName}`);
+      
+      const healthCheckPromise = supabase.functions.invoke(functionName, {
+        body: { health: true }
+      });
+
+      const result = await withTimeout(
+        healthCheckPromise,
+        timeoutMs,
+        `Health check timeout for ${functionName}`
+      );
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      results.push({
+        function: functionName,
+        status: 'passed',
+        timestamp: new Date().toISOString(),
+        response: result.data
+      });
+      
+      logger.log('info', `Health check passed: ${functionName}`);
+
+    } catch (error) {
+      const errorInfo = parseErrorResponse(error);
+      results.push({
+        function: functionName,
+        status: 'failed',
+        error: errorInfo.message,
+        stack: errorInfo.stack,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.log('error', `Health check failed: ${functionName}`, errorInfo);
+    }
+  }
+
+  return results;
+}
+
+// Persist results to database
+async function persistTestResults(
+  smokeTestResults: any,
+  healthCheckResults: any[],
+  overallSuccess: boolean
+): Promise<void> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      logger.log('warn', 'Cannot persist results: missing credentials');
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { error } = await supabase.from('system_logs').insert({
+      event_type: 'smoke_test_run',
+      severity: overallSuccess ? 'info' : 'error',
+      message: `Smoke test run ${overallSuccess ? 'passed' : 'failed'}`,
+      metadata: {
+        smoke_tests: smokeTestResults,
+        health_checks: healthCheckResults,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    if (error) {
+      logger.log('error', 'Failed to persist test results', parseErrorResponse(error));
+    } else {
+      logger.log('info', 'Test results persisted successfully');
+    }
+  } catch (error) {
+    logger.log('error', 'Exception persisting test results', parseErrorResponse(error));
+  }
+}
+
+// Send failure alerts
+async function sendFailureAlert(
+  smokeTestResults: any,
+  healthCheckResults: any[]
+): Promise<void> {
+  try {
+    logger.log('warn', 'Sending failure alert', {
+      smoke_tests: smokeTestResults,
+      health_checks: healthCheckResults
+    });
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      logger.log('warn', 'Cannot send alert: missing credentials');
+      return;
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    await supabase.from('system_logs').insert({
+      event_type: 'smoke_test_alert',
+      severity: 'error',
+      message: 'Smoke test failures detected',
+      metadata: {
+        failed_smoke_tests: smokeTestResults.failed,
+        failed_health_checks: healthCheckResults.filter(h => h.status === 'failed').length,
+        details: {
+          smoke_tests: smokeTestResults,
+          health_checks: healthCheckResults
+        }
+      }
+    });
+
+    logger.log('info', 'Failure alert sent');
+  } catch (error) {
+    logger.log('error', 'Failed to send alert', parseErrorResponse(error));
+  }
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -322,80 +453,4 @@ async function handleRequest(req: Request): Promise<Response> {
     logger.log('info', 'Health checks completed', {
       total: healthCheckResults.length,
       passed: healthCheckResults.filter(h => h.status === 'passed').length,
-      failed: healthCheckResults.filter(h => h.status === 'failed').length
-    });
-
-    // Determine overall success
-    const overallSuccess = 
-      smokeTestResults.failed === 0 && 
-      healthCheckResults.every(h => h.status === 'passed');
-
-    // Persist results
-    await persistTestResults(smokeTestResults, healthCheckResults, overallSuccess);
-
-    // Send alerts if there are failures
-    if (!overallSuccess) {
-      await sendFailureAlert(smokeTestResults, healthCheckResults);
-    }
-
-    // Return results
-    return new Response(
-      JSON.stringify({
-        success: overallSuccess,
-        timestamp: new Date().toISOString(),
-        smoke_tests: smokeTestResults,
-        health_checks: healthCheckResults,
-        logs: logger.getLogs()
-      }),
-      {
-        status: overallSuccess ? 200 : 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-
-  } catch (error) {
-    const errorInfo = parseErrorResponse(error);
-    logger.log('error', 'Smoke test runner failed', errorInfo);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: errorInfo.message,
-        details: errorInfo.details,
-        stack: errorInfo.stack,
-        timestamp: new Date().toISOString(),
-        logs: logger.getLogs()
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-  }
-}
-
-// Serve with health check wrapper
-Deno.serve(async (req: Request) => {
-  try {
-    return await handleRequest(req);
-  } catch (error) {
-    const errorInfo = parseErrorResponse(error);
-    logger.log('error', 'Unhandled error in serve wrapper', errorInfo);
-    
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'Internal server error',
-        message: errorInfo.message,
-        timestamp: new Date().toISOString()
-      }),
-      {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      }
-    );
-  }
-});
+      failed: healthCheckResults.filter(h
