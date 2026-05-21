@@ -18,6 +18,7 @@ async function sendTelegram(msg: string) {
 function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   const companyName = contractor.company_name as string || '';
   const ownerPhone = contractor.owner_phone as string || '';
+  const ownerEmail = contractor.owner_email as string || '';
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
   return `<!DOCTYPE html>
 <html>
@@ -36,9 +37,9 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
 <p class="sub" style="margin-top:0">Your account is active. Here's how to get started.</p>
 <hr>
 <h3>Step 1 — Log into your dashboard</h3>
-<p>Go to your contractor dashboard and enter your phone number to get a login link:</p>
-<p style="margin:16px 0"><a href="https://roofingos.dev/dashboard" class="cta">Open Your Dashboard →</a></p>
-<p class="sub">Your phone: ${ownerPhone}<br>We'll text you a login link — no password needed.</p>
+<p>Go to your contractor dashboard and enter your email to get a magic link — no password needed:</p>
+<p style="margin:16px 0"><a href="https://app.nexuszc.com/roofing/login" class="cta">Log Into Your Dashboard →</a></p>
+<p class="sub">Use this email: ${ownerEmail}<br>We'll send you a one-click login link. No password ever.</p>
 <hr>
 <h3>Step 2 — Create your first job</h3>
 <p>Call or text <strong>${twilioNumber}</strong> to start a job with your voice. Say the homeowner's name, address, and insurance carrier. We handle the rest.</p>
@@ -98,6 +99,7 @@ Deno.serve(async (req) => {
     .slice(0, 30);
 
   const planPrices: Record<string, number> = {
+    free: 0,
     door: 4900,
     starter: 29900,
     growth: 49900,
@@ -179,7 +181,7 @@ Deno.serve(async (req) => {
       plan_price_cents: planPrices[plan] || 29900,
       stripe_customer_id: stripeCustomerId || null,
       stripe_subscription_id: stripeSubscriptionId || null,
-      subscription_status: payment_method_id ? 'trialing' : 'trialing',
+      subscription_status: plan === 'free' ? 'active' : (payment_method_id ? 'trialing' : 'trialing'),
       trial_ends_at: trialEndsAt,
       referral_code: referralCode,
       referred_by_contractor_id: referredBy,
@@ -257,7 +259,7 @@ Deno.serve(async (req) => {
         body: new URLSearchParams({
           To: owner_phone,
           From: twilioNumber,
-          Body: `Hey ${firstName} — welcome to Roofing OS. Log in here: roofingos.dev/dashboard\nEnter this number when prompted. Any questions — reply here.`
+          Body: `Hey ${firstName} — welcome to Roofing OS. Log in here: app.nexuszc.com/roofing/login\nEnter your email (${owner_email}) and we'll send you a magic link. No password needed.`
         }).toString()
       }).catch(() => {});
     })() : Promise.resolve(),
@@ -288,6 +290,6 @@ Deno.serve(async (req) => {
     subdomain,
     referral_code: referralCode,
     trial_ends_at: trialEndsAt,
-    dashboard_url: `https://roofingos.dev/dashboard`
+    dashboard_url: `https://app.nexuszc.com/roofing/login`
   });
 });

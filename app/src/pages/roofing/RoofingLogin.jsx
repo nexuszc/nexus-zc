@@ -61,7 +61,10 @@ export default function RoofingLogin() {
               {loading ? 'Sending...' : 'Send Magic Link'}
             </button>
             <p className="text-center text-xs text-gray-500">
-              Don't have an account? Contact your account administrator.
+              New here?{' '}
+              <a href="https://roofingos.dev" className="text-orange-400 hover:text-orange-300" target="_blank" rel="noopener">
+                Create your free account →
+              </a>
             </p>
           </form>
         )}

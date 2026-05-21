@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useContractor } from '../../context/ContractorContext'
 
 const STAGES = [
@@ -76,6 +76,186 @@ function UpgradeNudge({ jobs, plan }) {
   return null
 }
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+
+function SupportChat({ contractorId, contractorName }) {
+  const [open, setOpen] = useState(false)
+  const [question, setQuestion] = useState('')
+  const [messages, setMessages] = useState([
+    { role: 'aria', text: 'Hi! I\'m Aria. Ask me anything about getting started — adding jobs, the homeowner portal, integrations, or features.' }
+  ])
+  const [asking, setAsking] = useState(false)
+
+  async function ask(e) {
+    e.preventDefault()
+    if (!question.trim() || asking) return
+    const q = question.trim()
+    setMessages(m => [...m, { role: 'user', text: q }])
+    setQuestion('')
+    setAsking(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/contractor-support`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ question: q, contractor_id: contractorId, contractor_name: contractorName }),
+      })
+      const data = await res.json()
+      setMessages(m => [...m, { role: 'aria', text: data.answer || 'Something went wrong. Try again.' }])
+    } catch {
+      setMessages(m => [...m, { role: 'aria', text: 'Network error. Try again.' }])
+    }
+    setAsking(false)
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-orange-600 hover:bg-orange-500 text-white rounded-full shadow-xl shadow-orange-900/40 flex items-center justify-center text-xl transition-colors"
+        title="Ask Aria"
+      >
+        {open ? '✕' : '💬'}
+      </button>
+      {open && (
+        <div className="fixed bottom-20 right-6 z-50 w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col" style={{ maxHeight: '420px' }}>
+          <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+            <span className="text-sm font-semibold text-white">Aria Support</span>
+            <span className="text-xs text-gray-500 ml-auto">Ask anything</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ minHeight: 0 }}>
+            {messages.map((m, i) => (
+              <div key={i} className={`text-xs rounded-xl px-3 py-2 max-w-[90%] ${m.role === 'aria' ? 'bg-gray-800 text-gray-300 self-start' : 'bg-orange-600/20 text-white ml-auto'}`}>
+                {m.text}
+              </div>
+            ))}
+            {asking && <div className="bg-gray-800 text-gray-500 text-xs rounded-xl px-3 py-2 animate-pulse">Aria is thinking…</div>}
+          </div>
+          <form onSubmit={ask} className="p-3 border-t border-gray-800 flex gap-2">
+            <input
+              type="text"
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              placeholder="How do I add a job?"
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-xs placeholder-gray-600 focus:border-orange-500 focus:outline-none"
+            />
+            <button type="submit" disabled={asking || !question.trim()} className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors">→</button>
+          </form>
+        </div>
+      )}
+    </>
+  )
+}
+
+function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) {
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [address, setAddress] = useState('')
+  const [phone, setPhone] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleCreate(e) {
+    e.preventDefault()
+    setError('')
+    if (!name.trim() || !address.trim()) { setError('Name and address are required.'); return }
+    setSaving(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-job-create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({
+          homeowner_name: name.trim(),
+          property_address: address.trim(),
+          homeowner_phone: phone.trim() || null,
+          contractor_id: contractorId,
+          client_id: contractorClientId || null,
+          status: 'lead',
+        }),
+      })
+      const data = await res.json()
+      if (data.job?.id || data.id) {
+        navigate(`/roofing/jobs/${data.job?.id || data.id}`)
+      } else {
+        const { data: job, error: err } = await supabase
+          .from('roofing_jobs')
+          .insert({
+            homeowner_name: name.trim(),
+            property_address: address.trim(),
+            homeowner_phone: phone.trim() || null,
+            contractor_id: contractorId,
+            client_id: contractorClientId || null,
+            status: 'lead',
+          })
+          .select()
+          .single()
+        if (err) throw err
+        navigate(`/roofing/jobs/${job.id}`)
+      }
+    } catch (e) {
+      setError('Could not create job. Try again.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 py-16 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-orange-600/20 border border-orange-600/30 flex items-center justify-center text-2xl mb-6">
+        🏠
+      </div>
+      <h2 className="text-white text-2xl font-black tracking-tight mb-2">Add your first job</h2>
+      <p className="text-gray-500 text-sm mb-8 max-w-sm">
+        Enter a homeowner and address. Your portal link generates instantly — share it and they can track their job in real time.
+      </p>
+      <form onSubmit={handleCreate} className="w-full max-w-sm space-y-3 text-left">
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Name</label>
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Jane Smith"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Property Address</label>
+          <input
+            type="text"
+            value={address}
+            onChange={e => setAddress(e.target.value)}
+            placeholder="4821 Timberline Dr, Aurora CO 80016"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Phone <span className="text-gray-600 normal-case font-normal">(optional)</span></label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={e => setPhone(e.target.value)}
+            placeholder="(720) 555-0100"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+        <button
+          type="submit"
+          disabled={saving}
+          className="w-full bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm mt-1"
+        >
+          {saving ? 'Creating job…' : 'Create job & open portal →'}
+        </button>
+      </form>
+      <p className="text-gray-600 text-xs mt-4">
+        The homeowner gets a magic link — no app download required.
+      </p>
+    </div>
+  )
+}
+
 export default function RoofingDashboard() {
   const { contractorClientId, contractor } = useContractor()
 
@@ -133,6 +313,22 @@ export default function RoofingDashboard() {
     : stageFilter === 'all'
     ? jobs
     : jobs.filter(j => j.status === stageFilter)
+
+  if (!loading && jobs.length === 0 && !onboardingProgress) {
+    return (
+      <div className="animate-fade-in">
+        <div className="px-6 lg:px-10 pt-8 pb-2">
+          <p className="text-[10px] font-bold text-orange-600/60 uppercase tracking-[0.2em] mb-1">Roofing OS · Operations</p>
+          <h1 className="text-[28px] font-black text-white tracking-tight leading-none">Job Pipeline</h1>
+        </div>
+        <FirstJobExperience
+          contractorId={contractor?.id}
+          contractorClientId={contractorClientId}
+        />
+        <SupportChat contractorId={contractor?.id} contractorName={contractor?.clients?.name || contractor?.clients?.brand_name} />
+      </div>
+    )
+  }
 
   return (
     <div className="animate-fade-in">
@@ -324,6 +520,7 @@ export default function RoofingDashboard() {
         </div>
       )}
       </div>
+      <SupportChat contractorId={contractor?.id} contractorName={contractor?.clients?.name || contractor?.clients?.brand_name} />
     </div>
   )
 }
