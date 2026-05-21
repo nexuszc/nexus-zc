@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v10
+# Last updated: May 21, 2026 — v8
 
 ---
 
@@ -402,43 +402,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
-**DONE (Launch Spec v3 — All Phases 1–11 + smoke test):**
-- Phase 0 pre-flight: all secrets verified (STRIPE/TWILIO/RETELL/RESEND set; COMPANYCAM/ONESX missing)
-- Phase 1C: Portal URL simplified — /demo redirect live, 'demo' alias added to homeowner_sessions
-- Phase 1D: Demo portal enriched — adjuster info, insurance_claims record, 9 activities, ACV check $16,375
-- Phase 1E: Sequencer confirmed healthy — 180 emails sent, errors = normal bounce rate on cold prospects
-- Phase 2: Landing page rewritten — $0/free forever messaging, no card required, add-on upsell grid
-- Phase 3: Dashboard upgrade nudges (Aria + Supplement AI) + upgrade.html add-on pricing page
-- Phase 4: Portal mobile polish — 5-stage job bar, Aria bubble label, responsive layout fixes
-- Phase 5: Measurements product — roofing-measurements function + RoofingMeasurements.jsx + measurement_reports table
-- Phase 6: 7 integration connectors — RoofingIntegrations.jsx + App.jsx routes (CompanyCam, AccuLynx, JobNimbus, Leap, Roofr, Improveit360, webhook)
-- Phase 7: Nexus self-healing — nexus-core monitors stale measurement reports every 6th cycle
-- Phase 8: Full smoke-test suite — 20 tests, portal-api 401 handled correctly, smoke-test-runner deployed
-- Phase 9: Larry call script — docs/larry-call-script.md, zero-touch onboarding model
-- Phase 10: CLAUDE.md updated to v9
-- Phase 11A: First-time dashboard — zero jobs → 4-field form (name/address/email/phone), minimal nav
-- Phase 11B: Aria support chat widget — contractor-support edge function, KB seeded with 10 onboarding entries, Telegram escalation for pricing questions
-- Phase 11C: Signup flow — contractor-signup updated for free plan ($0, active status), RoofingLogin → "Create your free account" link to roofingos.dev
-- Phase 11D: Larry call script updated with support chat and 4-field form
-- Smoke test v2: docs/smoke-test-v2.sh — 23/23 checks, ALL SYSTEMS GREEN (May 21, 2026)
-- Measurements product: manual fulfillment until 1ESX API key obtained (get from 1esx.com)
+**DONE this session:**
+- (nothing yet this session)
 
-**STATUS: Ready for first contractor call (Larry / hot prospects)**
-
-**PENDING (manual / external):**
-1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
-2. Get 1ESX API key (1esx.com) — needed for Measurements product auto-fulfillment ($49/mo)
-3. Get CompanyCam webhook key — needed for photo sync integration
-4. Complete 10DLC campaign registration after brand approval
-5. Verify Stripe keys are live (sk_live_) not test — check at stripe.com/dashboard
-6. Call hot prospects daily — 10 in pipeline (use docs/larry-call-script.md)
-7. Approve weekly content batch in dashboard
-8. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
-
-**NEXT (after first contractor signed):**
-- Onboard first contractor end-to-end: signup → demo → magic link → first job created
-- Monitor Aria support chat for real questions; tune KB accordingly
-- Get 1ESX API key to unlock auto-fulfillment on Measurements ($49/mo)
+**NEXT:**
+1. Fix smoke_test_failed error
+2. Fix Recurring Smoke Test Failures
+3. Add Self-Learning Pattern Recognition
+4. Add memory consolidation ability
+5. Add Conversation Context Memory
+6. Draft operating agreement for Nexus ZC LLC
+7. Build complete Roofing OS go-to-market system
+8. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
