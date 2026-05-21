@@ -18,7 +18,8 @@ async function runTest(name: string, fn: () => Promise<void>): Promise<TestResul
     await fn()
     return { name, ok: true, ms: Date.now() - t0 }
   } catch (e) {
-    return { name, ok: false, ms: Date.now() - t0, error: String(e) }
+    const msg = e instanceof Error ? e.message : (typeof e === 'object' ? JSON.stringify(e) : String(e))
+    return { name, ok: false, ms: Date.now() - t0, error: msg }
   }
 }
 
@@ -176,6 +177,27 @@ Deno.serve(async (_req) => {
   results.push(await runTest('db:system-heartbeats-accessible', async () => {
     const { error } = await supabase.from('system_heartbeats').select('id').limit(1)
     if (error) throw error
+  }))
+
+  // ── v4 tables ────────────────────────────────────────────────────────────
+  results.push(await runTest('db:v4-supplement-jobs-accessible', async () => {
+    const { error } = await supabase.from('supplement_jobs').select('id').limit(1)
+    if (error) throw new Error(`supplement_jobs: ${error.message || error.code}`)
+  }))
+
+  results.push(await runTest('db:v4-portal-photos-accessible', async () => {
+    const { error } = await supabase.from('portal_photos').select('id').limit(1)
+    if (error) throw new Error(`portal_photos: ${error.message || error.code}`)
+  }))
+
+  results.push(await runTest('db:v4-monetization-events-accessible', async () => {
+    const { error } = await supabase.from('monetization_events').select('id').limit(1)
+    if (error) throw new Error(`monetization_events: ${error.message || error.code}`)
+  }))
+
+  results.push(await runTest('db:v4-nexus-roofing-proposals-accessible', async () => {
+    const { error } = await supabase.from('nexus_roofing_proposals').select('id').limit(1)
+    if (error) throw new Error(`nexus_roofing_proposals: ${error.message || error.code}`)
   }))
 
   // ── Summary ──────────────────────────────────────────────────────────────
