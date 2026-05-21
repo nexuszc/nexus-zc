@@ -180,7 +180,7 @@ function EmailComposer({ prospect, onClose, onToast }) {
   const fn = firstName(prospect.owner_name)
   const [subject, setSubject] = useState('Quick follow up')
   const [body, setBody] = useState(
-    `Hey ${fn} —\n\nJust wanted to make sure my last email didn't get buried.\n\nWorth 30 seconds — see the homeowner portal:\nhttps://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\n$49/month. No contract.\n— Zach @ Roofing OS`
+    `Hey ${fn} —\n\nJust wanted to make sure my last email didn't get buried.\n\nWorth 30 seconds — see the homeowner portal:\nhttps://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS\n\nFree forever. No credit card. 4 minutes to set up.\n— Zach @ Roofing OS`
   )
   const [sending, setSending] = useState(false)
   const send = async () => {
