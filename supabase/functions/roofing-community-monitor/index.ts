@@ -220,18 +220,41 @@ Return ONLY the response text, nothing else.`
       if (!response) continue;
 
       try {
+        // confidence_score: score * 10 (score 1-10 → 10-100)
+        const confidenceScore = Math.min(100, score * 10);
+        // Auto-post if score >= 9 (confidence >= 90), otherwise queue for review
+        const autoPost = score >= 9;
+
         const { data: saved } = await supabase.from("roofing_community_posts").insert({
           platform: post.platform,
           thread_url: post.url,
           thread_title: post.title.slice(0, 200),
           thread_content: post.content.slice(0, 500),
           our_response: response,
-          status: "pending",
-          portal_mentioned: portal_relevant
+          status: autoPost ? "approved" : "pending",
+          portal_mentioned: portal_relevant,
+          confidence_score: confidenceScore,
+          auto_posted: false,
         }).select().single();
 
         if (saved) {
           responsesQueued++;
+          // For medium confidence (75-90), send Telegram for quick review
+          if (!autoPost && score >= 8) {
+            const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
+            const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID");
+            if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+              await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: TELEGRAM_CHAT_ID,
+                  text: `💬 *Community response ready* (score ${score}/10)\n\n*${post.title.slice(0, 80)}*\n\nDraft: "${response.slice(0, 200)}..."\n\nApprove in dashboard → Community tab`,
+                  parse_mode: "Markdown",
+                }),
+              }).catch(() => {});
+            }
+          }
         }
       } catch (e) {
         console.error("Save community post failed:", e);

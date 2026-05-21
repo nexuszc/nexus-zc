@@ -30,7 +30,7 @@ async function tg(text: string) {
 async function postToFacebook(title: string, hook: string, youtubeUrl: string): Promise<string | null> {
   if (!FACEBOOK_PAGE_ID || !FACEBOOK_ACCESS_TOKEN) return null;
 
-  const message = `${hook}\n\nFull breakdown 👇\n${youtubeUrl}\n\n🏠 roofingos.dev — starts at $49/month`;
+  const message = `${hook}\n\nFull breakdown 👇\n${youtubeUrl}\n\n🏠 roofingos.dev — free homeowner portal for every job`;
 
   const res = await fetch(`https://graph.facebook.com/v18.0/${FACEBOOK_PAGE_ID}/feed`, {
     method: 'POST',
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     if (body.youtube_url) {
       const hook = body.hook || body.title || '';
       const link = body.youtube_url as string;
-      message = `${hook}\n\nFull breakdown 👇\n${link}\n\n🏠 roofingos.dev — starts at $49/month`;
+      message = `${hook}\n\nFull breakdown 👇\n${link}\n\n🏠 roofingos.dev — free homeowner portal for every job`;
     } else {
       message = (body.message as string) || 'Test post from Roofing OS';
     }
