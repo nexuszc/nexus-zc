@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 20, 2026 — v10
+# Last updated: May 20, 2026 — v8
 
 ---
 
@@ -401,25 +401,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 20, 2026)
 
-**DONE (May 18-20 sessions — Exposure Spec v1 + Content System + Business Setup):**
-- Auto-Close System v1 (8 phases): email open → Aria call → demo link → portal banner → signup
-- Exposure Spec v1 live: landing page rebuilt, email sequence upgraded, YouTube topics added
-- Content system: daily publishing live, 7 shorts + 1 long per run, story arc topics added
-- Email open rate: 28% real (bot detection added)
-- System optimization: $160 → $51/month
-- 10DLC brand registration submitted (in progress) — EIN: 42-2453089, NEXUS ZC LLC
-- Stripe live mode: bank account added (Mercury); tax ID verification pending SS-4/CP575 upload
-- is_test_account bypass for zach@nexuszc.com churn alerts
-- Removed non-existent roofing-financial from QA smoke tests
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
-1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
-2. Complete 10DLC campaign registration after brand approval (24-48 hours)
-3. Uncomment SMS blocks after 10DLC approved (grep -rn SMS_DISABLED supabase/functions/ — 2 files)
-4. Update Stripe live API keys in Supabase secrets
-5. Call hot prospects daily — 10 in pipeline
-6. Approve weekly content batch in dashboard
-7. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
+1. Fix smoke_test_failed error
+2. Fix Recurring Smoke Test Failures
+3. Add Self-Learning Pattern Recognition
+4. Add memory consolidation ability
+5. Add Conversation Context Memory
+6. Draft operating agreement for Nexus ZC LLC
+7. Build complete Roofing OS go-to-market system
+8. Improve Brian client health from 65 to 80+
 
 ---
 
