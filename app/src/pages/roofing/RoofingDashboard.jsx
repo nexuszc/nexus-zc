@@ -52,7 +52,7 @@ function UpgradeNudge({ jobs, plan }) {
         </div>
         <a href="https://roofingos.dev/upgrade?plan=aria" target="_blank" rel="noopener"
           className="shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-          Add Aria — $149/mo →
+          Add Aria — $249/mo →
         </a>
       </div>
     )
@@ -63,11 +63,11 @@ function UpgradeNudge({ jobs, plan }) {
       <div className="mx-6 lg:mx-10 mt-4 bg-violet-900/20 border border-violet-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
         <div>
           <p className="text-violet-300 text-sm font-semibold">{insuranceJobs} insurance jobs — Supplement AI finds missed line items automatically</p>
-          <p className="text-gray-500 text-xs mt-0.5">Average recovery: $3,200 per job. One supplement pays for months of the subscription.</p>
+          <p className="text-gray-500 text-xs mt-0.5">Average recovery: $4,200 per job. At $99/job you keep nearly everything we recover.</p>
         </div>
         <a href="https://roofingos.dev/upgrade?plan=supplement" target="_blank" rel="noopener"
           className="shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-          Add Supplement AI — $499/mo →
+          Add Supplement AI — $99/job →
         </a>
       </div>
     )
@@ -276,6 +276,50 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
   )
 }
 
+function ReferralWidget({ contractorId, plan }) {
+  const [code, setCode] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!contractorId) return
+    supabase.from('contractor_accounts').select('referral_code').eq('id', contractorId).single()
+      .then(({ data }) => { if (data?.referral_code) setCode(data.referral_code) })
+  }, [contractorId])
+
+  const planStr = (plan || '').toLowerCase()
+  const isFree = !planStr || planStr === 'free'
+  if (!isFree || !code) return null
+
+  const link = `https://roofingos.dev/r/${code}`
+
+  function copy() {
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <div className="mx-6 lg:mx-10 mt-4 bg-orange-900/10 border border-orange-600/20 rounded-xl p-4">
+      <p className="text-orange-300 text-sm font-semibold mb-0.5">Know a roofer?</p>
+      <p className="text-gray-500 text-xs mb-3">
+        Share your link — they get a free portal, you get 30 days of Portal Pro free.
+      </p>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-orange-400 font-mono truncate">
+          roofingos.dev/r/{code}
+        </code>
+        <button
+          onClick={copy}
+          className="shrink-0 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function RoofingDashboard() {
   const { contractorClientId, contractor } = useContractor()
 
@@ -345,6 +389,7 @@ export default function RoofingDashboard() {
           contractorId={contractor?.id}
           contractorClientId={contractorClientId}
         />
+        <ReferralWidget contractorId={contractor?.id} plan={contractor?.plan || contractor?.clients?.plan} />
         <SupportChat contractorId={contractor?.id} contractorName={contractor?.clients?.name || contractor?.clients?.brand_name} />
       </div>
     )
@@ -373,6 +418,7 @@ export default function RoofingDashboard() {
         </div>
       )}
       {!loading && <UpgradeNudge jobs={jobs} plan={contractor?.plan || contractor?.clients?.plan} />}
+      {!loading && <ReferralWidget contractorId={contractor?.id} plan={contractor?.plan || contractor?.clients?.plan} />}
 
       {/* Header — orange branded, full width */}
       <div className="relative overflow-hidden border-b border-white/[0.06]">

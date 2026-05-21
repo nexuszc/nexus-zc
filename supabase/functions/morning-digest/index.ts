@@ -118,12 +118,15 @@ Deno.serve(async (req) => {
       const since24h = new Date(Date.now() - 86400000).toISOString();
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       const [
         { data: whales },
         { data: recentLogs },
         { data: touchesToday },
         { count: ariaQueued },
         { count: contentPending },
+        { data: visitRow },
+        { count: signupsYesterday },
       ] = await Promise.all([
         supabase.from('roofing_prospects')
           .select('owner_name, company_name, phone, last_activity_at')
@@ -136,6 +139,8 @@ Deno.serve(async (req) => {
           .not('last_touch_at', 'is', null).limit(100),
         supabase.from('aria_call_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
         supabase.from('roofing_content').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('roofing_page_visits').select('visits').eq('date', yesterday).eq('page', '/').maybeSingle(),
+        supabase.from('roofing_captures').select('id', { count: 'exact', head: true }).gte('created_at', yesterday + 'T00:00:00'),
       ]);
 
       const wList = whales || [];
@@ -146,6 +151,9 @@ Deno.serve(async (req) => {
       const touchCount = (touchesToday || []).length;
       const queuedCalls = ariaQueued || 0;
       const pendingContent = contentPending || 0;
+      const visits = (visitRow as { visits?: number } | null)?.visits || 0;
+      const signups = signupsYesterday || 0;
+      const convRate = visits > 0 ? Math.round(signups / visits * 100) : 0;
 
       const dayStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
@@ -195,6 +203,8 @@ Deno.serve(async (req) => {
         lines.push(``);
       }
 
+      lines.push(`🚀 *Growth:* ${visits} visits · ${signups} signups · ${convRate}% conversion`);
+      lines.push(``);
       lines.push(`⚡ *One thing:* ${oneThing}`);
 
       await tg(lines.join('\n'));

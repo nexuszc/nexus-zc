@@ -171,7 +171,12 @@ Deno.serve(async (req) => {
       `site:reddit.com roofing "supplement software" OR "homeowner portal" OR "adjuster denied" 2026`,
       `site:reddit.com/r/Roofing "O&P" OR "supplement" OR "hail claim" help`,
       `site:facebook.com/groups roofing contractor "supplement" OR "adjuster" OR "insurance claim" 2026`,
-      `site:reddit.com roofing contractor app CRM recommendation 2026`
+      `site:reddit.com roofing contractor app CRM recommendation 2026`,
+      // CompanyCam complaint monitoring (Task 5 — growth sprint)
+      `"companycam" "expensive" OR "price" roofing site:reddit.com`,
+      `"companycam alternative" roofing site:reddit.com`,
+      `"cancel companycam" roofing`,
+      `"companycam" "price increase" roofing site:reddit.com`,
     ];
 
     for (const query of searchQueries) {
