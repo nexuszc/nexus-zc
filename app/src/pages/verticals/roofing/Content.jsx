@@ -1,8 +1,72 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
-const SB_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SB_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+const API = `${SB_URL}/functions/v1/roofing-content-api`
+function api(method, action, id) {
+  const url = `${API}?action=${action}${id ? `&id=${id}` : ''}`
+  return fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+  }).then(r => r.json())
+}
+
+// Facebook post variants for rotating daily banner
+const FB_VARIANTS = [
+  {
+    label: 'Variant A — CompanyCam angle',
+    groups: 'Roofing Contractors Network, Roofers Coffee Shop, Contractor Talk',
+    body: `We built a free replacement for CompanyCam. Here's why.
+
+CompanyCam charges $79–199/month to store and share job photos. That's it.
+
+We built something that does that — plus gives every homeowner a real-time portal for their job. Photos, updates, insurance claim status, Aria chat, the whole thing.
+
+It's free. No credit card. First 5 jobs free to test. No subscription to share photos with homeowners ever.
+
+Why free? We make money on Measurements ($25/report), Supplement AI ($99–329/job), and CRM ($299/mo). The portal is the hook. If you just want to cancel CompanyCam, it costs you nothing.
+
+4 minutes to get your first homeowner portal live: roofingos.dev/dashboard
+
+Curious what the homeowner sees? Portal demo: roofingos.dev/portal/demo
+
+Happy to answer questions in comments.`,
+  },
+  {
+    label: 'Variant B — Homeowner calls angle',
+    groups: 'Roofing Business Owners, Roofing Sales & Marketing, Roofing Contractor Mastermind',
+    body: `Quick question for contractors: how many calls/texts do you get from homeowners asking "what's the status of my roof?"
+
+We track this. Average contractor gets 4–6 status check calls per active job per week. That's 20–30 interruptions a week during storm season.
+
+We built a homeowner portal that shows them everything in real time — photos your crew uploads from the job site, updates from the office, insurance claim status, timeline. They stop calling because they don't need to.
+
+Portal is free. Your crew uploads photos from any phone. Homeowner gets a link. Done.
+
+Get set up in 4 minutes: roofingos.dev/dashboard
+
+Demo of what the homeowner sees: roofingos.dev/portal/demo`,
+  },
+  {
+    label: 'Variant C — Supplement AI angle',
+    groups: 'Storm Restoration Professionals, Insurance Restoration Roofing, Roofing Contractor Pro Talk',
+    body: `Storm season question: what's your supplement approval rate with State Farm right now?
+
+Industry average is hovering around 58%. Best contractors I know are hitting 75–80% — and they're using AI to build the packets.
+
+We built Supplement AI into our free portal. It:
+- Analyzes your job photos for every damage code
+- Generates carrier-specific Xactimate line items the adjuster missed
+- Builds the full supplement packet as a PDF
+- (Optional) Has Aria call the adjuster and follow up until approved
+
+Package is $99/job. Full handling with Aria calling the adjuster is $329/job. Industry supplement companies charge 10–15% of recovery. At $329 you keep significantly more.
+
+The portal your homeowners use is free: roofingos.dev/dashboard`,
+  },
+]
 
 function ago(ts) {
   if (!ts) return '—'
@@ -12,48 +76,6 @@ function ago(ts) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-function fmtDate(d) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-// Returns next Mon/Wed/Fri dates starting from today
-function getScheduleDates(count, startFrom = new Date()) {
-  const dates = []
-  const d = new Date(startFrom)
-  d.setHours(14, 0, 0, 0)
-  while (dates.length < count) {
-    d.setDate(d.getDate() + 1)
-    const dow = d.getDay()
-    if (dow === 1 || dow === 3 || dow === 5) {
-      dates.push(new Date(d))
-    }
-  }
-  return dates
-}
-
-// Get the next occurrence of a named day slot
-function slotToDate(slot) {
-  if (slot === 'now') return new Date().toISOString().split('T')[0]
-  const targets = { mon: 1, wed: 3, fri: 5 }
-  const target = targets[slot]
-  if (target === undefined) return null
-  const d = new Date()
-  d.setHours(14, 0, 0, 0)
-  for (let i = 1; i <= 7; i++) {
-    d.setDate(d.getDate() + 1)
-    if (d.getDay() === target) return d.toISOString().split('T')[0]
-  }
-  return null
-}
-
-function slotLabel(slot) {
-  if (!slot) return ''
-  if (slot === 'now') return 'Post Now'
-  return slot.charAt(0).toUpperCase() + slot.slice(1)
-}
-
-// Simple toast state — module-level so it survives re-renders
 let _setToast = null
 function toast(msg, type = 'success') {
   if (_setToast) _setToast({ msg, type, id: Date.now() })
@@ -62,7 +84,7 @@ function toast(msg, type = 'success') {
 function Toast({ toast: t }) {
   if (!t) return null
   return (
-    <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg transition-all ${
+    <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl text-sm font-semibold shadow-lg ${
       t.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
     }`}>
       {t.msg}
@@ -70,201 +92,286 @@ function Toast({ toast: t }) {
   )
 }
 
-const COMMUNITY_STATUS_COLORS = {
-  pending:  'text-amber-400 bg-amber-500/10',
-  approved: 'text-green-400 bg-green-500/10',
-  skipped:  'text-gray-500 bg-gray-800',
+// Copy to clipboard with 2s feedback
+function CopyButton({ text, label = '📋 Copy', className = '' }) {
+  const [copied, setCopied] = useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast('Copy failed — check permissions', 'error')
+    }
+  }
+  return (
+    <button
+      onClick={copy}
+      className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+        copied
+          ? 'bg-green-700 text-white'
+          : 'bg-[#1e1e2e] text-gray-400 hover:bg-indigo-600 hover:text-white'
+      } ${className}`}
+    >
+      {copied ? '✓ Copied!' : label}
+    </button>
+  )
 }
 
-// ── YouTube Queue Card ────────────────────────────────────────────────────────
+// ── Facebook Daily Banner ─────────────────────────────────────────────────────
 
-function QueueCard({ item, onApprove, onReject, onSchedule }) {
+function FacebookBanner() {
+  const dayIndex = Math.floor(Date.now() / 86400000) % FB_VARIANTS.length
+  const variant = FB_VARIANTS[dayIndex]
   const [expanded, setExpanded] = useState(false)
-  const [acting, setActing] = useState(null)
 
-  const act = async (fn, type) => {
-    setActing(type)
-    try { await fn() } finally { setActing(null) }
+  return (
+    <div className="bg-[#1a1a2e] border border-blue-500/30 rounded-xl p-4 mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-blue-400 text-lg">🔵</span>
+          <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">Today's Facebook Post</span>
+          <span className="text-[10px] text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">{variant.label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <CopyButton text={variant.body} label="📋 Copy post" />
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="text-xs text-gray-600 hover:text-gray-400"
+          >
+            {expanded ? 'Hide ↑' : 'Preview ↓'}
+          </button>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-600">Best groups: {variant.groups}</p>
+      {expanded && (
+        <pre className="mt-3 text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-3 border border-[#1e1e2e] leading-relaxed">
+          {variant.body}
+        </pre>
+      )}
+    </div>
+  )
+}
+
+// ── Stats Bar ─────────────────────────────────────────────────────────────────
+
+function StatsBar({ stats }) {
+  if (!stats) return null
+  const items = [
+    { label: 'Posts this week', value: stats.posts_this_week },
+    { label: 'New signups (7d)', value: stats.signups_this_week },
+    { label: 'Community pending', value: stats.community_pending },
+  ]
+  return (
+    <div className="grid grid-cols-3 gap-3 mb-5">
+      {items.map(({ label, value }) => (
+        <div key={label} className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-white">{value ?? '—'}</div>
+          <div className="text-[10px] text-gray-600 mt-0.5">{label}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Channel Status Row ────────────────────────────────────────────────────────
+
+function ChannelRow({ icon, label, status, copyText, onCopy, onDone, generating }) {
+  const isDone = status === 'done'
+  const isPosted = status === 'posted'
+  const isPending = !isDone && !isPosted
+
+  return (
+    <div className={`flex items-center gap-2 py-1.5 border-t border-[#1e1e2e] ${isDone || isPosted ? 'opacity-60' : ''}`}>
+      <span className="text-sm w-5 text-center">{icon}</span>
+      <span className="text-xs text-gray-500 w-16">{label}</span>
+      <div className="flex-1" />
+      {isPosted || isDone ? (
+        <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full font-semibold">
+          {isPosted ? '✓ Posted' : '✓ Done'}
+        </span>
+      ) : copyText ? (
+        <>
+          <CopyButton text={copyText} label="📋 Copy" />
+          {onDone && (
+            <button
+              onClick={onDone}
+              className="text-[10px] text-gray-600 hover:text-green-400 px-2 py-1 rounded transition-colors"
+            >
+              Mark done
+            </button>
+          )}
+        </>
+      ) : (
+        <button
+          onClick={onCopy}
+          disabled={generating}
+          className="text-xs font-semibold bg-[#1e1e2e] text-gray-500 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+        >
+          {generating ? 'Generating…' : '✨ Generate + Copy'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Content Card ──────────────────────────────────────────────────────────────
+
+function ContentCard({ item, onUpdate }) {
+  const [expanded, setExpanded] = useState(false)
+  const [generatingFb, setGeneratingFb] = useState(false)
+  const [generatingTt, setGeneratingTt] = useState(false)
+
+  const fbStatus = item.facebook_marked_done_at ? 'done' : item.facebook_status
+  const ttStatus = item.tiktok_marked_done_at ? 'done' : item.tiktok_status
+  const ytStatus = item.youtube_status
+  const liStatus = item.linkedin_status
+
+  const handleGenerateFb = async () => {
+    setGeneratingFb(true)
+    try {
+      const res = await api('POST', 'generate-facebook', item.id)
+      if (res.copy) {
+        await navigator.clipboard.writeText(res.copy).catch(() => {})
+        toast('Facebook copy generated + copied ✓')
+        onUpdate()
+      } else {
+        toast('Generation failed', 'error')
+      }
+    } finally {
+      setGeneratingFb(false)
+    }
+  }
+
+  const handleGenerateTt = async () => {
+    setGeneratingTt(true)
+    try {
+      const res = await api('POST', 'generate-tiktok', item.id)
+      if (res.copy) {
+        await navigator.clipboard.writeText(res.copy).catch(() => {})
+        toast('TikTok copy generated + copied ✓')
+        onUpdate()
+      } else {
+        toast('Generation failed', 'error')
+      }
+    } finally {
+      setGeneratingTt(false)
+    }
+  }
+
+  const handleFbDone = async () => {
+    await api('POST', 'facebook-done', item.id)
+    toast('Facebook marked done ✓')
+    onUpdate()
+  }
+
+  const handleTtDone = async () => {
+    await api('POST', 'tiktok-done', item.id)
+    toast('TikTok marked done ✓')
+    onUpdate()
+  }
+
+  const channelBadge = (status, label) => {
+    if (status === 'posted' || status === 'done') return <span key={label} className="text-[9px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">✓ {label}</span>
+    return <span key={label} className="text-[9px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded-full">{label}</span>
   }
 
   return (
-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5 hover:border-[#2a2a3e] transition-all">
+    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 hover:border-[#2a2a3e] transition-all">
       <div className="flex items-start gap-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${item.format === 'long' ? 'bg-red-700' : 'bg-red-600'}`}>
-          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M8 5v14l11-7z"/></svg>
+        <div className="w-8 h-8 bg-red-600/20 rounded-lg flex items-center justify-center shrink-0 border border-red-500/20">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-red-400"><path d="M8 5v14l11-7z"/></svg>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-white leading-tight">{item.title || 'Untitled'}</span>
-            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full uppercase tracking-wide">
-              {item.format === 'long' ? 'Long' : 'Short'}
-            </span>
-            {item.duration_estimate && (
-              <span className="text-[10px] text-gray-600">~{item.duration_estimate}s</span>
-            )}
-          </div>
-
-          {item.script && !expanded && (
-            <p className="mt-1.5 text-xs text-gray-500 line-clamp-2 leading-relaxed">{item.script}</p>
-          )}
-
-          {expanded && (
-            <div className="mt-3 border-t border-[#1e1e2e] pt-3 space-y-2">
-              {item.hook_text && (
-                <p className="text-xs text-amber-400 italic">"{item.hook_text}"</p>
-              )}
-              <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{item.script}</p>
-              {item.thumbnail_text && (
-                <p className="text-[10px] text-gray-500">
-                  Thumbnail: <span className="text-white font-semibold">{item.thumbnail_text}</span>
-                </p>
-              )}
-              {item.seo_description && (
-                <p className="text-[10px] text-gray-500 mt-2 border-t border-[#1e1e2e] pt-2">
-                  <span className="text-gray-600 block mb-1 uppercase tracking-widest text-[9px]">SEO Description</span>
-                  {item.seo_description}
-                </p>
-              )}
+          <div className="flex items-start gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-white leading-tight flex-1">{item.title || 'Untitled'}</span>
+            <div className="flex gap-1 flex-wrap shrink-0">
+              {channelBadge(ytStatus, 'YT')}
+              {channelBadge(liStatus, 'LI')}
+              {channelBadge(fbStatus, 'FB')}
+              {channelBadge(ttStatus, 'TT')}
             </div>
-          )}
+          </div>
+          <div className="text-[10px] text-gray-600 mt-0.5">{ago(item.created_at)}</div>
         </div>
       </div>
 
-      <div className="mt-4 pt-4 border-t border-[#1e1e2e] flex items-center gap-2 flex-wrap">
-        <div className="flex gap-1.5 flex-1 flex-wrap">
-          {['now', 'mon', 'wed', 'fri'].map(slot => (
-            <button
-              key={slot}
-              onClick={() => act(() => onSchedule(slot), slot)}
-              disabled={!!acting}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#1e1e2e] text-gray-400 hover:bg-indigo-600 hover:text-white transition-colors disabled:opacity-40"
-            >
-              {acting === slot ? '…' : slot === 'now' ? 'Post Now' : slot.charAt(0).toUpperCase() + slot.slice(1)}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-1.5 items-center">
-          <button
-            onClick={() => act(onApprove, 'approve')}
-            disabled={!!acting}
-            className="text-xs font-semibold bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-          >
-            {acting === 'approve' ? '…' : 'Approve'}
-          </button>
-          <button
-            onClick={() => act(onReject, 'reject')}
-            disabled={!!acting}
-            className="text-xs text-gray-600 hover:text-red-400 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-          >
-            {acting === 'reject' ? '…' : 'Skip'}
-          </button>
-        </div>
+      {/* Channel rows */}
+      <div className="mt-3">
+        <ChannelRow
+          icon="▶"
+          label="YouTube"
+          status={ytStatus}
+        />
+        <ChannelRow
+          icon="💼"
+          label="LinkedIn"
+          status={liStatus}
+        />
+        <ChannelRow
+          icon="🔵"
+          label="Facebook"
+          status={fbStatus}
+          copyText={item.facebook_copy}
+          onCopy={handleGenerateFb}
+          onDone={handleFbDone}
+          generating={generatingFb}
+        />
+        <ChannelRow
+          icon="🎵"
+          label="TikTok"
+          status={ttStatus}
+          copyText={item.tiktok_copy}
+          onCopy={handleGenerateTt}
+          onDone={handleTtDone}
+          generating={generatingTt}
+        />
       </div>
+
+      {expanded && item.script && (
+        <div className="mt-3 pt-3 border-t border-[#1e1e2e]">
+          {item.hook_text && (
+            <p className="text-xs text-amber-400 italic mb-2">"{item.hook_text}"</p>
+          )}
+          <p className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">{item.script.slice(0, 600)}</p>
+        </div>
+      )}
 
       <button
         onClick={() => setExpanded(e => !e)}
         className="mt-2 text-xs text-gray-700 hover:text-gray-500 transition-colors"
       >
-        {expanded ? 'Hide script ↑' : 'Full script ↓'}
+        {expanded ? 'Hide ↑' : 'Script ↓'}
       </button>
     </div>
   )
 }
 
-// ── Scheduled Card ────────────────────────────────────────────────────────────
-
-function ScheduledCard({ item }) {
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <div className="bg-[#0e0e18] border border-[#1e1e2e] rounded-xl p-4 hover:border-[#2a2a3e] transition-all">
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 bg-indigo-600/20 rounded-lg flex items-center justify-center shrink-0 border border-indigo-500/20">
-          <span className="text-xs font-bold text-indigo-400">
-            {item.schedule_slot === 'now' ? '▶' : (item.schedule_slot || '?').slice(0, 1).toUpperCase()}
-          </span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-white leading-tight">{item.title || 'Untitled'}</span>
-            <span className="text-[10px] text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
-              {item.format === 'long' ? 'Long' : 'Short'}
-            </span>
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-            <span className="text-indigo-400 font-medium">{slotLabel(item.schedule_slot)}</span>
-            {item.schedule_date && <span>· {fmtDate(item.schedule_date)}</span>}
-            {item.approved_at && <span>· approved {ago(item.approved_at)}</span>}
-          </div>
-          {expanded && item.script && (
-            <p className="mt-2 text-xs text-gray-400 leading-relaxed whitespace-pre-wrap border-t border-[#1e1e2e] pt-2">
-              {item.script}
-            </p>
-          )}
-        </div>
-      </div>
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="mt-2 text-xs text-gray-700 hover:text-gray-500 transition-colors"
-      >
-        {expanded ? 'Hide ↑' : 'Preview ↓'}
-      </button>
-    </div>
-  )
-}
-
-// ── Posted Card ───────────────────────────────────────────────────────────────
-
-function PostedCard({ item }) {
-  return (
-    <div className="bg-[#0e0e18] border border-[#1e1e2e] rounded-xl p-4 hover:border-[#2a2a3e] transition-all">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center shrink-0 border border-green-500/20">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 fill-green-400"><path d="M8 5v14l11-7z"/></svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-white leading-tight">{item.title || 'Untitled'}</span>
-            <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Published</span>
-          </div>
-          <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-            {item.posted_at && <span>{fmtDate(item.posted_at)}</span>}
-            {item.views_count > 0 && <span className="text-white font-semibold">{item.views_count.toLocaleString()} views</span>}
-            {item.likes_count > 0 && <span>{item.likes_count} likes</span>}
-            {item.youtube_url && (
-              <a href={item.youtube_url} target="_blank" rel="noopener noreferrer"
-                className="text-indigo-400 hover:text-indigo-300">View ↗</a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Community card ────────────────────────────────────────────────────────────
+// ── Community Card ────────────────────────────────────────────────────────────
 
 function CommunityCard({ post, onApprove, onSkip }) {
   const [expanded, setExpanded] = useState(false)
   const [acting, setActing] = useState(null)
   const act = async (fn, type) => { setActing(type); try { await fn() } finally { setActing(null) } }
-  const ICONS = { reddit: '🟠', facebook_groups: '🔵' }
 
   return (
     <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 hover:border-[#2a2a3e] transition-all">
       <div className="flex items-start gap-3">
-        <span className="text-xl shrink-0 mt-0.5">{ICONS[post.platform] || '💬'}</span>
+        <span className="text-xl shrink-0 mt-0.5">{post.platform === 'reddit' ? '🟠' : '🔵'}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-white line-clamp-1">{post.thread_title || 'Untitled'}</span>
-            <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${COMMUNITY_STATUS_COLORS[post.status] || 'text-gray-500 bg-gray-800'}`}>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              post.status === 'approved' ? 'text-green-400 bg-green-500/10' :
+              post.status === 'skipped'  ? 'text-gray-500 bg-gray-800' :
+              'text-amber-400 bg-amber-500/10'
+            }`}>
               {post.status}
             </span>
-            {post.portal_mentioned && (
-              <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">Portal</span>
-            )}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5 capitalize">{(post.platform || '').replace('_', ' ')} · {ago(post.created_at)}</div>
+          <div className="text-xs text-gray-500 mt-0.5 capitalize">
+            {(post.platform || '').replace('_', ' ')} · {ago(post.created_at)}
+          </div>
           {expanded && (
             <div className="mt-3 border-t border-[#1e1e2e] pt-3 space-y-3">
               {post.thread_content && (
@@ -284,6 +391,9 @@ function CommunityCard({ post, onApprove, onSkip }) {
           )}
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
+          {post.our_response && (
+            <CopyButton text={post.our_response} label="📋 Copy" />
+          )}
           {post.status === 'pending' && (
             <>
               <button onClick={() => act(onApprove, 'approve')} disabled={acting === 'approve'}
@@ -305,18 +415,63 @@ function CommunityCard({ post, onApprove, onSkip }) {
   )
 }
 
+// ── Partner Row ───────────────────────────────────────────────────────────────
+
+function PartnerRow({ partner, onSent }) {
+  const [acting, setActing] = useState(false)
+  const isSent = !!partner.sent_at
+
+  const handleSent = async () => {
+    setActing(true)
+    try {
+      await api('POST', 'partner-sent', partner.id)
+      toast('Marked as sent ✓')
+      onSent()
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const emailText = `To: ${partner.email}\nSubject: ${partner.subject}\n\n${partner.body}`
+
+  return (
+    <div className={`flex items-center gap-3 py-3 border-b border-[#1e1e2e] last:border-0 ${isSent ? 'opacity-50' : ''}`}>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-white">{partner.name}</div>
+        <div className="text-xs text-gray-500 truncate">{partner.email} · {partner.subject}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {isSent ? (
+          <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Sent</span>
+        ) : (
+          <>
+            <CopyButton text={emailText} label="📋 Copy email" />
+            <button
+              onClick={handleSent}
+              disabled={acting}
+              className="text-xs font-semibold bg-[#1e1e2e] hover:bg-green-700 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+            >
+              {acting ? '…' : 'Mark sent'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function Content() {
-  const [items, setItems]           = useState([])
-  const [community, setCommunity]   = useState([])
-  const [tab, setTab]               = useState('queue')
-  const [loading, setLoading]       = useState(true)
+  const [items, setItems]         = useState([])
+  const [community, setCommunity] = useState([])
+  const [partners, setPartners]   = useState([])
+  const [stats, setStats]         = useState(null)
+  const [tab, setTab]             = useState('content')
+  const [loading, setLoading]     = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [approvingAll, setApprovingAll] = useState(false)
   const [toastState, setToastState] = useState(null)
 
-  // Register global toast setter and auto-dismiss
   useEffect(() => {
     _setToast = setToastState
     return () => { _setToast = null }
@@ -329,95 +484,23 @@ export default function Content() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: contentRows }, { data: communityRows }] = await Promise.all([
-      supabase.from('roofing_content')
-        .select('*')
-        .in('channel', ['youtube'])
-        .order('created_at', { ascending: false })
-        .limit(200),
-      supabase.from('roofing_community_posts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(30),
+    const [dashRes, communityRes, partnersRes, statsRes] = await Promise.all([
+      api('GET', 'dashboard', null),
+      api('GET', 'community', null),
+      api('GET', 'partners', null),
+      api('GET', 'stats', null),
     ])
-    setItems(contentRows || [])
-    setCommunity(communityRows || [])
+    setItems(dashRes.data || [])
+    setCommunity(communityRes.data || [])
+    setPartners(partnersRes.data || [])
+    setStats(statsRes)
     setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  const queueItems     = items.filter(i => i.status === 'pending_approval' || i.status === 'pending')
-  const scheduledItems = items.filter(i => i.status === 'approved').sort((a, b) => {
-    const order = { now: 0, mon: 1, wed: 2, fri: 3 }
-    return (order[a.schedule_slot] ?? 9) - (order[b.schedule_slot] ?? 9)
-  })
-  const postedItems    = items.filter(i => i.status === 'published').sort((a, b) =>
-    new Date(b.posted_at || b.created_at) - new Date(a.posted_at || a.created_at)
-  )
   const communityPending = community.filter(p => p.status === 'pending').length
-
-  // Handlers
-  const approve = (item) => async () => {
-    const { error } = await supabase.from('roofing_content')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
-      .eq('id', item.id)
-    if (error) { toast(`Update failed: ${error.message}`, 'error'); console.error('approve error', error); return }
-    toast('Approved ✓')
-    await load()
-  }
-
-  const reject = (item) => async () => {
-    const { error } = await supabase.from('roofing_content').update({ status: 'rejected' }).eq('id', item.id)
-    if (error) { toast(`Skip failed: ${error.message}`, 'error'); console.error('reject error', error); return }
-    toast('Skipped')
-    await load()
-  }
-
-  const schedule = (item) => async (slot) => {
-    const scheduleDate = slotToDate(slot)
-    const { error } = await supabase.from('roofing_content')
-      .update({ status: 'approved', approved_at: new Date().toISOString(), schedule_slot: slot, schedule_date: scheduleDate })
-      .eq('id', item.id)
-    if (error) { toast(`Schedule failed: ${error.message}`, 'error'); console.error('schedule error', error); return }
-    toast(`Scheduled for ${slotLabel(slot)} ✓`)
-    await load()
-  }
-
-  // Approve All: space pending items across Mon/Wed/Fri
-  const approveAll = async () => {
-    if (queueItems.length === 0) return
-    setApprovingAll(true)
-    try {
-      const nowItem = queueItems[0]
-      const rest = queueItems.slice(1)
-      const dates = getScheduleDates(rest.length)
-      const dayToSlot = { 1: 'mon', 3: 'wed', 5: 'fri' }
-      const updates = [
-        { id: nowItem.id, slot: 'now', date: new Date().toISOString().split('T')[0] },
-        ...rest.map((item, i) => ({
-          id: item.id,
-          slot: dayToSlot[dates[i].getDay()],
-          date: dates[i].toISOString().split('T')[0],
-        })),
-      ]
-      const results = await Promise.all(updates.map(({ id, slot, date }) =>
-        supabase.from('roofing_content').update({
-          status: 'approved',
-          approved_at: new Date().toISOString(),
-          schedule_slot: slot,
-          schedule_date: date,
-        }).eq('id', id)
-      ))
-      const failed = results.filter(r => r.error).length
-      if (failed > 0) toast(`${failed} update(s) failed — check console`, 'error')
-      else toast(`All ${updates.length} scripts scheduled ✓`)
-      results.forEach((r, i) => { if (r.error) console.error(`approveAll[${i}]`, r.error) })
-      await load()
-    } finally {
-      setApprovingAll(false)
-    }
-  }
+  const partnerPending   = partners.filter(p => !p.sent_at).length
 
   const approvePost = (post) => async () => {
     const { error } = await supabase.from('roofing_community_posts')
@@ -429,7 +512,9 @@ export default function Content() {
   }
 
   const skipPost = (post) => async () => {
-    const { error } = await supabase.from('roofing_community_posts').update({ status: 'skipped' }).eq('id', post.id)
+    const { error } = await supabase.from('roofing_community_posts')
+      .update({ status: 'skipped' })
+      .eq('id', post.id)
     if (error) { toast(`Skip failed: ${error.message}`, 'error'); return }
     toast('Post skipped')
     await load()
@@ -451,23 +536,20 @@ export default function Content() {
   }
 
   const TABS = [
-    { key: 'queue',     label: 'Approval Queue', count: queueItems.length },
-    { key: 'scheduled', label: 'Scheduled',      count: scheduledItems.length },
-    { key: 'posted',    label: 'Posted',          count: postedItems.length },
-    { key: 'community', label: 'Community',       count: communityPending },
+    { key: 'content',   label: 'Content',   count: 0 },
+    { key: 'community', label: 'Community', count: communityPending },
+    { key: 'partners',  label: 'Partners',  count: partnerPending },
   ]
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <Toast toast={toastState} />
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-white">Content</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {queueItems.length > 0 ? `${queueItems.length} pending approval` : 'YouTube content pipeline'}
-            {communityPending > 0 && ` · ${communityPending} community`}
-          </p>
+          <p className="text-gray-500 text-sm mt-0.5">Multi-channel posting hub</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load}
@@ -481,6 +563,9 @@ export default function Content() {
         </div>
       </div>
 
+      <StatsBar stats={stats} />
+      <FacebookBanner />
+
       {/* Tabs */}
       <div className="flex gap-1.5 mb-5 flex-wrap">
         {TABS.map(t => (
@@ -492,9 +577,7 @@ export default function Content() {
             }`}>
             {t.label}
             {t.count > 0 && (
-              <span className={`ml-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full ${
-                t.key === 'queue' ? 'bg-amber-500 text-black' : 'bg-gray-700 text-gray-300'
-              }`}>
+              <span className="ml-1.5 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.5 rounded-full">
                 {t.count}
               </span>
             )}
@@ -504,102 +587,23 @@ export default function Content() {
 
       {loading ? (
         <div className="space-y-3">
-          {[1,2,3].map(i => <div key={i} className="h-24 bg-[#12121a] rounded-xl animate-pulse" />)}
+          {[1, 2, 3].map(i => <div key={i} className="h-32 bg-[#12121a] rounded-xl animate-pulse" />)}
         </div>
 
-      ) : tab === 'queue' ? (
-        <div className="space-y-4">
-          {queueItems.length > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">{queueItems.length} script{queueItems.length !== 1 ? 's' : ''} need approval</span>
-              <button onClick={approveAll} disabled={approvingAll}
-                className="text-xs font-semibold bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-                {approvingAll ? 'Scheduling…' : `Approve All → Schedule Mon/Wed/Fri`}
-              </button>
-            </div>
-          )}
-
-          {queueItems.length === 0 ? (
+      ) : tab === 'content' ? (
+        <div className="space-y-3">
+          {items.length === 0 ? (
             <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
-              <p className="text-gray-600 text-sm">Queue is clear.</p>
+              <p className="text-gray-600 text-sm">No content yet.</p>
               <button onClick={generate} disabled={generating}
                 className="mt-3 text-xs text-indigo-400 hover:text-indigo-300">
-                {generating ? 'Generating…' : 'Generate next batch →'}
+                {generating ? 'Generating…' : 'Generate first batch →'}
               </button>
             </div>
           ) : (
-            <div className="space-y-3">
-              {queueItems.map(item => (
-                <QueueCard
-                  key={item.id}
-                  item={item}
-                  onApprove={approve(item)}
-                  onReject={reject(item)}
-                  onSchedule={schedule(item)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-      ) : tab === 'scheduled' ? (
-        <div className="space-y-3">
-          {scheduledItems.length === 0 ? (
-            <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
-              <p className="text-gray-600 text-sm">Nothing scheduled yet. Approve content from the queue.</p>
-            </div>
-          ) : (
-            <>
-              {/* Group by slot */}
-              {['now', 'mon', 'wed', 'fri'].map(slot => {
-                const group = scheduledItems.filter(i => i.schedule_slot === slot)
-                if (group.length === 0) return null
-                return (
-                  <div key={slot}>
-                    <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-2 px-1">
-                      {slot === 'now' ? 'Post Now' : slot.charAt(0).toUpperCase() + slot.slice(1) + 'days'}
-                      <span className="ml-2 text-gray-700 normal-case tracking-normal font-normal">
-                        {group.length} script{group.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {group.map(item => <ScheduledCard key={item.id} item={item} />)}
-                    </div>
-                  </div>
-                )
-              })}
-              {/* Any with no slot */}
-              {scheduledItems.filter(i => !['now','mon','wed','fri'].includes(i.schedule_slot)).map(item => (
-                <ScheduledCard key={item.id} item={item} />
-              ))}
-            </>
-          )}
-        </div>
-
-      ) : tab === 'posted' ? (
-        <div className="space-y-3">
-          {postedItems.length === 0 ? (
-            <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
-              <p className="text-gray-600 text-sm">Nothing published yet.</p>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {[
-                  { label: 'Published', value: postedItems.length },
-                  { label: 'Total Views', value: postedItems.reduce((s, i) => s + (i.views_count || 0), 0).toLocaleString() },
-                  { label: 'Total Likes', value: postedItems.reduce((s, i) => s + (i.likes_count || 0), 0).toLocaleString() },
-                ].map(({ label, value }) => (
-                  <div key={label} className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 text-center">
-                    <div className="text-lg font-bold text-white">{value}</div>
-                    <div className="text-[10px] text-gray-600 mt-0.5">{label}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                {postedItems.map(item => <PostedCard key={item.id} item={item} />)}
-              </div>
-            </>
+            items.map(item => (
+              <ContentCard key={item.id} item={item} onUpdate={load} />
+            ))
           )}
         </div>
 
@@ -609,14 +613,38 @@ export default function Content() {
             <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
               <p className="text-gray-600 text-sm">No community posts yet.</p>
             </div>
-          ) : community.map(post => (
-            <CommunityCard
-              key={post.id}
-              post={post}
-              onApprove={approvePost(post)}
-              onSkip={skipPost(post)}
-            />
-          ))}
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-500">{communityPending} pending · {community.length} total</span>
+              </div>
+              {community.map(post => (
+                <CommunityCard
+                  key={post.id}
+                  post={post}
+                  onApprove={approvePost(post)}
+                  onSkip={skipPost(post)}
+                />
+              ))}
+            </>
+          )}
+        </div>
+
+      ) : tab === 'partners' ? (
+        <div>
+          <p className="text-xs text-gray-500 mb-4">
+            Distribution partners — their audience is our customer. Copy email, send manually, mark done.
+          </p>
+          <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
+            {partners.length === 0 ? (
+              <p className="text-gray-600 text-sm text-center py-6">No partnership targets yet.</p>
+            ) : (
+              partners.map(p => (
+                <PartnerRow key={p.id} partner={p} onSent={load} />
+              ))
+            )}
+          </div>
+          <p className="text-[10px] text-gray-700 mt-3">Full email templates: docs/partnership-outreach-emails.md</p>
         </div>
       ) : null}
     </div>

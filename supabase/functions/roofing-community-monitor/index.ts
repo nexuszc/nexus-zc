@@ -6,21 +6,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const RELEVANCE_THRESHOLD = 7;
-
-async function tg(text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: "Markdown" })
-  }).catch(() => {});
-}
 
 
 async function claude(prompt: string, maxTokens = 600): Promise<string> {
@@ -252,22 +242,6 @@ Return ONLY the response text, nothing else.`
 
         if (saved) {
           responsesQueued++;
-          // For medium confidence (75-90), send Telegram for quick review
-          if (!autoPost && score >= 8) {
-            const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-            const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID");
-            if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-              await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: TELEGRAM_CHAT_ID,
-                  text: `💬 *Community response ready* (score ${score}/10)\n\n*${post.title.slice(0, 80)}*\n\nDraft: "${response.slice(0, 200)}..."\n\nApprove in dashboard → Community tab`,
-                  parse_mode: "Markdown",
-                }),
-              }).catch(() => {});
-            }
-          }
         }
       } catch (e) {
         console.error("Save community post failed:", e);
