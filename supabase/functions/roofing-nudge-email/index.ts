@@ -48,6 +48,7 @@ Deno.serve(async (req) => {
 <a href="https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS" style="color:#3b82f6;">
 See the homeowner portal →</a></p>
 <p>Free forever. No credit card. Portal Pro $69/month.<br>— Zach @ Roofing OS</p>
+<p style="color:#6b7280;font-size:14px;margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;">P.S. Join our free Facebook group for roofing contractors — supplement tips, software reviews, and storm strategy: <a href="https://www.facebook.com/groups/2266757270527259" style="color:#3b82f6;">facebook.com/groups/2266757270527259</a></p>
 </div>`;
 
   const res = await fetch("https://api.resend.com/emails", {

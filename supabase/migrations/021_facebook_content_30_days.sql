@@ -1,0 +1,372 @@
+-- Migration 021: 30-day Facebook group + page content
+-- 60 posts total. channel: facebook_group or facebook_page.
+-- Rotates through 8 topic categories. status=pending_approval for one-click dashboard copy.
+-- Schedule: 2026-05-22 through 2026-06-20.
+
+INSERT INTO roofing_content
+  (type, format, title, body, hook, status, channel, topic_category, schedule_date)
+VALUES
+
+-- ── FACEBOOK GROUP POSTS (value-first, no links in body, no hard sell) ──────
+
+('facebook_post','social',
+ 'The question every homeowner asks at 10pm',
+ E'Quick question for the group — what is the most common thing homeowners text you after hours?\n\nFor us it was always "where does the job stand?" or "did insurance approve it?"\n\nStarted tracking it. Was fielding 3-5 of these per active job per week.\n\nThe ones who called less? Homeowners who understood what was happening. Not because we had more time to explain — just because we proactively sent updates before they had to ask.\n\nTwo things that cut callbacks almost entirely:\n1. Send a text with stage updates BEFORE they ask\n2. Make sure they have the adjuster name and claim number saved — so they''re not calling you to look it up\n\nAnyone else track how many status calls they get per job? Curious if it varies by job type.',
+ 'Quick question for the group — what is the most common thing homeowners text you after hours?',
+ 'pending_approval','facebook_group','homeowner_communication','2026-05-22'),
+
+('facebook_post','social',
+ 'The O&P fight nobody talks about',
+ E'Real one from last month. Carrier denied O&P because the adjuster said "no need for a general contractor." Standard denial.\n\nHere''s the rebuttal that worked:\n\nFramed it as coordination overhead — not a contractor fee. Specific line items: material coordination, permit management, crew sequencing, subcontractor liability. Each with hours and rates documented.\n\nAdjuster approved it within 3 days.\n\nThe key was not arguing whether a GC was "needed." The key was proving what we actually did — and billing exactly for it.\n\nWhat''s your most successful O&P rebuttal approach?',
+ 'Real one from last month. Carrier denied O&P because the adjuster said "no need for a general contractor."',
+ 'pending_approval','facebook_group','supplement_recovery','2026-05-23'),
+
+('facebook_post','social',
+ 'Honest question: what are you using to track jobs?',
+ E'Running an informal survey here.\n\nFor those of you running 20+ jobs in a season — what software are you actually using day-to-day?\n\nI''ve heard a lot about:\n- AccuLynx (powerful but steep learning curve)\n- JobNimbus (good pipeline, weaker on reporting)\n- CompanyCam (photos, but not much else)\n- Just texts and a spreadsheet (more common than anyone admits)\n\nNot trying to push anything — genuinely curious where people land after a few years. And what made you switch if you did.\n\nDrop your setup below.',
+ 'Running an informal survey here. What software are you actually using day-to-day?',
+ 'pending_approval','facebook_group','software_comparison','2026-05-24'),
+
+('facebook_post','social',
+ 'First 48 hours after a storm — what''s your playbook?',
+ E'Hail hit our market last Tuesday. Curious how others handle the first 48 hours.\n\nOur current move:\n- Pull radar data and map affected ZIPs\n- Prioritize any existing homeowners in those areas first\n- Get a door-knock crew out within 24 hours\n\nThe biggest mistake I made early on: canvassing too wide too fast. Ended up with leads I couldn''t follow up on and homeowners who got picked off by someone faster.\n\nNow we run tight — fewer doors, faster follow-through.\n\nWhat does your first 48 look like?',
+ 'Hail hit our market last Tuesday. Curious how others handle the first 48 hours.',
+ 'pending_approval','facebook_group','storm_response','2026-05-25'),
+
+('facebook_post','social',
+ 'The referral that never gets asked for',
+ E'Had a contractor tell me last week that 40% of his jobs come from referrals.\n\nAsked him what his referral system is. He said: "I just do good work."\n\nI pushed back a little. Turns out he also:\n- Texts the homeowner a personal note when the job closes\n- Asks if they know anyone with roof issues from the same storm\n- Sends a Christmas card with a "refer a friend" note inside\n\nNone of it is automated. None of it is complicated. But it''s a system.\n\nThe best referral trigger I''ve found: ask within 48 hours of final inspection, when the homeowner is still excited. After that the window closes fast.\n\nWhen do you ask?',
+ 'Had a contractor tell me last week that 40% of his jobs come from referrals.',
+ 'pending_approval','facebook_group','business_growth','2026-05-26'),
+
+('facebook_post','social',
+ 'ACV check arrived. Now what do you tell them?',
+ E'Walk me through your conversation when the ACV check arrives and the homeowner doesn''t understand depreciation holdback.\n\nThis is the moment a lot of jobs go sideways. Homeowner sees a number that doesn''t match the estimate. They panic. Sometimes they call the carrier. Sometimes they find a different contractor.\n\nWhat I''ve found works:\n- Show them the ACV vs RCV line items before the check arrives, not after\n- Explain recoverable depreciation as a second check they''ll get — not missing money\n- Give them a timeline based on the carrier''s typical release schedule\n\nFraming it as a "two-check process" kills the confusion almost immediately.\n\nHow do you handle it?',
+ 'Walk me through your conversation when the ACV check arrives and the homeowner doesn''t understand depreciation holdback.',
+ 'pending_approval','facebook_group','insurance_process','2026-05-27'),
+
+('facebook_post','social',
+ 'Digital contracts — did it hurt your close rate?',
+ E'Moved to digital contracts about two years ago. Took some getting used to.\n\nFirst month I thought it was hurting us — homeowners seemed less certain when they couldn''t hold paper. Turns out they just needed a different explanation of the process.\n\nOnce I started saying "I''ll send you a secure link to sign — takes 30 seconds on your phone" instead of handing over a tablet, close rate went back up.\n\nThe actual benefit that surprised me: follow-ups became easier. If they didn''t sign, I could see they''d opened the email. Instant conversation starter.\n\nAnyone else go through the digital contract switch? How did it land?',
+ 'Moved to digital contracts about two years ago. Took some getting used to.',
+ 'pending_approval','facebook_group','technology_adoption','2026-05-28'),
+
+('facebook_post','social',
+ 'How many photos are you taking per job?',
+ E'Ran the numbers recently. Our crew was taking an average of 34 photos per job.\n\nTwo problems: nobody was organizing them, and half ended up on personal phones.\n\nNow we have a standard: 12 required photos per stage with specific shot types defined. Crew knows exactly what to take before they get on the roof.\n\nThree things that changed:\n- Adjuster supplements got easier — always have the right photo\n- Homeowner questions dropped — they can actually see the work\n- Warranty claims became faster — documented evidence\n\nHow many photos does your crew take per job? Do you have a standard, or is it up to each tech?',
+ 'Ran the numbers recently. Our crew was taking an average of 34 photos per job.',
+ 'pending_approval','facebook_group','efficiency_wins','2026-05-29'),
+
+('facebook_post','social',
+ 'Homeowner called the adjuster without telling you',
+ E'It happened to a contractor I know last month. Job was going smooth. ACV approved. Materials ordered.\n\nThen the homeowner got nervous and called State Farm directly asking if they "really had to use this contractor."\n\nJob fell apart. $8,000 supplement lost.\n\nThe homeowner wasn''t malicious. They were just uninformed and felt like they were making a big decision without enough visibility.\n\nThe contractors I know who don''t have this problem all share one thing: they over-communicate in the first week. Not just updates — context. Why this step, what comes next, what the homeowner should and shouldn''t do.\n\nWhat do you tell homeowners in the first 24 hours after signing?',
+ 'It happened to a contractor I know last month. Job was going smooth. ACV approved. Materials ordered. Then...',
+ 'pending_approval','facebook_group','homeowner_communication','2026-05-30'),
+
+('facebook_post','social',
+ 'Denied: "cosmetic damage only"',
+ E'Getting this denial more than ever this year. Carriers citing functional vs cosmetic on impact damage.\n\nWhat''s working: Impact Resistance Testing (IR) reports. When we can show the spatter pattern, granule displacement, and depth of impact alongside the carrier''s own policy language on "functional damage," cosmetic denials get reversed more often than not.\n\nAlso useful: reference state case law in hail litigation if you''re in a state with precedent. Some carriers back off immediately when they see it cited.\n\nAnyone else seeing an increase in cosmetic-only denials this spring?',
+ 'Getting the "cosmetic damage only" denial more than ever this year.',
+ 'pending_approval','facebook_group','supplement_recovery','2026-05-31'),
+
+('facebook_post','social',
+ 'What made you finally switch software?',
+ E'Curious about this one.\n\nFor those who switched CRMs or field tools in the last couple years — what was the thing that finally made you do it?\n\nFrom what I''ve heard from others in this group:\n- "Lost a supplement because photos were scattered across 3 phones"\n- "Spent 2 hours looking for a signed contract"\n- "Homeowner complained because they couldn''t reach us and went to the BBB"\n\nThe pain usually has to be specific and expensive before people move. Totally understandable.\n\nWhat was yours?',
+ 'For those who switched CRMs or field tools in the last couple years — what was the thing that finally made you do it?',
+ 'pending_approval','facebook_group','software_comparison','2026-06-01'),
+
+('facebook_post','social',
+ 'Storm season hiring — contract crews vs in-house',
+ E'This comes up every year. What''s the group''s take on scaling labor during storm season?\n\nWe''ve gone back and forth. Contract crews give you flexibility but you lose quality control. In-house is slower to scale but you own the training and the relationship.\n\nWhat I''ve settled on: a small permanent core (2-3 guys) who know our standards, plus 2-3 vetted contract guys we call when volume spikes. Pre-vetting happens in the off-season so we''re not scrambling.\n\nThe worst thing is calling someone you don''t know the week after a big storm. That''s where quality issues come from.\n\nWhat''s your model for scaling during heavy volume?',
+ 'This comes up every year. What''s the group''s take on scaling labor during storm season?',
+ 'pending_approval','facebook_group','storm_response','2026-06-02'),
+
+('facebook_post','social',
+ 'The close that happens while you''re still at the door',
+ E'Had a contractor walk me through his door-to-door pitch last week.\n\nHe closes on the spot about 40% of the time. Not because he''s pushy — because he does one specific thing: shows homeowners a finished job on his phone while he''s standing there.\n\nNot a brochure. A real job, in their neighborhood, with before/after photos.\n\nThe other thing: he never asks if they want a quote. He says "I''m going to write up your options right now so you can see exactly what you''d get from insurance." Converts estimate to consultation.\n\nWhat''s your highest-converting door approach?',
+ 'Had a contractor walk me through his door-to-door pitch last week. He closes 40% on the spot.',
+ 'pending_approval','facebook_group','business_growth','2026-06-03'),
+
+('facebook_post','social',
+ 'Supplements are taking longer. Anyone else?',
+ E'Seeing delays on supplements across the board this season. Carriers that used to turn around in 10-14 days are taking 3-4 weeks.\n\nA few things we''ve been doing to push them along:\n- Following up at day 7 with a "just confirming receipt" call — establishes contact record\n- Referencing the state''s prompt payment statute in the follow-up email\n- Attaching the carrier''s own SLA language from the policy if available\n\nThe statute reference in particular has moved a few stubborn ones along faster.\n\nAnyone else seeing longer supplement timelines this year?',
+ 'Seeing delays on supplements across the board this season. Anyone else?',
+ 'pending_approval','facebook_group','insurance_process','2026-06-04'),
+
+('facebook_post','social',
+ 'AI for estimates — is anyone actually using it?',
+ E'Legitimate question for the group.\n\nIs anyone using AI tools in their actual estimation or supplement workflow? Not just gimmick stuff — something that''s actually saving time or money?\n\nI''ve heard about tools that parse Xactimate and suggest missing line items, and others that analyze photos and recommend codes. Skeptical on most of them, but curious if anyone has hands-on experience.\n\nWhat have you tried? What''s real vs hype?',
+ 'Is anyone using AI tools in their actual estimation or supplement workflow?',
+ 'pending_approval','facebook_group','technology_adoption','2026-06-05'),
+
+('facebook_post','social',
+ '3 things that cut our callback time in half',
+ E'Sharing what worked for us this past season. Take what''s useful, ignore the rest.\n\n1. Photo protocol before first contact. We now take 12 standard photos at every inspection — specific shots, specific angles — before we''ve said a word about the job. Never have to go back for documentation.\n\n2. Inspection checklist on paper. Sounds old school. Works every time. Crews stopped missing line items.\n\n3. One outbound call per job per week minimum. Even when there''s nothing to report. Just "here''s where we are." Homeowners stop reaching out when they know the call is coming.\n\nWhat''s your highest-leverage time save this year?',
+ 'Sharing what worked for us this past season. Three things that cut our callback time in half.',
+ 'pending_approval','facebook_group','efficiency_wins','2026-06-06'),
+
+('facebook_post','social',
+ 'When homeowners find your Google reviews before calling',
+ E'This came up in a conversation last week and I think it''s more relevant than most contractors realize.\n\nHomeowners research you after the door knock, not before calling. They go home, Google your name, and decide there — usually within 2 hours.\n\nWhat shows up on that search matters more than your pitch.\n\nThe contractors winning this have:\n- 20+ Google reviews with recent dates (not 5 from 4 years ago)\n- Photos from actual jobs in the listing\n- Responses to every review, including the negative ones\n\nThe ask I''ve had the most success with: text the homeowner a Google review link the day of final inspection sign-off. That''s when they''re happiest.\n\nHow do you generate reviews consistently?',
+ 'Homeowners research you after the door knock, not before calling.',
+ 'pending_approval','facebook_group','homeowner_communication','2026-06-07'),
+
+('facebook_post','social',
+ 'Line items adjusters always miss on commercial jobs',
+ E'For those running commercial work — sharing the items that consistently get missed in initial estimates and end up in supplements:\n\n1. Penetration flashing — often underestimated on industrial or HVAC-heavy roofs\n2. Deck replacement scope — adjusters write for partial, actual scope is usually larger\n3. Temporary protection — tarp and water barrier during extended jobs\n4. Code upgrade items — ice & water shield, ventilation requirements post-permit\n5. General conditions / mobilization — especially on multi-story or access-restricted jobs\n\nThe key: document before teardown. Photos with measurements every time.\n\nAnything I''m missing that you commonly supplement?',
+ 'For those running commercial work — the items that consistently get missed in initial estimates.',
+ 'pending_approval','facebook_group','supplement_recovery','2026-06-08'),
+
+('facebook_post','social',
+ 'Paper vs. software — the real cost nobody calculates',
+ E'Something I hear often: "software costs too much."\n\nAlmost never true when you run the numbers.\n\nHere''s how I think about it:\n- Time spent looking for documents, photos, contacts: 30-60 min/week/job\n- At 20 active jobs: 10-20 hours/week in admin\n- At $50 equivalent labor rate: $500-1,000/week\n- That''s $26,000-52,000/year in unbilled time\n\nGood software typically pays for itself in the first month on time saved alone.\n\nThe harder question isn''t "can I afford it" — it''s "what''s it costing me not to have it?"\n\nWhat does your admin overhead actually look like during storm season?',
+ 'Something I hear often: "software costs too much." Almost never true when you run the numbers.',
+ 'pending_approval','facebook_group','software_comparison','2026-06-09'),
+
+('facebook_post','social',
+ 'Storm chasing vs. local market — what''s your take?',
+ E'Honest conversation for the group.\n\nStorm chasers vs. local contractors — this has been a debate forever. But I''m curious how people here actually think about it, especially those who''ve built long-term local operations.\n\nWhat I''ve observed:\n- Chasers have speed and scale but reputation rarely transfers\n- Locals have relationships but can miss the window during large events\n- The hybrids — locals who expand radius after major storms — tend to do best long-term\n\nThe one thing I keep coming back to: repeat business and referrals only come from locals. Chasers are constantly starting over.\n\nWhat''s your model, and how has it held up?',
+ 'Storm chasers vs. local contractors — honest conversation for the group.',
+ 'pending_approval','facebook_group','storm_response','2026-06-10'),
+
+('facebook_post','social',
+ 'The contractor who raised prices and closed more jobs',
+ E'Counterintuitive thing from a conversation I had last week.\n\nA roofer raised prices 12% last January. Expected to lose some jobs. Instead:\n- Close rate stayed flat\n- Average job value went up\n- Homeowner quality improved — fewer difficult claims, less payment chasing\n\nHis read: lower prices were attracting price shoppers. Higher prices attracted homeowners who''d already decided to move forward with a quality contractor.\n\nHe also said something worth sitting with: "When you''re cheap, homeowners treat you like a commodity. When you''re priced right, they treat you like a professional."\n\nHas anyone else made a pricing move that surprised them with the result?',
+ 'Counterintuitive thing from a conversation I had last week about pricing.',
+ 'pending_approval','facebook_group','business_growth','2026-06-11'),
+
+('facebook_post','social',
+ 'When the carrier delays beyond their SLA',
+ E'Every state has a prompt payment law. Most contractors don''t use them.\n\nIn Colorado: carriers must acknowledge a claim within 10 days and pay or deny within 30 days of proof of loss. Violation can trigger penalties and interest.\n\nWhat I''ve found: referencing the statute in a written follow-up — not a call, a written email — often gets things moving within 48 hours. Carriers don''t want the paper trail of a documented SLA violation.\n\nFor any state, search "[State] prompt payment statute homeowner insurance" — you''ll find the specific law.\n\nHas anyone successfully used this? Or are there other state-specific tactics that have worked?',
+ 'Every state has a prompt payment law. Most contractors don''t use them.',
+ 'pending_approval','facebook_group','insurance_process','2026-06-12'),
+
+('facebook_post','social',
+ 'Drone inspections — worth it at what scale?',
+ E'Thinking about adding drone capability. Want honest input from anyone who''s done it.\n\nSpecific questions:\n1. At what job volume does it start paying off?\n2. Part 107 — necessary? How long did it take?\n3. Do you do your own processing or use a service?\n4. Did it actually help with supplement documentation, or is it mostly a pitch tool?\n\nI''ve seen the pitch. I want the real experience.',
+ 'Thinking about adding drone capability. Want honest input from anyone who''s done it.',
+ 'pending_approval','facebook_group','technology_adoption','2026-06-13'),
+
+('facebook_post','social',
+ 'End-of-day crew checklist — what''s on yours?',
+ E'We implemented a simple end-of-day crew check-out about 6 months ago. Three questions texted to the lead tech at close of day:\n\n1. What got done today?\n2. What''s the plan for tomorrow?\n3. Any issues the homeowner raised?\n\nAdded literally 3 minutes to the crew''s day. Cut my "what happened today?" calls by 80%.\n\nThe third one was the game-changer. Turns out crew and homeowners were having conversations I never knew about — including a few that almost became complaints.\n\nDo you have a daily check-in system? What''s on it?',
+ 'We implemented a simple end-of-day crew check-out 6 months ago. Changed everything.',
+ 'pending_approval','facebook_group','efficiency_wins','2026-06-14'),
+
+('facebook_post','social',
+ 'The day the job ends — what do you send?',
+ E'Curious what the group does on the day of final inspection and sign-off.\n\nFor us it used to be just "job closed, here''s your invoice." Now we send:\n- A summary of everything completed with photos\n- Their warranty info in writing\n- A maintenance tip sheet for the first year\n- The Google review link\n\nLast one is obvious, but the maintenance tip sheet was the surprise. Got three referrals from homeowners who forwarded it to friends with "you should use this company, they actually took the time."\n\nWhat do you send on job close day?',
+ 'Curious what the group does on the day of final inspection and sign-off.',
+ 'pending_approval','facebook_group','homeowner_communication','2026-06-15'),
+
+('facebook_post','social',
+ 'Getting O&P on claims where the carrier says it''s not warranted',
+ E'Carriers are getting more aggressive on O&P denials — especially on smaller claims where they argue no GC oversight is needed.\n\nA few things that have worked for us:\n\nDocument your actual coordination work. Time spent coordinating with the permits office, managing materials delivery, sequencing trades. Even on a "simple" job this adds up fast.\n\nSubcontractor argument. If you used any subs — even just a gutter crew — O&P is clearly warranted. Get it in writing.\n\nXactimate''s own logic. Pull the F9 note that explains the O&P calculation. Some adjusters don''t fully understand their own estimating software. Walking them through it helps.\n\nWhat''s your O&P rebuttal rate looking like this year?',
+ 'Carriers are getting more aggressive on O&P denials. Here''s what''s working for us.',
+ 'pending_approval','facebook_group','supplement_recovery','2026-06-16'),
+
+('facebook_post','social',
+ 'CRM or spreadsheet — what''s the real number where software wins?',
+ E'Putting this to the group because I keep hearing different answers.\n\nAt what revenue volume or job count does CRM software become non-negotiable vs. "we can manage with a spreadsheet"?\n\nMy rough take:\n- Under 30 jobs/year: a well-structured spreadsheet works\n- 30-80 jobs/year: you''ll feel the pain but survive\n- 80+ jobs/year: you''re leaving money on the table without software\n\nBut I know contractors doing 200+ jobs still on spreadsheets. And others who adopted software at 20 jobs and swear it was the right call early.\n\nWhere''s your line?',
+ 'At what job count does CRM software become non-negotiable?',
+ 'pending_approval','facebook_group','software_comparison','2026-06-17'),
+
+('facebook_post','social',
+ 'Pre-storm preparation — what''s your market ready-up look like?',
+ E'With storm season ramping up, curious what preparation looks like for people before the event.\n\nFor us:\n- Updated radar alerts on 2-3 monitoring services for target ZIPs\n- Materials supplier relationships confirmed + pre-orders on common SKUs\n- Crew availability confirmed for surge weeks\n- Door-knock lists organized by ZIP code\n\nThe one I added this year: reaching out to past customers in storm-prone ZIPs before storm season even starts. "Just a heads-up — if anything hits your area, we''ll be in touch." Three have already called us proactively.\n\nWhat pre-season prep are you doing?',
+ 'With storm season ramping up, curious what preparation looks like for people before the event.',
+ 'pending_approval','facebook_group','storm_response','2026-06-18'),
+
+('facebook_post','social',
+ 'The contractor who generates leads from every job site',
+ E'Met a guy last spring who never buys leads. Every single job he runs generates 1-2 warm inquiries from neighbors.\n\nHis system:\n- Yard sign with phone number, always\n- Brief conversation with any neighbor who comes over while crew is working\n- "Hey, we''re finishing up — if you had any damage from this storm, let me know"\n- On close day, door knocks to the 3 houses on each side\n\nHe said the close-day door knock is highest-converting because the homeowner''s roof looks great and neighbors can see it.\n\nWhat lead generation comes directly from your active job sites?',
+ 'Met a guy last spring who never buys leads. Every job generates 1-2 warm inquiries from neighbors.',
+ 'pending_approval','facebook_group','business_growth','2026-06-19'),
+
+('facebook_post','social',
+ 'Recoverable depreciation — how do you track it?',
+ E'Question for the group on depreciation follow-up.\n\nFor large or complex jobs, tracking recoverable depreciation release is basically a second collection process — different timeline, different contacts, different docs needed.\n\nWhat''s your system for staying on top of it?\n\nWe started logging every open depreciation holdback with carrier, adjuster name, expected release window, and follow-up date. Used to fall through the cracks constantly. Now it''s essentially a second A/R list.\n\nThe other thing: some homeowners don''t know they need to file for the release. They assume it comes automatically. Have to actively tell them every time.\n\nHow do you manage your depreciation pipeline?',
+ 'For large jobs, tracking recoverable depreciation release is basically a second collection process.',
+ 'pending_approval','facebook_group','insurance_process','2026-06-20'),
+
+-- ── FACEBOOK PAGE POSTS (brand-forward, light CTA, can mention Roofing OS) ──
+
+('facebook_post','social',
+ 'Why homeowners call during jobs (and how to stop it)',
+ E'The average homeowner calls their roofing contractor 4-6 times during an active job.\n\nUsually the same three questions:\n"When is the crew coming?"\n"Did insurance approve it?"\n"Where are my photos?"\n\nThese are not bad homeowners. They are uninformed homeowners.\n\nThe solution is not picking up faster — it''s giving them a place to look so they do not have to call.\n\nWhen homeowners have real-time visibility into their job — stages, photos, insurance status — callback volume drops dramatically.\n\nWe built Roofing OS specifically for this. Your homeowner gets a portal link. They stop calling.\n\nFree forever. No credit card. Link in bio.',
+ 'The average homeowner calls their roofing contractor 4-6 times during an active job.',
+ 'pending_approval','facebook_page','homeowner_communication','2026-05-22'),
+
+('facebook_post','social',
+ 'The 3 most commonly missed supplement items in 2026',
+ E'Based on what we''re seeing across insurance restoration jobs this season:\n\n1. Code upgrade line items\nIce & water shield, ventilation code changes, permit fees — often missing from the initial estimate, always supplementable.\n\n2. O&P on jobs with any subcontractor involvement\nIf you used anyone — gutters, HVAC, any trade — O&P is warranted. Document your coordination role.\n\n3. Temporary protective measures\nTarps, water barriers, emergency coverage during extended jobs. Carriers routinely omit these on initial scopes.\n\nMost successful supplements come down to one thing: documentation. Photos before teardown, written coordination records, code citations.\n\nRoofing OS keeps all of this in one place per job — accessible from your phone in the field.\n\nFree at roofingos.dev',
+ 'The 3 most commonly missed supplement items in 2026.',
+ 'pending_approval','facebook_page','supplement_recovery','2026-05-23'),
+
+('facebook_post','social',
+ 'Why contractors are leaving AccuLynx in 2026',
+ E'We hear a lot from contractors who have moved on from AccuLynx in the last year.\n\nThe consistent themes:\n→ "Too complex for what I actually use"\n→ "No homeowner-facing layer — I still have to call them"\n→ "Training new employees takes forever"\n→ "Price went up again"\n\nMost contractors actually need four things:\n✅ Job pipeline they can see at a glance\n✅ Photo organization per job\n✅ Homeowner communication that runs itself\n✅ Supplement documentation in one place\n\nRoofing OS CRM is $299/month — about half the cost of AccuLynx for a small team. Plus the homeowner portal is free forever.\n\nSee how it compares: roofingos.dev',
+ 'Why contractors are leaving AccuLynx in 2026.',
+ 'pending_approval','facebook_page','software_comparison','2026-05-24'),
+
+('facebook_post','social',
+ 'Storm hit your market? Here''s the play.',
+ E'If hail hit your service area this week, here are the 4 things that matter in the first 6 hours:\n\n1. Pull storm data first.\nKnow which ZIPs took the hit and hail size. 1.5"+ means structural consideration. 2"+ is near-certain qualifying damage on any roof over 10 years.\n\n2. Your existing clients in those ZIPs come first.\nBefore you knock new doors — check in with homeowners you have history with.\n\n3. Documentation starts at the first knock.\nPhotos of the property exterior before you are even on the roof. Date-stamped.\n\n4. Do not overextend.\n10 leads closed beats 50 leads ghosted.\n\nRoofing OS lets you track every active job and send homeowners a portal link from the driveway. Free to start.',
+ 'If hail hit your service area this week, here are the 4 things that matter in the first 6 hours.',
+ 'pending_approval','facebook_page','storm_response','2026-05-25'),
+
+('facebook_post','social',
+ 'The metric that predicts close rate better than anything else',
+ E'Not open rate. Not lead quality. Not even follow-up speed.\n\nIt is how fast you get visual documentation in front of the homeowner after the first inspection.\n\nContractors who show homeowners photos of their actual damage within 24 hours of first contact close at nearly double the rate of those who wait.\n\nWhy: homeowners make emotional decisions about their home. Seeing their actual damage — not a generic photo — makes it real.\n\nRoofing OS lets you upload crew photos directly to the homeowner''s portal. They see it in real time. The conversation changes.\n\nFree portal. No credit card. 5 minutes to set up your first job.\nroofingos.dev',
+ 'The metric that predicts close rate better than anything else.',
+ 'pending_approval','facebook_page','business_growth','2026-05-26'),
+
+('facebook_post','social',
+ 'ACV vs. RCV — the most misunderstood part of a claim',
+ E'The most common homeowner complaint we hear: "My check was way less than the estimate."\n\nAlmost always this comes down to ACV vs. RCV — and not explaining it before the check arrives.\n\nHere is the simple version:\n\nACV (Actual Cash Value) = replacement cost minus depreciation. This is the first check.\n\nRCV (Replacement Cost Value) = the full replacement cost. This is what you recover once the work is complete.\n\nRecoverable depreciation = the difference. The homeowner gets a second check — but only if they complete the work.\n\nWhen homeowners understand this before the check arrives, the confusion never happens.\n\nRoofing OS shows ACV/RCV status in the homeowner portal automatically. They stay informed so you do not have to explain it twice.',
+ 'The most common homeowner complaint: "My check was way less than the estimate."',
+ 'pending_approval','facebook_page','insurance_process','2026-05-27'),
+
+('facebook_post','social',
+ 'Why roofing businesses that adopted software early are bigger today',
+ E'We have looked at this pattern across a lot of operations.\n\nContractors who adopted digital tools early — job tracking, photo documentation, homeowner communication — did not just save time. They built a foundation that let them scale.\n\nHere is why it compounds:\n\nBetter documentation → more supplements approved → higher job value\nBetter homeowner communication → more 5-star reviews → more organic leads\nBetter job tracking → faster close-out → more jobs per season\n\nThe gap between operators who did this and those who did not has grown significantly over the past 3 years.\n\nRoofing OS is built for this: homeowner portal, supplement tracking, and Aria AI — free to start.\nroofingos.dev',
+ 'Why roofing businesses that adopted software early are bigger today.',
+ 'pending_approval','facebook_page','technology_adoption','2026-05-28'),
+
+('facebook_post','social',
+ 'The photo standard that changed our supplement rate',
+ E'One of the highest-leverage process changes in roofing operations: standardizing job photos.\n\nNot "take a lot of photos." A specific protocol:\n→ 4 aerial angles of the full roof\n→ Close-up of each penetration\n→ Ridge and hip documentation\n→ Valley documentation\n→ Pre-existing conditions labeled separately\n→ Before and after each stage of work\n\nWhen you have this, supplements write themselves. Carrier questions get answered in minutes. Warranty claims have everything they need.\n\nRoofing OS lets your crew upload photos directly to the job. They auto-appear in the homeowner portal and the supplement package. No manual organizing.\n\nFree forever. roofingos.dev',
+ 'One of the highest-leverage process changes in roofing: standardizing job photos.',
+ 'pending_approval','facebook_page','efficiency_wins','2026-05-29'),
+
+('facebook_post','social',
+ 'What Roofing OS actually is (plain language)',
+ E'A lot of people ask us: "What is Roofing OS, really?"\n\nThe simplest answer:\n\nYou send your homeowner one link. They stop calling you.\n\nWhen you add a job to Roofing OS, your homeowner gets a portal with:\n→ Live job stages\n→ Every photo from the crew\n→ Insurance claim status and adjuster info\n→ Aria — an AI that answers their questions so you do not have to\n→ Their documents and warranty\n\nThey can see everything. You get fewer interruptions.\n\nFree forever for the portal. No credit card. Takes 5 minutes to add your first job.\n\nSee a live demo: roofingos.dev/portal/DEMO2026ROOFINGOS\n\nQuestions? Drop them below.',
+ 'A lot of people ask us: "What is Roofing OS, really?"',
+ 'pending_approval','facebook_page','homeowner_communication','2026-05-30'),
+
+('facebook_post','social',
+ 'How one Denver roofer recovered $34,000 in denied supplements',
+ E'A restoration contractor in Denver shared his numbers with us last month.\n\nIn 2024, his team started systematically reviewing every carrier denial before accepting it. Prior years, most denials just got accepted.\n\nWhat changed:\n→ Documented every denial in writing with specific carrier language\n→ Cross-referenced with policy language and state case law\n→ Filed formal written rebuttals for denials over $1,000\n\nResult: 73% rebuttal success rate. $34,000 recovered that would have been written off.\n\nThe most common successfully-reversed denial: "cosmetic damage only" on hail jobs where functional impairment could be documented with photos.\n\nRoofing OS Supplement Full Handling is $329/job — Aria writes the rebuttal and handles the back-and-forth.\nroofingos.dev',
+ 'A Denver roofer recovered $34,000 in denied supplements last season. Here''s how.',
+ 'pending_approval','facebook_page','supplement_recovery','2026-05-31'),
+
+('facebook_post','social',
+ 'CompanyCam is great for photos. Here''s what it doesn''t do.',
+ E'CompanyCam is genuinely good at what it does: photo organization by job.\n\nBut here is what we hear from contractors who use it:\n→ "Homeowners still call because they can''t see anything"\n→ "I still need a separate CRM"\n→ "It does not track insurance status"\n→ "It does not connect to my supplement workflow"\n\nCompanyCam solves the crew-side photo problem. It does not solve the homeowner communication problem.\n\nThat gap is where most callbacks still live.\n\nRoofing OS gives your homeowner a live portal with photos, claim status, and Aria AI — all from the same place your crew uploads to.\n\nFree portal. $299/month CRM. Free to try.\nroofingos.dev',
+ 'CompanyCam is great for photos. Here''s what it does not do.',
+ 'pending_approval','facebook_page','software_comparison','2026-06-01'),
+
+('facebook_post','social',
+ 'The window between storm and adjuster visit is your biggest leverage point',
+ E'Most contractors focus on the inspection. The real leverage is in the days between your inspection and the adjuster''s visit.\n\nWhat happens in that window determines a lot:\n\nPrepare the homeowner. Walk them through what to expect. What the adjuster will measure. What a full replacement scope looks like. What they should and should not say.\n\nAn informed homeowner who knows what is happening is far less likely to accidentally undermine their own claim.\n\nGet your documentation complete before they arrive.\n\nBe available for the inspection. Contractors who attend the adjuster visit supplement less because more gets approved the first time.\n\nRoofing OS gives your homeowner context at every step so they stay calm and informed through the process.\nroofingos.dev',
+ 'Most contractors focus on the inspection. The real leverage is before the adjuster arrives.',
+ 'pending_approval','facebook_page','storm_response','2026-06-02'),
+
+('facebook_post','social',
+ 'The review request that converts every time',
+ E'Two versions of a review request:\n\nVersion A: "If you were happy with our work, please leave us a Google review."\n\nVersion B: "You mentioned the crew kept you updated throughout — would you mind sharing that in a Google review? It takes about 2 minutes and really helps other homeowners find us."\n\nVersion B converts at 3x the rate. Not because it''s manipulative — because it''s specific.\n\nThe key: reference the exact thing they said they liked. They already said it. You are just asking them to say it publicly.\n\nThe best time to send it: day of final inspection. Not a week later.\n\nRoofing OS sends the review link automatically on job close. You do not have to remember.',
+ 'The review request that converts every time.',
+ 'pending_approval','facebook_page','business_growth','2026-06-03'),
+
+('facebook_post','social',
+ 'Supplement timelines are getting longer. How to protect cashflow.',
+ E'We are hearing from contractors across multiple markets: supplement approval timelines have stretched from 2 weeks to 4-6 weeks in 2026.\n\nHere is what experienced operators are doing to protect cashflow:\n\n1. Collect ACV before work begins. Non-negotiable regardless, but it matters more now.\n\n2. File supplements the day you find them. Every day you wait is a day added to an already-long timeline.\n\n3. Follow up in writing at day 7. Creates a paper trail and establishes your communication record.\n\n4. Know your state''s prompt payment statute. Most states require carriers to pay or deny within 30 days. Reference it if you are approaching that window.\n\nRoofing OS supplement tracker logs every open item with status so nothing falls through the cracks.',
+ 'Supplement timelines have stretched from 2 weeks to 4-6 weeks in 2026.',
+ 'pending_approval','facebook_page','insurance_process','2026-06-04'),
+
+('facebook_post','social',
+ 'What Aria does when your homeowner texts at midnight',
+ E'One of the most common things roofing contractors tell us: "I spend too much time answering the same questions over and over."\n\nHere is what Aria does with that problem:\n\nWhen a homeowner has a question — about their claim status, crew schedule, deductible, next steps — they ask Aria in the portal.\n\nAria answers using information specific to their job: the stage it is in, the insurance info logged, the photos from the crew.\n\nIt does not guess. It answers based on what is actually true about their job.\n\nYou do not get a text at midnight. You get a note in the morning.\n\nAria Internal is $249/month. Works 24/7.\nLearn more at roofingos.dev',
+ 'What happens when your homeowner texts at midnight?',
+ 'pending_approval','facebook_page','technology_adoption','2026-06-05'),
+
+('facebook_post','social',
+ 'The job that closed in 8 days start to finish',
+ E'This is not an anomaly — it is a repeatable process.\n\nA contractor in our network closed a $14,000 insurance restoration job in 8 days.\n\nDay 1: Storm hit. Door knocked. Photos taken, homeowner walked through the process.\nDay 2: Adjuster attended with contractor. Scope agreed on-site.\nDay 3: ACV check issued. Contract signed.\nDay 5: Materials delivered.\nDay 6-7: Install completed.\nDay 8: Final inspection, warranty delivered, Google review requested.\n\nWhat made it fast: no information gaps at any step. The homeowner never had to ask "what is happening now?"\n\nSpeed in roofing is almost always a documentation and communication problem — not a labor problem.\n\nRoofing OS is built for exactly this. Free to start at roofingos.dev',
+ 'A contractor in our network closed a $14,000 insurance restoration job in 8 days.',
+ 'pending_approval','facebook_page','efficiency_wins','2026-06-06'),
+
+('facebook_post','social',
+ 'What your homeowner does after you leave the driveway',
+ E'After your door knock or first inspection, the homeowner goes inside and does one of three things:\n\n1. Googles your company name\n2. Calls their neighbor who "also got hit"\n3. Texts their spouse "what do we do?"\n\nWhat they find — or do not find — in the next hour determines if they call you back.\n\nThe contractors with the strongest conversion from first visit to signed contract have engineered what happens after they leave:\n→ Strong recent Google reviews\n→ A clear website that explains the process\n→ Something to give the homeowner before you walk away — a link, a portal, any reason to stay connected\n\nRoofing OS gives you a portal link to send before you are out of the driveway. Free forever.\nroofingos.dev',
+ 'What your homeowner does after you leave the driveway matters more than your pitch.',
+ 'pending_approval','facebook_page','homeowner_communication','2026-06-07'),
+
+('facebook_post','social',
+ 'Our supplement documentation checklist — free to copy',
+ E'Sharing the checklist we use before filing any supplement:\n\nPHOTOS\n☐ Full roof aerial (all 4 sides)\n☐ Close-up of each penetration\n☐ Ridge and hip close-ups\n☐ All valley documentation\n☐ Pre-existing conditions labeled separately\n☐ Before/after for every damaged section\n\nDOCUMENTATION\n☐ Signed scope of work\n☐ Building permit (if applicable)\n☐ Code citations for any upgrade items\n☐ Subcontractor invoices (for O&P justification)\n☐ Weather data for date of loss\n\nXACTIMATE\n☐ All line items with F9 notes\n☐ Photos linked to line items\n\nTakes 20 minutes to build the packet. Saves weeks of back-and-forth.\n\nRoofing OS stores all of this per job, accessible from the field.\nroofingos.dev',
+ 'Our supplement documentation checklist — free to copy.',
+ 'pending_approval','facebook_page','supplement_recovery','2026-06-08'),
+
+('facebook_post','social',
+ 'Honest comparison: Roofing OS vs. JobNimbus',
+ E'We get asked this a lot, so here is an honest answer.\n\nJobNimbus is good at:\n→ Sales pipeline management\n→ Task tracking for your internal team\n→ Integration with some measurement tools\n→ It has been around a long time — stable product\n\nWhere contractors tell us they still have gaps:\n→ No homeowner-facing portal\n→ Supplement documentation is manual\n→ Homeowners still call because they cannot see anything\n\nWhat Roofing OS adds:\n→ Live portal your homeowner logs into (no app, just a link)\n→ Insurance status visible to homeowner in real time\n→ Aria AI answers homeowner questions so you do not have to\n→ Supplement documentation built in\n\nSome contractors run both. Some switch. Depends on where the pain is.\nroofingos.dev',
+ 'Honest comparison: Roofing OS vs. JobNimbus.',
+ 'pending_approval','facebook_page','software_comparison','2026-06-09'),
+
+('facebook_post','social',
+ 'How to generate $200K+ from a single storm event',
+ E'The contractors who do this are not lucky — they are prepared.\n\nThe difference between a 5-job storm week and a 50-job storm week usually comes down to decisions made before the storm.\n\nBefore:\n→ Material relationships already established\n→ Crew surge plan pre-negotiated\n→ Target ZIP list ready\n\nDuring:\n→ Existing customers and referrals first\n→ Cap on new leads based on actual capacity\n→ Same-day follow-up on every lead\n\nAfter:\n→ Every job fully documented for supplements\n→ Reviews requested on close day\n→ Every signed homeowner becomes a referral source for the neighborhood\n\nRoofing OS tracks everything across all active jobs so nothing falls through during high volume.\nroofingos.dev',
+ 'The contractors generating $200K+ from a storm event are not lucky — they are prepared.',
+ 'pending_approval','facebook_page','storm_response','2026-06-10'),
+
+('facebook_post','social',
+ 'Why your CRM might be costing more than it saves',
+ E'We talk to a lot of contractors paying $400-600/month for software they use 20% of.\n\nHonest question: are you paying for features you actually use, or features that were on the pricing page?\n\nMost contractors actually need:\n→ See all active jobs at a glance\n→ Know who needs a callback today\n→ Photos and documents per job\n→ Send homeowners status updates without making a call\n\nEverything else is usually overhead.\n\nRoofing OS CRM is $299/month. AccuLynx typically runs $500-800/month for a small team.\n\nIf you are not using the advanced features, the math is simple.\n\nFree portal included. No credit card to start.\nroofingos.dev',
+ 'Is your CRM costing more than it saves?',
+ 'pending_approval','facebook_page','business_growth','2026-06-11'),
+
+('facebook_post','social',
+ 'The 4 questions to ask before signing the AOS',
+ E'The Assignment of Benefits conversation is one of the most important in insurance restoration.\n\nBefore a homeowner signs an AOS, they should understand:\n\n1. What rights are they transferring?\nFull AOS transfers the right to negotiate and receive payment. Partial AOS can preserve more homeowner control.\n\n2. What happens if there is a dispute?\nWith full AOS, the contractor has standing to negotiate — but so do their interests.\n\n3. Are there state-specific restrictions?\nSeveral states have passed AOS reform legislation. Know your state''s current rules.\n\n4. Is this standard for the job type?\nFor commercial jobs, AOS is often standard. For residential, explain the trade-off clearly.\n\nHomeowners who fully understand what they are signing have fewer complaints later.\n\nRoofing OS keeps AOS documents in the homeowner portal with e-signature built in.',
+ 'The 4 questions to ask before signing the AOS.',
+ 'pending_approval','facebook_page','insurance_process','2026-06-12'),
+
+('facebook_post','social',
+ 'The contractor who added 2 jobs/month without adding staff',
+ E'A roofing contractor in the midwest shared his numbers with us in March.\n\nAdded 2 jobs per month in 2025 compared to 2024. Same crew. Same market. No new salespeople.\n\nWhere did they come from?\n\n5-star reviews from homeowners who felt informed and taken care of throughout their job.\n\nNot just satisfied — specifically impressed by how connected they stayed.\n\nHe started using a homeowner portal in early 2024. By mid-year, reviews mentioned it specifically: "They kept me in the loop the whole time." "Never had to wonder what was happening."\n\nThose reviews convert to jobs. Homeowners on the fence pick the contractor who "communicates great" over the one with the lowest price.\n\nRoofing OS portal is free forever. roofingos.dev',
+ 'The contractor who added 2 jobs per month without adding staff.',
+ 'pending_approval','facebook_page','technology_adoption','2026-06-13'),
+
+('facebook_post','social',
+ 'The 3 numbers every roofing business owner should know cold',
+ E'You should be able to answer these without looking anything up:\n\n1. Average job value (this month vs. same month last year)\nIf you do not know this, you cannot tell if your supplement rate is improving.\n\n2. Average days from signed contract to final inspection\nThis is your cycle time. Longer cycles = more homeowner anxiety = more callbacks = more lost supplements.\n\n3. Supplement approval rate\nWhat percentage of supplement requests are you getting approved? Below 70% is a documentation problem — not a carrier problem.\n\nThese three numbers tell you almost everything about the health of an insurance restoration operation.\n\nRoofing OS tracks all three automatically in the contractor dashboard.\nroofingos.dev',
+ 'The 3 numbers every roofing business owner should know cold.',
+ 'pending_approval','facebook_page','efficiency_wins','2026-06-14'),
+
+('facebook_post','social',
+ 'The $0 marketing channel every roofer ignores',
+ E'Your closed jobs are a marketing channel. Most contractors leave it completely unused.\n\nEvery homeowner whose job closed well has:\n→ Neighbors who saw the crew\n→ Friends from the same storm event\n→ A Google account and 2 minutes\n\nConversion rate on a warm ask from a happy homeowner is 5-10x higher than cold outreach.\n\nThe system that works:\n1. Close the job well — communication all the way through\n2. Send the review link same day\n3. Two weeks later: "Any neighbors mention their roof? Happy to take a look, no pressure."\n\nThat is it. Roofing OS sends the review link automatically on job close and can remind you to follow up.\n\nFree forever. roofingos.dev',
+ 'Your closed jobs are a marketing channel. Most contractors leave it completely unused.',
+ 'pending_approval','facebook_page','homeowner_communication','2026-06-15'),
+
+('facebook_post','social',
+ 'Why Xactimate F9 notes change everything',
+ E'If you are not using F9 notes in your Xactimate estimates, you are leaving money on the table.\n\nAn F9 note is a line-item explanation that documents:\n→ Why this item is present\n→ What code or standard requires it\n→ Photos or measurements that support the scope\n\nAdjusters who see well-documented F9 notes approve faster and argue less.\n\nThe categories where F9 notes matter most:\n→ Any code upgrade item (cite the actual code)\n→ O&P (document coordination work performed)\n→ Any line item above default quantity\n→ Temporary protective measures\n\nTakes 15 extra minutes per estimate. Pays back in days of negotiation saved.\n\nRoofing OS supplement packages include F9 documentation as part of the AI-generated package.\nroofingos.dev',
+ 'If you are not using Xactimate F9 notes, you are leaving money on the table.',
+ 'pending_approval','facebook_page','supplement_recovery','2026-06-16'),
+
+('facebook_post','social',
+ 'What contractors need vs. what software companies sell them',
+ E'Here is the disconnect we see constantly in roofing software:\n\nWhat software companies pitch:\n→ 200-feature CRMs\n→ Integrations with everything\n→ Custom reporting dashboards\n→ "All-in-one platform"\n\nWhat contractors actually tell us they need:\n→ Know what every active job needs today\n→ Get homeowners to stop calling\n→ Keep photos organized and accessible\n→ Get supplements documented without chasing paperwork\n\nThe gap between those two lists is where a lot of monthly subscription dollars go.\n\nGood software simplifies. If you need a training video to use your CRM, it is probably not the right tool.\n\nRoofing OS is built around those four actual needs. Free portal. $299/month CRM.\nroofingos.dev',
+ 'What contractors need vs. what software companies sell them.',
+ 'pending_approval','facebook_page','software_comparison','2026-06-17'),
+
+('facebook_post','social',
+ 'Why your best storm leads are not from canvassing',
+ E'The highest-converting storm leads are not knocked doors.\n\nThey are:\n→ Past customers who trust you already\n→ Referrals from past customers whose neighbors got hit\n→ Homeowners who find you from 5-star reviews that mention your storm response\n\nNone of these require canvassing. All of them require having done great work before.\n\nThe compounding effect: every storm job done well generates 1-2 future storm leads through reviews and referrals. Over 5 years, that is the difference between buying leads forever and never having to.\n\nContractors canvassing less are usually the ones who invested in homeowner communication and review generation 2-3 years ago.\n\nRoofing OS is built to create those moments. Free forever to start.\nroofingos.dev',
+ 'Your best storm leads are not coming from canvassing.',
+ 'pending_approval','facebook_page','storm_response','2026-06-18'),
+
+('facebook_post','social',
+ 'How to price for profit, not just revenue',
+ E'Revenue is vanity. Profit is reality.\n\nThe most common pricing mistake in insurance restoration: pricing at what the carrier "allows" rather than what the job actually costs.\n\nWhat gets missed:\n→ Your actual overhead rate (most contractors underestimate by 15-20%)\n→ True labor burden — taxes, insurance, benefits\n→ Administrative time per job\n→ Warranty cost allocated per job\n\nWhen you work backwards from a target margin — say 25% net — you often find the carrier''s estimate needs to be supplemented just to be profitable.\n\nThe supplement is not optional. It is math.\n\nRoofing OS supplement tracking shows profitability per job so you can see exactly where you stand.\nroofingos.dev',
+ 'Revenue is vanity. Profit is reality. How to price for profit in roofing.',
+ 'pending_approval','facebook_page','business_growth','2026-06-19'),
+
+('facebook_post','social',
+ 'How Roofing OS handles insurance claims in the homeowner portal',
+ E'One of the highest-value features for insurance restoration contractors:\n\nWhen you log a job in Roofing OS, your homeowner sees the full insurance claim section in their portal:\n\n→ Claim number\n→ Adjuster name and contact\n→ Claim status (ACV approved, supplement pending, RCV released)\n→ Supplement tracker with line items and amounts\n→ Expected depreciation release date\n\nThey stop calling their adjuster "to check." They stop calling you "to see if anything changed."\n\nWhen the supplement gets approved, they see it. When depreciation releases, they see it. Real-time, on their phone.\n\nFree forever to start. Portal Pro is $69/month for unlimited jobs.\n\nTry it at roofingos.dev — 5 minutes to set up your first job.',
+ 'How Roofing OS handles insurance claims in the homeowner portal.',
+ 'pending_approval','facebook_page','insurance_process','2026-06-20');
