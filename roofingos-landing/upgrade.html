@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Upgrade — Roofing OS</title>
+<meta name="description" content="Add Aria AI, Supplement AI, CRM, and more to your free Roofing OS portal.">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --card: #16161f;
+    --border: #1e1e2e; --cyan: #06b6d4; --text: #f8fafc; --muted: #94a3b8;
+    --green: #22c55e; --violet: #8b5cf6; --amber: #f59e0b;
+  }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Inter', system-ui, sans-serif; line-height: 1.6; }
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 14px 24px; background: rgba(10,10,15,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+  .logo em { color: var(--cyan); font-style: normal; }
+  main { max-width: 960px; margin: 0 auto; padding: 100px 24px 80px; }
+  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 12px; }
+  .sub { color: var(--muted); font-size: 17px; margin-bottom: 56px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; transition: border-color 0.2s; }
+  .card:hover { border-color: rgba(255,255,255,0.15); }
+  .card.featured { border-color: var(--cyan); box-shadow: 0 0 40px rgba(6,182,212,0.08); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 10px; border-radius: 100px; margin-bottom: 16px; }
+  .badge-cyan { background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); }
+  .badge-violet { background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.4); color: var(--violet); }
+  .badge-amber { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); }
+  .badge-green { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: var(--green); }
+  .price { font-size: 44px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
+  .price-sub { font-size: 16px; font-weight: 400; color: var(--muted); }
+  .tagline { font-size: 18px; font-weight: 700; margin: 14px 0 6px; }
+  .desc { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+  .features { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+  .features li { font-size: 13px; color: var(--text); display: flex; align-items: flex-start; gap: 8px; }
+  .features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+  .cta { display: block; text-align: center; padding: 13px; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; text-decoration: none; border: none; font-family: inherit; width: 100%; }
+  .cta-cyan { background: var(--cyan); color: white; box-shadow: 0 6px 20px rgba(6,182,212,0.3); }
+  .cta-cyan:hover { background: #0891b2; }
+  .cta-violet { background: var(--violet); color: white; }
+  .cta-violet:hover { background: #7c3aed; }
+  .cta-amber { background: var(--amber); color: white; }
+  .cta-amber:hover { background: #d97706; }
+  .cta-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .cta-outline:hover { border-color: var(--muted); }
+  .roi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+  .roi-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .roi-value { font-size: 22px; font-weight: 900; color: var(--green); }
+  footer { text-align: center; padding: 40px 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 80px; }
+  a { color: var(--cyan); text-decoration: none; }
+</style>
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">Roofing <em>OS</em></a>
+</nav>
+
+<main>
+  <h1>Your portal is free.<br>Power it up when you're ready.</h1>
+  <p class="sub">Every add-on pays for itself. Pick the one that matches where you are right now.</p>
+
+  <div class="grid">
+
+    <!-- Measurements -->
+    <div class="card">
+      <div class="badge badge-green">Measurements</div>
+      <div class="price">$49<span class="price-sub">/mo</span></div>
+      <div class="tagline">Accurate measurements. No ladder.</div>
+      <div class="desc">Order a roof measurement report from the office. Delivered in hours. Unlimited reports, all included.</div>
+      <div class="roi">
+        <div class="roi-label">Why it pays</div>
+        <div class="roi-value">Save 2 hrs per job</div>
+      </div>
+      <ul class="features">
+        <li>Unlimited measurement reports</li>
+        <li>Exact squares, pitch, facets, ridges</li>
+        <li>PDF export for estimates</li>
+        <li>Order from the dashboard in 30 seconds</li>
+      </ul>
+      <a href="mailto:zach@roofingos.dev?subject=Add Measurements" class="cta cta-outline">Add Measurements →</a>
+    </div>
+
+    <!-- Aria -->
+    <div class="card featured">
+      <div class="badge badge-cyan">Aria AI</div>
+      <div class="price">$149<span class="price-sub">/mo</span></div>
+      <div class="tagline">Your 24/7 AI team member.</div>
+      <div class="desc">Aria answers homeowner questions, sends updates, follows up on unsigned contracts, and calls prospects — automatically.</div>
+      <div class="roi">
+        <div class="roi-label">Why it pays</div>
+        <div class="roi-value">~8 hours saved per week</div>
+      </div>
+      <ul class="features">
+        <li>Homeowner questions answered 24/7 via portal chat</li>
+        <li>Outbound follow-up calls on unsigned estimates</li>
+        <li>Post-job review and referral outreach</li>
+        <li>Inbound call routing — "I'll have your rep call you"</li>
+        <li>Bilingual (English + Spanish)</li>
+      </ul>
+      <a href="mailto:zach@roofingos.dev?subject=Add Aria" class="cta cta-cyan">Add Aria — $149/mo →</a>
+    </div>
+
+    <!-- Supplement AI -->
+    <div class="card">
+      <div class="badge badge-violet">Supplement AI</div>
+      <div class="price">$499<span class="price-sub">/mo</span></div>
+      <div class="tagline">Find every dollar the adjuster missed.</div>
+      <div class="desc">AI reviews your photos and estimate, identifies missing line items, and builds a supplement packet ready to submit to the carrier.</div>
+      <div class="roi">
+        <div class="roi-label">Average recovery</div>
+        <div class="roi-value">$3,200 per job</div>
+      </div>
+      <ul class="features">
+        <li>AI photo analysis — every damage item identified</li>
+        <li>Xactimate line item suggestions</li>
+        <li>Carrier-specific strategy (State Farm, Allstate, etc.)</li>
+        <li>Denial rebuttal letters generated automatically</li>
+        <li>Depreciation release tracking and follow-up</li>
+      </ul>
+      <a href="mailto:zach@roofingos.dev?subject=Add Supplement AI" class="cta cta-violet">Add Supplement AI →</a>
+    </div>
+
+    <!-- All In -->
+    <div class="card">
+      <div class="badge badge-amber">All In</div>
+      <div class="price">$1,299<span class="price-sub">/mo</span></div>
+      <div class="tagline">Everything, running itself.</div>
+      <div class="desc">The full Roofing OS stack: portal, Aria, Supplement AI, CRM, growth engine, competitor monitoring, and content machine.</div>
+      <div class="roi">
+        <div class="roi-label">Replaces</div>
+        <div class="roi-value">$3,000+/mo in tools</div>
+      </div>
+      <ul class="features">
+        <li>Everything in every add-on</li>
+        <li>Full CRM with pipeline automation</li>
+        <li>Weekly competitor intelligence</li>
+        <li>YouTube + SEO content engine</li>
+        <li>Storm detection and rapid outreach</li>
+        <li>CompanyCam, AccuLynx, JobNimbus integration</li>
+      </ul>
+      <a href="mailto:zach@roofingos.dev?subject=All In Plan" class="cta cta-amber">Talk to Zach →</a>
+    </div>
+
+  </div>
+
+  <div style="text-align:center;margin-top:40px;color:var(--muted);font-size:14px;">
+    Not sure which one? <a href="mailto:zach@roofingos.dev">Email Zach</a> — he'll tell you which one actually makes sense for your operation.
+  </div>
+</main>
+
+<footer>
+  &copy; 2026 Nexus ZC LLC &nbsp;·&nbsp; Roofing OS &nbsp;·&nbsp;
+  <a href="/privacy.html">Privacy</a> &nbsp;·&nbsp;
+  <a href="/terms.html">Terms</a>
+</footer>
+
+</body>
+</html>

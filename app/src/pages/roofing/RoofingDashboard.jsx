@@ -36,6 +36,46 @@ function Skeleton({ className = '' }) {
   return <div className={`skeleton ${className}`} />
 }
 
+function UpgradeNudge({ jobs, plan }) {
+  const planStr = (plan || '').toLowerCase()
+  const hasAria = planStr.includes('aria') || planStr.includes('all')
+  const hasSupp = planStr.includes('supplement') || planStr.includes('supp') || planStr.includes('all')
+
+  const insuranceJobs = jobs.filter(j => j.insurance_claim || j.claim_number).length
+
+  if (jobs.length >= 5 && !hasAria) {
+    return (
+      <div className="mx-6 lg:mx-10 mt-4 bg-cyan-900/20 border border-cyan-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-cyan-300 text-sm font-semibold">You have {jobs.length} jobs — add Aria to handle homeowner questions 24/7</p>
+          <p className="text-gray-500 text-xs mt-0.5">Aria answers calls, texts homeowners updates, and follows up on every job automatically.</p>
+        </div>
+        <a href="https://roofingos.dev/upgrade?plan=aria" target="_blank" rel="noopener"
+          className="shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+          Add Aria — $149/mo →
+        </a>
+      </div>
+    )
+  }
+
+  if (insuranceJobs >= 3 && !hasSupp) {
+    return (
+      <div className="mx-6 lg:mx-10 mt-4 bg-violet-900/20 border border-violet-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-violet-300 text-sm font-semibold">{insuranceJobs} insurance jobs — Supplement AI finds missed line items automatically</p>
+          <p className="text-gray-500 text-xs mt-0.5">Average recovery: $3,200 per job. One supplement pays for months of the subscription.</p>
+        </div>
+        <a href="https://roofingos.dev/upgrade?plan=supplement" target="_blank" rel="noopener"
+          className="shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+          Add Supplement AI — $499/mo →
+        </a>
+      </div>
+    )
+  }
+
+  return null
+}
+
 export default function RoofingDashboard() {
   const { contractorClientId, contractor } = useContractor()
 
@@ -116,6 +156,8 @@ export default function RoofingDashboard() {
           </Link>
         </div>
       )}
+      {!loading && <UpgradeNudge jobs={jobs} plan={contractor?.plan || contractor?.clients?.plan} />}
+
       {/* Header — orange branded, full width */}
       <div className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-600/[0.06] via-transparent to-transparent pointer-events-none" />
