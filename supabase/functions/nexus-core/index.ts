@@ -988,6 +988,39 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
 
+    // Every 6th cycle (~3 hours): measurement report stale check
+    if (cycleNumber % 6 === 2) {
+      (async () => {
+        try {
+          // Fail any measurement reports stuck in processing > 24h
+          const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: stale } = await supabase
+            .from("measurement_reports")
+            .select("id, address")
+            .eq("status", "processing")
+            .lt("ordered_at", cutoff);
+
+          if (stale && stale.length > 0) {
+            await supabase.from("measurement_reports")
+              .update({ status: "failed", notes: "Auto-failed: no response within 24h" })
+              .in("id", stale.map((r: { id: string }) => r.id));
+            await logHeartbeat("roofing-measurements:stale-check", "ok", 0);
+          }
+
+          // Heartbeat probe
+          const t0 = Date.now();
+          const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-measurements`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ test: true })
+          });
+          await logHeartbeat("roofing-measurements", res.ok ? "ok" : "error", Date.now() - t0);
+        } catch (e) {
+          await logHeartbeat("roofing-measurements", "error", 0, String(e));
+        }
+      })();
+    }
+
     // Every 8th cycle (~4 hours): proactive prospecting scan
     if (cycleNumber % 8 === 0) {
       (async () => {
