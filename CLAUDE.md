@@ -404,15 +404,22 @@ Then productized and sold to other multi-business operators.
 **DONE this session:**
 - (nothing yet this session)
 
+**DONE (Launch Spec v3 — Phase 0 + Phase 1):**
+- Phase 0 pre-flight complete: all secrets verified (STRIPE/TWILIO/RETELL/RESEND set; COMPANYCAM/ONESX missing)
+- Phase 1C: Portal URL simplified — /demo redirect live, 'demo' alias added to homeowner_sessions
+- Phase 1D: Demo portal enriched — adjuster info, insurance_claims record, 9th activity (ACV check $16,375)
+- Phase 1E: Sequencer confirmed healthy — 180 emails sent, errors = normal bounce rate on cold prospects
+- Measurements product: manual fulfillment until 1ESX API key obtained (get from 1esx.com)
+
 **NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build complete Roofing OS go-to-market system
-8. Improve Brian client health from 65 to 80+
+1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
+2. Get 1ESX API key (1esx.com) — needed for Measurements product ($49/mo)
+3. Get CompanyCam webhook key — needed for photo sync integration
+4. Complete 10DLC campaign registration after brand approval
+5. Phase 1A: Verify Stripe keys are live (sk_live_) not test — check at stripe.com/dashboard
+6. Call hot prospects daily — 10 in pipeline
+7. Approve weekly content batch in dashboard
+8. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
 
 ---
 
