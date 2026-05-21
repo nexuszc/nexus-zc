@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v11
+# Last updated: May 21, 2026 — v12
 
 ---
 
@@ -421,20 +421,45 @@ Then productized and sold to other multi-business operators.
 
 **STATUS: Build spec v4 complete — ALL SYSTEMS GREEN (38/38)**
 
+**Build spec v5 complete (May 21, 2026):**
+- Phase 0: Prereqs verified (v4 smoke test 38/38 green before starting)
+- Phase 1: Landing page v5 — "Never pay for photo storage again" hero, v5 product stack cards (Portal Free, Portal Pro $69, Measurements $25, Aria Internal $249, Supplement AI from $99, CRM $299, Growth $599, All In $2,499)
+- Phase 2: Upgrade page v5 — all 7 products, 2 supplement tiers ($99 Package Only, $329 Full Handling with Aria), CRM $299, Growth $599, 5 Stripe placeholder links
+- Phase 3: Cloudflare redeploy + live verification (all checks green)
+- Phase 4: CLAUDE.md v12 updated
+
+**V5 LOCKED PRODUCT LINE:**
+| Product | Price |
+|---------|-------|
+| Portal Free | $0/mo — first 5 jobs |
+| Portal Pro | $69/mo — unlimited jobs |
+| Measurements | $25/report (bundles: $199/10, $449/25) |
+| Aria Internal | $249/mo |
+| Supplement Package | $99/job |
+| Supplement + Aria | $329/job |
+| CRM | $299/mo |
+| Growth | $599/mo |
+| All In | $2,499/mo |
+
 **PENDING (manual / external):**
 1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
-2. Get 1ESX API key (1esx.com) — needed for Measurements product auto-fulfillment ($49/mo)
+2. Get 1ESX API key (1esx.com) — needed for Measurements product auto-fulfillment
 3. Get CompanyCam API key (COMPANYCAM_API_KEY secret)
 4. Complete 10DLC campaign registration after brand approval
 5. Verify Stripe keys are live (sk_live_) not test — check at stripe.com/dashboard
-6. Create Stripe payment links for all 7 products (Portal Pro $69, Measurements $25, Aria $249, Supplement $99, Supplement+Aria $249, All In $2,499)
+6. Create 5 Stripe payment links and replace STRIPE_*_LINK placeholders in upgrade.html:
+   - Portal Pro $69/mo → STRIPE_PORTAL_PRO_LINK
+   - Aria Internal $249/mo → STRIPE_ARIA_INTERNAL_LINK
+   - CRM $299/mo → STRIPE_CRM_LINK
+   - Growth $599/mo → STRIPE_GROWTH_LINK
+   - All In $2,499/mo → STRIPE_ALL_IN_LINK
 7. Call hot prospects daily — use docs/larry-call-script.md
 8. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
 
 **NEXT (after first contractor signed):**
 - Onboard first contractor end-to-end: signup → demo → magic link → first job created
 - Monitor Aria support chat for real questions; tune KB accordingly
-- Get 1ESX API key to unlock auto-fulfillment on Measurements ($49/mo)
+- Get 1ESX API key to unlock auto-fulfillment on Measurements
 - Watch nexus_roofing_proposals dashboard — approve/reject weekly AI proposals
 
 ---
