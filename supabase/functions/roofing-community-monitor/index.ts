@@ -53,7 +53,7 @@ Return a JSON object with:
 - reason: one sentence why
 - portal_relevant: boolean — true if the homeowner portal would directly solve their problem
 
-Score high (8-10) for: supplement help, adjuster denials, homeowner communication issues, needing software/CRM, hail damage questions from contractors
+Score high (8-10) for: supplement help, adjuster denials, homeowner communication issues, needing software/CRM, hail damage questions from contractors, CompanyCam complaints or pricing frustration, AccuLynx/JobNimbus complaints or alternatives sought
 Score medium (5-7) for: general roofing questions where our tools help but aren't the core answer
 Score low (1-4) for: pricing questions, material questions, hiring, unrelated topics
 
@@ -90,9 +90,9 @@ async function searchSerper(query: string): Promise<Array<{ title: string; link:
   }
 }
 
-async function fetchRedditPosts(subreddit: string): Promise<Array<{ title: string; url: string; selftext: string; created_utc: number }>> {
+async function fetchRedditPosts(subreddit: string, limit = 25): Promise<Array<{ title: string; url: string; selftext: string; created_utc: number }>> {
   try {
-    const res = await fetch(`https://www.reddit.com/r/${subreddit}/new.json?limit=25`, {
+    const res = await fetch(`https://www.reddit.com/r/${subreddit}/new.json?limit=${limit}`, {
       headers: { "User-Agent": "RoofingOS/1.0 community monitor" }
     });
     const data = await res.json();
@@ -151,8 +151,8 @@ Deno.serve(async (req) => {
   try {
     const postsToProcess: Array<{ platform: string; title: string; url: string; content: string }> = [];
 
-    // 1. Reddit r/Roofing and r/RoofingContractors
-    for (const subreddit of ["Roofing", "RoofingContractors"]) {
+    // 1. Reddit — 6 subreddits
+    for (const subreddit of ["Roofing", "RoofingContractors", "Insurance", "HomeImprovement", "Contractor", "smallbusiness"]) {
       const posts = await fetchRedditPosts(subreddit);
       for (const post of posts) {
         const url = `https://reddit.com${post.url || ""}`.replace("https://reddit.comhttps://", "https://");
@@ -166,13 +166,20 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Serper web search
+    // 2. Serper web search — 12 targeted queries
     const searchQueries = [
+      // Core supplement + adjuster intent
       `site:reddit.com roofing "supplement software" OR "homeowner portal" OR "adjuster denied" 2026`,
       `site:reddit.com/r/Roofing "O&P" OR "supplement" OR "hail claim" help`,
-      `site:facebook.com/groups roofing contractor "supplement" OR "adjuster" OR "insurance claim" 2026`,
+      `site:reddit.com roofing "xactimate" OR "supplement" denied adjuster`,
+      `site:reddit.com roofing "adjuster" OR "insurance claim" help 2026`,
+      // Software/CRM intent
       `site:reddit.com roofing contractor app CRM recommendation 2026`,
-      // CompanyCam complaint monitoring (Task 5 — growth sprint)
+      `site:reddit.com roofing contractor software recommendation`,
+      `"acculynx" OR "jobnimbus" alternative roofing site:reddit.com`,
+      // Facebook groups
+      `site:facebook.com/groups roofing contractor "supplement" OR "adjuster" OR "insurance claim" 2026`,
+      // CompanyCam complaint monitoring
       `"companycam" "expensive" OR "price" roofing site:reddit.com`,
       `"companycam alternative" roofing site:reddit.com`,
       `"cancel companycam" roofing`,
@@ -195,7 +202,7 @@ Deno.serve(async (req) => {
     postsScanned = postsToProcess.length;
 
     // Score and respond to top posts
-    for (const post of postsToProcess.slice(0, 15)) {
+    for (const post of postsToProcess.slice(0, 25)) {
       const { score, reason, portal_relevant } = await scoreRelevance(post.title, post.content);
 
       if (score < RELEVANCE_THRESHOLD) {
@@ -215,6 +222,7 @@ Rules:
 - Sound like a real contractor, not a salesperson
 - Lead with genuinely useful advice (be specific — mention actual Xactimate codes, adjuster tactics, documentation tips)
 - If portal_relevant is true, you can naturally mention that contractors tracking documentation through their job management system see faster approvals — don't name the product
+- If the post is about CompanyCam pricing/alternatives OR AccuLynx/JobNimbus cost, you can mention "we switched to roofingos.dev — homeowner portal is free, CRM is $299 vs $550+" naturally
 - Max 150 words
 - No marketing speak, no "I'd be happy to help" openers
 - End with a question to continue the conversation

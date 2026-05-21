@@ -19,7 +19,19 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   const companyName = contractor.company_name as string || '';
   const ownerPhone = contractor.owner_phone as string || '';
   const ownerEmail = contractor.owner_email as string || '';
+  const referralCode = contractor.referral_code as string || '';
+  const plan = (contractor.plan as string || 'free').toLowerCase();
+  const isFree = !plan || plan === 'free';
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
+  const referralUrl = `https://roofingos.dev/r/${referralCode}`;
+
+  const referralBlock = isFree && referralCode ? `
+<hr>
+<h3 style="color:#e85d26">Share your link — both of you get 5 free jobs</h3>
+<p>Your referral link:</p>
+<p style="background:#f8f8f6;padding:12px 16px;border-radius:6px;font-family:monospace;font-size:15px;margin:12px 0"><strong>${referralUrl}</strong></p>
+<p class="sub">When another contractor signs up using your link, they get 5 free jobs AND you get 5 more. Share it in your contractor group chats — it takes 30 seconds.</p>` : '';
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -28,7 +40,7 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   h2{font-size:22px;margin-bottom:4px}
   h3{font-size:16px;margin-bottom:8px}
   hr{border:none;border-top:1px solid #e2e8f0;margin:24px 0}
-  .cta{background:#3b82f6;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block}
+  .cta{background:#e85d26;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block}
   .sub{color:#64748b;font-size:14px}
 </style>
 </head>
@@ -46,9 +58,10 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
 <hr>
 <h3>Step 3 — Your homeowner gets the portal</h3>
 <p>When you enter the homeowner's email, we send them a live project link instantly. They see every update. They stop calling.</p>
+${referralBlock}
 <hr>
 <p>Questions? Reply to this email or text ${twilioNumber} anytime.</p>
-<p style="margin-top:32px" class="sub">Zach Curtis<br>Roofing OS<br>roofingos.dev</p>
+<p style="margin-top:32px" class="sub">Roofing OS<br>roofingos.dev</p>
 </body>
 </html>`;
 }

@@ -193,7 +193,9 @@ Deno.serve(async (_req) => {
       : "";
 
     // Roofing OS intelligence (last 24h)
-    const [roofingOpensRes, ariaCallsRes] = await Promise.all([
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const [roofingOpensRes, ariaCallsRes, signupsYesterdayRes, visitsYesterdayRes, signupsWeekRes, pendingRedditRes] = await Promise.all([
       supabase.from("roofing_outreach_log")
         .select("prospect_id, open_count, touch_number")
         .eq("bot_open", false)
@@ -204,11 +206,25 @@ Deno.serve(async (_req) => {
         .select("contact_name, call_type, outcome, appointment_booked")
         .gte("created_at", new Date(Date.now() - 86400000).toISOString())
         .limit(10),
+      supabase.from("roofing_captures").select("id", { count: "exact", head: true })
+        .gte("created_at", yesterday + "T00:00:00"),
+      supabase.from("roofing_page_visits").select("visits").eq("date", yesterday).eq("page", "/").maybeSingle(),
+      supabase.from("roofing_captures").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
+      supabase.from("roofing_community_posts").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
     const roofingOpensCount = (roofingOpensRes.data || []).length;
     const ariaCallsToday = (ariaCallsRes.data || []) as Array<{ outcome: string; appointment_booked: boolean }>;
     const ariaBooked = ariaCallsToday.filter(c => c.appointment_booked).length;
     const ariaInterested = ariaCallsToday.filter(c => c.outcome === "interested").length;
+    const signupsYesterday = signupsYesterdayRes.count || 0;
+    const visitsYesterday = (visitsYesterdayRes.data as { visits?: number } | null)?.visits || 0;
+    const convRatePct = visitsYesterday > 0 ? Math.round(signupsYesterday / visitsYesterday * 100) : 0;
+    const signupsWeek = signupsWeekRes.count || 0;
+    const pendingRedditCount = pendingRedditRes.count || 0;
+    // Pace: assume 60-day goal of 1000
+    const { count: totalSignups } = await supabase.from("roofing_captures").select("id", { count: "exact", head: true });
+    const paceNeeded = Math.ceil((1000 - (totalSignups || 0)) / 60);
+    const onPace = signupsYesterday >= paceNeeded;
 
     // ----- 5. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
@@ -276,6 +292,7 @@ Deno.serve(async (_req) => {
       (roofingOpensCount > 0 || ariaCallsToday.length > 0)
         ? `ROOFING OS (last 24h):\n- Real email opens: ${roofingOpensCount}\n- Aria calls: ${ariaCallsToday.length} (${ariaBooked} booked, ${ariaInterested} interested)${roofingOpensCount >= 3 ? "\n- HOT: check aria_call_queue, multiple openers ready to call" : ""}`
         : "",
+      `GROWTH SCOREBOARD (1,000 signups in 60 days):\n- Yesterday: ${signupsYesterday} signups · ${visitsYesterday} visits · ${convRatePct}% conv\n- This week: ${signupsWeek} signups\n- Pace needed: ${paceNeeded}/day · ${onPace ? "✅ on pace" : "⚠️ behind pace"}\n- Total signups: ${totalSignups || 0}/1,000\n- Pending Reddit replies: ${pendingRedditCount}${pendingRedditCount > 0 ? " → approve in Community tab" : ""}\n- Facebook: check docs/facebook-posts-draft.md — post Variant A today if not done`,
     ].filter(Boolean).join("\n\n");
 
     // ----- 6. Generate briefing via Claude (with fallback) -----
@@ -293,6 +310,7 @@ Active projects: ${JSON.stringify(activeProjects.data || [])}
 Stale clients (no activity 5+ days): ${JSON.stringify(staleClients.data || [])}
 ${weeklySummary ? `Last week: ${weeklySummary}` : ""}
 Roofing OS (last 24h): opens=${roofingOpensCount}, aria_calls=${ariaCallsToday.length}, booked=${ariaBooked}, interested=${ariaInterested}
+Growth: signups_yesterday=${signupsYesterday}, visits_yesterday=${visitsYesterday}, conv_rate=${convRatePct}%, week_total=${signupsWeek}, total=${totalSignups || 0}/1000, pace_needed=${paceNeeded}/day, on_pace=${onPace}, pending_reddit=${pendingRedditCount}
 
 Generate a briefing in this EXACT format:
 
@@ -316,10 +334,13 @@ Generate a briefing in this EXACT format:
 *🏠 Roofing OS:*
 [Real email opens today, Aria call results, top prospect to follow up now. Skip if nothing.]
 
+*🚀 Growth scoreboard:*
+[Yesterday: X signups · Y visits · Z% conv. Week: N. Total: T/1,000. Pace: on track OR behind — need N/day. Pending Reddit replies: N. One action to take today on growth.]
+
 *💡 Zach, one thing:*
 [One strategic observation or nudge based on patterns you see. This is where you act like a real COO — notice what he's avoiding, what's slipping, what opportunity he should grab.]
 
-Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an assistant. Keep under 700 words.`;
+Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an assistant. Keep under 800 words.`;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
