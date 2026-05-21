@@ -3,11 +3,6 @@
 // call_started → look up caller, set Aria context
 // call_analyzed → extract job data, create job, email roofer
 //
-// SMS_DISABLED: 10DLC pending
-// Re-enable after 147C letter + 10DLC registration
-// Estimated: Monday May 18 2026
-// To re-enable: uncomment sendSMS blocks + remove this note
-// Then run: grep -r "SMS_DISABLED" supabase/functions/
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -20,10 +15,9 @@ const RETELL_INBOUND_AGENT_ID = Deno.env.get('ROOFING_ARIA_INBOUND_AGENT_ID') ||
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 
-// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
-// const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')!;
-// const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
-// const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || Deno.env.get('TWILIO_FROM_NUMBER') || '';
+const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')!;
+const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
+const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || Deno.env.get('TWILIO_FROM_NUMBER') || '';
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -182,19 +176,17 @@ async function sendResendEmail(to: string, subject: string, html: string): Promi
   }).catch(() => {});
 }
 
-// SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
-// To re-enable: uncomment below, remove this block
-// async function sendSMS(to: string, body: string) {
-//   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) return;
-//   await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
-//     method: 'POST',
-//     headers: {
-//       'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
-//       'Content-Type': 'application/x-www-form-urlencoded',
-//     },
-//     body: new URLSearchParams({ From: TWILIO_PHONE_NUMBER, To: to, Body: body }),
-//   }).catch(() => {});
-// }
+async function sendSMS(to: string, body: string) {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) return;
+  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ From: TWILIO_PHONE_NUMBER, To: to, Body: body }),
+  }).catch(() => {});
+}
 
 async function createJob(extracted: Record<string, unknown>, member: Record<string, unknown>, transcript: string) {
   const contractor = member.contractor_accounts as Record<string, unknown>;
@@ -462,8 +454,7 @@ Deno.serve(async (req) => {
           );
         }
 
-        // SMS_DISABLED: 10DLC pending — re-enable Monday May 18 2026
-        // await sendSMS(callerPhone, `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nJob ID: ${token}`);
+        await sendSMS(callerPhone, `✅ Job created — ${extracted.homeowner_name}\n${extracted.address}\n\nJob ID: ${token}`);
       } else {
         console.log('skipping job creation — confidence too low or missing fields');
       }
