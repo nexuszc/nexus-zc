@@ -3,14 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roofing OS — Homeowner Portal for Roofing Contractors</title>
-<meta name="description" content="Give every homeowner a live portal. Free forever. They track their own job. You stop answering calls during installations.">
-<meta property="og:title" content="Your homeowners stop calling you during installations.">
-<meta property="og:description" content="Roofing OS gives every homeowner a live portal. Free forever. Insurance status, crew photos, install dates — automatically.">
-<meta property="og:image" content="https://roofingos.dev/og-image.png">
+<title>Roofing OS — Never pay for photo storage again</title>
+<meta name="description" content="Cancel CompanyCam. Roofing OS replaces it free. Every homeowner gets a live portal — photos, insurance, crew schedule. Free forever for roofing contractors.">
+<meta property="og:title" content="Never pay for photo storage again — Roofing OS">
+<meta property="og:description" content="Cancel CompanyCam. Save $79-199/month. Free forever for roofing contractors.">
 <meta property="og:url" content="https://roofingos.dev">
+<meta property="og:image" content="https://roofingos.dev/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
-<script src="https://js.stripe.com/v3/"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -31,7 +30,7 @@
 
   /* NAV */
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 14px 24px; background: rgba(10,10,15,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); }
+  .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
   .logo em { color: var(--cyan); font-style: normal; }
   .nav-cta { background: var(--cyan); color: white; text-decoration: none; padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 700; white-space: nowrap; animation: ctaPulse 3s ease infinite; }
   @keyframes ctaPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.4); } 50% { box-shadow: 0 0 0 6px rgba(6,182,212,0); } }
@@ -46,6 +45,7 @@
   .hero-cta { display: inline-block; background: var(--cyan); color: white; text-decoration: none; padding: 16px 32px; border-radius: 10px; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; box-shadow: 0 8px 30px rgba(6,182,212,0.35); transition: transform 0.15s, box-shadow 0.15s; }
   .hero-cta:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(6,182,212,0.45); }
   .hero-sub-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .hero-badge { display: inline-block; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.3); color: var(--cyan); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 5px 14px; border-radius: 100px; margin-bottom: 20px; }
 
   /* PHONE MOCKUP */
   .phone-wrap { position: relative; }
@@ -110,7 +110,7 @@
   .step h3 { color: var(--text); font-size: 18px; font-weight: 700; margin: 0 0 8px; }
   .step p { color: var(--muted); font-size: 15px; margin: 0; line-height: 1.6; }
 
-  /* SARAH PORTAL MOCKUP */
+  /* SARAH PORTAL */
   .sarah-portal { background: #1e293b; border-radius: 16px; overflow: hidden; margin-bottom: 32px; }
   .sarah-portal-header { padding: 16px 20px; border-bottom: 1px solid #334155; }
   .sarah-portal-header .name { font-weight: 700; color: white; font-size: 16px; }
@@ -146,83 +146,6 @@
   .comp-item.good::before { content: '✓'; color: var(--green); flex-shrink: 0; font-weight: 700; }
   .comp-item.good { color: var(--text); }
 
-  /* CHECKLIST */
-  .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 40px; }
-  @media (max-width: 600px) { .check-grid { grid-template-columns: 1fr; } }
-  .check-item { display: flex; gap: 12px; align-items: flex-start; }
-  .check-icon { width: 24px; height: 24px; background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 12px; color: var(--green); font-weight: 700; }
-  .check-text strong { font-size: 14px; font-weight: 700; display: block; margin-bottom: 2px; }
-  .check-text span { font-size: 13px; color: var(--muted); }
-
-  /* SIGNUP */
-  #signup { background: var(--bg); }
-  .signup-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; max-width: 520px; margin: 0 auto; padding: 40px 36px; }
-  @media (max-width: 600px) { .signup-card { padding: 28px 20px; } }
-  .signup-title { font-size: 26px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 4px; }
-  .signup-price { font-size: 48px; font-weight: 900; letter-spacing: -0.04em; margin-bottom: 4px; }
-  .signup-price span { font-size: 18px; font-weight: 500; color: var(--muted); }
-  .signup-perks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
-  .signup-perk { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25); border-radius: 100px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--green); }
-  .field-group { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
-  .field input, .field select, .field textarea { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s; width: 100%; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--cyan); }
-  .field input::placeholder, .field textarea::placeholder { color: rgba(148,163,184,0.5); }
-  .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; cursor: pointer; }
-  .field select option { background: #1e293b; color: var(--text); }
-  .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
-  #card-element { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px; padding: 13px 14px; transition: border-color 0.15s; }
-  #card-element.StripeElement--focus { border-color: var(--cyan); }
-  .signup-btn { width: 100%; background: var(--cyan); color: white; border: none; border-radius: 10px; padding: 16px; font-size: 17px; font-weight: 800; cursor: pointer; font-family: inherit; transition: background 0.15s, transform 0.1s; margin-top: 8px; box-shadow: 0 8px 24px rgba(6,182,212,0.3); }
-  .signup-btn:hover { background: var(--cyan-dark); }
-  .signup-btn:active { transform: scale(0.99); }
-  .signup-btn:disabled { background: #334155; cursor: not-allowed; box-shadow: none; }
-  .signup-trust { display: flex; justify-content: center; gap: 20px; margin-top: 14px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
-  .signup-error { color: var(--red); font-size: 13px; margin-top: 8px; min-height: 18px; }
-  .signup-success { display: none; text-align: center; padding: 20px 0; }
-  .signup-success h3 { font-size: 24px; font-weight: 800; margin-bottom: 8px; color: var(--green); }
-  .signup-success p { color: var(--muted); font-size: 15px; line-height: 1.6; }
-
-  /* PRICING */
-  .pricing-header { text-align: center; margin-bottom: 48px; }
-  .pricing-header h2 { font-size: clamp(28px, 4.5vw, 44px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 12px; }
-  .pricing-header p { color: var(--muted); font-size: 16px; line-height: 1.6; max-width: 480px; margin: 0 auto; }
-  .pricing-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 24px; max-width: 900px; margin: 0 auto; align-items: start; }
-  @media (max-width: 720px) { .pricing-grid { grid-template-columns: 1fr; } }
-  .pricing-card { border-radius: 20px; padding: 36px 32px; position: relative; }
-  .pricing-card.featured { background: var(--surface); border: 1.5px solid var(--cyan); box-shadow: 0 0 40px rgba(6,182,212,0.1); }
-  .pricing-card.secondary { background: var(--card); border: 1px solid var(--border); }
-  @media (max-width: 720px) { .pricing-card.secondary { order: 2; } .pricing-card.featured { order: 1; } }
-  .pricing-badge { display: inline-block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 20px; }
-  .pricing-badge.popular { background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); }
-  .pricing-badge.enterprise { background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.2); color: var(--muted); }
-  .pricing-price { font-size: 52px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
-  .pricing-card.secondary .pricing-price { font-size: 40px; }
-  .pricing-price sub { font-size: 18px; font-weight: 500; color: var(--muted); vertical-align: baseline; }
-  .pricing-headline { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 16px 0 6px; }
-  .pricing-card.secondary .pricing-headline { font-size: 17px; }
-  .pricing-subhead { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 24px; }
-  .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; border-top: 1px solid var(--border); padding-top: 20px; }
-  .pricing-features li { font-size: 14px; color: var(--text); display: flex; align-items: flex-start; gap: 10px; line-height: 1.4; }
-  .pricing-card.secondary .pricing-features li { font-size: 13px; color: var(--muted); }
-  .pricing-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; font-size: 13px; margin-top: 1px; }
-  .pricing-cta { display: block; text-align: center; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: 800; cursor: pointer; text-decoration: none; border: none; font-family: inherit; transition: all 0.15s; width: 100%; }
-  .pricing-cta.primary { background: var(--cyan); color: white; box-shadow: 0 8px 24px rgba(6,182,212,0.3); }
-  .pricing-cta.primary:hover { background: var(--cyan-dark); transform: translateY(-1px); }
-  .pricing-cta.secondary-btn { background: transparent; color: var(--text); border: 1px solid var(--border); }
-  .pricing-cta.secondary-btn:hover { border-color: var(--muted); }
-  .pricing-footnote { text-align: center; font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
-
-  /* CONTACT MODAL */
-  .contact-modal { display: none; position: fixed; inset: 0; z-index: 200; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); padding: 24px; }
-  .contact-modal.open { display: flex; }
-  .contact-modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; width: 100%; max-width: 440px; padding: 36px 32px; position: relative; }
-  .contact-modal-card h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
-  .contact-modal-card p { color: var(--muted); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-  .contact-close { position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px; }
-  .contact-close:hover { color: var(--text); }
-
   /* FAQ */
   .faq-wrap { max-width: 680px; margin: 0 auto; }
   details { border-bottom: 1px solid var(--border); }
@@ -245,22 +168,106 @@
   footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
   footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { color: var(--text); }
+
+  /* CANCEL TABLE */
+  .cancel-table { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin: 32px 0; }
+  .cancel-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr; padding: 14px 20px; border-bottom: 1px solid rgba(30,30,46,0.7); align-items: center; font-size: 14px; }
+  .cancel-row:last-child { border-bottom: none; }
+  .cancel-header { background: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .cancel-total { background: rgba(6,182,212,0.05); font-weight: 700; }
+  .old-price { color: #f87171; font-weight: 700; }
+  .new-price { color: var(--green); font-weight: 700; }
+  .new-price.free { color: var(--cyan); }
+  .cyan { color: var(--cyan); }
+  .bold { font-weight: 900; }
+  @media (max-width: 600px) { .cancel-row { grid-template-columns: 1fr 1fr; } .cancel-row span:nth-child(2) { display: none; } .cancel-header span:nth-child(2) { display: none; } }
+
+  /* COMPANYCAM SECTION */
+  .cc-steps { display: flex; flex-direction: column; gap: 24px; margin: 32px 0; }
+  .cc-step { display: flex; gap: 20px; align-items: flex-start; }
+  .cc-step .step-num { background: var(--cyan); color: white; font-weight: 800; font-size: 16px; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cc-step strong { font-size: 16px; font-weight: 700; display: block; margin-bottom: 4px; }
+  .cc-step p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0; }
+  .cc-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0; }
+  @media (max-width: 600px) { .cc-compare { grid-template-columns: 1fr; } }
+  .cc-col { border-radius: 16px; overflow: hidden; }
+  .cc-lose { background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); }
+  .cc-win { background: rgba(6,182,212,0.05); border: 1px solid rgba(6,182,212,0.25); }
+  .col-head { padding: 14px 20px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+  .cc-lose .col-head { background: rgba(239,68,68,0.1); color: #f87171; }
+  .cc-win .col-head { background: rgba(6,182,212,0.1); color: var(--cyan); }
+  .cc-item { padding: 10px 20px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(255,255,255,0.04); line-height: 1.4; }
+
+  /* PORTAL FEATURES */
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 32px 0; }
+  .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .feat-icon { font-size: 24px; display: block; margin-bottom: 10px; }
+  .feature strong { font-size: 15px; font-weight: 700; display: block; margin-bottom: 6px; }
+  .feature p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+  .demo-link-box { display: block; background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.3); border-radius: 12px; padding: 20px 24px; text-decoration: none; color: var(--cyan); font-size: 16px; font-weight: 700; margin-top: 32px; }
+  .demo-link-box span { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+
+  /* STORM SECTION */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; }
+  @media (max-width: 600px) { .stats-row { grid-template-columns: 1fr; } }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; text-align: center; }
+  .stat-num { font-size: 40px; font-weight: 900; color: var(--cyan); letter-spacing: -0.03em; }
+  .stat-label { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+  /* PRODUCT STACK */
+  .free-card { background: var(--surface); border: 1.5px solid var(--cyan); border-radius: 20px; padding: 40px; max-width: 700px; margin: 0 auto 48px; box-shadow: 0 0 40px rgba(6,182,212,0.08); }
+  .free-badge { display: inline-block; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 16px; }
+  .product-name { font-size: 36px; font-weight: 900; letter-spacing: -0.03em; }
+  .product-price { font-size: 52px; font-weight: 900; letter-spacing: -0.04em; color: var(--cyan); margin: 8px 0; }
+  .product-features { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 20px 0 28px; border-top: 1px solid var(--border); padding-top: 20px; }
+  @media (max-width: 600px) { .product-features { grid-template-columns: 1fr; } }
+  .product-features li { font-size: 14px; color: var(--text); display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+  .product-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+  .cta-primary { display: inline-block; background: var(--cyan); color: white; text-decoration: none; padding: 15px 28px; border-radius: 10px; font-size: 16px; font-weight: 800; box-shadow: 0 8px 24px rgba(6,182,212,0.3); transition: background 0.15s; }
+  .cta-primary:hover { background: var(--cyan-dark); }
+  .cta-primary.large { padding: 18px 36px; font-size: 18px; }
+  .no-card { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .addons-title { text-align: center; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 24px; }
+  .addons-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; max-width: 1000px; margin: 0 auto 40px; }
+  .addon-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; transition: border-color 0.2s; }
+  .addon-card:hover { border-color: rgba(255,255,255,0.15); }
+  .addon-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+  .addon-price { font-size: 28px; font-weight: 900; color: var(--cyan); letter-spacing: -0.03em; }
+  .addon-vs { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .addon-card p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
+  .addon-card a { color: var(--cyan); font-size: 14px; font-weight: 600; text-decoration: none; }
+  .addon-card a:hover { text-decoration: underline; }
+  .all-in-card { background: var(--surface); border: 1px solid #f59e0b; border-radius: 20px; padding: 36px; max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 32px; flex-wrap: wrap; box-shadow: 0 0 40px rgba(245,158,11,0.06); }
+  .all-in-badge { display: inline-block; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: #f59e0b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 8px; }
+  .all-in-name { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .all-in-left p { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 380px; }
+  .all-in-price { font-size: 44px; font-weight: 900; color: #f59e0b; letter-spacing: -0.04em; margin-bottom: 16px; }
+  .all-in-right { text-align: center; }
+
+  /* SIGNUP SECTION */
+  .signup-section { text-align: center; }
+  .signup-section h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 900; letter-spacing: -0.03em; margin-bottom: 12px; }
+  .signup-section p { color: var(--muted); font-size: 16px; margin-bottom: 28px; }
+  .signup-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  .cta-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="logo">Roofing<em>OS</em></div>
-  <a href="#signup" class="nav-cta">Get your free portal →</a>
+  <a href="/" class="logo">Roofing<em>OS</em></a>
+  <a href="https://roofingos.dev/dashboard" class="nav-cta">Get your free portal →</a>
 </nav>
 
-<!-- HERO — "What's the point?" -->
+<!-- HERO -->
 <div class="hero">
   <div class="hero-copy">
-    <h1>Your homeowners stop calling you<br><em>during installations.</em></h1>
-    <p>Give every homeowner a live portal. They see their crew, their photos, their insurance status — in real time. They stop calling because they don't need to.</p>
-    <a href="#signup" class="hero-cta">Get your free portal →</a>
-    <div class="hero-sub-note">Portal is free forever · No card required · Setup in 5 minutes</div>
+    <div class="hero-badge">FREE FOREVER FOR ROOFING CONTRACTORS</div>
+    <h1>Never pay for photo storage again.<br><em>Your homeowners see every photo in real time.</em></h1>
+    <p>Roofing OS replaces CompanyCam — free. Every photo your crew takes appears in your homeowner's live portal automatically. No extra app. No extra cost. No bill.</p>
+    <a href="https://roofingos.dev/dashboard" class="hero-cta">Get your free portal →</a>
+    <div class="hero-sub-note">Free forever · No credit card · Setup in 4 minutes</div>
   </div>
 
   <div class="phone-wrap">
@@ -324,8 +331,278 @@
   </div>
 </div>
 
-<!-- PROBLEM — "How does this help ME?" -->
+<!-- CANCEL TABLE -->
 <section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:800px;margin:0 auto;">
+    <div class="section-label">Cancel your other tools</div>
+    <h2 class="section-title">You're already paying for tools Roofing OS replaces.</h2>
+    <p style="color:var(--muted);font-size:16px;margin:0 0 32px;line-height:1.6;">Most contractors save $800–2,000/month switching to Roofing OS.</p>
+
+    <div class="cancel-table">
+      <div class="cancel-row cancel-header">
+        <span>Tool</span>
+        <span>What you pay</span>
+        <span>Roofing OS</span>
+      </div>
+      <div class="cancel-row">
+        <span>📸 CompanyCam</span>
+        <span class="old-price">$79–199/mo</span>
+        <span class="new-price free">FREE</span>
+      </div>
+      <div class="cancel-row">
+        <span>📋 AccuLynx</span>
+        <span class="old-price">$550–1,200/mo</span>
+        <span class="new-price">CRM $299/mo</span>
+      </div>
+      <div class="cancel-row">
+        <span>📋 JobNimbus</span>
+        <span class="old-price">$619+/mo</span>
+        <span class="new-price">CRM $299/mo</span>
+      </div>
+      <div class="cancel-row">
+        <span>📐 EagleView</span>
+        <span class="old-price">$15–87/report</span>
+        <span class="new-price">$25/report</span>
+      </div>
+      <div class="cancel-row">
+        <span>📞 Answering service</span>
+        <span class="old-price">$200–500/mo</span>
+        <span class="new-price">Aria $249/mo</span>
+      </div>
+      <div class="cancel-row">
+        <span>📣 Marketing agency</span>
+        <span class="old-price">$2–5k/mo</span>
+        <span class="new-price">Growth $599/mo</span>
+      </div>
+      <div class="cancel-row cancel-total">
+        <span>Average monthly savings</span>
+        <span></span>
+        <span class="cyan bold">$800–2,000/mo</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPANYCAM REPLACEMENT -->
+<section>
+  <div style="max-width:800px;margin:0 auto;">
+    <div class="section-label">CompanyCam replacement</div>
+    <h2 class="section-title">Already using CompanyCam? <span class="cyan">Connect it. Import everything. Cancel it.</span></h2>
+
+    <div class="cc-steps">
+      <div class="cc-step">
+        <div class="step-num">1</div>
+        <div>
+          <strong>Connect your account</strong>
+          <p>Paste your CompanyCam API key. 30 seconds. All your projects import automatically.</p>
+        </div>
+      </div>
+      <div class="cc-step">
+        <div class="step-num">2</div>
+        <div>
+          <strong>Every job gets a homeowner portal</strong>
+          <p>All existing projects and photos imported in minutes. Active jobs get homeowner portals created instantly.</p>
+        </div>
+      </div>
+      <div class="cc-step">
+        <div class="step-num">3</div>
+        <div>
+          <strong>Cancel CompanyCam</strong>
+          <p>Your photos stay in Roofing OS forever. New crew photos sync from any phone. Save $79–199/month.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="cc-compare">
+      <div class="cc-col cc-lose">
+        <div class="col-head">CompanyCam</div>
+        <div class="cc-item">✗ Photos stay internal</div>
+        <div class="cc-item">✗ Homeowner sees nothing</div>
+        <div class="cc-item">✗ No portal, no AI, no supplements</div>
+        <div class="cc-item">✗ $79–199/month minimum</div>
+        <div class="cc-item">✗ 3-user minimum lock-in</div>
+        <div class="cc-item">✗ Just photo storage. Nothing else.</div>
+      </div>
+      <div class="cc-col cc-win">
+        <div class="col-head">Roofing OS</div>
+        <div class="cc-item">✓ Photos go to homeowner portal instantly</div>
+        <div class="cc-item">✓ Homeowner tracks their own job</div>
+        <div class="cc-item">✓ Aria, supplements, CRM — all here</div>
+        <div class="cc-item">✓ Free forever, no seat minimums</div>
+        <div class="cc-item">✓ Unlimited team on free plan</div>
+        <div class="cc-item">✓ Photo storage plus everything else</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:32px;">
+      <a href="https://roofingos.dev/dashboard" class="hero-cta">Start free — connect CompanyCam →</a>
+      <p class="cta-note">No credit card. Cancel CompanyCam this month.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PORTAL EXPLANATION -->
+<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:1000px;margin:0 auto;">
+    <div class="section-label">What homeowners see</div>
+    <h2 class="section-title">Every homeowner gets a live portal. <span class="cyan">They stop calling because they don't need to.</span></h2>
+
+    <div class="features-grid">
+      <div class="feature">
+        <span class="feat-icon">📸</span>
+        <strong>Real-time crew photos</strong>
+        <p>Your crew uploads from any phone. Homeowner sees it instantly.</p>
+      </div>
+      <div class="feature">
+        <span class="feat-icon">✅</span>
+        <strong>Insurance status in plain English</strong>
+        <p>Approved amounts, pending items, deductible — no jargon.</p>
+      </div>
+      <div class="feature">
+        <span class="feat-icon">🚛</span>
+        <strong>Crew schedule and arrival time</strong>
+        <p>They know when crew arrives. No need to call. No need to be home.</p>
+      </div>
+      <div class="feature">
+        <span class="feat-icon">💰</span>
+        <strong>Supplement updates</strong>
+        <p>They see when you submit and when the carrier approves.</p>
+      </div>
+      <div class="feature">
+        <span class="feat-icon">💬</span>
+        <strong>Aria chat — 24/7 (Portal Pro)</strong>
+        <p>Homeowners ask at midnight. Aria answers from the job data.</p>
+      </div>
+      <div class="feature">
+        <span class="feat-icon">📄</span>
+        <strong>Documents and warranties</strong>
+        <p>Contracts, permits, warranty docs. E-sign in the portal.</p>
+      </div>
+    </div>
+
+    <a href="https://roofingos.dev/portal/demo" class="demo-link-box">
+      See a real homeowner portal → roofingos.dev/portal/demo
+      <span>Live demo · Real job · No signup required</span>
+    </a>
+  </div>
+</section>
+
+<!-- STORM SECTION -->
+<section>
+  <div style="max-width:800px;margin:0 auto;">
+    <div class="section-label">Storm season</div>
+    <h2 class="section-title">When the storm hits, your salespeople should be selling. <span class="cyan">Not answering homeowner calls.</span></h2>
+    <p style="color:var(--muted);font-size:16px;margin:0 0 16px;line-height:1.7;">During storm season every interrupted sales call is a deal that doesn't close. Every homeowner on Roofing OS tracks their own job. Your team never stops to explain what's happening on a job they already closed.</p>
+
+    <div class="stats-row">
+      <div class="stat">
+        <div class="stat-num">3hrs</div>
+        <div class="stat-label">Average daily homeowner calls per salesperson during storm season</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">$0</div>
+        <div class="stat-label">Cost to give every homeowner a live portal</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">$4,200</div>
+        <div class="stat-label">Average supplement recovery per insurance job</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCT STACK -->
+<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+  <div style="max-width:1000px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:48px;">
+      <div class="section-label">Pricing</div>
+      <h2 class="section-title">Start free. Add what you need.</h2>
+      <p class="section-sub" style="margin:0 auto;">Every product pays for itself immediately. Nothing requires a long-term commitment.</p>
+    </div>
+
+    <div class="free-card">
+      <div class="free-badge">FREE FOREVER</div>
+      <div class="product-name">Portal</div>
+      <div class="product-price">$0<span style="font-size:20px;font-weight:500;color:var(--muted);">/month</span></div>
+      <ul class="product-features">
+        <li>Homeowner portal — 5 new jobs/month</li>
+        <li>Insurance and activity tracking</li>
+        <li>All 7 integrations — CompanyCam, AccuLynx, JobNimbus and more</li>
+        <li>Photos sync from CompanyCam hourly</li>
+        <li>1 team member seat</li>
+      </ul>
+      <a href="https://roofingos.dev/dashboard" class="cta-primary">Get started free →</a>
+      <p class="no-card">No credit card. No catch.</p>
+    </div>
+
+    <h3 class="addons-title">Add-ons — pay only for what you use</h3>
+
+    <div class="addons-grid">
+      <div class="addon-card">
+        <div class="addon-name">Portal Pro</div>
+        <div class="addon-price">$69/mo</div>
+        <div class="addon-vs">vs CompanyCam $79–199/mo</div>
+        <p>Unlimited jobs, unlimited team, unlimited storage. Homeowner Aria included. Review requests and referral tracking built in. Cancel CompanyCam today.</p>
+        <a href="/upgrade#portal-pro">Add Portal Pro →</a>
+      </div>
+
+      <div class="addon-card">
+        <div class="addon-name">Measurements</div>
+        <div class="addon-price">$25/report</div>
+        <div class="addon-vs">vs EagleView $15–87/report</div>
+        <p>Squares, pitch, eaves, ridges in 60 seconds. ESX/XML for Xactimate. Bundle 10 for $199.</p>
+        <a href="/upgrade#measurements">Order measurements →</a>
+      </div>
+
+      <div class="addon-card">
+        <div class="addon-name">Aria Internal</div>
+        <div class="addon-price">$249/mo</div>
+        <div class="addon-vs">vs answering service $200–500/mo</div>
+        <p>One number. Your whole team. Salespeople call in jobs. Crew calls in updates. Admin handles scheduling. Aria knows every job.</p>
+        <a href="/upgrade#aria">Add Aria →</a>
+      </div>
+
+      <div class="addon-card">
+        <div class="addon-name">Supplement AI</div>
+        <div class="addon-price">from $99/job</div>
+        <div class="addon-vs">or $329/job — Aria handles everything</div>
+        <p>AI generates supplement packages. Avg recovery: $4,200/job. Or let Aria call the adjuster, handle rebuttals, and track depreciation release for you.</p>
+        <a href="/upgrade#supplement">Add Supplement AI →</a>
+      </div>
+
+      <div class="addon-card">
+        <div class="addon-name">CRM</div>
+        <div class="addon-price">$299/mo</div>
+        <div class="addon-vs">vs AccuLynx $550–1,200/mo</div>
+        <p>Replaces AccuLynx and JobNimbus. Full pipeline, proposals, payments, team management. Flat fee — no per-user charges ever.</p>
+        <a href="/upgrade#crm">Add CRM →</a>
+      </div>
+
+      <div class="addon-card">
+        <div class="addon-name">Growth</div>
+        <div class="addon-price">$599/mo</div>
+        <div class="addon-vs">vs marketing agency $2–5k/mo</div>
+        <p>Storm alerts, outbound lead gen, YouTube content, email sequences — fully automated. Fills your pipeline while you sleep.</p>
+        <a href="/upgrade#growth">Add Growth →</a>
+      </div>
+    </div>
+
+    <div class="all-in-card">
+      <div class="all-in-left">
+        <div class="all-in-badge">BEST VALUE</div>
+        <div class="all-in-name">All In</div>
+        <p>Everything above. Priority support from Zach directly. Quarterly strategy review.</p>
+      </div>
+      <div class="all-in-right">
+        <div class="all-in-price">$2,499/mo</div>
+        <a href="/upgrade#all-in" class="cta-primary">Get All In →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CALLS THAT COST YOU MONEY (kept, price-scrubbed) -->
+<section style="background:var(--bg);border-bottom:1px solid var(--border);">
   <div style="max-width:680px;margin:0 auto;">
     <div class="section-label">You know this feeling</div>
     <h2 class="section-title">The calls that cost you money.</h2>
@@ -333,13 +610,11 @@
     <div class="pain-card">
       <p>📱 Your crew is on the roof. Your homeowner texts for the fourth time: <em>"When are you coming?"</em></p>
     </div>
-
     <div class="pain-card">
       <p>📞 Your adjuster approved the claim. You call the homeowner to schedule. No answer. Two days go by. They got three more bids.</p>
     </div>
-
     <div class="pain-card">
-      <p>💸 Your homeowner called the adjuster directly. Got confused. Pulled the claim. You lost a $4,000 supplement.</p>
+      <p>💸 Your homeowner called the adjuster directly. Got confused. Pulled the claim. You lost a $4,200 supplement.</p>
     </div>
 
     <p style="color:var(--muted);font-size:16px;margin-top:24px;line-height:1.7;">
@@ -349,7 +624,7 @@
   </div>
 </section>
 
-<!-- HOW IT WORKS — "How does it work?" + "Do I have to set anything up?" -->
+<!-- THREE STEPS (kept) -->
 <section>
   <div style="max-width:680px;margin:0 auto;">
     <div class="section-label">Setup</div>
@@ -363,7 +638,6 @@
         <p>Type the homeowner's name, address, and email. Takes 60 seconds. Or call our number and say it out loud — we create the job automatically.</p>
       </div>
     </div>
-
     <div class="step">
       <div class="step-num">2</div>
       <div>
@@ -371,7 +645,6 @@
         <p>We email them a portal link instantly. No app to download. No password. Just a link that works on any phone.</p>
       </div>
     </div>
-
     <div class="step">
       <div class="step-num">3</div>
       <div>
@@ -380,13 +653,13 @@
       </div>
     </div>
 
-    <a href="#signup" style="display:block;background:var(--cyan);color:white;padding:16px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 8px 24px rgba(6,182,212,0.3);">
-      See it live — free demo →
+    <a href="https://roofingos.dev/portal/demo" style="display:block;background:var(--cyan);color:white;padding:16px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 8px 24px rgba(6,182,212,0.3);">
+      See the demo portal — no signup →
     </a>
   </div>
 </section>
 
-<!-- SARAH'S STORY — "What do other roofers think?" -->
+<!-- SARAH'S STORY (kept, demo link updated) -->
 <section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
   <div style="max-width:680px;margin:0 auto;">
     <div class="section-label">Real job, real portal</div>
@@ -434,13 +707,13 @@
       Sarah got this link the day her contractor opened her file. She never called once. Her contractor closed the job, got a 5-star review, and two referrals from her neighbors.
     </p>
 
-    <a href="https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS" style="display:block;background:#1e293b;color:var(--cyan);padding:14px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;text-align:center;border:1px solid var(--cyan);">
+    <a href="https://roofingos.dev/portal/demo" style="display:block;background:#1e293b;color:var(--cyan);padding:14px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;text-align:center;border:1px solid var(--cyan);">
       See the full demo portal →
     </a>
   </div>
 </section>
 
-<!-- COMPARISON — "How does this help ME?" (visual) -->
+<!-- WHAT YOU STOP DOING (kept) -->
 <section>
   <div class="section-inner" style="text-align:center;">
     <div class="section-label">The job gets easier</div>
@@ -466,7 +739,7 @@
   </div>
 </section>
 
-<!-- FOUNDER STORY — "What do other roofers think?" -->
+<!-- ZACH TESTIMONIAL (kept) -->
 <section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
   <div style="max-width:680px;margin:0 auto;">
     <div class="founder-card">
@@ -485,244 +758,19 @@
   </div>
 </section>
 
-<!-- FEATURES — "How does it work?" (detail) -->
-<section>
-  <div class="section-inner">
-    <div class="section-label">What's included — Free forever</div>
-    <h2 class="section-title">Everything is handled.</h2>
-    <p class="section-sub">One job that impresses a homeowner pays for the year.</p>
-    <div class="check-grid">
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Homeowner portal — unlimited jobs</strong><span>Every job gets a live portal. No cap on jobs or homeowners.</span></div>
-      </div>
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Real-time activity feed</strong><span>Photos, milestones, crew notes — visible instantly from any phone.</span></div>
-      </div>
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Insurance claim tracker</strong><span>Approved, pending, and requested — clear language for the homeowner.</span></div>
-      </div>
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Aria AI chat (text, 24/7)</strong><span>Homeowners ask questions at midnight. Aria answers correctly.</span></div>
-      </div>
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Document delivery and signatures</strong><span>Contracts, permits, warranty docs — signed and stored in the portal.</span></div>
-      </div>
-      <div class="check-item">
-        <div class="check-icon">✓</div>
-        <div class="check-text"><strong>Referral engine built in</strong><span>Portal generates a referral link. Homeowners share it automatically.</span></div>
-      </div>
-    </div>
+<!-- SIGNUP (replaced with simple CTA) -->
+<section class="signup-section" id="signup">
+  <div style="max-width:520px;margin:0 auto;">
+    <h2>Get your free portal</h2>
+    <p>Free forever · No credit card · Setup in 4 minutes</p>
+    <a href="https://roofingos.dev/dashboard" class="cta-primary large">
+      Create your free account →
+    </a>
+    <p class="signup-note">Or go directly: roofingos.dev/dashboard</p>
   </div>
 </section>
 
-<!-- PRICING -->
-<section id="pricing" style="background:var(--bg);">
-  <div class="section-inner">
-    <div class="pricing-header">
-      <h2>The portal is free.<br><em style="font-style:normal;color:var(--cyan);">Forever.</em></h2>
-      <p>Start with the homeowner portal at no cost. Add AI, supplements, and automation when your jobs demand it.</p>
-    </div>
-
-    <!-- Free tier -->
-    <div style="max-width:700px;margin:0 auto 32px;background:var(--surface);border:1.5px solid var(--cyan);border-radius:20px;padding:36px 32px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:20px;">
-        <div>
-          <div class="pricing-badge popular" style="margin-bottom:8px;">Free forever</div>
-          <div style="font-size:48px;font-weight:900;letter-spacing:-0.04em;line-height:1;">$0<sub style="font-size:18px;font-weight:500;color:var(--muted);vertical-align:baseline;">/mo</sub></div>
-        </div>
-        <a href="#signup" style="display:inline-block;background:var(--cyan);color:white;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:16px;font-weight:800;white-space:nowrap;box-shadow:0 8px 24px rgba(6,182,212,0.3);">Start free — no card →</a>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;">
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Branded homeowner portal on every job</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Real-time photo updates during installation</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Insurance claim status in plain English</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Homeowner messaging and notifications</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Automatic 5-star review requests</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Referral program built in</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Unlimited jobs and homeowners</div>
-        <div style="font-size:14px;color:var(--text);display:flex;gap:8px;align-items:flex-start;"><span style="color:var(--green);font-weight:700;">✓</span>Whole team with role-based access</div>
-      </div>
-    </div>
-
-    <!-- CompanyCam killer -->
-    <div style="background:#0f172a;border:1px solid var(--border);border-radius:20px;padding:40px;margin-bottom:40px;max-width:900px;margin-left:auto;margin-right:auto;margin-bottom:40px;">
-      <div style="font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Photo storage included</div>
-      <h3 style="font-size:clamp(22px,3vw,32px);font-weight:900;letter-spacing:-0.03em;margin-bottom:12px;">Cancel CompanyCam.<br>The photos go straight to your homeowner.</h3>
-      <p style="color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:24px;max-width:560px;">Connect CompanyCam once and every photo you take auto-syncs into that homeowner's private portal. No extra app. No extra login. No per-seat fees. Your homeowner sees their roof progress the moment you take the photo.</p>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
-        <div style="background:#111827;border:1px solid var(--border);border-radius:12px;padding:16px;">
-          <div style="font-size:24px;font-weight:900;color:var(--green);">$0</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Photo storage. Forever.</div>
-        </div>
-        <div style="background:#111827;border:1px solid var(--border);border-radius:12px;padding:16px;">
-          <div style="font-size:24px;font-weight:900;color:var(--green);">Auto</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">CompanyCam sync — no manual uploads</div>
-        </div>
-        <div style="background:#111827;border:1px solid var(--border);border-radius:12px;padding:16px;">
-          <div style="font-size:24px;font-weight:900;color:var(--green);">Private</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Each homeowner only sees their job</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Cancel table -->
-    <div style="max-width:900px;margin:0 auto 48px;">
-      <div style="text-align:center;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px;">What contractors cancel after signing up</div>
-      <div style="background:#0f172a;border:1px solid var(--border);border-radius:16px;overflow:hidden;">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:12px 20px;border-bottom:1px solid var(--border);background:#111827;">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">Tool</div>
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;">What you paid</div>
-          <div style="font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.08em;">Now covered by</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 20px;border-bottom:1px solid rgba(30,30,46,0.5);">
-          <div style="font-size:14px;color:var(--text);font-weight:600;">CompanyCam</div>
-          <div style="font-size:14px;color:#f87171;font-weight:700;">$59/mo</div>
-          <div style="font-size:14px;color:var(--green);">Portal photos (free)</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 20px;border-bottom:1px solid rgba(30,30,46,0.5);">
-          <div style="font-size:14px;color:var(--text);font-weight:600;">Homeowner texts/calls</div>
-          <div style="font-size:14px;color:#f87171;font-weight:700;">3–5 hrs/job</div>
-          <div style="font-size:14px;color:var(--green);">Portal chat + activity feed</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 20px;border-bottom:1px solid rgba(30,30,46,0.5);">
-          <div style="font-size:14px;color:var(--text);font-weight:600;">Review request texts</div>
-          <div style="font-size:14px;color:#f87171;font-weight:700;">$49/mo tool</div>
-          <div style="font-size:14px;color:var(--green);">Built in (free)</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 20px;border-bottom:1px solid rgba(30,30,46,0.5);">
-          <div style="font-size:14px;color:var(--text);font-weight:600;">Document e-sign</div>
-          <div style="font-size:14px;color:#f87171;font-weight:700;">$25–$75/mo</div>
-          <div style="font-size:14px;color:var(--green);">Portal docs (free)</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;padding:14px 20px;">
-          <div style="font-size:14px;color:var(--text);font-weight:600;">Referral tracking</div>
-          <div style="font-size:14px;color:#f87171;font-weight:700;">Manual or $30+/mo</div>
-          <div style="font-size:14px;color:var(--green);">Portal referrals (free)</div>
-        </div>
-      </div>
-      <div style="text-align:center;color:var(--muted);font-size:12px;margin-top:12px;">Most contractors save $100–200/mo in tools they stop using. The portal itself is free.</div>
-    </div>
-
-    <!-- Add-ons -->
-    <div style="text-align:center;color:var(--muted);font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:20px;">Add-ons — when you're ready</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;max-width:900px;margin:0 auto 32px;">
-      <div class="pricing-card secondary" style="padding:24px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Measurements</div>
-        <div style="font-size:32px;font-weight:900;letter-spacing:-0.03em;">$49<sub style="font-size:14px;font-weight:500;color:var(--muted);vertical-align:baseline;">/mo</sub></div>
-        <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5;">Roof measurements delivered. No climbing required.</div>
-      </div>
-      <div class="pricing-card secondary" style="padding:24px;">
-        <div style="font-size:11px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Aria AI</div>
-        <div style="font-size:32px;font-weight:900;letter-spacing:-0.03em;">$149<sub style="font-size:14px;font-weight:500;color:var(--muted);vertical-align:baseline;">/mo</sub></div>
-        <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5;">AI answers homeowner questions 24/7. Outbound follow-up calls.</div>
-      </div>
-      <div class="pricing-card secondary" style="padding:24px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Supplement AI</div>
-        <div style="font-size:32px;font-weight:900;letter-spacing:-0.03em;">$499<sub style="font-size:14px;font-weight:500;color:var(--muted);vertical-align:baseline;">/mo</sub></div>
-        <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5;">AI finds missed line items and builds the supplement packet.</div>
-      </div>
-      <div class="pricing-card secondary" style="padding:24px;">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">All In</div>
-        <div style="font-size:32px;font-weight:900;letter-spacing:-0.03em;">$1,299<sub style="font-size:14px;font-weight:500;color:var(--muted);vertical-align:baseline;">/mo</sub></div>
-        <div style="font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5;">Everything. Aria + Supplement AI + CRM + Growth engine.</div>
-      </div>
-    </div>
-    <div style="text-align:center;color:var(--muted);font-size:13px;">No contracts. Cancel any add-on anytime. <a href="mailto:zach@roofingos.dev" style="color:var(--cyan);">Questions? Email Zach.</a></div>
-  </div>
-</section>
-
-<!-- CONTACT MODAL -->
-<div class="contact-modal" id="contact-modal" onclick="if(event.target===this)closeContactModal()">
-  <div class="contact-modal-card">
-    <button class="contact-close" onclick="closeContactModal()">✕</button>
-    <h3>Let's talk</h3>
-    <p>Tell us about your operation and we'll build a custom package around it. No generic demos — just a conversation about your workflow.</p>
-    <div class="field-group">
-      <div class="field">
-        <label>Your name</label>
-        <input type="text" id="c-name" placeholder="John Smith" autocomplete="name">
-      </div>
-      <div class="field">
-        <label>Company</label>
-        <input type="text" id="c-company" placeholder="ABC Roofing LLC" autocomplete="organization">
-      </div>
-      <div class="field">
-        <label>Phone</label>
-        <input type="tel" id="c-phone" placeholder="(720) 555-0100" autocomplete="tel">
-      </div>
-      <div class="field">
-        <label>How many jobs per month?</label>
-        <select id="c-jobs">
-          <option value="">Select…</option>
-          <option value="1-5">1–5</option>
-          <option value="6-15">6–15</option>
-          <option value="16-30">16–30</option>
-          <option value="30+">30+</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Biggest challenge right now <span style="color:var(--muted);font-weight:400;">(optional)</span></label>
-        <textarea id="c-challenge" rows="3" placeholder="e.g. supplements getting denied, homeowners going dark after install…"></textarea>
-      </div>
-    </div>
-    <div class="signup-error" id="c-error"></div>
-    <button class="signup-btn" id="c-btn" onclick="submitContact()" style="margin-top:4px;">Send →</button>
-    <div class="pricing-footnote" style="margin-top:12px;">Or email directly: <a href="mailto:zach@roofingos.dev" style="color:var(--cyan);">zach@roofingos.dev</a></div>
-  </div>
-</div>
-
-<!-- SIGNUP — keep exactly -->
-<section id="signup">
-  <div class="signup-card">
-    <div class="signup-title">Get your free homeowner portal</div>
-    <div class="signup-price" style="font-size:48px;">Free<span style="font-size:20px;color:var(--muted);"> forever</span></div>
-    <div class="signup-perks">
-      <span class="signup-perk">No card required</span>
-      <span class="signup-perk">Unlimited jobs</span>
-      <span class="signup-perk">Setup in 5 minutes</span>
-    </div>
-
-    <div id="signup-form">
-      <div class="field-group">
-        <div class="field">
-          <label>Your name</label>
-          <input type="text" id="s-name" placeholder="John Smith" autocomplete="name">
-        </div>
-        <div class="field">
-          <label>Company name</label>
-          <input type="text" id="s-company" placeholder="ABC Roofing LLC" autocomplete="organization">
-        </div>
-        <div class="field">
-          <label>Mobile phone</label>
-          <input type="tel" id="s-phone" placeholder="(720) 555-0100" autocomplete="tel">
-        </div>
-        <div class="field">
-          <label>Email</label>
-          <input type="email" id="s-email" placeholder="john@abcroofing.com" autocomplete="email">
-        </div>
-      </div>
-      <div class="signup-error" id="s-error"></div>
-      <button class="signup-btn" id="s-btn" onclick="submitSignup()">Create my free account →</button>
-      <div class="signup-trust">
-        <span>🔒 No credit card</span>
-        <span>⚡ Portal ready instantly</span>
-        <span>✓ Free forever</span>
-      </div>
-    </div>
-
-    <div class="signup-success" id="signup-success">
-      <h3>You're in.</h3>
-      <p>Check your email for your magic link.<br>Your portal is ready the moment you click it.</p>
-    </div>
-  </div>
-</section>
-
-<!-- FAQ — "Quick answers" — all 5 questions -->
+<!-- FAQ (updated answers) -->
 <section>
   <div style="text-align:center;margin-bottom:40px;max-width:680px;margin-left:auto;margin-right:auto;">
     <div class="section-label">FAQ</div>
@@ -731,7 +779,7 @@
   <div class="faq-wrap">
     <details>
       <summary>How long does setup take?</summary>
-      <p>5 minutes. Create your account, create your first job, send the link to your homeowner. That's it. No training. No onboarding calls. No learning curve. If you can text, you can use Roofing OS.</p>
+      <p>4 minutes. Create your account, create your first job, send the link to your homeowner. That's it. No training. No onboarding calls. No learning curve. If you can text, you can use Roofing OS.</p>
     </details>
     <details>
       <summary>Does my homeowner need to download an app?</summary>
@@ -747,24 +795,22 @@
     </details>
     <details>
       <summary>What if I don't like it?</summary>
-      <p>Cancel anytime. No contract. The portal is free forever — no card required. Text or call Zach directly at <a href="tel:+17205006668" style="color:var(--cyan);">(720) 500-6668</a> if you want to talk before signing up.</p>
+      <p>Cancel anytime. No contract. The portal is free forever — no card required. Text or call Zach directly at <a href="tel:+17205006668" style="color:var(--cyan);">(720) 500-6668</a>.</p>
     </details>
     <details>
       <summary>How much does it cost?</summary>
-      <p>The portal is free forever. No card required. Unlimited jobs, unlimited homeowners. Add-ons (Aria AI, Supplement AI, Measurements) are available when you're ready — starting at $49/mo. The portal pays for itself the first time a homeowner stops calling during an installation.</p>
+      <p>The portal is free forever. No credit card required. Add-ons start at $25/report for measurements, $69/month for Portal Pro, and $249/month for Aria Internal. Cancel anytime.</p>
     </details>
   </div>
 </section>
 
-<!-- BLOG — "For roofing contractors" -->
+<!-- BLOG -->
 <section style="background:#0f172a;border-top:1px solid var(--border);">
   <div class="section-inner">
     <div class="section-label">For roofing contractors</div>
     <h2 class="section-title" style="margin-bottom:8px;">Latest from Roofing OS</h2>
     <p style="color:var(--muted);font-size:15px;margin-bottom:8px;">Supplements, homeowners, storm strategy — written for people on job sites.</p>
-    <div class="blog-grid" id="blog-grid">
-      <!-- populated by JS -->
-    </div>
+    <div class="blog-grid" id="blog-grid"></div>
     <p style="text-align:center;margin-top:24px;">
       <a href="/blog" style="color:var(--cyan);font-size:14px;font-weight:600;text-decoration:none;">View all articles →</a>
     </p>
@@ -778,130 +824,6 @@
 <script>
 const SUPABASE_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
-
-let stripe, cardElement;
-
-function openContactModal() {
-  document.getElementById('contact-modal').classList.add('open');
-  document.getElementById('c-name').focus();
-}
-function closeContactModal() {
-  document.getElementById('contact-modal').classList.remove('open');
-}
-
-async function submitContact() {
-  const name      = document.getElementById('c-name').value.trim();
-  const company   = document.getElementById('c-company').value.trim();
-  const phone     = document.getElementById('c-phone').value.trim();
-  const jobs      = document.getElementById('c-jobs').value;
-  const challenge = document.getElementById('c-challenge').value.trim();
-  const errEl     = document.getElementById('c-error');
-  const btn       = document.getElementById('c-btn');
-
-  errEl.textContent = '';
-  if (!name || !company || !phone) { errEl.textContent = 'Name, company, and phone are required.'; return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Sending…';
-
-  const placeholderEmail = `${phone.replace(/\D/g,'')}@roofingos-inquiry.dev`;
-
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/contractor-signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        owner_name:   name,
-        company_name: company,
-        owner_email:  placeholderEmail,
-        owner_phone:  phone,
-        plan:         'enterprise_inquiry',
-        metadata:     { jobs_per_month: jobs, challenge }
-      })
-    });
-  } catch { /* best effort */ }
-
-  document.querySelector('.contact-modal-card').innerHTML = `
-    <div style="text-align:center;padding:20px 0;">
-      <div style="font-size:40px;margin-bottom:16px;">✓</div>
-      <h3 style="margin-bottom:8px;">Got it.</h3>
-      <p style="color:var(--muted);font-size:15px;line-height:1.6;">Zach will call you within 24 hours.</p>
-      <button onclick="closeContactModal()" style="margin-top:24px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 24px;cursor:pointer;font-size:14px;font-weight:600;">Close</button>
-    </div>
-  `;
-}
-
-async function initStripe() {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/get-public-config`, {
-      headers: { 'Authorization': `Bearer ${ANON_KEY}` }
-    });
-    const config = await res.json();
-    if (!config.stripe_publishable_key) return;
-    stripe = Stripe(config.stripe_publishable_key);
-    const elements = stripe.elements();
-    cardElement = elements.create('card', {
-      style: {
-        base: {
-          color: '#f8fafc',
-          fontFamily: '-apple-system, system-ui, sans-serif',
-          fontSize: '15px',
-          '::placeholder': { color: '#64748b' },
-          iconColor: '#94a3b8'
-        },
-        invalid: { color: '#ef4444' }
-      }
-    });
-    cardElement.mount('#card-element');
-  } catch { /* Stripe unavailable */ }
-}
-
-async function submitSignup() {
-  const name    = document.getElementById('s-name').value.trim();
-  const company = document.getElementById('s-company').value.trim();
-  const phone   = document.getElementById('s-phone').value.trim();
-  const email   = document.getElementById('s-email').value.trim();
-  const errEl   = document.getElementById('s-error');
-  const btn     = document.getElementById('s-btn');
-
-  errEl.textContent = '';
-  if (!name)  { errEl.textContent = 'Name is required.'; return; }
-  if (!email) { errEl.textContent = 'Email is required.'; return; }
-  if (!phone) { errEl.textContent = 'Phone is required — Aria will call you to finish setup.'; return; }
-
-  btn.disabled = true;
-  btn.textContent = 'Creating your account…';
-
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/contractor-signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        owner_name:   name,
-        company_name: company || name,
-        owner_phone:  phone,
-        owner_email:  email,
-        plan:         'free'
-      })
-    });
-    const data = await res.json();
-    if (data.ok) {
-      document.getElementById('signup-form').style.display = 'none';
-      document.getElementById('signup-success').style.display = 'block';
-      setTimeout(() => {
-        window.location.href = `/dashboard?new=true&id=${data.contractor_id}`;
-      }, 3000);
-    } else {
-      errEl.textContent = data.error || 'Something went wrong. Please try again.';
-      btn.disabled = false;
-      btn.textContent = 'Create my free account →';
-    }
-  } catch {
-    errEl.textContent = 'Network error. Please try again.';
-    btn.disabled = false;
-    btn.textContent = 'Create my free account →';
-  }
-}
 
 async function loadBlogPosts() {
   try {
@@ -919,10 +841,9 @@ async function loadBlogPosts() {
         <div class="blog-card-date">${p.created_at ? new Date(p.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
       </a>
     `).join('');
-  } catch { /* blog section stays empty */ }
+  } catch { /* blog stays empty */ }
 }
 
-// Pause scroll animation on touch
 const portalScroll = document.getElementById('portalScroll');
 if (portalScroll) {
   portalScroll.addEventListener('touchstart', () => portalScroll.classList.add('paused'), { passive: true });
@@ -931,7 +852,6 @@ if (portalScroll) {
   }, { passive: true });
 }
 
-initStripe();
 loadBlogPosts();
 </script>
 </body>
