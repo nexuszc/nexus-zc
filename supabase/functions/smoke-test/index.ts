@@ -1,8 +1,9 @@
-import { createServeHandler } from '../_shared/serve-wrapper.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createServeHandler } from '../_shared/serve.ts';
 import { logger } from '../_shared/logger.ts';
 
 /**
- * Health check result interface
+ * Health check result structure
  */
 interface HealthCheck {
   name: string;
@@ -29,6 +30,15 @@ interface HealthStatus {
 }
 
 /**
+ * Standard API response format
+ */
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+/**
  * Check database connectivity
  */
 async function checkDatabase(): Promise<HealthCheck> {
@@ -37,9 +47,9 @@ async function checkDatabase(): Promise<HealthCheck> {
   
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseServiceKey) {
       logger.error('Database configuration missing');
       return {
         name: 'database',
@@ -50,58 +60,32 @@ async function checkDatabase(): Promise<HealthCheck> {
       };
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const { error } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1)
+      .single();
 
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        logger.error('Database connectivity check failed', { status: response.status });
-        return {
-          name: 'database',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: `Database returned status ${response.status}`,
-          details: {
-            status: response.status,
-          },
-        };
-      }
-
-      logger.info('Database connectivity check passed');
+    if (error && error.code !== 'PGRST116') {
+      logger.error('Database connectivity check failed', error);
       return {
         name: 'database',
-        status: 'pass',
+        status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database is connected and operational',
-        details: {
-          status: response.status,
-        },
+        message: 'Database query failed',
+        error: error.message,
       };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        logger.error('Database check timed out');
-        return {
-          name: 'database',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: 'Database check timed out',
-          error: 'Request timeout after 5 seconds',
-        };
-      }
-      throw fetchError;
     }
+
+    logger.info('Database connectivity check passed');
+    return {
+      name: 'database',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'Database is connected and operational',
+    };
   } catch (error) {
     logger.error('Database connectivity check failed', error);
     return {
@@ -115,78 +99,52 @@ async function checkDatabase(): Promise<HealthCheck> {
 }
 
 /**
- * Check authentication service
+ * Check authentication system
  */
 async function checkAuthentication(): Promise<HealthCheck> {
   const startTime = performance.now();
-  logger.info('Starting authentication service check');
+  logger.info('Starting authentication check');
   
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseAnonKey) {
       logger.error('Authentication configuration missing');
       return {
         name: 'authentication',
         status: 'fail',
         duration_ms: performance.now() - startTime,
         message: 'Authentication configuration not available',
-        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+        error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY',
       };
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
+    const { data, error } = await supabase.auth.getSession();
 
-    try {
-      const response = await fetch(`${supabaseUrl}/auth/v1/health`, {
-        method: 'GET',
-        headers: {
-          'apikey': supabaseKey,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        logger.error('Authentication check failed', { status: response.status });
-        return {
-          name: 'authentication',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: `Authentication service returned status ${response.status}`,
-          details: {
-            status: response.status,
-          },
-        };
-      }
-
-      logger.info('Authentication check passed');
+    if (error) {
+      logger.error('Authentication check failed', error);
       return {
         name: 'authentication',
-        status: 'pass',
+        status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Authentication service is operational',
-        details: {
-          status: response.status,
-        },
+        message: 'Authentication system check failed',
+        error: error.message,
       };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        logger.error('Authentication check timed out');
-        return {
-          name: 'authentication',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: 'Authentication check timed out',
-          error: 'Request timeout after 5 seconds',
-        };
-      }
-      throw fetchError;
     }
+
+    logger.info('Authentication check passed');
+    return {
+      name: 'authentication',
+      status: 'pass',
+      duration_ms: performance.now() - startTime,
+      message: 'Authentication system is operational',
+      details: {
+        session_available: data.session !== null,
+      },
+    };
   } catch (error) {
     logger.error('Authentication check failed', error);
     return {
@@ -226,7 +184,7 @@ async function checkExternalServices(): Promise<HealthCheck> {
           name: 'external_services',
           status: 'warn',
           duration_ms: performance.now() - startTime,
-          message: 'External services connectivity may be limited',
+          message: `External services returned status ${response.status}`,
           details: {
             status: response.status,
           },
@@ -238,7 +196,10 @@ async function checkExternalServices(): Promise<HealthCheck> {
         name: 'external_services',
         status: 'pass',
         duration_ms: performance.now() - startTime,
-        message: 'External services are accessible',
+        message: 'External services connectivity confirmed',
+        details: {
+          status: response.status,
+        },
       };
     } catch (fetchError) {
       clearTimeout(timeoutId);
@@ -403,8 +364,12 @@ async function handler(req: Request): Promise<Response> {
 
   if (req.method !== 'GET') {
     logger.warn('Invalid method for smoke test', { method: req.method });
+    const errorResponse: ApiResponse = {
+      success: false,
+      error: 'Method not allowed',
+    };
     return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
+      JSON.stringify(errorResponse),
       { 
         status: 405,
         headers: { 'Content-Type': 'application/json' }
@@ -413,10 +378,43 @@ async function handler(req: Request): Promise<Response> {
   }
 
   try {
+    const url = new URL(req.url);
+    
+    if (url.pathname.endsWith('/health')) {
+      logger.info('Health endpoint called');
+      const healthStatus = await runHealthChecks();
+      
+      const statusCode = healthStatus.status === 'healthy' ? 200 :
+                        healthStatus.status === 'degraded' ? 200 : 503;
+
+      const response: ApiResponse<HealthStatus> = {
+        success: healthStatus.status !== 'unhealthy',
+        data: healthStatus,
+      };
+
+      logger.info('Returning health status', { 
+        status: healthStatus.status, 
+        statusCode 
+      });
+
+      return new Response(
+        JSON.stringify(response, null, 2),
+        {
+          status: statusCode,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const healthStatus = await runHealthChecks();
     
     const statusCode = healthStatus.status === 'healthy' ? 200 :
                       healthStatus.status === 'degraded' ? 200 : 503;
+
+    const response: ApiResponse<HealthStatus> = {
+      success: healthStatus.status !== 'unhealthy',
+      data: healthStatus,
+    };
 
     logger.info('Returning health status', { 
       status: healthStatus.status, 
@@ -424,7 +422,7 @@ async function handler(req: Request): Promise<Response> {
     });
 
     return new Response(
-      JSON.stringify(healthStatus, null, 2),
+      JSON.stringify(response, null, 2),
       {
         status: statusCode,
         headers: { 'Content-Type': 'application/json' }
@@ -433,11 +431,9 @@ async function handler(req: Request): Promise<Response> {
   } catch (error) {
     logger.error('Smoke test execution failed', error);
     
-    const errorResponse = {
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
+    const errorResponse: ApiResponse = {
+      success: false,
       error: error instanceof Error ? error.message : String(error),
-      message: 'Health check execution failed'
     };
 
     return new Response(
@@ -450,4 +446,50 @@ async function handler(req: Request): Promise<Response> {
   }
 }
 
-Deno.serve(createServeHandler(handler));
+/**
+ * Health check wrapper for Deno.serve
+ */
+function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
+  return async (req: Request): Promise<Response> => {
+    try {
+      const url = new URL(req.url);
+      
+      if (url.pathname === '/health' || url.pathname.endsWith('/health')) {
+        logger.info('Health check endpoint hit');
+        try {
+          const healthStatus = await runHealthChecks();
+          const statusCode = healthStatus.status === 'healthy' ? 200 :
+                            healthStatus.status === 'degraded' ? 200 : 503;
+
+          const response: ApiResponse<HealthStatus> = {
+            success: healthStatus.status !== 'unhealthy',
+            data: healthStatus,
+          };
+
+          return new Response(
+            JSON.stringify(response, null, 2),
+            {
+              status: statusCode,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+        } catch (healthError) {
+          logger.error('Health check failed', healthError);
+          const errorResponse: ApiResponse = {
+            success: false,
+            error: healthError instanceof Error ? healthError.message : String(healthError),
+          };
+          return new Response(
+            JSON.stringify(errorResponse, null, 2),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+        }
+      }
+
+      return await handler(req);
+    } catch (error) {
+      logger.error('Request handler failed', error);
+      const errorResponse: ApiResponse
