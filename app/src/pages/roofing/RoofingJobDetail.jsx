@@ -20,6 +20,8 @@ export default function RoofingJobDetail() {
   const [activeTab, setActiveTab] = useState('overview')
   const [generating, setGenerating] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadPhase, setUploadPhase] = useState('before')
+  const [uploadPublic, setUploadPublic] = useState(true)
   const [loading, setLoading] = useState(true)
   const [sentPortal, setSentPortal] = useState(false)
   const [claimForm, setClaimForm] = useState({})
@@ -33,7 +35,7 @@ export default function RoofingJobDetail() {
       supabase.from('job_timeline').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_messages').select('*').eq('job_id', id).order('created_at'),
       supabase.from('job_documents').select('*').eq('job_id', id).order('created_at'),
-      supabase.from('job_photos').select('*').eq('job_id', id).order('created_at'),
+      supabase.from('portal_photos').select('*').eq('job_id', id).order('created_at'),
       supabase.from('crew_assignments').select('*').eq('job_id', id).order('created_at'),
     ])
     setJob(j)
@@ -115,7 +117,17 @@ export default function RoofingJobDetail() {
       const { data: uploadData, error } = await supabase.storage.from('job-photos').upload(path, file)
       if (!error && uploadData) {
         const { data: { publicUrl } } = supabase.storage.from('job-photos').getPublicUrl(path)
-        await supabase.from('job_photos').insert({ job_id: id, photo_url: publicUrl, phase: 'before', uploaded_by: 'contractor' })
+        await supabase.from('portal_photos').insert({
+          job_id: id,
+          url: publicUrl,
+          phase: uploadPhase,
+          uploaded_by: 'contractor',
+          is_public: uploadPublic,
+          source: 'contractor_upload',
+          file_size_bytes: file.size,
+          is_before: uploadPhase === 'before',
+          is_after: uploadPhase === 'after',
+        })
       }
     }
     setUploading(false)
@@ -324,9 +336,23 @@ export default function RoofingJobDetail() {
           {/* Upload */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <p className="text-xs text-gray-400 font-semibold uppercase mb-3">Upload Photos</p>
+            <div className="flex gap-3 mb-3 flex-wrap">
+              <div className="flex gap-1">
+                {['before', 'during', 'after', 'damage', 'material'].map(ph => (
+                  <button key={ph} onClick={() => setUploadPhase(ph)}
+                    className={`text-xs px-3 py-1 rounded-full capitalize font-semibold transition-colors ${uploadPhase === ph ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}>
+                    {ph}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setUploadPublic(v => !v)}
+                className={`text-xs px-3 py-1 rounded-full font-semibold transition-colors ${uploadPublic ? 'bg-green-900/40 text-green-400 border border-green-800' : 'bg-gray-800 text-gray-500'}`}>
+                {uploadPublic ? '👁 Visible to homeowner' : '🔒 Internal only'}
+              </button>
+            </div>
             <label className={`flex items-center justify-center gap-2 border-2 border-dashed border-gray-700 rounded-lg p-6 cursor-pointer hover:border-blue-500 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <input type="file" accept="image/*" multiple onChange={uploadPhotos} disabled={uploading} className="hidden" />
-              <span className="text-gray-400 text-sm">{uploading ? '⏳ Uploading...' : '📷 Click to upload photos'}</span>
+              <span className="text-gray-400 text-sm">{uploading ? '⏳ Uploading...' : `📷 Click to upload as "${uploadPhase}"`}</span>
             </label>
           </div>
 
@@ -339,8 +365,11 @@ export default function RoofingJobDetail() {
                 <p className="text-xs text-gray-400 font-semibold uppercase mb-2">{phase}</p>
                 <div className="grid grid-cols-3 gap-2">
                   {phasePhotos.map(p => (
-                    <div key={p.id} className="aspect-square rounded-lg overflow-hidden bg-gray-800">
-                      <img src={p.photo_url} alt={p.caption || phase} className="w-full h-full object-cover" />
+                    <div key={p.id} className="aspect-square rounded-lg overflow-hidden bg-gray-800 relative group">
+                      <img src={p.url} alt={p.caption || phase} className="w-full h-full object-cover" />
+                      {!p.is_public && (
+                        <div className="absolute top-1 right-1 bg-gray-900/80 text-gray-400 text-xs px-1.5 py-0.5 rounded">🔒</div>
+                      )}
                     </div>
                   ))}
                 </div>

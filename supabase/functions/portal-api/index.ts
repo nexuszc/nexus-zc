@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
         integrationsRes
       ] = await Promise.all([
         supabase.from("portal_activities").select("*").eq("job_id", jobId).eq("visible_to_homeowner", true).order("created_at", { ascending: false }).limit(20),
-        supabase.from("portal_photos").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
+        supabase.from("portal_photos").select("*").eq("job_id", jobId).eq("is_public", true).order("created_at", { ascending: false }),
         supabase.from("insurance_claims").select("*").eq("job_id", jobId).maybeSingle(),
         supabase.from("supplement_tracker").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("portal_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
