@@ -162,11 +162,27 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
     if (!name.trim() || !address.trim()) { setError('Name and address are required.'); return }
     setSaving(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-job-create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({
+      // Check job limit before creating
+      const { data: acct } = await supabase
+        .from('contractor_accounts')
+        .select('plan, job_limit, jobs_used')
+        .eq('id', contractorId)
+        .single()
+
+      if (acct && acct.plan === 'free') {
+        const used = acct.jobs_used || 0
+        const limit = acct.job_limit || 5
+        if (used >= limit) {
+          setError(`You've used all ${limit} free jobs. Upgrade to Pro for unlimited jobs.`)
+          setSaving(false)
+          window.open('https://roofingos.dev/upgrade', '_blank')
+          return
+        }
+      }
+
+      const { data: job, error: err } = await supabase
+        .from('roofing_jobs')
+        .insert({
           homeowner_name: name.trim(),
           property_address: address.trim(),
           homeowner_email: email.trim() || null,
@@ -174,28 +190,19 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
           contractor_id: contractorId,
           client_id: contractorClientId || null,
           status: 'lead',
-        }),
-      })
-      const data = await res.json()
-      if (data.job?.id || data.id) {
-        navigate(`/roofing/jobs/${data.job?.id || data.id}`)
-      } else {
-        const { data: job, error: err } = await supabase
-          .from('roofing_jobs')
-          .insert({
-            homeowner_name: name.trim(),
-            property_address: address.trim(),
-            homeowner_email: email.trim() || null,
-            homeowner_phone: phone.trim() || null,
-            contractor_id: contractorId,
-            client_id: contractorClientId || null,
-            status: 'lead',
-          })
-          .select()
-          .single()
-        if (err) throw err
-        navigate(`/roofing/jobs/${job.id}`)
+        })
+        .select()
+        .single()
+      if (err) throw err
+
+      // Increment jobs_used
+      if (acct) {
+        await supabase.from('contractor_accounts')
+          .update({ jobs_used: (acct.jobs_used || 0) + 1, total_jobs: (acct.jobs_used || 0) + 1 })
+          .eq('id', contractorId)
       }
+
+      navigate(`/roofing/jobs/${job.id}`)
     } catch (e) {
       setError('Could not create job. Try again.')
     }

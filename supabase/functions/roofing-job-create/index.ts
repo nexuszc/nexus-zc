@@ -49,6 +49,36 @@ Deno.serve(async (req) => {
     return Response.json({ error: "homeowner_name or property_address required" }, { status: 400, headers: corsHeaders });
   }
 
+  // Enforce job limit for free tier
+  const { data: account } = await supabase
+    .from("contractor_accounts")
+    .select("plan, job_limit, jobs_used, total_jobs, company_name")
+    .eq("id", session.contractor_id)
+    .single();
+
+  if (account) {
+    const jobsUsed = account.jobs_used || 0;
+    const jobLimit = account.job_limit || 5;
+
+    if (account.plan === "free" && jobsUsed >= jobLimit) {
+      await supabase.from("monetization_events").insert({
+        contractor_id: session.contractor_id,
+        event_type: "job_limit_hit",
+        trigger_value: String(jobLimit),
+        upgrade_to: "pro",
+        metadata: { jobs_used: jobsUsed, job_limit: jobLimit },
+      }).catch(() => {});
+
+      return Response.json({
+        error: "job_limit_reached",
+        message: `You've used all ${jobLimit} free jobs. Upgrade to Pro ($69/mo) for unlimited jobs.`,
+        upgrade_url: "https://roofingos.dev/upgrade",
+        jobs_used: jobsUsed,
+        job_limit: jobLimit,
+      }, { status: 402, headers: corsHeaders });
+    }
+  }
+
   // Generate portal token
   const token = `ROS-${Date.now().toString(36).toUpperCase()}`;
 
@@ -130,6 +160,15 @@ Deno.serve(async (req) => {
       }),
     }).catch(() => {});
   }
+
+  // Increment jobs_used and total_jobs
+  await supabase.from("contractor_accounts")
+    .update({
+      jobs_used: (account?.jobs_used || 0) + 1,
+      total_jobs: (account?.total_jobs || 0) + 1,
+    })
+    .eq("id", session.contractor_id)
+    .catch(() => {});
 
   // Advance onboarding on first job
   const { count } = await supabase
