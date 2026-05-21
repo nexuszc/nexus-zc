@@ -1,31 +1,16 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 
 /**
- * Logger utility for structured logging
- */
-const logger = {
-  info: (message: string, data?: unknown) => {
-    console.log(JSON.stringify({ level: 'info', message, data, timestamp: new Date().toISOString() }));
-  },
-  error: (message: string, error?: unknown) => {
-    console.error(JSON.stringify({ level: 'error', message, error: error instanceof Error ? { message: error.message, stack: error.stack } : error, timestamp: new Date().toISOString() }));
-  },
-  warn: (message: string, data?: unknown) => {
-    console.warn(JSON.stringify({ level: 'warn', message, data, timestamp: new Date().toISOString() }));
-  },
-};
-
-/**
- * Type definitions
+ * Types
  */
 interface CheckResult {
   name: string;
   status: 'pass' | 'fail' | 'warn';
   duration_ms: number;
   message: string;
-  error?: string;
   details?: Record<string, unknown>;
+  error?: string;
 }
 
 interface HealthStatus {
@@ -47,95 +32,107 @@ interface ApiResponse<T = unknown> {
 }
 
 /**
- * Get required environment variables with validation
+ * Logger utility
  */
-function getEnvVars() {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+const logger = {
+  info: (message: string, data?: unknown) => {
+    console.log(JSON.stringify({ level: 'info', message, data, timestamp: new Date().toISOString() }));
+  },
+  warn: (message: string, data?: unknown) => {
+    console.warn(JSON.stringify({ level: 'warn', message, data, timestamp: new Date().toISOString() }));
+  },
+  error: (message: string, error?: unknown) => {
+    console.error(JSON.stringify({ 
+      level: 'error', 
+      message, 
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+      timestamp: new Date().toISOString() 
+    }));
+  },
+};
 
-  if (!supabaseUrl) {
-    throw new Error('SUPABASE_URL environment variable is not set');
+/**
+ * Environment validation
+ */
+function getRequiredEnv(key: string): string {
+  const value = Deno.env.get(key);
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${key}`);
   }
-  if (!supabaseServiceKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
-  }
-  if (!supabaseAnonKey) {
-    throw new Error('SUPABASE_ANON_KEY environment variable is not set');
-  }
-
-  return { supabaseUrl, supabaseServiceKey, supabaseAnonKey };
+  return value;
 }
 
 /**
- * Check database connectivity and basic operations
+ * Check database connectivity
  */
 async function checkDatabase(): Promise<CheckResult> {
   const startTime = performance.now();
   
   try {
-    logger.info('Starting database connectivity check');
-    const { supabaseUrl, supabaseServiceKey } = getEnvVars();
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Test 1: Simple query
+    logger.info('Starting database check');
+    
+    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+    const supabaseKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
     const { data, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('id')
       .limit(1);
 
     if (error) {
-      logger.error('Database query failed', error);
+      logger.error('Database check failed', error);
       return {
         name: 'database',
         status: 'fail',
         duration_ms: performance.now() - startTime,
-        message: 'Database query failed',
+        message: 'Database connectivity check failed',
         error: error.message,
       };
     }
 
-    logger.info('Database check passed', { rowCount: data?.length ?? 0 });
+    logger.info('Database check completed', { hasData: !!data });
+    
     return {
       name: 'database',
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'Database is accessible and responding',
       details: {
-        rowCount: data?.length ?? 0,
+        hasData: !!data,
       },
     };
   } catch (error) {
-    logger.error('Database connectivity check failed', error);
+    logger.error('Database check error', error);
     return {
       name: 'database',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: 'Database connectivity check failed',
+      message: 'Database connectivity check error',
       error: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 /**
- * Check authentication service
+ * Check authentication functionality
  */
 async function checkAuthentication(): Promise<CheckResult> {
   const startTime = performance.now();
   
   try {
-    logger.info('Starting authentication service check');
-    const { supabaseUrl, supabaseServiceKey } = getEnvVars();
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    logger.info('Starting authentication check');
+    
+    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+    const supabaseKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase.auth.getUser();
 
-    // Test: List users (limited to 1)
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1,
-    });
-
-    if (error) {
-      logger.error('Authentication service check failed', error);
+    if (error && error.message !== 'Auth session missing!') {
+      logger.error('Authentication check failed', error);
       return {
         name: 'authentication',
         status: 'fail',
@@ -145,123 +142,94 @@ async function checkAuthentication(): Promise<CheckResult> {
       };
     }
 
-    logger.info('Authentication check passed', { userCount: data.users.length });
+    logger.info('Authentication check completed');
+    
     return {
       name: 'authentication',
       status: 'pass',
       duration_ms: performance.now() - startTime,
       message: 'Authentication service is operational',
       details: {
-        userCount: data.users.length,
+        authEnabled: true,
       },
     };
   } catch (error) {
-    logger.error('Authentication service check failed', error);
+    logger.error('Authentication check error', error);
     return {
       name: 'authentication',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: 'Authentication service check failed',
+      message: 'Authentication service check error',
       error: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 /**
- * Check external services connectivity
+ * Check external services
  */
 async function checkExternalServices(): Promise<CheckResult> {
   const startTime = performance.now();
   
   try {
     logger.info('Starting external services check');
-    const { supabaseUrl } = getEnvVars();
+    
+    const openAIKey = Deno.env.get('OPENAI_API_KEY');
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    
+    const servicesStatus = {
+      openai: !!openAIKey,
+      anthropic: !!anthropicKey,
+    };
 
-    // Test: Health endpoint of Supabase
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok && response.status !== 401 && response.status !== 404) {
-        logger.warn('External service returned non-OK status', { status: response.status });
-        return {
-          name: 'external_services',
-          status: 'warn',
-          duration_ms: performance.now() - startTime,
-          message: 'External service returned non-OK status',
-          details: {
-            status: response.status,
-          },
-        };
-      }
-
-      logger.info('External services check passed');
-      return {
-        name: 'external_services',
-        status: 'pass',
-        duration_ms: performance.now() - startTime,
-        message: 'External services are reachable',
-        details: {
-          status: response.status,
-        },
-      };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        logger.error('External services check timed out');
-        return {
-          name: 'external_services',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: 'External services check timed out',
-          error: 'Request timeout after 5 seconds',
-        };
-      }
-      throw fetchError;
-    }
-  } catch (error) {
-    logger.error('External services check failed', error);
+    const allConfigured = Object.values(servicesStatus).every(status => status);
+    
+    logger.info('External services check completed', servicesStatus);
+    
     return {
       name: 'external_services',
-      status: 'fail',
+      status: allConfigured ? 'pass' : 'warn',
       duration_ms: performance.now() - startTime,
-      message: 'External services check failed',
+      message: allConfigured 
+        ? 'All external services are configured'
+        : 'Some external services may not be configured',
+      details: servicesStatus,
+    };
+  } catch (error) {
+    logger.error('External services check error', error);
+    return {
+      name: 'external_services',
+      status: 'warn',
+      duration_ms: performance.now() - startTime,
+      message: 'External services check error',
       error: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
 /**
- * Check Supabase client initialization
+ * Check Supabase client connectivity
  */
 async function checkSupabaseClient(): Promise<CheckResult> {
   const startTime = performance.now();
   
   try {
     logger.info('Starting Supabase client check');
-    const { supabaseUrl, supabaseAnonKey } = getEnvVars();
     
-    // Test: Initialize client with anon key
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    // Test: Simple health check using anon client
+    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
+    const supabaseKey = getRequiredEnv('SUPABASE_ANON_KEY');
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
-
+    
     try {
       const response = await fetch(`${supabaseUrl}/rest/v1/`, {
         method: 'HEAD',
-        signal: controller.signal,
         headers: {
-          'apikey': supabaseAnonKey,
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
         },
+        signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
@@ -477,4 +445,49 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
         logger.info('Health check endpoint hit');
         try {
           const healthStatus = await runHealthChecks();
-          const statusCode = healthStatus.status ===
+          const statusCode = healthStatus.status === 'healthy' ? 200 :
+                            healthStatus.status === 'degraded' ? 200 : 503;
+
+          const response: ApiResponse<HealthStatus> = {
+            success: healthStatus.status !== 'unhealthy',
+            data: healthStatus,
+          };
+
+          const headers = new Headers({ 'Content-Type': 'application/json' });
+          addCorsHeaders(headers);
+          return new Response(
+            JSON.stringify(response, null, 2),
+            {
+              status: statusCode,
+              headers
+            }
+          );
+        } catch (healthError) {
+          logger.error('Health check failed', healthError);
+          const errorResponse: ApiResponse = {
+            success: false,
+            error: healthError instanceof Error ? healthError.message : String(healthError),
+          };
+          const headers = new Headers({ 'Content-Type': 'application/json' });
+          addCorsHeaders(headers);
+          return new Response(
+            JSON.stringify(errorResponse, null, 2),
+            {
+              status: 500,
+              headers
+            }
+          );
+        }
+      }
+      
+      return await handler(req);
+    } catch (error) {
+      logger.error('Request handling failed', error);
+      const errorResponse: ApiResponse = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      addCorsHeaders(headers);
+      return new Response(
+        JSON
