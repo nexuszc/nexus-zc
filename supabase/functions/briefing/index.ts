@@ -40,8 +40,10 @@ async function bubbleInsights(supabase: any, clientSummaries: any[]) {
   }
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const body = await req.json().catch(() => ({}));
+  if (body.test) return Response.json({ ok: true, message: "briefing ready" });
 
   try {
     // ----- 1. Get Zach's Telegram chat ID dynamically -----
@@ -227,21 +229,28 @@ Deno.serve(async (_req) => {
     const onPace = signupsYesterday >= paceNeeded;
 
     // ----- 4b. AE task summary -----
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const [{ data: aeTasks }, { data: pendingEscalations }] = await Promise.all([
-      supabase.from("roofing_va_tasks")
-        .select("id, title, task_type, priority, status")
-        .eq("date", todayStr)
-        .eq("assigned_to", "ae")
-        .order("priority"),
-      supabase.from("roofing_va_tasks")
-        .select("id, title, task_type, escalation_status")
-        .eq("escalation_status", "pending"),
-    ]);
-    const aeTaskCount  = (aeTasks || []).length;
-    const aeEstMins    = 0; // time_estimate not fetched here for brevity
-    const urgentTasks  = (aeTasks || []).filter((t: any) => t.priority === 1);
-    const pendingEscCount = (pendingEscalations || []).length;
+    let aeTasks: any[] = [];
+    let pendingEscalations: any[] = [];
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [aeRes, escRes] = await Promise.all([
+        supabase.from("roofing_va_tasks")
+          .select("id, title, task_type, priority, status")
+          .eq("date", todayStr)
+          .eq("assigned_to", "ae")
+          .order("priority"),
+        supabase.from("roofing_va_tasks")
+          .select("id, title, task_type, escalation_status")
+          .eq("escalation_status", "pending"),
+      ]);
+      aeTasks = aeRes.data || [];
+      pendingEscalations = escRes.data || [];
+    } catch (e: any) {
+      console.error("AE section failed:", e.message);
+    }
+    const aeTaskCount = aeTasks.length;
+    const urgentTasks = aeTasks.filter((t: any) => t.priority === 1);
+    const pendingEscCount = pendingEscalations.length;
 
     // ----- 5. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
