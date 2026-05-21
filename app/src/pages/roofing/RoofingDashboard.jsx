@@ -175,6 +175,9 @@ export default function RoofingDashboard() {
               <Link to="/roofing/measurements" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
                 Measurements
               </Link>
+              <Link to="/roofing/integrations" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
+                Integrations
+              </Link>
               <Link to="/roofing/jobs/new"
                 className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl px-4 py-2 text-sm font-bold transition-all shadow-lg shadow-orange-900/30">
                 + New Job
