@@ -1,7 +1,9 @@
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface ServeOptions {
@@ -9,53 +11,48 @@ interface ServeOptions {
   logRequests?: boolean;
 }
 
-type Handler = (req: Request) => Promise<Response> | Response;
-
-export function serveWithHealthCheck(
-  handler: Handler,
+export function serveWithErrorHandling(
+  handler: (req: Request) => Promise<Response>,
   options: ServeOptions = {}
-): void {
-  const { timeout = 30000, logRequests = true } = options;
+) {
+  const { timeout = 55000, logRequests = true } = options;
 
-  Deno.serve(async (req: Request) => {
-    const url = new URL(req.url);
-    const method = req.method;
+  return serve(async (req: Request) => {
+    const startTime = Date.now();
+    const { pathname } = new URL(req.url);
 
-    if (logRequests) {
-      console.log(`${method} ${url.pathname}`);
-    }
-
-    if (method === 'OPTIONS') {
+    if (req.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
-        headers: CORS_HEADERS,
+        headers: corsHeaders,
       });
     }
 
-    if (url.pathname === '/health' || url.pathname.endsWith('/health')) {
-      return new Response(
-        JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }),
-        {
-          status: 200,
-          headers: {
-            ...CORS_HEADERS,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+    if (pathname === "/health") {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     try {
+      if (logRequests) {
+        console.log(`${req.method} ${pathname}`);
+      }
+
       const timeoutPromise = new Promise<Response>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), timeout);
+        setTimeout(() => reject(new Error("Request timeout")), timeout);
       });
 
-      const handlerPromise = Promise.resolve(handler(req));
+      const response = await Promise.race([handler(req), timeoutPromise]);
 
-      const response = await Promise.race([handlerPromise, timeoutPromise]);
+      const duration = Date.now() - startTime;
+      if (logRequests) {
+        console.log(`${req.method} ${pathname} - ${response.status} (${duration}ms)`);
+      }
 
       const headers = new Headers(response.headers);
-      Object.entries(CORS_HEADERS).forEach(([key, value]) => {
+      Object.entries(corsHeaders).forEach(([key, value]) => {
         headers.set(key, value);
       });
 
@@ -65,27 +62,37 @@ export function serveWithHealthCheck(
         headers,
       });
     } catch (error) {
-      console.error('Handler error:', error);
+      const duration = Date.now() - startTime;
+      console.error(`Error handling ${req.method} ${pathname}:`, error);
+      console.error(`Duration: ${duration}ms`);
 
-      const errorMessage =
-        error instanceof Error ? error.message : 'Internal server error';
-      const statusCode = error instanceof Error && error.message === 'Request timeout'
-        ? 504
-        : 500;
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const statusCode = error instanceof Error && error.message === "Request timeout" ? 504 : 500;
 
       return new Response(
         JSON.stringify({
           error: errorMessage,
-          timestamp: new Date().toISOString(),
+          details: error instanceof Error ? error.stack : undefined,
         }),
         {
           status: statusCode,
-          headers: {
-            ...CORS_HEADERS,
-            'Content-Type': 'application/json',
-          },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
+  });
+}
+
+export function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export function errorResponse(message: string, status = 400): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
   });
 }
