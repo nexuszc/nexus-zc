@@ -151,6 +151,7 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -168,6 +169,7 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
         body: JSON.stringify({
           homeowner_name: name.trim(),
           property_address: address.trim(),
+          homeowner_email: email.trim() || null,
           homeowner_phone: phone.trim() || null,
           contractor_id: contractorId,
           client_id: contractorClientId || null,
@@ -183,6 +185,7 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
           .insert({
             homeowner_name: name.trim(),
             property_address: address.trim(),
+            homeowner_email: email.trim() || null,
             homeowner_phone: phone.trim() || null,
             contractor_id: contractorId,
             client_id: contractorClientId || null,
@@ -227,6 +230,16 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
             value={address}
             onChange={e => setAddress(e.target.value)}
             placeholder="4821 Timberline Dr, Aurora CO 80016"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Email <span className="text-gray-600 normal-case font-normal">(portal link sent here)</span></label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="jane@gmail.com"
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
           />
         </div>

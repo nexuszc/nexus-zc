@@ -156,7 +156,7 @@ Deno.serve(async (_req) => {
       .select('id')
       .eq('function_name', 'nexus-core')
       .eq('status', 'ok')
-      .gte('checked_at', cutoff)
+      .gte('recorded_at', cutoff)
       .limit(1)
     if (error) throw error
     if (!data || data.length === 0) throw new Error('No successful nexus-core heartbeat in last 3h')
