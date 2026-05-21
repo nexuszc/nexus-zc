@@ -206,6 +206,7 @@ Deno.serve(async (req) => {
           status: "published",
           youtube_video_id: youtubeId,
           youtube_url: youtubeUrl,
+          youtube_posted_at: new Date().toISOString(),
           published_at: new Date().toISOString(),
         }).eq("id", content_id);
       } catch (dbErr) {
