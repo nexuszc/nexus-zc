@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v9
+# Last updated: May 21, 2026 — v10
 
 ---
 
@@ -416,6 +416,10 @@ Then productized and sold to other multi-business operators.
 - nexus_improvements backlog: archived 158 proposals >7 days, 73 remain
 - Community posts: competitor-recommending posts moved to pending; posts missing roofingos.dev URL updated
 - CLAUDE.md: nexus-core cron corrected (3x/day, not every 30 min)
+- 356 Aria calls queued for tomorrow 8am local across CO/TX/FL/GA/OH/IL — TCPA compliant
+- 301 prospects enrolled in cold email sequence with 4h offset after Aria call
+- Aria + email wired permanently — aria-queue-daily v2 auto-enrolls every future prospect in email_sequences at queue time; no manual step ever needed again
+- roofing-outreach-sequencer v18 — cold cadence: Day 1 Aria call → Day 1 +4h Email 1 → Day 3 Email 2 → Day 7 Email 3
 
 **PENDING — needs Zach manually:**
 1. Reddit OAuth app: reddit.com/prefs/apps → create script app → 4 credentials → add to Supabase secrets
