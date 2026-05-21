@@ -88,10 +88,10 @@ async function syncPhotosForJob(
       external_url: originalUri,
       source: "companycam",
       external_id: externalId,
-      stage: "progress",
+      phase: "during",
       caption: (photo.tags as string[])?.join(", ") || null,
       taken_at: takenAt,
-      visible_to_homeowner: true,
+      is_public: true,
     });
 
     created++;
@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
   }
 
   if (!action) {
-    return Response.json({ ok: false, error: "action required: verify | sync | connect | disconnect" }, { status: 400, headers: corsHeaders });
+    return Response.json({ ok: false, error: "action required: verify | sync | bulk_import | connect | disconnect" }, { status: 400, headers: corsHeaders });
   }
 
   // CONNECT — upsert integration row with provided token
@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
     return Response.json(result, { headers: corsHeaders });
   }
 
-  // SYNC — pull photos for all matched jobs
+  // SYNC — pull photos for all matched jobs (skips existing)
   if (action === "sync") {
     const { data: integration } = await supabase
       .from("contractor_integrations")
@@ -312,6 +312,37 @@ Deno.serve(async (req) => {
 
     const result = await sync(resolvedContractorId, integration as Record<string, unknown>);
     return Response.json(result, { headers: corsHeaders });
+  }
+
+  // BULK_IMPORT — force-import all CompanyCam photos, clearing existing ones first
+  if (action === "bulk_import") {
+    const { data: integration } = await supabase
+      .from("contractor_integrations")
+      .select("*")
+      .eq("contractor_id", resolvedContractorId)
+      .eq("integration_type", "companycam")
+      .single();
+
+    if (!integration || integration.status !== "active") {
+      return Response.json({ ok: false, error: "CompanyCam not connected or inactive" }, { status: 400, headers: corsHeaders });
+    }
+
+    // Delete existing CompanyCam photos for this contractor's jobs so we do a clean import
+    const { data: contractorJobs } = await supabase
+      .from("roofing_jobs")
+      .select("id")
+      .eq("contractor_id", resolvedContractorId);
+
+    if (contractorJobs && contractorJobs.length > 0) {
+      const jobIds = contractorJobs.map((j: Record<string, unknown>) => j.id as string);
+      await supabase.from("portal_photos")
+        .delete()
+        .in("job_id", jobIds)
+        .eq("source", "companycam");
+    }
+
+    const result = await sync(resolvedContractorId, integration as Record<string, unknown>);
+    return Response.json({ ...result, bulk: true }, { headers: corsHeaders });
   }
 
   // DISCONNECT — remove integration
