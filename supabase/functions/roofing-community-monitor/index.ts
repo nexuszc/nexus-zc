@@ -178,6 +178,31 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-community-monitor v3 ready" });
 
+  // Autonomous batch post — triggered by nexus-core when >10 approved posts are queued
+  if (body.batch_post) {
+    if (!hasRedditCreds()) return Response.json({ ok: false, error: "Reddit credentials not configured" }, { status: 400 });
+    const limit = Math.min(body.limit || 10, 25);
+    const { data: pending } = await supabase
+      .from("roofing_community_posts")
+      .select("id, thread_url, our_response")
+      .eq("status", "approved")
+      .eq("auto_posted", false)
+      .eq("platform", "reddit")
+      .limit(limit);
+    let posted = 0;
+    for (const post of (pending || [])) {
+      if (!post.thread_url || !post.our_response) continue;
+      const success = await postToReddit(post.thread_url, post.our_response);
+      if (success) {
+        await supabase.from("roofing_community_posts")
+          .update({ auto_posted: true, posted_at: new Date().toISOString() }).eq("id", post.id);
+        posted++;
+      }
+      await new Promise(r => setTimeout(r, 600));
+    }
+    return Response.json({ ok: true, posted });
+  }
+
   // Telegram callback_query for inline buttons (legacy support)
   if (body.callback_query) {
     const { data: cbData } = body.callback_query;

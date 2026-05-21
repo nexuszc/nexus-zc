@@ -405,6 +405,116 @@ async function observe() {
   };
 }
 
+// ── AUTONOMOUS ACT (runs every cycle, after observe, before stateHash gate) ──
+// Handles routine execution tasks that don't need Zach's attention.
+// Rule: act on execution, stage code changes, NEVER deploy to main.
+
+async function autonomousAct(): Promise<string[]> {
+  const summary: string[] = [];
+
+  // 1. Reddit community posts — batch post when >10 approved + unposted + creds exist
+  try {
+    const hasReddit = !!(
+      Deno.env.get("REDDIT_CLIENT_ID") &&
+      Deno.env.get("REDDIT_CLIENT_SECRET") &&
+      Deno.env.get("REDDIT_USERNAME") &&
+      Deno.env.get("REDDIT_PASSWORD")
+    );
+    if (hasReddit) {
+      const { count } = await supabase
+        .from("roofing_community_posts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "approved")
+        .eq("auto_posted", false)
+        .eq("platform", "reddit");
+      if ((count || 0) > 10) {
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-community-monitor`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ batch_post: true, limit: 10 })
+        }).catch(() => {});
+        summary.push(`community:${count}_queued`);
+        await log("autonomous_community_post", `Batch post triggered — ${count} approved posts pending`);
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // 2. YouTube upload ready — trigger uploader for content marked ready
+  try {
+    const { data: uploadReady } = await supabase
+      .from("roofing_content")
+      .select("id, title")
+      .eq("youtube_upload_ready", true)
+      .is("published_url", null)
+      .limit(2);
+    for (const item of (uploadReady || [])) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-uploader`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ content_id: item.id })
+      }).catch(() => {});
+    }
+    if ((uploadReady || []).length > 0) {
+      summary.push(`youtube:${uploadReady!.length}_triggered`);
+      await log("autonomous_youtube_upload", `Triggered ${uploadReady!.length} YouTube uploads`);
+    }
+  } catch { /* non-fatal */ }
+
+  // 3. Email sequences due — trigger outreach sequencer when sends are overdue
+  try {
+    const { count: dueCount } = await supabase
+      .from("email_sequences")
+      .select("*", { count: "exact", head: true })
+      .lte("next_send_at", new Date().toISOString())
+      .eq("completed", false)
+      .eq("unsubscribed", false);
+    if ((dueCount || 0) > 0) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-outreach-sequencer`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "process_due" })
+      }).catch(() => {});
+      summary.push(`sequences:${dueCount}_due`);
+      await log("autonomous_sequence_advance", `Triggered sequencer — ${dueCount} due sequences`);
+    }
+  } catch { /* non-fatal */ }
+
+  // 4. High-confidence proposals — stage to dev branch, Telegram Zach to approve
+  try {
+    const { data: proposals } = await supabase
+      .from("nexus_roofing_proposals")
+      .select("id, title, description, proposed_fix, fix_confidence")
+      .eq("priority", "high")
+      .eq("status", "pending")
+      .gt("fix_confidence", 85)
+      .limit(1);
+    for (const proposal of (proposals || [])) {
+      await supabase.from("nexus_roofing_proposals")
+        .update({ status: "building" }).eq("id", proposal.id);
+      fetch(`${SUPABASE_URL}/functions/v1/nexus-build`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: proposal.proposed_fix || proposal.description,
+          source: "nexus-core-autonomous",
+          directive_priority: 1,
+          proposal_id: proposal.id
+        })
+      }).catch(() => {});
+      await tg(
+        `🤖 *Built and staged: ${proposal.title}*\n\n` +
+        `${(proposal.description || "").slice(0, 300)}\n\n` +
+        `Confidence: ${proposal.fix_confidence}%\n\n` +
+        `Reply \`approve\` to deploy to main.`
+      );
+      summary.push(`proposal_staged:${proposal.title.slice(0, 30)}`);
+      await log("autonomous_proposal_staged", `Staged: ${proposal.title} (confidence: ${proposal.fix_confidence}%)`);
+    }
+  } catch { /* non-fatal */ }
+
+  return summary;
+}
+
 // ── THINK (Phase 3: judgment filter) ─────────────────────────────────────────
 
 async function think(
@@ -946,6 +1056,9 @@ Deno.serve(async (req) => {
     _t = Date.now();
     const state = await observe().then(r => { logHeartbeat("nexus-core:observe", "ok", Date.now() - _t); return r; })
       .catch(e => { logHeartbeat("nexus-core:observe", "error", Date.now() - _t, String(e)); throw e; });
+
+    // Autonomous routine execution — runs every cycle, before state-hash gate
+    const autonomousSummary = await autonomousAct().catch(() => []);
 
     // State hash — includes roofing signals so idle cycles skip think() + act() entirely
     const stateHash = JSON.stringify({
