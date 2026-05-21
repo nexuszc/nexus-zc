@@ -1,259 +1,57 @@
-ing credentials');
-      return;
-    }
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { Logger } from '../_shared/logger.ts'
+import { parseErrorResponse, parseStandardizedError, withTimeout, createTimeoutError } from '../_shared/error-utils.ts'
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+const logger = new Logger('smoke-test-runner');
 
-    const { error } = await supabase.from('system_logs').insert({
-      event_type: 'smoke_test_run',
-      severity: overallSuccess ? 'info' : 'error',
-      message: `Smoke test run ${overallSuccess ? 'passed' : 'failed'}`,
-      metadata: {
-        smoke_tests: smokeTestResults,
-        health_checks: healthCheckResults,
-        timestamp: new Date().toISOString()
-      }
-    });
+// Timeout configurations
+const SMOKE_TEST_TIMEOUT = 180000; // 3 minutes for smoke test execution
+const HEALTH_CHECK_TIMEOUT = 30000; // 30 seconds per health check
+const FUNCTION_INVOKE_TIMEOUT = 120000; // 2 minutes per function invocation
 
-    if (error) {
-      logger.log('error', 'Failed to persist test results', parseErrorResponse(error));
-    } else {
-      logger.log('info', 'Test results persisted successfully');
-    }
-  } catch (error) {
-    logger.log('error', 'Exception persisting test results', parseErrorResponse(error));
-  }
-}
-
-// Send failure alerts
-async function sendFailureAlert(
-  smokeTestResults: any,
-  healthCheckResults: any[]
-): Promise<void> {
+// Run smoke test with timeout protection
+async function runSmokeTestWithTimeout(): Promise<any> {
   try {
-    logger.log('warn', 'Sending failure alert', {
-      smoke_tests: smokeTestResults,
-      health_checks: healthCheckResults
-    });
-
+    logger.log('info', 'Invoking smoke-test function with timeout protection');
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
     
     if (!supabaseUrl || !supabaseKey) {
-      logger.log('warn', 'Cannot send alert: missing credentials');
-      return;
+      throw new Error('Missing required Supabase configuration');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-
-    await supabase.from('system_logs').insert({
-      event_type: 'smoke_test_alert',
-      severity: 'error',
-      message: 'Smoke test failures detected',
-      metadata: {
-        failed_smoke_tests: smokeTestResults.failed,
-        failed_health_checks: healthCheckResults.filter(h => h.status === 'failed').length,
-        details: {
-          smoke_tests: smokeTestResults,
-          health_checks: healthCheckResults
-        }
+    
+    const invokePromise = supabase.functions.invoke('smoke-test', {
+      body: { 
+        runTests: true,
+        includeHealthCheck: true,
+        timeout: SMOKE_TEST_TIMEOUT - 10000 // Leave buffer for outer timeout
       }
     });
 
-    logger.log('info', 'Failure alert sent');
-  } catch (error) {
-    logger.log('error', 'Failed to send alert', parseErrorResponse(error));
-  }
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  errorMessage: string = 'Operation timed out'
-): Promise<T> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-  });
-  
-  return Promise.race([promise, timeoutPromise]);
-}
-
-// Check smoke-test health endpoint before running full suite
-async function checkSmokeTestHealth(): Promise<{ healthy: boolean; error?: string; details?: any }> {
-  try {
-    logger.log('info', 'Checking smoke-test health endpoint');
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return {
-        healthy: false,
-        error: 'Missing Supabase credentials for health check'
-      };
-    }
-
-    const healthUrl = `${supabaseUrl}/functions/v1/smoke-test?health=true`;
-    
-    const response = await withTimeout(
-      fetch(healthUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        }
-      }),
-      10000,
-      'Health check timeout after 10s'
+    const result = await withTimeout(
+      invokePromise,
+      SMOKE_TEST_TIMEOUT,
+      'Smoke test execution timeout'
     );
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.log('warn', 'Smoke-test health check failed', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText
+    if (result.error) {
+      logger.log('error', 'Smoke test invocation returned error', {
+        error: result.error
       });
-      
-      return {
-        healthy: false,
-        error: `Health check returned ${response.status}: ${response.statusText}`,
-        details: { status: response.status, body: errorText }
-      };
+      throw new Error(`Smoke test failed: ${result.error.message || JSON.stringify(result.error)}`);
     }
 
-    const healthData = await response.json();
-    logger.log('info', 'Smoke-test health check passed', healthData);
-    
-    return {
-      healthy: true,
-      details: healthData
-    };
-  } catch (error) {
-    const errorInfo = parseErrorResponse(error);
-    logger.log('error', 'Smoke-test health check exception', {
-      message: errorInfo.message,
-      stack: errorInfo.stack,
-      details: errorInfo.details
-    });
-    
-    return {
-      healthy: false,
-      error: errorInfo.message,
-      details: errorInfo
-    };
-  }
-}
-
-// Parse standardized error response format from wrapper
-function parseStandardizedError(error: any): { message: string; stack?: string; details?: any; isTimeout?: boolean } {
-  if (error?.error) {
-    // New standardized format from Deno.serve() wrapper
-    return {
-      message: error.error,
-      stack: error.stack,
-      details: error.details || {},
-      isTimeout: error.error?.includes('timeout') || error.error?.includes('timed out')
-    };
-  }
-  
-  // Fallback to existing error parsing
-  const errorInfo = parseErrorResponse(error);
-  return {
-    message: errorInfo.message,
-    stack: errorInfo.stack,
-    details: errorInfo.details,
-    isTimeout: errorInfo.message?.toLowerCase().includes('timeout')
-  };
-}
-
-// Enhanced smoke test runner with health check and better error handling
-async function runSmokeTestWithTimeout(): Promise<any> {
-  try {
-    logger.log('info', 'Starting smoke test with health check');
-    
-    // First check health endpoint
-    const healthCheck = await checkSmokeTestHealth();
-    if (!healthCheck.healthy) {
-      logger.log('error', 'Smoke-test health check failed, aborting test run', {
-        error: healthCheck.error,
-        details: healthCheck.details
-      });
-      
-      return {
-        success: false,
-        error: 'Health check failed',
-        healthCheck: healthCheck,
-        tests: []
-      };
-    }
-
-    logger.log('info', 'Health check passed, proceeding with smoke tests');
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-
-    const smokeTestUrl = `${supabaseUrl}/functions/v1/smoke-test`;
-    
-    logger.log('info', 'Invoking smoke-test function with 35s timeout');
-    
-    const response = await withTimeout(
-      fetch(smokeTestUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ runAll: true })
-      }),
-      35000,
-      'Smoke test execution timeout after 35s'
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorData;
-      
-      try {
-        errorData = JSON.parse(errorText);
-      } catch {
-        errorData = { error: errorText };
-      }
-      
-      const parsedError = parseStandardizedError(errorData);
-      
-      logger.log('error', 'Smoke test returned error response', {
-        status: response.status,
-        statusText: response.statusText,
-        message: parsedError.message,
-        stack: parsedError.stack,
-        details: parsedError.details,
-        isTimeout: parsedError.isTimeout
-      });
-      
-      return {
-        success: false,
-        error: parsedError.message,
-        stack: parsedError.stack,
-        details: parsedError.details,
-        isTimeout: parsedError.isTimeout,
-        status: response.status,
-        tests: []
-      };
-    }
-
-    const result = await response.json();
     logger.log('info', 'Smoke test completed successfully', {
-      testsRun: result.tests?.length || 0
+      hasData: !!result.data,
+      dataKeys: result.data ? Object.keys(result.data) : []
     });
-    
+
     return {
       success: true,
-      ...result
+      ...result.data
     };
   } catch (error) {
     const errorInfo = parseStandardizedError(error);
@@ -446,4 +244,138 @@ async function handleRequest(req: Request): Promise<Response> {
       isTimeout: smokeTestResults.isTimeout
     });
 
-    // Run health
+    // Run health checks on other functions
+    logger.log('info', 'Running health checks on functions', { functions: functionsToCheck });
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing required Supabase configuration for health checks');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const healthCheckResults = [];
+
+    for (const functionName of functionsToCheck) {
+      const startTime = Date.now();
+      try {
+        logger.log('info', `Health checking function: ${functionName}`);
+        
+        const invokePromise = supabase.functions.invoke(functionName, {
+          body: { health: true }
+        });
+
+        const result = await withTimeout(
+          invokePromise,
+          HEALTH_CHECK_TIMEOUT,
+          `Health check timeout for ${functionName}`
+        );
+
+        const duration = Date.now() - startTime;
+
+        if (result.error) {
+          logger.log('warn', `Health check failed for ${functionName}`, {
+            error: result.error,
+            duration
+          });
+          healthCheckResults.push({
+            function: functionName,
+            status: 'failed',
+            error: result.error.message || JSON.stringify(result.error),
+            duration
+          });
+        } else {
+          logger.log('info', `Health check passed for ${functionName}`, { duration });
+          healthCheckResults.push({
+            function: functionName,
+            status: 'passed',
+            duration,
+            response: result.data
+          });
+        }
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        const errorInfo = parseStandardizedError(error);
+        logger.log('error', `Health check exception for ${functionName}`, {
+          error: errorInfo.message,
+          isTimeout: errorInfo.isTimeout,
+          duration
+        });
+        healthCheckResults.push({
+          function: functionName,
+          status: 'failed',
+          error: errorInfo.message,
+          isTimeout: errorInfo.isTimeout,
+          duration
+        });
+      }
+    }
+
+    // Aggregate results
+    const overallSuccess = smokeTestResults.success && 
+                          healthCheckResults.every(h => h.status === 'passed');
+
+    const responseData = {
+      success: overallSuccess,
+      timestamp: new Date().toISOString(),
+      smokeTests: smokeTestResults,
+      healthChecks: {
+        total: healthCheckResults.length,
+        passed: healthCheckResults.filter(h => h.status === 'passed').length,
+        failed: healthCheckResults.filter(h => h.status === 'failed').length,
+        results: healthCheckResults
+      }
+    };
+
+    // Add failure report if there were any failures
+    if (!overallSuccess) {
+      responseData['failureReport'] = generateFailureReport(smokeTestResult, healthCheckResults);
+    }
+
+    logger.log('info', 'Smoke test runner completed', {
+      overallSuccess,
+      smokeTestSuccess: smokeTestResults.success,
+      healthChecksPassed: healthCheckResults.filter(h => h.status === 'passed').length,
+      healthChecksFailed: healthCheckResults.filter(h => h.status === 'failed').length
+    });
+
+    // Return appropriate status code based on results
+    const statusCode = overallSuccess ? 200 : 500;
+
+    return new Response(
+      JSON.stringify(responseData),
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+
+  } catch (error) {
+    const errorInfo = parseErrorResponse(error);
+    logger.log('error', 'Smoke test runner failed with exception', {
+      message: errorInfo.message,
+      stack: errorInfo.stack,
+      details: errorInfo.details
+    });
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: errorInfo.message,
+        stack: errorInfo.stack,
+        details: errorInfo.details,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
+// Deno.serve handler wrapper
+Deno.serve(async (req: Request) => {
+  return await handleRequest(req);
+});
