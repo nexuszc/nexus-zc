@@ -4,34 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Upgrade — Roofing OS</title>
-<meta name="description" content="Add Aria AI, Supplement AI, Measurements, and more to your free Roofing OS portal.">
+<meta name="description" content="Add Aria AI, Supplement AI, CRM, Growth, and more to your free Roofing OS portal.">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
     --bg: #0a0a0f; --surface: #111118; --card: #16161f;
     --border: #1e1e2e; --cyan: #06b6d4; --text: #f8fafc; --muted: #94a3b8;
     --green: #22c55e; --violet: #8b5cf6; --amber: #f59e0b; --rose: #f43f5e;
+    --blue: #3b82f6; --indigo: #6366f1;
   }
   body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Inter', system-ui, sans-serif; line-height: 1.6; }
   nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 14px 24px; background: rgba(10,10,15,0.92); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
   .logo em { color: var(--cyan); font-style: normal; }
-  main { max-width: 1000px; margin: 0 auto; padding: 100px 24px 80px; }
+  main { max-width: 1040px; margin: 0 auto; padding: 100px 24px 80px; }
   h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; margin-bottom: 12px; }
   .sub { color: var(--muted); font-size: 17px; margin-bottom: 56px; }
   .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--cyan); margin-bottom: 32px; padding-top: 20px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 48px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 48px; }
   .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 48px; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; transition: border-color 0.2s; }
   .card:hover { border-color: rgba(255,255,255,0.15); }
   .card.featured { border-color: var(--cyan); box-shadow: 0 0 40px rgba(6,182,212,0.08); }
   .card.featured-violet { border-color: var(--violet); box-shadow: 0 0 40px rgba(139,92,246,0.08); }
+  .card.featured-amber { border-color: var(--amber); box-shadow: 0 0 40px rgba(245,158,11,0.10); }
   .badge { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 10px; border-radius: 100px; margin-bottom: 16px; }
   .badge-cyan { background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); }
   .badge-violet { background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.4); color: var(--violet); }
   .badge-amber { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); }
   .badge-green { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: var(--green); }
   .badge-rose { background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); color: var(--rose); }
+  .badge-blue { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: var(--blue); }
+  .badge-indigo { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); color: var(--indigo); }
   .price { font-size: 44px; font-weight: 900; letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px; }
   .price-sub { font-size: 16px; font-weight: 400; color: var(--muted); }
   .tagline { font-size: 18px; font-weight: 700; margin: 14px 0 6px; }
@@ -48,6 +53,10 @@
   .cta-amber:hover { background: #d97706; }
   .cta-green { background: var(--green); color: white; }
   .cta-green:hover { background: #16a34a; }
+  .cta-blue { background: var(--blue); color: white; }
+  .cta-blue:hover { background: #2563eb; }
+  .cta-indigo { background: var(--indigo); color: white; }
+  .cta-indigo:hover { background: #4f46e5; }
   .cta-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
   .cta-outline:hover { border-color: var(--muted); }
   .roi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
@@ -66,9 +75,9 @@
 
 <main>
   <h1>Your portal is free.<br>Power it up when you're ready.</h1>
-  <p class="sub">Every add-on pays for itself in the first job it touches. Pick what you need now.</p>
+  <p class="sub">Every add-on pays for itself in the first job it touches. Start with what you need.</p>
 
-  <!-- UNLOCK UNLIMITED JOBS -->
+  <!-- PORTAL PRO + MEASUREMENTS -->
   <div class="section-label">Step 1 — Unlock unlimited jobs</div>
   <div class="grid">
 
@@ -76,7 +85,7 @@
       <div class="badge badge-cyan">Portal Pro</div>
       <div class="price">$69<span class="price-sub">/mo</span></div>
       <div class="tagline">Unlimited jobs. No cap, ever.</div>
-      <div class="desc">The free portal handles your first 5 jobs. Go pro and remove the limit. Everything else stays the same — just no ceiling.</div>
+      <div class="desc">The free portal handles your first 5 jobs. Go pro and remove the limit — everything else stays the same.</div>
       <div class="roi">
         <div class="roi-label">Break-even</div>
         <div class="roi-value">1 extra referral/year</div>
@@ -87,7 +96,7 @@
         <li>Priority support</li>
         <li>CompanyCam auto-sync</li>
       </ul>
-      <a href="mailto:zach@roofingos.dev?subject=Portal Pro" class="cta cta-cyan">Upgrade to Pro — $69/mo →</a>
+      <a href="STRIPE_PORTAL_PRO_LINK" class="cta cta-cyan">Upgrade to Pro — $69/mo →</a>
     </div>
 
     <div class="card">
@@ -96,28 +105,28 @@
       <div class="tagline">Accurate measurements. No ladder.</div>
       <div class="desc">Order a full roof measurement report from the office. Delivered in hours. Pay per report — no subscription.</div>
       <div class="roi">
-        <div class="roi-label">Why it pays</div>
-        <div class="roi-value">Save 2 hrs per job</div>
+        <div class="roi-label">Bundle pricing</div>
+        <div class="roi-value">10 for $199 · 25 for $449</div>
       </div>
       <ul class="features">
         <li>Exact squares, pitch, facets, ridges</li>
         <li>PDF export for estimates</li>
-        <li>Bundle pricing: 5 for $100, 10 for $175</li>
-        <li>Order from the dashboard in 30 seconds</li>
+        <li>Order from dashboard in 30 seconds</li>
+        <li>No subscription required</li>
       </ul>
-      <a href="mailto:zach@roofingos.dev?subject=Measurements" class="cta cta-outline">Get Started →</a>
+      <a href="mailto:zach@roofingos.dev?subject=Measurements" class="cta cta-outline">Order Reports →</a>
     </div>
 
   </div>
 
   <hr class="divider">
 
-  <!-- ARIA -->
+  <!-- ARIA INTERNAL -->
   <div class="section-label">AI that works while you're on the roof</div>
   <div class="grid">
 
     <div class="card featured">
-      <div class="badge badge-cyan">Aria AI</div>
+      <div class="badge badge-cyan">Aria Internal</div>
       <div class="price">$249<span class="price-sub">/mo</span></div>
       <div class="tagline">Your 24/7 AI team member.</div>
       <div class="desc">Aria answers homeowner questions, sends updates, follows up on unsigned contracts, and calls prospects — automatically.</div>
@@ -129,11 +138,11 @@
         <li>Homeowner questions answered 24/7 via portal chat</li>
         <li>Outbound follow-up calls on unsigned estimates</li>
         <li>Post-job review and referral outreach</li>
-        <li>Inbound call routing — "I'll have your rep call you"</li>
+        <li>Inbound call routing</li>
         <li>Bilingual (English + Spanish)</li>
         <li>Storm outreach — calls prospects after every hail event</li>
       </ul>
-      <a href="mailto:zach@roofingos.dev?subject=Add Aria" class="cta cta-cyan">Add Aria — $249/mo →</a>
+      <a href="STRIPE_ARIA_INTERNAL_LINK" class="cta cta-cyan">Add Aria — $249/mo →</a>
     </div>
 
   </div>
@@ -142,7 +151,7 @@
 
   <!-- SUPPLEMENT AI -->
   <div class="section-label">Supplement AI — find every dollar the adjuster missed</div>
-  <div class="grid-3">
+  <div class="grid-2">
 
     <div class="card">
       <div class="badge badge-violet">Supplement Package</div>
@@ -157,14 +166,14 @@
         <li>AI photo analysis — every damage item</li>
         <li>Xactimate line item suggestions</li>
         <li>Carrier-specific strategy</li>
-        <li>PDF supplement packet</li>
+        <li>PDF supplement packet ready to submit</li>
       </ul>
       <a href="mailto:zach@roofingos.dev?subject=Supplement Package" class="cta cta-outline">Start a Supplement →</a>
     </div>
 
     <div class="card featured-violet">
       <div class="badge badge-violet">Supplement + Aria</div>
-      <div class="price">$249<span class="price-sub">/job</span></div>
+      <div class="price">$329<span class="price-sub">/job</span></div>
       <div class="tagline">AI builds it. Aria fights for it.</div>
       <div class="desc">Everything in the package, plus Aria calls the adjuster, handles denials, and tracks depreciation release automatically.</div>
       <div class="roi">
@@ -176,26 +185,55 @@
         <li>Aria calls adjuster directly</li>
         <li>Denial rebuttal letters generated</li>
         <li>Depreciation release tracking + follow-up</li>
+        <li>Most contractors make this back on job one</li>
       </ul>
       <a href="mailto:zach@roofingos.dev?subject=Supplement + Aria" class="cta cta-violet">Most popular →</a>
     </div>
 
+  </div>
+
+  <hr class="divider">
+
+  <!-- CRM + GROWTH -->
+  <div class="section-label">Scale your operation</div>
+  <div class="grid-2">
+
     <div class="card">
-      <div class="badge badge-rose">Full Recovery</div>
-      <div class="price">10%<span class="price-sub"> of approval</span></div>
-      <div class="tagline">We fight until it's approved.</div>
-      <div class="desc">No upfront cost. We handle everything — supplement, rebuttal, depreciation — and take 10% of what we recover. You pay only when you win.</div>
+      <div class="badge badge-blue">CRM</div>
+      <div class="price">$299<span class="price-sub">/mo</span></div>
+      <div class="tagline">Pipeline that runs itself.</div>
+      <div class="desc">Full pipeline automation built for roofing — lead intake, follow-up sequences, knock-to-close tracking, and carrier status. Replaces AccuLynx or JobNimbus.</div>
       <div class="roi">
-        <div class="roi-label">Upfront cost</div>
-        <div class="roi-value">$0</div>
+        <div class="roi-label">Replaces</div>
+        <div class="roi-value">$299–$499/mo in CRM fees</div>
       </div>
       <ul class="features">
-        <li>Everything in Supplement + Aria</li>
-        <li>Success-based — zero risk</li>
-        <li>We fight denials until approved</li>
-        <li>No win, no fee</li>
+        <li>Lead pipeline with storm-triggered intake</li>
+        <li>Automated follow-up sequences</li>
+        <li>AccuLynx and JobNimbus data import</li>
+        <li>Carrier status tracking per job</li>
+        <li>Crew scheduling and material orders</li>
       </ul>
-      <a href="mailto:zach@roofingos.dev?subject=Full Recovery" class="cta cta-outline">Talk to Zach →</a>
+      <a href="STRIPE_CRM_LINK" class="cta cta-blue">Add CRM — $299/mo →</a>
+    </div>
+
+    <div class="card">
+      <div class="badge badge-indigo">Growth</div>
+      <div class="price">$599<span class="price-sub">/mo</span></div>
+      <div class="tagline">Your marketing team, on autopilot.</div>
+      <div class="desc">Weekly YouTube content, SEO blog posts, Facebook and Instagram, competitor intelligence, and storm-triggered outreach — all automated.</div>
+      <div class="roi">
+        <div class="roi-label">Replaces</div>
+        <div class="roi-value">$1,500+/mo in marketing agency fees</div>
+      </div>
+      <ul class="features">
+        <li>Weekly YouTube videos (AI + voiceover)</li>
+        <li>SEO blog posts published automatically</li>
+        <li>Social media — Facebook, Instagram, Google</li>
+        <li>Competitor monitor — weekly intel report</li>
+        <li>Storm marketing — rapid outreach after hail events</li>
+      </ul>
+      <a href="STRIPE_GROWTH_LINK" class="cta cta-indigo">Add Growth — $599/mo →</a>
     </div>
 
   </div>
@@ -206,25 +244,25 @@
   <div class="section-label">Everything, running itself</div>
   <div class="grid">
 
-    <div class="card">
+    <div class="card featured-amber">
       <div class="badge badge-amber">All In</div>
       <div class="price">$2,499<span class="price-sub">/mo</span></div>
       <div class="tagline">The full Roofing OS stack.</div>
-      <div class="desc">Portal, Aria, Supplement AI, CRM, growth engine, competitor monitoring, and content machine. Your entire operation on autopilot.</div>
+      <div class="desc">Portal Pro, Aria Internal, Supplement AI, CRM, Growth engine, and every future feature we build. One price, forever.</div>
       <div class="roi">
         <div class="roi-label">Replaces</div>
-        <div class="roi-value">$4,000+/mo in tools</div>
+        <div class="roi-value">$4,000+/mo in tools + labor</div>
       </div>
       <ul class="features">
-        <li>Everything in every add-on</li>
-        <li>Full CRM with pipeline automation</li>
-        <li>Weekly competitor intelligence</li>
-        <li>YouTube + SEO content engine</li>
-        <li>Storm detection and rapid outreach</li>
+        <li>Everything in every add-on above</li>
+        <li>Unlimited measurement reports</li>
+        <li>All future features at no extra charge</li>
         <li>CompanyCam, AccuLynx, JobNimbus integration</li>
+        <li>Storm detection and rapid outreach</li>
         <li>Dedicated onboarding + success manager</li>
+        <li>Direct line to Zach for strategy</li>
       </ul>
-      <a href="mailto:zach@roofingos.dev?subject=All In Plan" class="cta cta-amber">Talk to Zach →</a>
+      <a href="STRIPE_ALL_IN_LINK" class="cta cta-amber">Go All In — $2,499/mo →</a>
     </div>
 
   </div>
