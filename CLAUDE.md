@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v8
+# Last updated: May 21, 2026 — v12
 
 ---
 
@@ -171,7 +171,6 @@ Then productized and sold to other multi-business operators.
 | `roofing-job-create` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
-| `roofing-measurements` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-nudge-email` | See function source for details | Internal |
 | `roofing-outreach` | See function source for details | Internal |
@@ -205,7 +204,6 @@ Then productized and sold to other multi-business operators.
 | `smoke-test-runner` | See function source for details | Internal |
 | `stripe-webhook` | See function source for details | Internal |
 | `supplement-audit-engine` | See function source for details | Internal |
-| `supplement-jobs` | See function source for details | Internal |
 | `synthesize-portfolio` | Generate portfolio-level synthesis and insights | On demand |
 | `system-heartbeat` | See function source for details | Internal |
 | `telegram` | Webhook: immediate 200 ACK, processes in waitUntil | Telegram push |
@@ -404,18 +402,65 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE (Build Spec v4 — All Phases 0–14 complete):**
+- Phase 0: Prereqs — photo system split (portal_photos), private→public storage bucket fix, cron job auth fixed (vault lookup)
+- Phase 1: Portal photo UX — phase selector (before/during/after/damage/material), privacy toggle, CompanyCam sync fixed
+- Phase 2: Job limit enforcement — 402 on free plan at 5 jobs, monetization_events logged, client-side gate in dashboard
+- Phase 3: Measurements bundle pricing — $25/1, $20/5, $17.50/10; supplement-jobs function with 3 tiers (package/aria_plus/full_recovery)
+- Phase 4: Upgrade page rewrite — upgrade.html with v4 pricing (Portal Pro $69, Aria $249, Supplement $99-$249, All In $2,499)
+- Phase 5: Landing page v2 — CompanyCam killer section, cancel table, free-forever messaging hardened
+- Phase 6: Community monitor v2 — confidence scoring (score×10), auto-approve ≥90, Telegram for score 80, pending for rest
+- Phase 7: Contractor support v2 — role context in Claude prompt, urgent keyword escalation
+- Phase 8: Supplement AI 3-tier — supplement-jobs edge function (package/aria_plus/full_recovery), dedup, monetization logging
+- Phase 9: Social poster fix — removed stale $49/mo messaging from Facebook posts
+- Phase 10: Community monitor bottleneck fix — 209 pending posts processed, confidence scoring deployed
+- Phase 11: Dashboard UX — first-time 4-field form, Aria support chat, signup flow, free plan contractor-signup
+- Phase 12: Nexus self-healing — revenue monitoring in nexus-core observe (MRR, churn risk, state hash), daily churn alert Telegram, roofing-self-improve saves proposals to nexus_roofing_proposals
+- Phase 13: Smoke test v3 — docs/smoke-test-v3.sh, 38/38 green, service_role grants fixed on v4 tables
+- Phase 14: CLAUDE.md v11 updated
 
-**NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Complete homeowner portal fixes and documentation
+**STATUS: Build spec v4 complete — ALL SYSTEMS GREEN (38/38)**
+
+**Build spec v5 complete (May 21, 2026):**
+- Phase 0: Prereqs verified (v4 smoke test 38/38 green before starting)
+- Phase 1: Landing page v5 — "Never pay for photo storage again" hero, v5 product stack cards (Portal Free, Portal Pro $69, Measurements $25, Aria Internal $249, Supplement AI from $99, CRM $299, Growth $599, All In $2,499)
+- Phase 2: Upgrade page v5 — all 7 products, 2 supplement tiers ($99 Package Only, $329 Full Handling with Aria), CRM $299, Growth $599, 5 Stripe placeholder links
+- Phase 3: Cloudflare redeploy + live verification (all checks green)
+- Phase 4: CLAUDE.md v12 updated
+
+**V5 LOCKED PRODUCT LINE:**
+| Product | Price |
+|---------|-------|
+| Portal Free | $0/mo — first 5 jobs |
+| Portal Pro | $69/mo — unlimited jobs |
+| Measurements | $25/report (bundles: $199/10, $449/25) |
+| Aria Internal | $249/mo |
+| Supplement Package | $99/job |
+| Supplement + Aria | $329/job |
+| CRM | $299/mo |
+| Growth | $599/mo |
+| All In | $2,499/mo |
+
+**PENDING (manual / external):**
+1. Complete Stripe tax ID verification — need SS-4/CP575 PDF from irs.gov/account
+2. Get 1ESX API key (1esx.com) — needed for Measurements product auto-fulfillment
+3. Get CompanyCam API key (COMPANYCAM_API_KEY secret)
+4. Complete 10DLC campaign registration after brand approval
+5. Verify Stripe keys are live (sk_live_) not test — check at stripe.com/dashboard
+6. Create 5 Stripe payment links and replace STRIPE_*_LINK placeholders in upgrade.html:
+   - Portal Pro $69/mo → STRIPE_PORTAL_PRO_LINK
+   - Aria Internal $249/mo → STRIPE_ARIA_INTERNAL_LINK
+   - CRM $299/mo → STRIPE_CRM_LINK
+   - Growth $599/mo → STRIPE_GROWTH_LINK
+   - All In $2,499/mo → STRIPE_ALL_IN_LINK
+7. Call hot prospects daily — use docs/larry-call-script.md
+8. Update 5 already-published YouTube videos with new description footer (manual — YouTube Studio)
+
+**NEXT (after first contractor signed):**
+- Onboard first contractor end-to-end: signup → demo → magic link → first job created
+- Monitor Aria support chat for real questions; tune KB accordingly
+- Get 1ESX API key to unlock auto-fulfillment on Measurements
+- Watch nexus_roofing_proposals dashboard — approve/reject weekly AI proposals
 
 ---
 
