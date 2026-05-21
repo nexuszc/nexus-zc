@@ -183,7 +183,7 @@ function buildCaption(content: {
 
   return (
     `📋 *TITLE:*\n${content.title}\n\n` +
-    `📝 *DESCRIPTION:*\n${desc}\n\nroofingos.dev — starts at $49/month\n\n` +
+    `📝 *DESCRIPTION:*\n${desc}\n\nfree at roofingos.dev/dashboard\n\n` +
     `🏷️ *TAGS:*\n${tags}\n\n` +
     `🖼️ *THUMBNAIL TEXT:*\n${thumbnail}\n\n` +
     `studio.youtube.com → Create → Upload → set Public → Publish\n\n` +

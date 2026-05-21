@@ -18,11 +18,11 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 const YOUTUBE_DESCRIPTION_FOOTER = `
 
 ---
-Try Roofing OS free for 14 days → https://roofingos.dev
-No contract. No setup fees. Cancel anytime.
+Free forever → https://roofingos.dev
+No credit card. No contract. 5 jobs/month free.
 
 🏠 What is Roofing OS?
-Roofing OS is a $49/month homeowner portal that gives your clients live job updates, photos, insurance status, and messaging — so they stop calling you during jobs.
+Roofing OS gives your homeowners a live portal with job updates, photos, insurance status, and messaging — so they stop calling you during jobs. Free forever. Portal Pro $69/month for unlimited jobs.
 
 ✅ Live portal link sent in seconds
 ✅ Insurance claim status visible to homeowner
@@ -38,15 +38,42 @@ Questions? Reply in comments or email zach@roofingos.dev
 
 // ── PROMPTS ───────────────────────────────────────────────────────────────────
 
-const SHORT_SYSTEM = `You write YouTube Shorts scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+const SHORT_SYSTEM = `You write YouTube Shorts scripts for Roofing OS — a free homeowner portal for roofing contractors.
 
 TARGET: Insurance restoration roofers. Busy, skeptical, and practical.
+
+PRICING (use exactly):
+- Portal: FREE forever. No credit card. 5 jobs/month.
+- Portal Pro: $69/month. Unlimited jobs.
+- Measurements: $25/report. Bundles: 10 for $199.
+- Aria Internal: $249/month. Team calls.
+- Supplement Package: $99/job. AI generates it.
+- Supplement Full Handling: $329/job. Aria handles everything.
+- CRM: $299/month. Replaces AccuLynx.
+- Growth: $599/month. Storm + leads + content.
+- All In: $2,499/month. 20 jobs included.
+NEVER say $49, free trial, 14-day, or credit card required.
+ALWAYS say free forever, no credit card, 4 minutes.
+
+TOPIC CATEGORIES (pick one for every script):
+1. homeowner_communication — stopping calls, portals, status updates
+2. supplement_recovery — O&P, denials, Xactimate, adjuster fights
+3. software_comparison — CompanyCam, AccuLynx, JobNimbus alternatives
+4. storm_response — hail season, storm leads, rapid response
+5. business_growth — scaling, close rate, referrals, reviews
+6. insurance_process — claims, ACV vs RCV, depreciation
+7. technology_adoption — why roofers fall behind without software
+8. efficiency_wins — time saved, callbacks cut, crew management
+
+TOPIC ROTATION (enforced):
+- You will be told the last 5 titles generated. Do NOT produce a script on the same topic or category as any of them.
+- The "topic_category" field in your JSON output MUST match one of the 8 categories above.
 
 STRUCTURE (strict — do not deviate):
 0-3 sec: ONE sentence. The exact pain. No intro. No name. Just the problem.
 3-15 sec: Make it worse. They feel it daily. One specific scenario.
 15-25 sec: Roofing OS fixes this. One feature. One outcome.
-25-30 sec: "roofingos.dev. Free trial. Link in bio."
+25-30 sec: "roofingos.dev. Free forever. No credit card. Link in bio."
 
 RULES:
 - Max 80 words. Under 30 seconds when spoken.
@@ -61,19 +88,47 @@ OUTPUT: JSON only. No markdown. No explanation.
   "script": "full word-for-word script",
   "hook_text": "on-screen text for first 3 sec",
   "thumbnail_text": "3-5 word thumbnail overlay",
+  "topic_category": "one of the 8 categories above",
   "duration_estimate": 28
 }`;
 
-const LONG_SYSTEM = `You write short YouTube video scripts for Roofing OS — a $49/month homeowner portal for roofing contractors.
+const LONG_SYSTEM = `You write short YouTube video scripts for Roofing OS — a free homeowner portal for roofing contractors.
 
 TARGET: Insurance restoration roofers. Busy. Skeptical. Practical. 2-50 employees.
+
+PRICING (use exactly):
+- Portal: FREE forever. No credit card. 5 jobs/month.
+- Portal Pro: $69/month. Unlimited jobs.
+- Measurements: $25/report. Bundles: 10 for $199.
+- Aria Internal: $249/month. Team calls.
+- Supplement Package: $99/job. AI generates it.
+- Supplement Full Handling: $329/job. Aria handles everything.
+- CRM: $299/month. Replaces AccuLynx.
+- Growth: $599/month. Storm + leads + content.
+- All In: $2,499/month. 20 jobs included.
+NEVER say $49, free trial, 14-day, or credit card required.
+ALWAYS say free forever, no credit card, 4 minutes.
+
+TOPIC CATEGORIES (pick one for every script):
+1. homeowner_communication — stopping calls, portals, status updates
+2. supplement_recovery — O&P, denials, Xactimate, adjuster fights
+3. software_comparison — CompanyCam, AccuLynx, JobNimbus alternatives
+4. storm_response — hail season, storm leads, rapid response
+5. business_growth — scaling, close rate, referrals, reviews
+6. insurance_process — claims, ACV vs RCV, depreciation
+7. technology_adoption — why roofers fall behind without software
+8. efficiency_wins — time saved, callbacks cut, crew management
+
+TOPIC ROTATION (enforced):
+- You will be told the last 5 titles generated. Do NOT produce a script on the same topic or category as any of them.
+- The "topic_category" field in your JSON output MUST match one of the 8 categories above.
 
 STRUCTURE (follow exactly — 2-3 minutes total):
 Hook (0:00-0:15): State the pain immediately. No intro. Make them feel it in 2 sentences.
 Problem (0:15-0:45): Why this happens in roofing. One story or scenario with a number.
 Cost (0:45-1:15): What it costs them. Time lost or revenue missed. One specific example.
 Solution (1:15-2:30): How Roofing OS fixes it. What the roofer does, what the homeowner sees. Concrete steps.
-CTA (2:30-end): "Go to roofingos.dev right now. 14-day free trial. No contract. Link in the description." Say the URL twice.
+CTA (2:30-end): "Go to roofingos.dev right now. Free forever. No credit card. Link in the description." Say the URL twice.
 
 RULES:
 - Max 400 words. 2-3 minutes when spoken.
@@ -88,6 +143,7 @@ OUTPUT: JSON only. No markdown.
   "script": "full word-for-word script",
   "hook_text": "first sentence on screen",
   "thumbnail_text": "3-5 word thumbnail overlay",
+  "topic_category": "one of the 8 categories above",
   "description": "YouTube SEO description 200 words",
   "tags": ["tag1", "tag2"],
   "duration_estimate": 150
@@ -95,11 +151,24 @@ OUTPUT: JSON only. No markdown.
 
 // ── GENERATE ──────────────────────────────────────────────────────────────────
 
+async function getRecentTitles(format: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("roofing_content")
+    .select("title, topic_category")
+    .eq("format", format)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  return (data || []).map((r: { title: string; topic_category?: string }) =>
+    r.topic_category ? `${r.title} [${r.topic_category}]` : r.title
+  );
+}
+
 async function generateScript(topic: { title: string; pain_point: string; format: string }): Promise<{
   title: string;
   script: string;
   hook_text: string;
   thumbnail_text: string;
+  topic_category?: string;
   description?: string;
   tags?: string[];
   duration_estimate: number;
@@ -124,7 +193,7 @@ async function generateScript(topic: { title: string; pain_point: string; format
         system: topic.format === "short" ? SHORT_SYSTEM : LONG_SYSTEM,
         messages: [{
           role: "user",
-          content: `Topic: "${topic.title}"\nPain point: ${topic.pain_point}\nGenerate the script now. JSON only.`,
+          content: `Topic: "${topic.title}"\nPain point: ${topic.pain_point}\nRecent titles (avoid these topics/categories): ${(topic as any).recentTitles || "none yet"}\nGenerate the script now. JSON only.`,
         }],
       }),
       signal: controller.signal,
@@ -207,10 +276,16 @@ Deno.serve(async (req) => {
 
     let generated = 0;
     const errors: string[] = [];
+    const recentShorts = await getRecentTitles("short");
+    const recentLongs  = await getRecentTitles("long");
 
     for (const topic of toGenerate) {
       try {
-        const parsed = await generateScript(topic);
+        const enriched = {
+          ...topic,
+          recentTitles: (topic.format === "short" ? recentShorts : recentLongs).join(" | ") || "none yet",
+        };
+        const parsed = await generateScript(enriched);
         if (!parsed) {
           errors.push(`Parse failed: ${topic.title}`);
           continue;
@@ -222,6 +297,7 @@ Deno.serve(async (req) => {
           script: parsed.script,
           hook_text: parsed.hook_text,
           thumbnail_text: parsed.thumbnail_text,
+          topic_category: parsed.topic_category || null,
           seo_description: parsed.description ? parsed.description + YOUTUBE_DESCRIPTION_FOOTER : null,
           tags: parsed.tags || [],
           format: topic.format,

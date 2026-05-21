@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       `*Demo link if they want it again:*\n` +
       `app\\.nexuszc\\.com/roofing/portal/DEMO2026ROOFINGOS\n\n` +
       `*Full product:*\n` +
-      `roofingos\\.dev — starts at \\$49/month\n\n` +
+      `roofingos\\.dev — free portal, Portal Pro \\$69/month\n\n` +
       `Reply to log outcome:\n` +
       `\`booked ${fn}\`\n` +
       `\`dead ${fn}\``;

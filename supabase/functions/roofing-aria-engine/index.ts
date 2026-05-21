@@ -43,7 +43,7 @@ async function sendProspectEmail(to: string, firstName: string): Promise<void> {
 <p>Here's the link I mentioned on the call:</p>
 <p><a href="${portalLink}">${portalLink}</a></p>
 <p>30 seconds to see it. This is what your homeowners see instead of calling you.</p>
-<p>$49/month. No contract.</p>
+<p>Free forever. No credit card.</p>
 <p>Zach<br>Roofing OS</p>
 </div>`,
     }),

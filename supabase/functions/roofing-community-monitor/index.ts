@@ -7,6 +7,10 @@ const SUPABASE_URL       = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY        = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY  = Deno.env.get("ANTHROPIC_API_KEY")!;
 const SERPER_API_KEY     = Deno.env.get("SERPER_API_KEY")!;
+const REDDIT_CLIENT_ID     = Deno.env.get("REDDIT_CLIENT_ID") || "";
+const REDDIT_CLIENT_SECRET = Deno.env.get("REDDIT_CLIENT_SECRET") || "";
+const REDDIT_USERNAME      = Deno.env.get("REDDIT_USERNAME") || "";
+const REDDIT_PASSWORD      = Deno.env.get("REDDIT_PASSWORD") || "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -121,6 +125,50 @@ async function fetchRedditPosts(subreddit: string, limit = 25): Promise<Array<{ 
   }
 }
 
+const hasRedditCreds = () =>
+  Boolean(REDDIT_CLIENT_ID && REDDIT_CLIENT_SECRET && REDDIT_USERNAME && REDDIT_PASSWORD);
+
+async function getRedditToken(): Promise<string> {
+  const res = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${btoa(`${REDDIT_CLIENT_ID}:${REDDIT_CLIENT_SECRET}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "RoofingOS/1.0 community poster",
+    },
+    body: new URLSearchParams({ grant_type: "password", username: REDDIT_USERNAME, password: REDDIT_PASSWORD }),
+  });
+  const data = await res.json();
+  if (!data.access_token) throw new Error(`Reddit auth failed: ${JSON.stringify(data)}`);
+  return data.access_token;
+}
+
+function extractRedditPostId(url: string): string | null {
+  const match = url.match(/\/comments\/([a-z0-9]+)\//i);
+  return match ? `t3_${match[1]}` : null;
+}
+
+async function postToReddit(threadUrl: string, commentText: string): Promise<boolean> {
+  if (!hasRedditCreds()) return false;
+  try {
+    const thingId = extractRedditPostId(threadUrl);
+    if (!thingId) return false;
+    const token = await getRedditToken();
+    const res = await fetch("https://oauth.reddit.com/api/comment", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "RoofingOS/1.0 community poster",
+      },
+      body: new URLSearchParams({ thing_id: thingId, text: commentText }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function alreadyTracked(url: string): Promise<boolean> {
   const { data } = await supabase.from("roofing_community_posts").select("id").eq("thread_url", url).maybeSingle();
   return !!data;
@@ -138,6 +186,17 @@ Deno.serve(async (req) => {
     if (action === "approve") {
       await supabase.from("roofing_community_posts")
         .update({ status: "approved", approved_at: new Date().toISOString() }).eq("id", postId);
+      if (hasRedditCreds()) {
+        const { data: post } = await supabase.from("roofing_community_posts")
+          .select("thread_url, our_response, platform").eq("id", postId).maybeSingle();
+        if (post?.platform === "reddit" && post.thread_url && post.our_response) {
+          const posted = await postToReddit(post.thread_url, post.our_response);
+          if (posted) {
+            await supabase.from("roofing_community_posts")
+              .update({ auto_posted: true, posted_at: new Date().toISOString() }).eq("id", postId);
+          }
+        }
+      }
     } else if (action === "skip") {
       await supabase.from("roofing_community_posts").update({ status: "skipped" }).eq("id", postId);
     }
@@ -207,6 +266,11 @@ Return ONLY the response text.`
         const confidenceScore = Math.min(100, score * 10);
         const autoPost = score >= 9;
 
+        let actuallyPosted = false;
+        if (autoPost && post.platform === "reddit" && hasRedditCreds()) {
+          actuallyPosted = await postToReddit(post.url, response);
+        }
+
         const { data: saved } = await supabase.from("roofing_community_posts").insert({
           platform: post.platform,
           thread_url: post.url,
@@ -216,7 +280,8 @@ Return ONLY the response text.`
           status: autoPost ? "approved" : "pending",
           portal_mentioned: portal_relevant,
           confidence_score: confidenceScore,
-          auto_posted: false,
+          auto_posted: actuallyPosted,
+          ...(actuallyPosted ? { posted_at: new Date().toISOString() } : {}),
         }).select().single();
 
         if (saved) responsesQueued++;

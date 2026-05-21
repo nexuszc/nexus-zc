@@ -75,16 +75,17 @@ Walk him through the demo portal — he's the homeowner's contractor:
 > the automated follow-up. They do the back office. We do the customer experience."
 
 **"What does it cost?"**
-> "Zero to start. Portal is free forever. The add-ons are:
-> - Measurements (aerial reports): $49/mo
-> - Aria (AI follow-up calls): $149/mo
-> - Supplement AI: $499/mo
-> - All In bundle: $1,299/mo
+> "Zero to start. Portal is free forever — no card. The add-ons are:
+> - Measurements: $25/report. Bundles of 10 for $199.
+> - Aria Internal (AI follow-up calls): $249/mo
+> - Supplement Package: $99/job. AI generates the whole package.
+> - CRM: $299/mo. Replaces AccuLynx.
+> - All In: $2,499/mo. Everything included, 20 jobs.
 >
 > Most guys start free, add Aria after they see the portal working."
 
 **"How is this different from XactAnalysis / EagleView?"**
-> "EagleView is measurements only — $25-40 per report. We're $49/month unlimited.
+> "EagleView is measurements only — $25-40 per report. We're $25/report, same quality, with bundles.
 > XactAnalysis is carrier-side. We're contractor-side. Totally different layer."
 
 **"I'm busy — not a good time to try something new."**

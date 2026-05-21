@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
 <p>Worth 30 seconds:<br>
 <a href="https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS" style="color:#3b82f6;">
 See the homeowner portal →</a></p>
-<p>$49/month. No contract.<br>— Zach @ Roofing OS</p>
+<p>Free forever. No credit card. Portal Pro $69/month.<br>— Zach @ Roofing OS</p>
 </div>`;
 
   const res = await fetch("https://api.resend.com/emails", {
