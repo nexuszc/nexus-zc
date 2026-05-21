@@ -1,61 +1,66 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsHeaders } from "./cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-interface ServeOptions {
-  handler: (req: Request) => Promise<Response>;
-  timeoutMs?: number;
+export interface ServeOptions {
+  timeout?: number;
+  healthCheckPath?: string;
 }
 
-export function serveWithHealthCheck(options: ServeOptions) {
-  const { handler, timeoutMs = 55000 } = options;
+export function serveWithHealthCheck(
+  handler: (req: Request) => Promise<Response> | Response,
+  options: ServeOptions = {}
+) {
+  const timeout = options.timeout || 50000;
+  const healthCheckPath = options.healthCheckPath || "/health";
 
-  serve(async (req: Request) => {
+  return Deno.serve(async (req: Request) => {
+    const url = new URL(req.url);
+
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
 
-    const url = new URL(req.url);
-    if (url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "ok" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+    if (url.pathname === healthCheckPath) {
+      return new Response(
+        JSON.stringify({ status: "healthy", timestamp: new Date().toISOString() }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
-    const startTime = Date.now();
-    console.log(`${req.method} ${url.pathname}`);
-
     try {
-      const timeoutPromise = new Promise<Response>((_, reject) =>
-        setTimeout(() => reject(new Error("Request timeout")), timeoutMs)
-      );
+      const timeoutPromise = new Promise<Response>((_, reject) => {
+        setTimeout(() => reject(new Error("Request timeout")), timeout);
+      });
 
-      const handlerPromise = handler(req);
-
+      const handlerPromise = Promise.resolve(handler(req));
       const response = await Promise.race([handlerPromise, timeoutPromise]);
 
-      const duration = Date.now() - startTime;
-      console.log(`${req.method} ${url.pathname} - ${response.status} (${duration}ms)`);
+      const headers = new Headers(response.headers);
+      Object.entries(corsHeaders).forEach(([key, value]) => {
+        headers.set(key, value);
+      });
 
       return new Response(response.body, {
         status: response.status,
-        headers: { ...corsHeaders, ...Object.fromEntries(response.headers) },
+        statusText: response.statusText,
+        headers,
       });
     } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`Error (${duration}ms):`, error);
+      console.error("Error in handler:", error);
+
+      const isTimeout = error instanceof Error && error.message === "Request timeout";
+      const status = isTimeout ? 504 : 500;
+      const message = isTimeout ? "Request timeout" : "Internal server error";
 
       return new Response(
         JSON.stringify({
-          error: error instanceof Error ? error.message : "Internal server error",
+          error: message,
+          details: error instanceof Error ? error.message : String(error),
         }),
         {
-          status: 500,
+          status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
