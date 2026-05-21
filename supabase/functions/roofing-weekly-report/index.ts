@@ -151,10 +151,75 @@ Respond ONLY with valid JSON, no markdown:
   //   `*Next week forecast:* $${(intelligence.next_week_forecast || 0).toLocaleString()}`
   // );
 
+  // ── AE performance section ──────────────────────────────────────────────
+  const [{ data: aeGenerated }, { data: aeCompleted }, { data: aeEscalated }, { data: prevWeekEscalated }] = await Promise.all([
+    supabase.from("roofing_va_tasks")
+      .select("id", { count: "exact" } as any)
+      .gte("created_at", weekStart)
+      .eq("assigned_to", "ae"),
+    supabase.from("roofing_va_tasks")
+      .select("id, task_type", { count: "exact" } as any)
+      .gte("created_at", weekStart)
+      .eq("status", "completed")
+      .eq("assigned_to", "ae"),
+    supabase.from("roofing_va_tasks")
+      .select("id, task_type", { count: "exact" } as any)
+      .gte("created_at", weekStart)
+      .eq("status", "escalated")
+      .eq("assigned_to", "ae"),
+    // Previous week completion rate check
+    supabase.from("roofing_va_tasks")
+      .select("id, status")
+      .gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString())
+      .lt("created_at", weekStart)
+      .eq("assigned_to", "ae"),
+  ]);
+
+  const genCount   = (aeGenerated || []).length;
+  const doneCount  = (aeCompleted || []).length;
+  const escalCount = (aeEscalated || []).length;
+  const compPct    = genCount > 0 ? Math.round((doneCount / genCount) * 100) : 0;
+
+  const typeCounts: Record<string, number> = {};
+  for (const t of (aeEscalated || [])) {
+    const tt = (t as any).task_type || "unknown";
+    typeCounts[tt] = (typeCounts[tt] || 0) + 1;
+  }
+  const topEscType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
+
+  const hotLeadsDone  = (aeCompleted || []).filter((t: any) => t.task_type === "hot_lead_followup").length;
+  const welcomeDone   = (aeCompleted || []).filter((t: any) => t.task_type === "welcome_call").length;
+
+  // Check if completion rate has been low two weeks running
+  const prevTotal = (prevWeekEscalated || []).length;
+  const prevDone  = (prevWeekEscalated || []).filter((t: any) => t.status === "completed").length;
+  const prevPct   = prevTotal > 0 ? Math.round((prevDone / prevTotal) * 100) : 100;
+  const twoWeeksLow = compPct < 70 && prevPct < 70;
+  const estWeeklyCost = 6 * 5 * 15; // 6h/day * 5 days * $15/h
+
+  const aeMsg = `📊 AE performance this week (${weekStart}):
+- Tasks generated: ${genCount}
+- Completed: ${doneCount} (${compPct}%)
+- Escalated: ${escalCount}
+- Most escalated type: ${topEscType}
+- Hot leads followed up: ${hotLeadsDone}
+- Welcome calls made: ${welcomeDone}${
+    twoWeeksLow
+      ? `\n\n⚠️ AE task load is high. Consider hiring part-time help. Est cost: $${estWeeklyCost}/week`
+      : ""
+  }`;
+
+  // Only send on Sunday (day 0)
+  const isSunday = new Date().getDay() === 0;
+  if (isSunday) {
+    await sendTelegram(aeMsg).catch(() => {});
+  }
+
   return Response.json({
     ok: true,
     report_id: report?.id,
     revenue: weekRevenue,
-    insights: intelligence.insights
+    insights: intelligence.insights,
+    ae: { generated: genCount, completed: doneCount, completion_pct: compPct, escalated: escalCount },
   });
 });

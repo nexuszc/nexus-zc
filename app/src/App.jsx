@@ -23,9 +23,11 @@ import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
-import Home    from './pages/Home'
-import Brain   from './pages/Brain'
-import RoofingOS from './pages/verticals/roofing/RoofingOS'
+import Home        from './pages/Home'
+import Brain        from './pages/Brain'
+import RoofingOS    from './pages/verticals/roofing/RoofingOS'
+import AEDashboard  from './pages/verticals/roofing/AEDashboard'
+import AELogin      from './pages/verticals/roofing/AELogin'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -56,6 +58,8 @@ export default function App() {
         <Route path="/portal/:token" element={<ClientPortal />} />
         <Route path="/roofing/portal/:token" element={<RoofingPortal />} />
         <Route path="/roofing/login" element={<RoofingLogin />} />
+        <Route path="/roofing/ae" element={<AEDashboard />} />
+        <Route path="/roofing/ae/login" element={<AELogin />} />
 
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>

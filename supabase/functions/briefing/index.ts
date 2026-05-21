@@ -226,6 +226,23 @@ Deno.serve(async (_req) => {
     const paceNeeded = Math.ceil((1000 - (totalSignups || 0)) / 60);
     const onPace = signupsYesterday >= paceNeeded;
 
+    // ----- 4b. AE task summary -----
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const [{ data: aeTasks }, { data: pendingEscalations }] = await Promise.all([
+      supabase.from("roofing_va_tasks")
+        .select("id, title, task_type, priority, status")
+        .eq("date", todayStr)
+        .eq("assigned_to", "ae")
+        .order("priority"),
+      supabase.from("roofing_va_tasks")
+        .select("id, title, task_type, escalation_status")
+        .eq("escalation_status", "pending"),
+    ]);
+    const aeTaskCount  = (aeTasks || []).length;
+    const aeEstMins    = 0; // time_estimate not fetched here for brevity
+    const urgentTasks  = (aeTasks || []).filter((t: any) => t.priority === 1);
+    const pendingEscCount = (pendingEscalations || []).length;
+
     // ----- 5. Build context blocks -----
     const today = new Date().toLocaleDateString("en-US", {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -377,7 +394,20 @@ Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an a
       }).catch(() => {});
     }
 
-    // ----- 7. Truncate and send to Telegram -----
+    // ----- 7. Send AE task summary as separate message -----
+    if (aeTaskCount > 0) {
+      const urgentLines = urgentTasks.length > 0
+        ? "\nUrgent:\n" + urgentTasks.map((t: any) => `• ${t.title}`).join("\n")
+        : "";
+      const escalationLines = pendingEscCount > 0
+        ? `\n\nPending escalations: ${pendingEscCount}\n` +
+          (pendingEscalations || []).map((e: any) => `• ${e.title}`).join("\n")
+        : "";
+      const aeMsg = `📋 AE tasks ready — ${aeTaskCount} tasks${urgentLines}${escalationLines}\n\napp.nexuszc.com/roofing/ae`;
+      await sendTelegramMessage(chatId, aeMsg).catch(() => {});
+    }
+
+    // ----- 8. Truncate and send main briefing to Telegram -----
     const LIMIT = 4000;
     const tgMessage = briefing.length > LIMIT
       ? briefing.slice(0, LIMIT) + "... (truncated)"
