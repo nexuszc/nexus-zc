@@ -1,174 +1,31 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createServeHandler } from '../_shared/serve-wrapper.ts';
+import { logger } from '../_shared/logger.ts';
 
-// Logger utility
-const logger = {
-  info: (message: string, data?: unknown) => {
-    console.log(JSON.stringify({ level: 'info', message, data, timestamp: new Date().toISOString() }));
-  },
-  error: (message: string, error?: unknown) => {
-    console.error(JSON.stringify({ level: 'error', message, error, timestamp: new Date().toISOString() }));
-  },
-  warn: (message: string, data?: unknown) => {
-    console.warn(JSON.stringify({ level: 'warn', message, data, timestamp: new Date().toISOString() }));
-  },
-};
-
-// Health check types
+/**
+ * Health check result interface
+ */
 interface HealthCheck {
   name: string;
-  status: 'pass' | 'warn' | 'fail';
+  status: 'pass' | 'fail' | 'warn';
   duration_ms: number;
   message: string;
   error?: string;
   details?: Record<string, unknown>;
 }
 
-interface SmokeTestResult {
-  status: 'pass' | 'warn' | 'fail';
+/**
+ * Overall health status
+ */
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
-  duration_ms: number;
   checks: HealthCheck[];
   summary: {
     total: number;
     passed: number;
-    warned: number;
     failed: number;
+    warnings: number;
   };
-}
-
-/**
- * Wrapper for Deno.serve with health check endpoint and proper error handling
- */
-function serveWithHealthCheck(handler: (req: Request) => Promise<Response> | Response) {
-  return serve(async (req: Request) => {
-    try {
-      const url = new URL(req.url);
-      
-      // Health check endpoint
-      if (url.pathname === '/health' && req.method === 'GET') {
-        return new Response(
-          JSON.stringify({
-            status: 'ok',
-            timestamp: Date.now(),
-          }),
-          {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      }
-      
-      // Call the actual handler with timeout protection
-      const timeoutPromise = new Promise<Response>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout')), 30000);
-      });
-      
-      const handlerPromise = Promise.resolve(handler(req));
-      
-      return await Promise.race([handlerPromise, timeoutPromise]);
-    } catch (error) {
-      logger.error('Request handler error', error);
-      return new Response(
-        JSON.stringify({
-          error: 'Internal server error',
-          message: error instanceof Error ? error.message : String(error),
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    }
-  });
-}
-
-/**
- * Check environment variables
- */
-async function checkEnvironment(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting environment check');
-  
-  try {
-    const requiredEnvVars = [
-      'SUPABASE_URL',
-      'SUPABASE_ANON_KEY',
-      'SUPABASE_SERVICE_ROLE_KEY',
-    ];
-
-    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-
-    if (missingVars.length > 0) {
-      logger.error('Missing environment variables', { missingVars });
-      return {
-        name: 'environment',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
-        error: 'Configuration incomplete',
-      };
-    }
-
-    logger.info('Environment check passed');
-    return {
-      name: 'environment',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'All required environment variables are present',
-    };
-  } catch (error) {
-    logger.error('Environment check failed', error);
-    return {
-      name: 'environment',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Environment check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check Edge Functions availability
- */
-async function checkEdgeFunctions(): Promise<HealthCheck> {
-  const startTime = performance.now();
-  logger.info('Starting edge functions check');
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    
-    if (!supabaseUrl) {
-      logger.error('SUPABASE_URL not configured');
-      return {
-        name: 'edge_functions',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Edge functions check skipped - SUPABASE_URL not configured',
-        error: 'Missing SUPABASE_URL',
-      };
-    }
-
-    logger.info('Edge functions check passed');
-    return {
-      name: 'edge_functions',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'Edge functions environment is operational',
-      details: {
-        url: supabaseUrl,
-      },
-    };
-  } catch (error) {
-    logger.error('Edge functions check failed', error);
-    return {
-      name: 'edge_functions',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Edge functions check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
 }
 
 /**
@@ -176,7 +33,7 @@ async function checkEdgeFunctions(): Promise<HealthCheck> {
  */
 async function checkDatabase(): Promise<HealthCheck> {
   const startTime = performance.now();
-  logger.info('Starting database check');
+  logger.info('Starting database connectivity check');
   
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -209,7 +66,7 @@ async function checkDatabase(): Promise<HealthCheck> {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        logger.error('Database check failed', { status: response.status });
+        logger.error('Database connectivity check failed', { status: response.status });
         return {
           name: 'database',
           status: 'fail',
@@ -221,12 +78,12 @@ async function checkDatabase(): Promise<HealthCheck> {
         };
       }
 
-      logger.info('Database check passed');
+      logger.info('Database connectivity check passed');
       return {
         name: 'database',
         status: 'pass',
         duration_ms: performance.now() - startTime,
-        message: 'Database is accessible',
+        message: 'Database is connected and operational',
         details: {
           status: response.status,
         },
@@ -246,12 +103,12 @@ async function checkDatabase(): Promise<HealthCheck> {
       throw fetchError;
     }
   } catch (error) {
-    logger.error('Database check failed', error);
+    logger.error('Database connectivity check failed', error);
     return {
       name: 'database',
       status: 'fail',
       duration_ms: performance.now() - startTime,
-      message: 'Database check failed',
+      message: 'Database connectivity check failed',
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -262,11 +119,11 @@ async function checkDatabase(): Promise<HealthCheck> {
  */
 async function checkAuthentication(): Promise<HealthCheck> {
   const startTime = performance.now();
-  logger.info('Starting authentication check');
+  logger.info('Starting authentication service check');
   
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseKey) {
       logger.error('Authentication configuration missing');
@@ -275,7 +132,7 @@ async function checkAuthentication(): Promise<HealthCheck> {
         status: 'fail',
         duration_ms: performance.now() - startTime,
         message: 'Authentication configuration not available',
-        error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY',
+        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
       };
     }
 
@@ -478,3 +335,119 @@ async function checkSupabaseClient(): Promise<HealthCheck> {
         return {
           name: 'supabase_client',
           status: 'fail',
+          duration_ms: performance.now() - startTime,
+          message: 'Supabase client check timed out',
+          error: 'Request timeout after 5 seconds',
+        };
+      }
+      throw fetchError;
+    }
+  } catch (error) {
+    logger.error('Supabase client connectivity check failed', error);
+    return {
+      name: 'supabase_client',
+      status: 'fail',
+      duration_ms: performance.now() - startTime,
+      message: 'Supabase client connectivity check failed',
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Run all health checks and aggregate results
+ */
+async function runHealthChecks(): Promise<HealthStatus> {
+  logger.info('Starting comprehensive health checks');
+  
+  const checks = await Promise.all([
+    checkDatabase(),
+    checkAuthentication(),
+    checkExternalServices(),
+    checkSupabaseClient(),
+  ]);
+
+  const summary = {
+    total: checks.length,
+    passed: checks.filter(c => c.status === 'pass').length,
+    failed: checks.filter(c => c.status === 'fail').length,
+    warnings: checks.filter(c => c.status === 'warn').length,
+  };
+
+  let status: 'healthy' | 'degraded' | 'unhealthy';
+  if (summary.failed > 0) {
+    status = 'unhealthy';
+  } else if (summary.warnings > 0) {
+    status = 'degraded';
+  } else {
+    status = 'healthy';
+  }
+
+  const healthStatus: HealthStatus = {
+    status,
+    timestamp: new Date().toISOString(),
+    checks,
+    summary,
+  };
+
+  logger.info('Health checks completed', { status, summary });
+  
+  return healthStatus;
+}
+
+/**
+ * Main handler function
+ */
+async function handler(req: Request): Promise<Response> {
+  logger.info('Smoke test endpoint called', { method: req.method });
+
+  if (req.method !== 'GET') {
+    logger.warn('Invalid method for smoke test', { method: req.method });
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { 
+        status: 405,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
+  try {
+    const healthStatus = await runHealthChecks();
+    
+    const statusCode = healthStatus.status === 'healthy' ? 200 :
+                      healthStatus.status === 'degraded' ? 200 : 503;
+
+    logger.info('Returning health status', { 
+      status: healthStatus.status, 
+      statusCode 
+    });
+
+    return new Response(
+      JSON.stringify(healthStatus, null, 2),
+      {
+        status: statusCode,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  } catch (error) {
+    logger.error('Smoke test execution failed', error);
+    
+    const errorResponse = {
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+      message: 'Health check execution failed'
+    };
+
+    return new Response(
+      JSON.stringify(errorResponse, null, 2),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
+Deno.serve(createServeHandler(handler));
