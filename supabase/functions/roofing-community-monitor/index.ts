@@ -1,17 +1,50 @@
-// roofing-community-monitor v2
-// Relevance scoring 1-10 (only respond >= 7), portal_mentioned tracking, inline button approvals
+// roofing-community-monitor v3
+// 20 targeted search queries, 8 subreddits, ?ref=reddit attribution, no Telegram
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY")!;
+const SUPABASE_URL       = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY        = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANTHROPIC_API_KEY  = Deno.env.get("ANTHROPIC_API_KEY")!;
+const SERPER_API_KEY     = Deno.env.get("SERPER_API_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const RELEVANCE_THRESHOLD = 7;
 
+const QUERIES = [
+  "companycam alternative",
+  "companycam too expensive",
+  "cancel companycam",
+  "companycam replacement",
+  "roofing software recommendation",
+  "best roofing contractor app",
+  "homeowner keeps calling roofing",
+  "roofing contractor crm",
+  "jobnimbus alternative",
+  "acculynx too expensive",
+  "acculynx alternative",
+  "roofing supplement software",
+  "insurance supplement roofing",
+  "storm roofing leads",
+  "free roofing software",
+  "roofing homeowner portal",
+  "roofing business software 2026",
+  "supplement recovery roofing contractor",
+  "roofing photo storage",
+  "roofing contractor tools",
+];
+
+const SUBREDDITS = [
+  "Roofing",
+  "RoofingContractors",
+  "Insurance",
+  "HomeImprovement",
+  "Contractor",
+  "smallbusiness",
+  "Entrepreneur",
+  "realestateinvesting",
+];
 
 async function claude(prompt: string, maxTokens = 600): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -19,13 +52,13 @@ async function claude(prompt: string, maxTokens = 600): Promise<string> {
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
       max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }]
-    })
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
   const data = await res.json();
   return data.content?.[0]?.text || "";
@@ -38,31 +71,25 @@ async function scoreRelevance(title: string, content: string): Promise<{ score: 
 Post title: "${title}"
 Post content: "${content.slice(0, 400)}"
 
-Return a JSON object with:
-- score: integer 1-10 (10 = direct question about our exact solution, 1 = completely irrelevant)
+Return JSON:
+- score: integer 1-10 (10 = direct question about our solution, 1 = irrelevant)
 - reason: one sentence why
-- portal_relevant: boolean — true if the homeowner portal would directly solve their problem
+- portal_relevant: true if homeowner portal directly solves their problem
 
-Score high (8-10) for: supplement help, adjuster denials, homeowner communication issues, needing software/CRM, hail damage questions from contractors, CompanyCam complaints or pricing frustration, AccuLynx/JobNimbus complaints or alternatives sought
-Score medium (5-7) for: general roofing questions where our tools help but aren't the core answer
-Score low (1-4) for: pricing questions, material questions, hiring, unrelated topics
+Score high (8-10): supplement help, adjuster denials, homeowner communication, needing CRM/software, CompanyCam complaints, AccuLynx/JobNimbus alternatives
+Score medium (5-7): general roofing where our tools help indirectly
+Score low (1-4): material/pricing/hiring/unrelated
 
-Return ONLY valid JSON, no other text.`,
+Return ONLY valid JSON.`,
     200
   );
-
   try {
     const parsed = JSON.parse(result.replace(/```json\n?|\n?```/g, "").trim());
-    return {
-      score: Number(parsed.score) || 1,
-      reason: parsed.reason || "",
-      portal_relevant: Boolean(parsed.portal_relevant)
-    };
+    return { score: Number(parsed.score) || 1, reason: parsed.reason || "", portal_relevant: Boolean(parsed.portal_relevant) };
   } catch {
-    // Fallback: basic keyword score
     const lower = (title + " " + content).toLowerCase();
-    const highValue = ["supplement", "adjuster denied", "o&p", "xactimate", "homeowner portal", "supplement software"].filter(kw => lower.includes(kw)).length;
-    return { score: highValue >= 2 ? 8 : highValue >= 1 ? 6 : 3, reason: "keyword match", portal_relevant: lower.includes("portal") || lower.includes("homeowner") };
+    const hits = ["supplement", "adjuster denied", "o&p", "xactimate", "homeowner portal", "companycam"].filter(kw => lower.includes(kw)).length;
+    return { score: hits >= 2 ? 8 : hits >= 1 ? 6 : 3, reason: "keyword match", portal_relevant: lower.includes("portal") };
   }
 }
 
@@ -71,10 +98,10 @@ async function searchSerper(query: string): Promise<Array<{ title: string; link:
     const res = await fetch("https://google.serper.dev/search", {
       method: "POST",
       headers: { "X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ q: query, num: 10 })
+      body: JSON.stringify({ q: query + " site:reddit.com OR site:facebook.com/groups", num: 8 }),
     });
     const data = await res.json();
-    return (data.organic || []).slice(0, 8);
+    return (data.organic || []).slice(0, 6);
   } catch {
     return [];
   }
@@ -83,10 +110,10 @@ async function searchSerper(query: string): Promise<Array<{ title: string; link:
 async function fetchRedditPosts(subreddit: string, limit = 25): Promise<Array<{ title: string; url: string; selftext: string; created_utc: number }>> {
   try {
     const res = await fetch(`https://www.reddit.com/r/${subreddit}/new.json?limit=${limit}`, {
-      headers: { "User-Agent": "RoofingOS/1.0 community monitor" }
+      headers: { "User-Agent": "RoofingOS/1.0 community monitor" },
     });
     const data = await res.json();
-    const posts = (data?.data?.children || []).map((child: any) => child.data);
+    const posts = (data?.data?.children || []).map((c: any) => c.data);
     const since2h = Date.now() / 1000 - 2 * 60 * 60;
     return posts.filter((p: any) => p.created_utc >= since2h);
   } catch {
@@ -94,89 +121,47 @@ async function fetchRedditPosts(subreddit: string, limit = 25): Promise<Array<{ 
   }
 }
 
-async function alreadyTracked(threadUrl: string): Promise<boolean> {
-  const { data } = await supabase
-    .from("roofing_community_posts")
-    .select("id")
-    .eq("thread_url", threadUrl)
-    .maybeSingle();
+async function alreadyTracked(url: string): Promise<boolean> {
+  const { data } = await supabase.from("roofing_community_posts").select("id").eq("thread_url", url).maybeSingle();
   return !!data;
 }
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-community-monitor ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-community-monitor v3 ready" });
 
-  // Handle Telegram callback_query for inline buttons
+  // Telegram callback_query for inline buttons (legacy support)
   if (body.callback_query) {
-    const { data: callbackData } = body.callback_query;
-    const postId = callbackData.replace(/^(approve|skip)_community_/, "");
-    const action = callbackData.split("_")[0];
-
+    const { data: cbData } = body.callback_query;
+    const postId = cbData.replace(/^(approve|skip)_community_/, "");
+    const action = cbData.split("_")[0];
     if (action === "approve") {
       await supabase.from("roofing_community_posts")
-        .update({ status: "approved", approved_at: new Date().toISOString() })
-        .eq("id", postId);
-
-      const { data: post } = await supabase
-        .from("roofing_community_posts")
-        .select("our_response, thread_url")
-        .eq("id", postId)
-        .maybeSingle();
-
-      // Response copied from dashboard — no Telegram needed
+        .update({ status: "approved", approved_at: new Date().toISOString() }).eq("id", postId);
     } else if (action === "skip") {
-      await supabase.from("roofing_community_posts")
-        .update({ status: "skipped" })
-        .eq("id", postId);
+      await supabase.from("roofing_community_posts").update({ status: "skipped" }).eq("id", postId);
     }
     return Response.json({ ok: true });
   }
 
   const startMs = Date.now();
-  let postsScanned = 0;
-  let responsesQueued = 0;
-  let skippedLowScore = 0;
+  let postsScanned = 0, responsesQueued = 0, skippedLowScore = 0;
 
   try {
     const postsToProcess: Array<{ platform: string; title: string; url: string; content: string }> = [];
 
-    // 1. Reddit — 6 subreddits
-    for (const subreddit of ["Roofing", "RoofingContractors", "Insurance", "HomeImprovement", "Contractor", "smallbusiness"]) {
+    // 1. Reddit API — 8 subreddits, last 2 hours
+    for (const subreddit of SUBREDDITS) {
       const posts = await fetchRedditPosts(subreddit);
       for (const post of posts) {
         const url = `https://reddit.com${post.url || ""}`.replace("https://reddit.comhttps://", "https://");
         if (await alreadyTracked(url)) continue;
-        postsToProcess.push({
-          platform: "reddit",
-          title: post.title,
-          url,
-          content: post.selftext?.slice(0, 500) || post.title
-        });
+        postsToProcess.push({ platform: "reddit", title: post.title, url, content: post.selftext?.slice(0, 500) || post.title });
       }
     }
 
-    // 2. Serper web search — 12 targeted queries
-    const searchQueries = [
-      // Core supplement + adjuster intent
-      `site:reddit.com roofing "supplement software" OR "homeowner portal" OR "adjuster denied" 2026`,
-      `site:reddit.com/r/Roofing "O&P" OR "supplement" OR "hail claim" help`,
-      `site:reddit.com roofing "xactimate" OR "supplement" denied adjuster`,
-      `site:reddit.com roofing "adjuster" OR "insurance claim" help 2026`,
-      // Software/CRM intent
-      `site:reddit.com roofing contractor app CRM recommendation 2026`,
-      `site:reddit.com roofing contractor software recommendation`,
-      `"acculynx" OR "jobnimbus" alternative roofing site:reddit.com`,
-      // Facebook groups
-      `site:facebook.com/groups roofing contractor "supplement" OR "adjuster" OR "insurance claim" 2026`,
-      // CompanyCam complaint monitoring
-      `"companycam" "expensive" OR "price" roofing site:reddit.com`,
-      `"companycam alternative" roofing site:reddit.com`,
-      `"cancel companycam" roofing`,
-      `"companycam" "price increase" roofing site:reddit.com`,
-    ];
-
-    for (const query of searchQueries) {
+    // 2. Serper — 20 keyword queries
+    for (const query of QUERIES) {
       const results = await searchSerper(query);
       for (const result of results) {
         if (await alreadyTracked(result.link)) continue;
@@ -184,48 +169,42 @@ Deno.serve(async (req) => {
           platform: result.link.includes("facebook") ? "facebook_groups" : "reddit",
           title: result.title,
           url: result.link,
-          content: result.snippet
+          content: result.snippet,
         });
       }
     }
 
     postsScanned = postsToProcess.length;
 
-    // Score and respond to top posts
     for (const post of postsToProcess.slice(0, 25)) {
       const { score, reason, portal_relevant } = await scoreRelevance(post.title, post.content);
-
-      if (score < RELEVANCE_THRESHOLD) {
-        skippedLowScore++;
-        continue;
-      }
+      if (score < RELEVANCE_THRESHOLD) { skippedLowScore++; continue; }
 
       const response = await claude(
-        `You're a knowledgeable roofing contractor on Reddit/social media. Write a genuine, helpful reply to this post.
+        `You're a knowledgeable roofing contractor on Reddit/social media. Write a genuine, helpful reply.
 
 Post title: "${post.title}"
 Post content: "${post.content}"
-Relevance reason: "${reason}"
+Relevance: "${reason}"
 Portal relevant: ${portal_relevant}
 
 Rules:
 - Sound like a real contractor, not a salesperson
-- Lead with genuinely useful advice (be specific — mention actual Xactimate codes, adjuster tactics, documentation tips)
-- If portal_relevant is true, you can naturally mention that contractors tracking documentation through their job management system see faster approvals — don't name the product
-- If the post is about CompanyCam pricing/alternatives OR AccuLynx/JobNimbus cost, you can mention "we switched to roofingos.dev — homeowner portal is free, CRM is $299 vs $550+" naturally
+- Lead with useful, specific advice (Xactimate codes, adjuster tactics, documentation tips)
+- If portal_relevant, mention that contractors tracking documentation through job management software see faster approvals
+- If about CompanyCam pricing OR AccuLynx/JobNimbus cost, mention "we switched to roofingos.dev?ref=reddit — homeowner portal is free, CRM is $299 vs $550+"
+- Add ?ref=reddit to ALL roofingos.dev links
 - Max 150 words
-- No marketing speak, no "I'd be happy to help" openers
-- End with a question to continue the conversation
+- No opener phrases like "I'd be happy to help"
+- End with a question
 
-Return ONLY the response text, nothing else.`
+Return ONLY the response text.`
       );
 
       if (!response) continue;
 
       try {
-        // confidence_score: score * 10 (score 1-10 → 10-100)
         const confidenceScore = Math.min(100, score * 10);
-        // Auto-post if score >= 9 (confidence >= 90), otherwise queue for review
         const autoPost = score >= 9;
 
         const { data: saved } = await supabase.from("roofing_community_posts").insert({
@@ -240,23 +219,20 @@ Return ONLY the response text, nothing else.`
           auto_posted: false,
         }).select().single();
 
-        if (saved) {
-          responsesQueued++;
-        }
+        if (saved) responsesQueued++;
       } catch (e) {
-        console.error("Save community post failed:", e);
+        console.error("Save failed:", e);
       }
 
       await new Promise(r => setTimeout(r, 400));
     }
 
     const duration = Date.now() - startMs;
-
     await supabase.from("system_heartbeats").insert({
       function_name: "roofing-community-monitor",
       status: "ok",
       response_ms: duration,
-      checked_at: new Date().toISOString()
+      checked_at: new Date().toISOString(),
     }).catch(() => {});
 
     return Response.json({ ok: true, posts_scanned: postsScanned, skipped_low_score: skippedLowScore, responses_queued: responsesQueued, duration_ms: duration });
@@ -267,7 +243,7 @@ Return ONLY the response text, nothing else.`
       function_name: "roofing-community-monitor",
       status: "error",
       error_message: msg,
-      checked_at: new Date().toISOString()
+      checked_at: new Date().toISOString(),
     }).catch(() => {});
     return Response.json({ ok: false, error: msg }, { status: 500 });
   }

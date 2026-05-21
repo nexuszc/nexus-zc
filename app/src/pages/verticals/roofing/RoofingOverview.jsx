@@ -74,15 +74,101 @@ function FeedItem({ icon, text, ts }) {
   )
 }
 
+function GrowthPanel({ growth }) {
+  if (!growth) return null
+  const { signupsToday, visitsToday, signupsWeek, totalSignups, bySource, contentQueue, communityPending } = growth
+  const goal = 1000
+  const remaining = Math.max(0, goal - totalSignups)
+  const daysLeft = 60 - Math.floor((Date.now() - new Date('2026-05-21').getTime()) / 86400000)
+  const paceNeeded = daysLeft > 0 ? Math.ceil(remaining / daysLeft) : 0
+  const convPct = visitsToday > 0 ? ((signupsToday / visitsToday) * 100).toFixed(1) : '—'
+  const onPace = signupsToday >= paceNeeded
+
+  const sources = [
+    { label: 'Reddit',   value: bySource?.reddit   || 0 },
+    { label: 'Facebook', value: bySource?.facebook  || 0 },
+    { label: 'YouTube',  value: bySource?.youtube   || 0 },
+    { label: 'Email',    value: bySource?.email     || 0 },
+    { label: 'Aria',     value: bySource?.aria      || 0 },
+    { label: 'Referral', value: bySource?.referral  || 0 },
+    { label: 'Direct',   value: bySource?.direct    || 0 },
+  ]
+  const maxSource = Math.max(1, ...sources.map(s => s.value))
+
+  return (
+    <div className="bg-[#0e0e18] border border-[#1e1e2e] rounded-xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">🚀 Growth — 1,000 Signups in 60 Days</div>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${onPace ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
+          {onPace ? '✅ On pace' : '⚠️ Behind pace'}
+        </span>
+      </div>
+
+      {/* Today stats */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-[#12121a] rounded-lg p-3 text-center">
+          <div className="text-xl font-black text-white">{signupsToday}</div>
+          <div className="text-[10px] text-gray-600 mt-0.5">Signups today</div>
+        </div>
+        <div className="bg-[#12121a] rounded-lg p-3 text-center">
+          <div className="text-xl font-black text-white">{visitsToday}</div>
+          <div className="text-[10px] text-gray-600 mt-0.5">Visits today</div>
+        </div>
+        <div className="bg-[#12121a] rounded-lg p-3 text-center">
+          <div className="text-xl font-black text-indigo-400">{convPct}%</div>
+          <div className="text-[10px] text-gray-600 mt-0.5">Conversion</div>
+        </div>
+      </div>
+
+      {/* Progress */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between text-xs mb-1.5">
+          <span className="text-gray-500">{totalSignups} / {goal}</span>
+          <span className="text-gray-600">Need {paceNeeded}/day · {daysLeft}d left</span>
+        </div>
+        <div className="h-2 bg-[#1e1e2e] rounded-full overflow-hidden">
+          <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${Math.min(100, (totalSignups / goal) * 100)}%` }} />
+        </div>
+      </div>
+
+      {/* By source */}
+      <div className="mb-4">
+        <div className="text-[10px] text-gray-700 uppercase tracking-widest mb-2">By Source (7d)</div>
+        <div className="space-y-1.5">
+          {sources.map(({ label, value }) => (
+            <div key={label} className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500 w-14">{label}</span>
+              <div className="flex-1 h-1.5 bg-[#1e1e2e] rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-500/70 rounded-full" style={{ width: `${(value / maxSource) * 100}%` }} />
+              </div>
+              <span className="text-[10px] text-gray-600 w-4 text-right">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Content queue */}
+      <div className="flex gap-3 flex-wrap text-[10px] text-gray-600 border-t border-[#1e1e2e] pt-3">
+        <span>YT ready: <span className="text-white font-semibold">{contentQueue?.ytReady || 0}</span></span>
+        <span>Scripts queued: <span className="text-white font-semibold">{contentQueue?.queued || 0}</span></span>
+        <span>Reddit pending: <span className="text-amber-400 font-semibold">{communityPending || 0}</span></span>
+        <span>This week: <span className="text-indigo-400 font-semibold">{signupsWeek} signups</span></span>
+      </div>
+    </div>
+  )
+}
+
 export default function RoofingOverview() {
   const navigate = useNavigate()
   const [stats, setStats]     = useState(null)
+  const [growth, setGrowth]   = useState(null)
   const [actions, setActions] = useState([])
   const [feed, setFeed]       = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+    const weekAgo = new Date(Date.now() - 7 * 86400000)
     const dayAgo = new Date(Date.now() - 86400000)
 
     const [
@@ -99,6 +185,12 @@ export default function RoofingOverview() {
       { data: recentStorms },
       { data: heartbeats },
       { data: pendingFixes },
+      { count: signupsToday },
+      { count: signupsWeek },
+      { count: totalSignups },
+      { count: communityPending },
+      { count: ytReady },
+      { count: scriptsQueued },
     ] = await Promise.all([
       supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).eq('subscription_status', 'active'),
       supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
@@ -113,6 +205,12 @@ export default function RoofingOverview() {
       supabase.from('hail_events').select('id, city, state, hail_size_inches, event_date').gte('event_date', new Date(Date.now() - 86400000 * 2).toISOString()).order('hail_size_inches', { ascending: false }).limit(3),
       supabase.from('system_heartbeats').select('function_name, status, response_ms, error_message, recorded_at').order('recorded_at', { ascending: false }).limit(20),
       supabase.from('nexus_improvements').select('id, title, priority').eq('status', 'pending').order('priority', { ascending: true }).limit(5),
+      supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+      supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo.toISOString()),
+      supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }),
+      supabase.from('roofing_community_posts').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('roofing_content').select('id', { count: 'exact', head: true }).eq('youtube_upload_ready', true).is('youtube_video_id', null),
+      supabase.from('roofing_content').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
     ])
 
     const mrrCents = (activeContractorRevenue || []).reduce((s, c) => s + (c.plan_price_cents || 0), 0)
@@ -123,6 +221,16 @@ export default function RoofingOverview() {
       emailsToday:   emailsToday ?? 0,
       callsQueued:   callsQueued ?? 0,
       contentPending: contentPending ?? 0,
+    })
+
+    setGrowth({
+      signupsToday:     signupsToday ?? 0,
+      visitsToday:      0, // roofing_page_visits not yet populated
+      signupsWeek:      signupsWeek ?? 0,
+      totalSignups:     totalSignups ?? 0,
+      bySource:         {}, // will populate once signup_source is tracked
+      contentQueue:     { ytReady: ytReady ?? 0, queued: scriptsQueued ?? 0 },
+      communityPending: communityPending ?? 0,
     })
 
     const cards = []
@@ -267,6 +375,9 @@ export default function RoofingOverview() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
+      {/* Growth scoreboard */}
+      <GrowthPanel growth={growth} />
+
       {/* 6-tile stats bar */}
       <div className="grid grid-cols-2 gap-3 mb-6 sm:grid-cols-3 lg:grid-cols-6">
         <StatTile label="Monthly Revenue"     value={stats?.mrr}            loading={loading} />

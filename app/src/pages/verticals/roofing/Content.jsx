@@ -221,6 +221,8 @@ function ContentCard({ item, onUpdate }) {
   const [expanded, setExpanded] = useState(false)
   const [generatingFb, setGeneratingFb] = useState(false)
   const [generatingTt, setGeneratingTt] = useState(false)
+  const [generatingVo, setGeneratingVo] = useState(false)
+  const [uploadingYt, setUploadingYt]   = useState(false)
 
   const fbStatus = item.facebook_marked_done_at ? 'done' : item.facebook_status
   const ttStatus = item.tiktok_marked_done_at ? 'done' : item.tiktok_status
@@ -271,6 +273,34 @@ function ContentCard({ item, onUpdate }) {
     onUpdate()
   }
 
+  const handleGenerateVo = async () => {
+    setGeneratingVo(true)
+    try {
+      const res = await fetch(`${SB_URL}/functions/v1/roofing-voiceover-engine`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_id: item.id }),
+      }).then(r => r.json())
+      if (res.ok || res.mp3_url) { toast('Voiceover queued ✓'); onUpdate() }
+      else toast(res.error || 'Voiceover failed', 'error')
+    } catch { toast('Request failed', 'error') }
+    finally { setGeneratingVo(false) }
+  }
+
+  const handleUploadYT = async () => {
+    setUploadingYt(true)
+    try {
+      const res = await fetch(`${SB_URL}/functions/v1/roofing-youtube-uploader`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_id: item.id }),
+      }).then(r => r.json())
+      if (res.ok) { toast('Upload queued ✓'); onUpdate() }
+      else toast(res.error || 'Upload failed', 'error')
+    } catch { toast('Request failed', 'error') }
+    finally { setUploadingYt(false) }
+  }
+
   const channelBadge = (status, label) => {
     if (status === 'posted' || status === 'done') return <span key={label} className="text-[9px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">✓ {label}</span>
     return <span key={label} className="text-[9px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded-full">{label}</span>
@@ -298,11 +328,29 @@ function ContentCard({ item, onUpdate }) {
 
       {/* Channel rows */}
       <div className="mt-3">
-        <ChannelRow
-          icon="▶"
-          label="YouTube"
-          status={ytStatus}
-        />
+        {/* YouTube — voiceover → upload → published */}
+        <div className={`flex items-center gap-2 py-1.5 border-t border-[#1e1e2e] ${item.published_url ? 'opacity-60' : ''}`}>
+          <span className="text-sm w-5 text-center">▶</span>
+          <span className="text-xs text-gray-500 w-16">YouTube</span>
+          <div className="flex-1" />
+          {item.published_url ? (
+            <div className="flex items-center gap-2">
+              <a href={item.published_url} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">Watch ↗</a>
+              {item.views > 0 && <span className="text-[10px] text-gray-600">{Number(item.views).toLocaleString()} views</span>}
+            </div>
+          ) : item.mp3_url ? (
+            <button onClick={handleUploadYT} disabled={uploadingYt}
+              className="text-xs font-semibold bg-[#1e1e2e] hover:bg-red-700 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40">
+              {uploadingYt ? 'Uploading…' : '📤 Upload to YouTube'}
+            </button>
+          ) : (
+            <button onClick={handleGenerateVo} disabled={generatingVo}
+              className="text-xs font-semibold bg-[#1e1e2e] hover:bg-indigo-600 text-gray-500 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40">
+              {generatingVo ? 'Generating…' : '🎬 Generate voiceover'}
+            </button>
+          )}
+        </div>
         <ChannelRow
           icon="💼"
           label="LinkedIn"
@@ -321,7 +369,7 @@ function ContentCard({ item, onUpdate }) {
           icon="🎵"
           label="TikTok"
           status={ttStatus}
-          copyText={item.tiktok_copy}
+          copyText={item.tiktok_copy || (item.body ? item.body.slice(0, 280) : null)}
           onCopy={handleGenerateTt}
           onDone={handleTtDone}
           generating={generatingTt}
@@ -417,9 +465,14 @@ function CommunityCard({ post, onApprove, onSkip }) {
 
 // ── Partner Row ───────────────────────────────────────────────────────────────
 
+const FOLLOWUP_TEMPLATE = (partner) =>
+  `Subject: Re: ${partner.subject}\n\nHey — just wanted to follow up on my note from last week.\n\nStill happy to offer free access to your members/customers. Takes 5 minutes to set up.\n\nroofingos.dev\n\n— Zach`
+
 function PartnerRow({ partner, onSent }) {
   const [acting, setActing] = useState(false)
   const isSent = !!partner.sent_at
+  const daysSinceSent = isSent ? Math.floor((Date.now() - new Date(partner.sent_at)) / 86400000) : 0
+  const needsFollowup = isSent && daysSinceSent >= 5 && !partner.replied_at
 
   const handleSent = async () => {
     setActing(true)
@@ -432,29 +485,39 @@ function PartnerRow({ partner, onSent }) {
     }
   }
 
-  const emailText = `To: ${partner.email}\nSubject: ${partner.subject}\n\n${partner.body}`
+  const emailBody = partner.body || ''
+  const mailtoHref = `mailto:${partner.email}?subject=${encodeURIComponent(partner.subject || '')}&body=${encodeURIComponent(emailBody)}`
 
   return (
-    <div className={`flex items-center gap-3 py-3 border-b border-[#1e1e2e] last:border-0 ${isSent ? 'opacity-50' : ''}`}>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-white">{partner.name}</div>
-        <div className="text-xs text-gray-500 truncate">{partner.email} · {partner.subject}</div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {isSent ? (
-          <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Sent</span>
-        ) : (
-          <>
-            <CopyButton text={emailText} label="📋 Copy email" />
-            <button
-              onClick={handleSent}
-              disabled={acting}
-              className="text-xs font-semibold bg-[#1e1e2e] hover:bg-green-700 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
-            >
-              {acting ? '…' : 'Mark sent'}
-            </button>
-          </>
-        )}
+    <div className={`py-3 border-b border-[#1e1e2e] last:border-0`}>
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-white">{partner.name}</span>
+            {isSent && <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Sent {daysSinceSent}d ago</span>}
+            {needsFollowup && <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">No reply</span>}
+          </div>
+          <div className="text-xs text-gray-600 mt-0.5 truncate">{partner.email !== 'facebook-dm' ? partner.email : 'Facebook DM'} · {(partner.subject || '').slice(0, 50)}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+          {needsFollowup ? (
+            <CopyButton text={FOLLOWUP_TEMPLATE(partner)} label="⚡ Follow up" className="text-amber-400 bg-amber-500/10 hover:bg-amber-600 hover:text-white" />
+          ) : !isSent ? (
+            <>
+              <CopyButton text={`To: ${partner.email}\nSubject: ${partner.subject}\n\n${partner.body}`} label="📋 Copy" />
+              {partner.email && partner.email !== 'facebook-dm' && (
+                <a href={mailtoHref}
+                  className="text-xs font-semibold bg-[#1e1e2e] hover:bg-indigo-600 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors">
+                  📧 Mail
+                </a>
+              )}
+              <button onClick={handleSent} disabled={acting}
+                className="text-xs font-semibold bg-[#1e1e2e] hover:bg-green-700 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40">
+                {acting ? '…' : '✅ Sent'}
+              </button>
+            </>
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -468,9 +531,10 @@ export default function Content() {
   const [partners, setPartners]   = useState([])
   const [stats, setStats]         = useState(null)
   const [tab, setTab]             = useState('content')
-  const [loading, setLoading]     = useState(true)
-  const [generating, setGenerating] = useState(false)
-  const [toastState, setToastState] = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [generating, setGenerating]   = useState(false)
+  const [communityFilter, setCommunityFilter] = useState('all')
+  const [toastState, setToastState]   = useState(null)
 
   useEffect(() => {
     _setToast = setToastState
@@ -499,8 +563,13 @@ export default function Content() {
 
   useEffect(() => { load() }, [load])
 
-  const communityPending = community.filter(p => p.status === 'pending').length
-  const partnerPending   = partners.filter(p => !p.sent_at).length
+  const communityPending    = community.filter(p => p.status === 'pending').length
+  const partnerPending      = partners.filter(p => !p.sent_at).length
+  const communityThisWeek   = community.filter(p => (Date.now() - new Date(p.created_at)) < 7 * 86400000).length
+  const communityAutoPosted = community.filter(p => p.status === 'approved' && (p.confidence_score || 0) >= 90).length
+  const communityFiltered   = communityFilter === 'all'         ? community
+    : communityFilter === 'auto-posted' ? community.filter(p => (p.confidence_score || 0) >= 90)
+    : community.filter(p => p.status === communityFilter)
 
   const approvePost = (post) => async () => {
     const { error } = await supabase.from('roofing_community_posts')
@@ -608,17 +677,43 @@ export default function Content() {
         </div>
 
       ) : tab === 'community' ? (
-        <div className="space-y-3">
-          {community.length === 0 ? (
+        <div>
+          {/* Stats bar */}
+          <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-3 mb-4 flex gap-5 flex-wrap">
+            <span className="text-xs text-gray-500">This week: <span className="text-white font-semibold">{communityThisWeek}</span> posts</span>
+            <span className="text-xs text-gray-500">Auto-posted: <span className="text-green-400 font-semibold">{communityAutoPosted}</span></span>
+            <span className="text-xs text-gray-500">Pending review: <span className="text-amber-400 font-semibold">{communityPending}</span></span>
+            <span className="text-xs text-gray-500">Total: <span className="text-gray-300 font-semibold">{community.length}</span></span>
+          </div>
+          {/* Filter buttons */}
+          <div className="flex gap-1.5 mb-4 flex-wrap">
+            {[
+              { key: 'all',         label: 'All' },
+              { key: 'pending',     label: 'Pending' },
+              { key: 'approved',    label: 'Approved' },
+              { key: 'auto-posted', label: 'Auto-posted' },
+              { key: 'skipped',     label: 'Skipped' },
+            ].map(f => (
+              <button key={f.key} onClick={() => setCommunityFilter(f.key)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  communityFilter === f.key
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
+                }`}>
+                {f.label}
+                {f.key === 'pending' && communityPending > 0 && (
+                  <span className="ml-1.5 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.5 rounded-full">{communityPending}</span>
+                )}
+              </button>
+            ))}
+          </div>
+          {communityFiltered.length === 0 ? (
             <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
-              <p className="text-gray-600 text-sm">No community posts yet.</p>
+              <p className="text-gray-600 text-sm">No {communityFilter === 'all' ? '' : communityFilter + ' '}posts.</p>
             </div>
           ) : (
-            <>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">{communityPending} pending · {community.length} total</span>
-              </div>
-              {community.map(post => (
+            <div className="space-y-3">
+              {communityFiltered.map(post => (
                 <CommunityCard
                   key={post.id}
                   post={post}
@@ -626,7 +721,7 @@ export default function Content() {
                   onSkip={skipPost(post)}
                 />
               ))}
-            </>
+            </div>
           )}
         </div>
 
