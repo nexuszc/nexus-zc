@@ -14,9 +14,19 @@ const PRICING_KEYWORDS = [
   'discount', 'trial', 'billing', 'invoice', 'charge',
 ]
 
+const URGENT_KEYWORDS = [
+  'broken', 'not working', 'error', 'bug', 'crash', 'down', 'failed', 'issue',
+  'problem', 'help', 'urgent', 'asap', 'emergency',
+]
+
 function isPricingQuestion(q: string): boolean {
   const lower = q.toLowerCase()
   return PRICING_KEYWORDS.some(k => lower.includes(k))
+}
+
+function isUrgentIssue(q: string): boolean {
+  const lower = q.toLowerCase()
+  return URGENT_KEYWORDS.some(k => lower.includes(k))
 }
 
 async function tg(text: string) {
@@ -27,7 +37,17 @@ async function tg(text: string) {
   }).catch(() => {})
 }
 
-async function getKnowledge(question: string): Promise<string> {
+async function getContractorRole(contractorId: string): Promise<Record<string, unknown> | null> {
+  if (!contractorId) return null
+  const { data } = await supabase
+    .from('contractor_accounts')
+    .select('plan, status, onboarding_completed, onboarding_step, total_jobs, company_name, first_job_created_at, trial_ends_at')
+    .eq('id', contractorId)
+    .single()
+  return data
+}
+
+async function getKnowledge(): Promise<string> {
   const { data } = await supabase
     .from('knowledge_base')
     .select('topic, content')
@@ -37,12 +57,23 @@ async function getKnowledge(question: string): Promise<string> {
   return data.map(r => `— ${r.content}`).join('\n\n')
 }
 
-async function askClaude(question: string, knowledge: string): Promise<string> {
-  const systemPrompt = `You are Aria, the support assistant for Roofing OS. You help roofing contractors get started quickly.
+async function askClaude(question: string, knowledge: string, role: Record<string, unknown> | null): Promise<string> {
+  const roleContext = role ? `
+CONTRACTOR CONTEXT:
+- Plan: ${role.plan || 'free'}
+- Status: ${role.status || 'active'}
+- Jobs created: ${role.total_jobs || 0}
+- Onboarding complete: ${role.onboarding_completed ? 'yes' : 'no'}
+- Onboarding step: ${role.onboarding_step || 'not started'}
+- First job: ${role.first_job_created_at ? 'yes' : 'not yet'}
+` : ''
 
-Keep answers short (2-4 sentences max). Be direct and practical.
+  const systemPrompt = `You are Aria, the support assistant for Roofing OS. You help roofing contractors get started and get value quickly.
+
+Keep answers short (2-4 sentences max). Be direct and practical. Use their context to give specific guidance.
 If you don't know the answer, say: "I'll have Zach follow up with you on that."
 
+${roleContext}
 KNOWLEDGE BASE:
 ${knowledge}`
 
@@ -78,18 +109,31 @@ Deno.serve(async (req) => {
     if (!question?.trim()) return Response.json({ error: 'question required' }, { status: 400, headers: cors })
 
     const pricing = isPricingQuestion(question)
+    const urgent = isUrgentIssue(question)
 
-    // Always answer from knowledge base
-    const knowledge = await getKnowledge(question)
-    const answer = await askClaude(question, knowledge)
+    const [role, knowledge] = await Promise.all([
+      getContractorRole(contractor_id),
+      getKnowledge(),
+    ])
 
-    // If pricing/upgrade question, alert Zach
+    const answer = await askClaude(question, knowledge, role)
+
+    const name = contractor_name || role?.company_name as string || contractor_id || 'unknown'
+    const plan = role?.plan || 'free'
+    const jobs = role?.total_jobs || 0
+
     if (pricing) {
-      const name = contractor_name || contractor_id || 'unknown contractor'
-      await tg(`💬 *Contractor pricing question* — ${name}\n\n"${question}"\n\n_Aria answered but flagged for follow-up._`)
+      await tg(`💬 *Pricing question* — ${name} (${plan}, ${jobs} jobs)\n\n"${question}"\n\n_Aria answered. Follow up recommended._`)
+    } else if (urgent) {
+      await tg(`🚨 *Support issue* — ${name} (${plan})\n\n"${question}"\n\nAria: "${answer.slice(0, 200)}"`)
     }
 
-    return Response.json({ ok: true, answer, escalated: pricing }, { headers: cors })
+    return Response.json({
+      ok: true,
+      answer,
+      escalated: String(pricing),
+      role: role ? { plan, jobs, onboarded: role.onboarding_completed } : null,
+    }, { headers: cors })
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500, headers: cors })
   }
