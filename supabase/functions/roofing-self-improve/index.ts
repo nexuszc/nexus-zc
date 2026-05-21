@@ -2,154 +2,235 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-async function sendTelegram(text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+async function claude(prompt: string, maxTokens = 800): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: "Markdown" })
-  }).catch(() => {});
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || "";
+}
+
+async function saveProposal(opts: {
+  title: string;
+  problem: string;
+  proposed_fix: string;
+  priority: "critical" | "high" | "medium" | "low";
+  category: string;
+  estimated_impact: string;
+}) {
+  // Deduplicate: skip if same title proposed in last 7 days
+  const { data: existing } = await supabase
+    .from("nexus_roofing_proposals")
+    .select("id")
+    .eq("title", opts.title)
+    .eq("status", "pending")
+    .gt("created_at", new Date(Date.now() - 7 * 86400000).toISOString())
+    .maybeSingle();
+
+  if (existing) return null;
+
+  const { data } = await supabase.from("nexus_roofing_proposals").insert({
+    title: opts.title,
+    problem: opts.problem,
+    proposed_fix: opts.proposed_fix,
+    priority: opts.priority,
+    category: opts.category,
+    estimated_impact: opts.estimated_impact,
+    status: "pending",
+    ai_generated: true,
+  }).select().single();
+
+  return data;
 }
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-self-improve ready" });
 
-  const thirtyDaysAgo = new Date(
-    Date.now() - 30 * 24 * 60 * 60 * 1000
-  ).toISOString();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString();
+  const proposals: { title: string; problem: string; proposed_fix: string; priority: "critical" | "high" | "medium" | "low"; category: string; estimated_impact: string }[] = [];
+  const contextParts: string[] = [];
 
-  const patterns: Record<string, unknown>[] = [];
-
-  // Pattern 1 — Best time analysis from door_knock_log (may not exist yet)
-  try {
-    const { data: knocks } = await supabase
-      .from("door_knock_log")
-      .select("outcome, knocked_at")
-      .gte("knocked_at", thirtyDaysAgo);
-
-    const knocksByHour: Record<number, { knocks: number; conversions: number }> = {};
-
-    for (const knock of knocks || []) {
-      const hour = new Date(knock.knocked_at).getHours();
-      if (!knocksByHour[hour]) knocksByHour[hour] = { knocks: 0, conversions: 0 };
-      knocksByHour[hour].knocks++;
-      if (["appointment_set", "signed"].includes(knock.outcome)) {
-        knocksByHour[hour].conversions++;
-      }
-    }
-
-    let bestHour = { hour: 10, rate: 0 };
-    for (const [hour, stats] of Object.entries(knocksByHour)) {
-      const rate = stats.knocks > 5 ? stats.conversions / stats.knocks : 0;
-      if (rate > bestHour.rate) bestHour = { hour: parseInt(hour), rate };
-    }
-
-    if (bestHour.rate > 0.15) {
-      patterns.push({
-        pattern_type: "scheduling",
-        pattern_description:
-          `Door knocking converts at ${Math.round(bestHour.rate * 100)}% ` +
-          `at ${bestHour.hour}:00. ` +
-          `Higher than average by ${Math.round((bestHour.rate - 0.1) * 100)}%.`,
-        recommendation:
-          `Schedule door knockers to start in their territory ` +
-          `no later than ${bestHour.hour}:00 local time.`,
-        evidence_count: knocksByHour[bestHour.hour]?.knocks || 0,
-        confidence_score: 0.8
-      });
-    }
-  } catch { /* door_knock_log may not exist yet */ }
-
-  // Pattern 2 — Supplement approval patterns
+  // Pattern 1 — Supplement approval rates by carrier
   try {
     const { data: packages } = await supabase
       .from("supplement_packages")
       .select("carrier_name, status, supplement_requested_amount, supplement_approved_amount")
       .gte("created_at", thirtyDaysAgo);
 
-    const carrierRates: Record<string, { submitted: number; approved: number }> = {};
+    const carrierRates: Record<string, { submitted: number; approved: number; total_approved: number }> = {};
     for (const pkg of packages || []) {
       const c = pkg.carrier_name || "Unknown";
-      if (!carrierRates[c]) carrierRates[c] = { submitted: 0, approved: 0 };
+      if (!carrierRates[c]) carrierRates[c] = { submitted: 0, approved: 0, total_approved: 0 };
       carrierRates[c].submitted++;
-      if (pkg.status === "approved") carrierRates[c].approved++;
+      if (pkg.status === "approved") {
+        carrierRates[c].approved++;
+        carrierRates[c].total_approved += pkg.supplement_approved_amount || 0;
+      }
     }
 
     for (const [carrier, stats] of Object.entries(carrierRates)) {
       if (stats.submitted < 3) continue;
       const rate = stats.approved / stats.submitted;
+      contextParts.push(`${carrier}: ${Math.round(rate * 100)}% approval rate (${stats.submitted} submitted)`);
       if (rate < 0.5) {
-        patterns.push({
-          pattern_type: "supplement",
-          pattern_description:
-            `${carrier} is approving only ${Math.round(rate * 100)}% ` +
-            `of supplements. Below target of 65%.`,
-          recommendation:
-            `Review ${carrier} supplement language. ` +
-            `Add more specific code citations. ` +
-            `Consider invoking appraisal clause on high-value denials.`,
-          evidence_count: stats.submitted,
-          confidence_score: 0.85
+        proposals.push({
+          title: `Improve supplement approval rate for ${carrier}`,
+          problem: `${carrier} is approving only ${Math.round(rate * 100)}% of supplements (target: 65%). ${stats.submitted} submitted in last 30 days.`,
+          proposed_fix: `Review ${carrier}-specific line item language. Add code citations per Xactimate. Surface appraisal clause option for high-value denials (>$2k). Update carrier_intelligence table with new tactics.`,
+          priority: rate < 0.35 ? "high" : "medium",
+          category: "supplement",
+          estimated_impact: `+${Math.round((0.65 - rate) * stats.submitted)} additional approvals/month`,
         });
       }
     }
-  } catch {}
+  } catch { /* non-fatal */ }
 
-  // Pattern 3 — Pricing opportunity
+  // Pattern 2 — Job value vs industry average
   try {
     const { data: closedJobs } = await supabase
       .from("roofing_jobs")
-      .select("contract_amount, zip_code")
+      .select("contract_amount")
       .in("status", ["complete", "paid"])
       .gte("created_at", thirtyDaysAgo);
 
-    if ((closedJobs?.length || 0) > 10) {
-      const avgValue = (closedJobs || []).reduce(
-        (sum, j) => sum + (j.contract_amount || 0), 0
-      ) / (closedJobs?.length || 1);
-
+    if ((closedJobs?.length || 0) >= 10) {
+      const avgValue = (closedJobs || []).reduce((sum, j) => sum + (j.contract_amount || 0), 0) / closedJobs!.length;
       const industryAvg = 15000;
+      contextParts.push(`Avg job value: $${Math.round(avgValue).toLocaleString()} vs industry $${industryAvg.toLocaleString()}`);
 
       if (avgValue < industryAvg * 0.85) {
-        patterns.push({
-          pattern_type: "pricing",
-          pattern_description:
-            `Average job value $${avgValue.toLocaleString()} ` +
-            `is below industry average of $15,000.`,
-          recommendation:
-            `Review pricing structure. ` +
-            `Consider 5-8% price increase on standard jobs. ` +
-            `Ensure all code upgrades are included in estimates.`,
-          evidence_count: closedJobs?.length || 0,
-          confidence_score: 0.75
+        proposals.push({
+          title: "Average job value below industry benchmark",
+          problem: `Avg job value $${Math.round(avgValue).toLocaleString()} is ${Math.round((1 - avgValue / industryAvg) * 100)}% below the $${industryAvg.toLocaleString()} industry average.`,
+          proposed_fix: `Add code upgrade checklist to estimate flow. Prompt contractors to include ice-and-water, drip edge, and ventilation line items on every job. Build in price calculator showing margin at each tier.`,
+          priority: "medium",
+          category: "product",
+          estimated_impact: `$${Math.round((industryAvg - avgValue) * closedJobs!.length).toLocaleString()} additional revenue over same job volume`,
         });
       }
     }
-  } catch {}
+  } catch { /* non-fatal */ }
 
-  // Save patterns
-  if (patterns.length > 0) {
-    await supabase.from("roofing_patterns").insert(patterns);
+  // Pattern 3 — Revenue / churn risk
+  try {
+    const { data: accounts } = await supabase
+      .from("contractor_accounts")
+      .select("company_name, plan, plan_price_cents, churn_risk_score, last_login_at, total_jobs, onboarding_completed")
+      .eq("status", "active")
+      .neq("is_test_account", true);
 
-    const patternText = patterns
-      .map(p => `• ${p.recommendation}`)
-      .join("\n");
+    const active = accounts || [];
+    const paid = active.filter(a => a.plan !== "free");
+    const mrr = paid.reduce((s, a) => s + (a.plan_price_cents || 0), 0);
+    const atRisk = paid.filter(a => (a.churn_risk_score || 0) >= 70);
+    const notOnboarded = active.filter(a => !a.onboarding_completed && !a.last_login_at);
+    const noLoginRecent = paid.filter(a => a.last_login_at && new Date(a.last_login_at) < new Date(fourteenDaysAgo));
 
-    await sendTelegram(
-      `🧠 *Roofing OS — New Patterns Detected*\n\n` +
-      `${patternText}\n\n` +
-      `Reply \`apply patterns\` to implement recommendations.`
-    );
+    contextParts.push(`MRR: $${(mrr / 100).toFixed(0)}/mo, paid contractors: ${paid.length}, churn risk ≥70: ${atRisk.length}`);
+
+    if (atRisk.length > 0) {
+      proposals.push({
+        title: `${atRisk.length} paid contractor(s) at churn risk`,
+        problem: `${atRisk.map(a => a.company_name).join(", ")} have churn_risk_score ≥ 70. Combined MRR at risk: $${(atRisk.reduce((s, a) => s + (a.plan_price_cents || 0), 0) / 100).toFixed(0)}/mo.`,
+        proposed_fix: `Queue Aria outreach check-in call for each at-risk account. Offer 1-on-1 onboarding session. Consider 1-month fee credit to re-engage. Log interaction in contractor dashboard.`,
+        priority: "high",
+        category: "retention",
+        estimated_impact: `Save $${(atRisk.reduce((s, a) => s + (a.plan_price_cents || 0), 0) / 100).toFixed(0)}/mo in at-risk MRR`,
+      });
+    }
+
+    if (noLoginRecent.length > 0) {
+      proposals.push({
+        title: `${noLoginRecent.length} paid contractor(s) haven't logged in for 14+ days`,
+        problem: `Paid accounts with no recent login: ${noLoginRecent.map(a => a.company_name).join(", ")}. Silent churn risk before score hits critical threshold.`,
+        proposed_fix: `Send automated re-engagement email via Resend. Show new features added since last login. Offer free measurement report as re-activation incentive.`,
+        priority: "medium",
+        category: "retention",
+        estimated_impact: `Prevent passive churn on ${noLoginRecent.length} account(s)`,
+      });
+    }
+
+    if (notOnboarded.length > 0) {
+      proposals.push({
+        title: `${notOnboarded.length} contractor(s) haven't completed onboarding`,
+        problem: `New accounts that haven't completed onboarding and never logged in: ${notOnboarded.map(a => a.company_name).join(", ")}.`,
+        proposed_fix: `Trigger Aria onboarding call within 24h of signup. Send magic link reminder email at +1h, +24h, +72h intervals. Add onboarding completion % to morning digest.`,
+        priority: "medium",
+        category: "onboarding",
+        estimated_impact: `Reduce first-week churn, improve activation rate`,
+      });
+    }
+  } catch { /* non-fatal */ }
+
+  // Pattern 4 — AI-generated product improvement (weekly Claude synthesis)
+  try {
+    if (contextParts.length > 0) {
+      const aiSuggestion = await claude(
+        `You are the product advisor for Roofing OS, a software platform for roofing contractors.
+Here's what the data shows this week:
+
+${contextParts.join("\n")}
+
+Identify ONE specific product improvement (not already listed below) that would have the highest impact on retention or revenue. Think about UX friction, missing features, or automation gaps.
+
+Existing proposals this cycle:
+${proposals.map(p => `- ${p.title}`).join("\n")}
+
+Return a JSON object with exactly these fields:
+- title: short title (max 60 chars)
+- problem: what the data suggests is broken or missing (2 sentences)
+- proposed_fix: specific implementation suggestion (2-3 sentences, technical enough to act on)
+- priority: "high" or "medium"
+- category: one of: product, supplement, retention, onboarding, marketing
+- estimated_impact: one-line estimate of business value
+
+Return ONLY valid JSON.`,
+        400
+      );
+
+      try {
+        const parsed = JSON.parse(aiSuggestion.replace(/```json\n?|\n?```/g, "").trim());
+        if (parsed.title && parsed.problem && parsed.proposed_fix) {
+          proposals.push({
+            title: parsed.title,
+            problem: parsed.problem,
+            proposed_fix: parsed.proposed_fix,
+            priority: ["critical", "high", "medium", "low"].includes(parsed.priority) ? parsed.priority : "medium",
+            category: parsed.category || "product",
+            estimated_impact: parsed.estimated_impact || "",
+          });
+        }
+      } catch { /* skip if Claude JSON was malformed */ }
+    }
+  } catch { /* non-fatal */ }
+
+  // Save all proposals to nexus_roofing_proposals (with dedup)
+  let saved = 0;
+  for (const proposal of proposals) {
+    const result = await saveProposal(proposal);
+    if (result) saved++;
   }
 
   return Response.json({
     ok: true,
-    patterns_detected: patterns.length,
-    patterns
+    proposals_generated: proposals.length,
+    proposals_saved: saved,
+    context_signals: contextParts,
   });
 });

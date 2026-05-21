@@ -308,6 +308,23 @@ async function observe() {
       .gt("created_at", ago.week).limit(50)
   ]);
 
+  // Roofing revenue snapshot — lightweight, no extra API calls
+  const { data: contractorSnap } = await supabase
+    .from("contractor_accounts")
+    .select("plan, plan_price_cents, churn_risk_score, last_login_at, company_name")
+    .eq("status", "active")
+    .neq("is_test_account", true);
+
+  const _activeConts = contractorSnap || [];
+  const roofingRevenue = {
+    activeCount: _activeConts.length,
+    paidCount: _activeConts.filter((c: { plan: string }) => c.plan !== "free").length,
+    mrr_cents: _activeConts
+      .filter((c: { plan: string }) => c.plan !== "free")
+      .reduce((s: number, c: { plan_price_cents: number }) => s + (c.plan_price_cents || 0), 0),
+    churnRiskCount: _activeConts.filter((c: { churn_risk_score: number }) => (c.churn_risk_score || 0) >= 70).length,
+  };
+
   const GUARD_TYPES = new Set([
     "size_guard_triggered", "path_verify_failed", "claude_md_sync_aborted",
     "build_aborted", "modify_error", "github_read_debug"
@@ -383,7 +400,8 @@ async function observe() {
     reflections: reflections || [],
     pendingApprovals: pendingApprovals || [],
     recentProposals: (recentProposals || []).map((p: { ability_name: string }) => p.ability_name),
-    self: { chatLines, chatHandlerCount, healthy: chatLines > 2000 }
+    self: { chatLines, chatHandlerCount, healthy: chatLines > 2000 },
+    roofingRevenue
   };
 }
 
@@ -936,7 +954,9 @@ Deno.serve(async (req) => {
       improvements: state.improvements.length,
       clients: state.clients.length,
       pendingApprovals: state.pendingApprovals.length,
-      liveAbilities: state.liveAbilities.length
+      liveAbilities: state.liveAbilities.length,
+      paidContractors: state.roofingRevenue.paidCount,
+      churnRisk: state.roofingRevenue.churnRiskCount,
     });
     const { data: lastHashEntry } = await supabase
       .from("nexus_audit_log")
@@ -1483,6 +1503,29 @@ Deno.serve(async (req) => {
         await logHeartbeat("nexus-core:aria-queue", "ok", 0);
         await log("aria_queue_processed", `Fired ${queueFired}/${(readyToFire || []).length} queued calls`);
       }
+    }
+
+    // REVENUE CHURN MONITOR — daily (offset 4 from trial expiry, prevents duplicate daily alerts)
+    if (cycleNumber % 48 === 4) {
+      (async () => {
+        try {
+          const { data: atRisk } = await supabase
+            .from("contractor_accounts")
+            .select("company_name, churn_risk_score, last_login_at, plan, total_jobs")
+            .eq("status", "active")
+            .neq("is_test_account", true)
+            .neq("plan", "free")
+            .gte("churn_risk_score", 70);
+
+          if (atRisk && atRisk.length > 0) {
+            const lines = atRisk.map((c: { company_name: string; churn_risk_score: number; total_jobs: number }) =>
+              `• ${c.company_name} — risk ${c.churn_risk_score}/100, ${c.total_jobs || 0} jobs`
+            ).join("\n");
+            await tg(`⚠️ *Churn Risk Alert* (${atRisk.length} paid)\n\n${lines}\n\nDashboard → Contractors tab`);
+            await log("churn_risk_alert", `${atRisk.length} at-risk paid contractors`);
+          }
+        } catch { /* non-fatal */ }
+      })().catch(() => {});
     }
 
     // MORNING DIGEST — daily 6:30am MT (12:30-13:00 UTC)
