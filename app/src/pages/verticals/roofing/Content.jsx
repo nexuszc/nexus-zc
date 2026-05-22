@@ -13,11 +13,15 @@ function api(method, action, id) {
   }).then(r => r.json())
 }
 
-// Facebook post variants for rotating daily banner
+// Facebook post variants — rotating daily, groups as individual checkboxes
 const FB_VARIANTS = [
   {
     label: 'Variant A — CompanyCam angle',
-    groups: 'Roofing Contractors Network, Roofers Coffee Shop, Contractor Talk',
+    groups: [
+      'Roofing Contractors Network',
+      'Roofers Coffee Shop',
+      'Contractor Talk',
+    ],
     body: `We built a free replacement for CompanyCam. Here's why.
 
 CompanyCam charges $79–199/month to store and share job photos. That's it.
@@ -36,7 +40,11 @@ Happy to answer questions in comments.`,
   },
   {
     label: 'Variant B — Homeowner calls angle',
-    groups: 'Roofing Business Owners, Roofing Sales & Marketing, Roofing Contractor Mastermind',
+    groups: [
+      'Roofing Business Owners',
+      'Roofing Sales & Marketing',
+      'Roofing Contractor Mastermind',
+    ],
     body: `Quick question for contractors: how many calls/texts do you get from homeowners asking "what's the status of my roof?"
 
 We track this. Average contractor gets 4–6 status check calls per active job per week. That's 20–30 interruptions a week during storm season.
@@ -51,7 +59,11 @@ Demo of what the homeowner sees: roofingos.dev/portal/demo`,
   },
   {
     label: 'Variant C — Supplement AI angle',
-    groups: 'Storm Restoration Professionals, Insurance Restoration Roofing, Roofing Contractor Pro Talk',
+    groups: [
+      'Storm Restoration Professionals',
+      'Insurance Restoration Roofing',
+      'Roofing Contractor Pro Talk',
+    ],
     body: `Storm season question: what's your supplement approval rate with State Farm right now?
 
 Industry average is hovering around 58%. Best contractors I know are hitting 75–80% — and they're using AI to build the packets.
@@ -92,7 +104,6 @@ function Toast({ toast: t }) {
   )
 }
 
-// Copy to clipboard with 2s feedback
 function CopyButton({ text, label = '📋 Copy', className = '' }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -118,36 +129,101 @@ function CopyButton({ text, label = '📋 Copy', className = '' }) {
   )
 }
 
-// ── Facebook Daily Banner ─────────────────────────────────────────────────────
+// ── Facebook Daily Task ───────────────────────────────────────────────────────
+// No Graph API needed. AE copies post, checks each group, done in ~20 min.
 
-function FacebookBanner() {
+function FacebookDailyTask() {
   const dayIndex = Math.floor(Date.now() / 86400000) % FB_VARIANTS.length
   const variant = FB_VARIANTS[dayIndex]
-  const [expanded, setExpanded] = useState(false)
+  const [checked, setChecked] = useState({})
+  const [copied, setCopied] = useState(false)
+
+  const allDone = variant.groups.every(g => checked[g])
+  const doneCount = variant.groups.filter(g => checked[g]).length
+
+  const copyPost = async () => {
+    try {
+      await navigator.clipboard.writeText(variant.body)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast('Copy failed — check permissions', 'error')
+    }
+  }
+
+  const toggle = (group) => setChecked(prev => ({ ...prev, [group]: !prev[group] }))
 
   return (
-    <div className="bg-[#1a1a2e] border border-blue-500/30 rounded-xl p-4 mb-5">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-blue-400 text-lg">🔵</span>
-          <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">Today's Facebook Post</span>
-          <span className="text-[10px] text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">{variant.label}</span>
+    <div className={`border rounded-xl p-5 mb-5 transition-colors ${
+      allDone
+        ? 'bg-green-950/30 border-green-500/30'
+        : 'bg-[#1a1a2e] border-blue-500/30'
+    }`}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-lg">🔵</span>
+        <div className="flex-1">
+          <div className={`text-sm font-bold ${allDone ? 'text-green-400' : 'text-blue-400'}`}>
+            Today's Facebook Post
+          </div>
+          <div className="text-[10px] text-gray-600">{variant.label} · AE daily task · ~20 min</div>
         </div>
-        <div className="flex items-center gap-2">
-          <CopyButton text={variant.body} label="📋 Copy post" />
-          <button
-            onClick={() => setExpanded(e => !e)}
-            className="text-xs text-gray-600 hover:text-gray-400"
-          >
-            {expanded ? 'Hide ↑' : 'Preview ↓'}
-          </button>
+        {allDone ? (
+          <span className="text-xs text-green-400 bg-green-500/15 px-3 py-1 rounded-full font-bold">✓ All posted</span>
+        ) : doneCount > 0 ? (
+          <span className="text-xs text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full font-semibold">{doneCount}/{variant.groups.length} done</span>
+        ) : null}
+      </div>
+
+      {/* Post body — scrollable preview */}
+      <pre className="mt-3 text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-4 border border-[#1e1e2e] leading-relaxed max-h-44 overflow-y-auto mb-4">
+        {variant.body}
+      </pre>
+
+      {/* Big copy button */}
+      <button
+        onClick={copyPost}
+        className={`w-full py-3 rounded-xl font-bold text-sm transition-all mb-5 ${
+          copied
+            ? 'bg-green-600 text-white'
+            : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-900/30'
+        }`}
+      >
+        {copied ? '✓ Copied to clipboard!' : '📋 Copy post'}
+      </button>
+
+      {/* Group checklist */}
+      <div>
+        <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">
+          Post in these groups — check off as you go
+        </div>
+        <div className="space-y-2">
+          {variant.groups.map(group => (
+            <label
+              key={group}
+              className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-lg hover:bg-white/[0.03] transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={!!checked[group]}
+                onChange={() => toggle(group)}
+                className="w-4 h-4 rounded accent-blue-500 cursor-pointer shrink-0"
+              />
+              <span className={`text-sm transition-colors ${
+                checked[group] ? 'text-green-400 line-through opacity-60' : 'text-gray-200'
+              }`}>
+                {group}
+              </span>
+              {checked[group] && <span className="text-green-400 text-xs ml-auto">✓ Posted</span>}
+            </label>
+          ))}
         </div>
       </div>
-      <p className="text-[10px] text-gray-600">Best groups: {variant.groups}</p>
-      {expanded && (
-        <pre className="mt-3 text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-3 border border-[#1e1e2e] leading-relaxed">
-          {variant.body}
-        </pre>
+
+      {allDone && (
+        <div className="mt-4 pt-4 border-t border-green-500/20 text-center text-xs text-green-400 font-semibold">
+          Facebook done for today. See you tomorrow.
+        </div>
       )}
     </div>
   )
@@ -179,7 +255,6 @@ function StatsBar({ stats }) {
 function ChannelRow({ icon, label, status, copyText, onCopy, onDone, generating }) {
   const isDone = status === 'done'
   const isPosted = status === 'posted'
-  const isPending = !isDone && !isPosted
 
   return (
     <div className={`flex items-center gap-2 py-1.5 border-t border-[#1e1e2e] ${isDone || isPosted ? 'opacity-60' : ''}`}>
@@ -489,7 +564,7 @@ function PartnerRow({ partner, onSent }) {
   const mailtoHref = `mailto:${partner.email}?subject=${encodeURIComponent(partner.subject || '')}&body=${encodeURIComponent(emailBody)}`
 
   return (
-    <div className={`py-3 border-b border-[#1e1e2e] last:border-0`}>
+    <div className="py-3 border-b border-[#1e1e2e] last:border-0">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -633,7 +708,7 @@ export default function Content() {
       </div>
 
       <StatsBar stats={stats} />
-      <FacebookBanner />
+      <FacebookDailyTask />
 
       {/* Tabs */}
       <div className="flex gap-1.5 mb-5 flex-wrap">
@@ -678,14 +753,12 @@ export default function Content() {
 
       ) : tab === 'community' ? (
         <div>
-          {/* Stats bar */}
           <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-3 mb-4 flex gap-5 flex-wrap">
             <span className="text-xs text-gray-500">This week: <span className="text-white font-semibold">{communityThisWeek}</span> posts</span>
             <span className="text-xs text-gray-500">Auto-posted: <span className="text-green-400 font-semibold">{communityAutoPosted}</span></span>
             <span className="text-xs text-gray-500">Pending review: <span className="text-amber-400 font-semibold">{communityPending}</span></span>
             <span className="text-xs text-gray-500">Total: <span className="text-gray-300 font-semibold">{community.length}</span></span>
           </div>
-          {/* Filter buttons */}
           <div className="flex gap-1.5 mb-4 flex-wrap">
             {[
               { key: 'all',         label: 'All' },
@@ -727,15 +800,14 @@ export default function Content() {
 
       ) : tab === 'partners' ? (
         <div>
-          {/* Pipeline stats */}
           <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4 mb-4">
             <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Partnership Pipeline</div>
             <div className="flex gap-5 flex-wrap">
               {[
-                { label: 'Pending',  value: partners.filter(p => !p.sent_at).length,                             color: 'text-gray-300' },
-                { label: 'Sent',     value: partners.filter(p => p.sent_at && !p.replied_at).length,             color: 'text-amber-400' },
-                { label: 'Replied',  value: partners.filter(p => p.replied_at).length,                           color: 'text-green-400' },
-                { label: 'Active',   value: partners.filter(p => p.status === 'active').length,                  color: 'text-indigo-400' },
+                { label: 'Pending',  value: partners.filter(p => !p.sent_at).length,                 color: 'text-gray-300' },
+                { label: 'Sent',     value: partners.filter(p => p.sent_at && !p.replied_at).length, color: 'text-amber-400' },
+                { label: 'Replied',  value: partners.filter(p => p.replied_at).length,               color: 'text-green-400' },
+                { label: 'Active',   value: partners.filter(p => p.status === 'active').length,      color: 'text-indigo-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="text-center min-w-[60px]">
                   <div className={`text-xl font-black ${color}`}>{value}</div>
