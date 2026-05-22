@@ -1,437 +1,233 @@
-// NEXUS briefing — proactive morning brief via Telegram
+// NEXUS briefing v3 — COO morning brief via Telegram
 // Scheduled: 13:00 UTC daily (7:00 AM MT)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const ANTHROPIC_API_KEY        = Deno.env.get("ANTHROPIC_API_KEY")!;
+const TELEGRAM_BOT_TOKEN       = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-async function sendTelegramMessage(chatId: string, text: string) {
-  const res = await fetch(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    },
-  );
-  if (!res.ok) console.error("Telegram send failed:", await res.text());
-}
-
-async function bubbleInsights(supabase: any, clientSummaries: any[]) {
-  const silentClients = clientSummaries.filter(c => c.hoursSilent !== null && c.hoursSilent > 48);
-  if (silentClients.length > 0) {
-    await supabase.from("platform_insights").insert({
-      insight: `${silentClients.length} client(s) have gone silent >48h: ${silentClients.map((c: any) => c.name).join(", ")}`,
-      source_client_ids: silentClients.map((c: any) => c.id).filter(Boolean),
-      insight_type: "risk",
-    });
-  }
-
-  const noVA = clientSummaries.filter(c => c.va === "no VA assigned");
-  if (noVA.length > 0) {
-    await supabase.from("platform_insights").insert({
-      insight: `${noVA.length} client(s) have no VA assigned: ${noVA.map((c: any) => c.name).join(", ")}`,
-      source_client_ids: [],
-      insight_type: "risk",
-    });
-  }
+async function tg(chatId: string, text: string) {
+  const truncated = text.length > 4000 ? text.slice(0, 3900) + "..." : text;
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: truncated }),
+  });
 }
 
 Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "briefing ready" });
+  if (body.test) return Response.json({ ok: true, message: "briefing v3 ready" });
 
   try {
-    // ----- 1. Get Zach's Telegram chat ID dynamically -----
+    // ── 0. Telegram chat ID ──────────────────────────────────────────────────
     const { data: channelRow } = await supabase
       .from("channel_conversations")
-      .select("external_id")
-      .eq("channel", "telegram")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .select("external_id").eq("channel", "telegram")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
 
-    if (!channelRow?.external_id) {
-      console.error("No Telegram chat ID found in channel_conversations");
-      return new Response("no chat id", { status: 200 });
-    }
+    if (!channelRow?.external_id) return new Response("no chat id", { status: 200 });
     const chatId = channelRow.external_id;
 
-    // ----- 2. Pull personal brain context -----
-    const minus48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-    const minus7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const now = Date.now();
+    const now     = Date.now();
+    const today   = new Date().toISOString().split("T")[0];
+    const yest    = new Date(now - 86400000).toISOString();
+    const weekAgo = new Date(now - 7 * 86400000).toISOString();
+    const minus48 = new Date(now - 48 * 60 * 60 * 1000).toISOString();
+    const minus3d = new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString();
 
-    const [recent48, top7d, openTasks, projects, recentPeople, overdueTasks, staleClients, activeProjects] = await Promise.all([
-      supabase.from("entries")
-        .select("role, content, entry_type, importance, project_names, people_names, created_at")
-        .gt("created_at", minus48h)
-        .eq("role", "user")
-        .is("client_id", null)
-        .order("created_at", { ascending: false })
-        .limit(30),
-
-      supabase.from("entries")
-        .select("content, entry_type, importance, project_names, people_names, created_at")
-        .gt("created_at", minus7d)
-        .eq("role", "user")
-        .is("client_id", null)
-        .order("importance", { ascending: false })
-        .limit(10),
-
-      supabase.from("entries")
-        .select("content, project_names, people_names, created_at")
-        .eq("task_status", "open")
-        .eq("role", "user")
-        .order("created_at", { ascending: true }),
-
-      supabase.from("projects")
-        .select("name, category")
-        .neq("category", "archived"),
-
-      supabase.from("entries")
-        .select("content, people_names, project_names, created_at")
-        .gt("created_at", minus7d)
-        .eq("role", "user")
-        .not("people_names", "eq", "{}")
-        .order("created_at", { ascending: false })
-        .limit(15),
-
-      // overdueTasks: open tasks older than 3 days
-      supabase.from("entries")
-        .select("content, created_at, project_names")
-        .eq("task_status", "open")
-        .lt("created_at", new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString())
-        .order("created_at", { ascending: true })
-        .limit(10),
-
-      // staleClients: active clients with no activity in 5+ days
-      supabase.from("clients")
-        .select("name, status, last_activity_at")
+    // ── 1. Personal brain context ─────────────────────────────────────────────
+    const [openTasks, projects, overdueTasks, staleClients] = await Promise.all([
+      supabase.from("entries").select("content, created_at, project_names")
+        .eq("task_status", "open").eq("role", "user").order("created_at", { ascending: true }),
+      supabase.from("projects").select("name, category").neq("category", "archived"),
+      supabase.from("entries").select("content, created_at, project_names")
+        .eq("task_status", "open").lt("created_at", minus3d).order("created_at").limit(5),
+      supabase.from("clients").select("name, status, last_activity_at")
         .eq("status", "active")
-        .or(`last_activity_at.lt.${new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString()},last_activity_at.is.null`)
-        .limit(10),
-
-      // activeProjects: projects with active momentum
-      supabase.from("projects")
-        .select("name, category, momentum_status, next_milestone, last_update_at")
-        .not("category", "eq", "archived")
-        .order("last_update_at", { ascending: true })
-        .limit(10),
+        .or(`last_activity_at.lt.${new Date(now - 5 * 86400000).toISOString()},last_activity_at.is.null`).limit(5),
     ]);
 
-    // ----- 3. Pull client brains status -----
-    const { data: activeClients } = await supabase
-      .from("clients")
-      .select(`
-        id, name, deal_type, status, rev_share_pct, monthly_fee,
-        client_context(core_offer, goals),
-        va_assignments(va_name, status)
-      `)
-      .eq("status", "active");
-
-    const clientSummaries = await Promise.all((activeClients || []).map(async (client: any) => {
-      const { data: recentActivity } = await supabase
-        .from("entries")
-        .select("content, entry_type, created_at, role")
-        .eq("client_id", client.id)
-        .gt("created_at", minus48h)
-        .order("created_at", { ascending: false })
-        .limit(5);
-
-      const activeVA = (client.va_assignments || []).find((v: any) => v.status === "active");
-      const lastActivity = recentActivity?.[0]?.created_at;
-      const hoursSilent = lastActivity
-        ? Math.floor((now - new Date(lastActivity).getTime()) / (1000 * 60 * 60))
-        : null;
-
-      return {
-        id: client.id,
-        name: client.name,
-        deal: client.deal_type || "unknown",
-        va: activeVA?.va_name || "no VA assigned",
-        recentActivity: recentActivity || [],
-        hoursSilent,
-        goals: client.client_context?.[0]?.goals || "not set",
-      };
-    }));
-
-    // ----- 4. Pull Nexus health + improvements + knowledge base -----
-    const { data: recentKnowledge } = await supabase
-      .from("knowledge_base")
-      .select("topic, content")
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    const dayOfWeek = new Date().toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Denver" });
-
-    const [healthData, pendingImprovements] = await Promise.all([
-      supabase.from("nexus_health")
-        .select("function_name, status, error_count, success_count")
-        .order("checked_at", { ascending: false })
-        .limit(4),
-
-      supabase.from("nexus_improvements")
-        .select("title, problem, recommended_fix, estimated_minutes, priority")
-        .eq("status", "pending")
-        .order("priority", { ascending: true })
-        .limit(3),
-    ]);
-
-    const healthSummary = (healthData.data || []).length
-      ? "NEXUS HEALTH:\n" + (healthData.data || []).map((h: any) =>
-          `- ${h.function_name}: ${h.status} (${h.success_count} ok, ${h.error_count} errors)`
-        ).join("\n")
-      : "";
-
-    const improvementsSummary = (pendingImprovements.data || []).length
-      ? "PENDING IMPROVEMENTS:\n" + (pendingImprovements.data || []).map((imp: any, i: number) =>
-          `${i + 1}. [${imp.estimated_minutes}min] ${imp.title}: ${imp.problem}`
-        ).join("\n")
-      : "";
-
-    // Roofing OS intelligence (last 24h)
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    const [roofingOpensRes, ariaCallsRes, signupsYesterdayRes, visitsYesterdayRes, signupsWeekRes, pendingRedditRes] = await Promise.all([
-      supabase.from("roofing_outreach_log")
-        .select("prospect_id, open_count, touch_number")
-        .eq("bot_open", false)
-        .not("first_opened_at", "is", null)
-        .gte("first_opened_at", new Date(Date.now() - 86400000).toISOString())
-        .limit(20),
-      supabase.from("roofing_aria_calls")
-        .select("contact_name, call_type, outcome, appointment_booked")
-        .gte("created_at", new Date(Date.now() - 86400000).toISOString())
-        .limit(10),
-      supabase.from("roofing_captures").select("id", { count: "exact", head: true })
-        .gte("created_at", yesterday + "T00:00:00"),
-      supabase.from("roofing_page_visits").select("visits").eq("date", yesterday).eq("page", "/").maybeSingle(),
+    // ── 2. Roofing OS growth numbers ─────────────────────────────────────────
+    const [
+      signupsYestRes, signupsWeekRes, signupsTotalRes, visitsYestRes,
+      ariaCallsRes, emailOpensRes,
+    ] = await Promise.all([
+      supabase.from("roofing_captures").select("id", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`),
       supabase.from("roofing_captures").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
-      supabase.from("roofing_community_posts").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("roofing_captures").select("id", { count: "exact", head: true }),
+      supabase.from("roofing_page_visits").select("visits").eq("date", today).eq("page", "/").maybeSingle(),
+      supabase.from("roofing_aria_calls").select("contact_name, contact_phone, outcome, appointment_booked, answered")
+        .gte("created_at", yest).limit(20),
+      supabase.from("roofing_outreach_log").select("prospect_id, open_count")
+        .eq("bot_open", false).not("first_opened_at", "is", null).gte("first_opened_at", yest).limit(20),
     ]);
-    const roofingOpensCount = (roofingOpensRes.data || []).length;
-    const ariaCallsToday = (ariaCallsRes.data || []) as Array<{ outcome: string; appointment_booked: boolean }>;
-    const ariaBooked = ariaCallsToday.filter(c => c.appointment_booked).length;
-    const ariaInterested = ariaCallsToday.filter(c => c.outcome === "interested").length;
-    const signupsYesterday = signupsYesterdayRes.count || 0;
-    const visitsYesterday = (visitsYesterdayRes.data as { visits?: number } | null)?.visits || 0;
-    const convRatePct = visitsYesterday > 0 ? Math.round(signupsYesterday / visitsYesterday * 100) : 0;
-    const signupsWeek = signupsWeekRes.count || 0;
-    const pendingRedditCount = pendingRedditRes.count || 0;
-    // Pace: assume 60-day goal of 1000
-    const { count: totalSignups } = await supabase.from("roofing_captures").select("id", { count: "exact", head: true });
-    const paceNeeded = Math.ceil((1000 - (totalSignups || 0)) / 60);
-    const onPace = signupsYesterday >= paceNeeded;
 
-    // ----- 4b. AE task summary -----
-    let aeTasks: any[] = [];
-    let pendingEscalations: any[] = [];
-    try {
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const [aeRes, escRes] = await Promise.all([
-        supabase.from("roofing_va_tasks")
-          .select("id, title, task_type, priority, status")
-          .eq("date", todayStr)
-          .eq("assigned_to", "ae")
-          .order("priority"),
-        supabase.from("roofing_va_tasks")
-          .select("id, title, task_type, escalation_status")
-          .eq("escalation_status", "pending"),
-      ]);
-      aeTasks = aeRes.data || [];
-      pendingEscalations = escRes.data || [];
-    } catch (e: any) {
-      console.error("AE section failed:", e.message);
+    const signupsToday = signupsYestRes.count || 0;
+    const signupsWeek  = signupsWeekRes.count || 0;
+    const signupsTotal = signupsTotalRes.count || 0;
+    const visitsToday  = (visitsYestRes.data as { visits?: number } | null)?.visits || 0;
+    const ariaCalls    = ariaCallsRes.data || [];
+    const ariaAnswered = ariaCalls.filter((c: any) => c.answered).length;
+    const ariaInterested = ariaCalls.filter((c: any) => c.outcome === "interested" || c.appointment_booked).length;
+    const emailOpens   = (emailOpensRes.data || []).length;
+
+    // Hot leads: aria calls answered with interest
+    const hotLeads = ariaCalls
+      .filter((c: any) => (c.outcome === "interested" || c.appointment_booked) && c.contact_phone)
+      .map((c: any) => `${c.contact_name || "Unknown"} — ${c.contact_phone}`)
+      .slice(0, 3);
+
+    // Pace to 100 signups (60-day goal)
+    const paceNeeded = Math.ceil((1000 - signupsTotal) / 60);
+    const onPace = signupsToday >= paceNeeded;
+    const paceDays = signupsToday > 0 ? Math.ceil((1000 - signupsTotal) / signupsToday) : 999;
+
+    // ── 3. Partnership pipeline ───────────────────────────────────────────────
+    const [partnerStatusRes, partnerRepliesRes, partnerOutreachYestRes, newTargetsWeekRes] = await Promise.all([
+      supabase.from("roofing_partnership_targets").select("status").neq("status", "archived"),
+      supabase.from("roofing_partnership_targets").select("name, email")
+        .not("responded_at", "is", null).gte("responded_at", weekAgo),
+      supabase.from("nexus_audit_log").select("action_detail")
+        .in("action_type", ["partner_outreach_sent", "partner_followup_sent"])
+        .gte("created_at", yest).limit(10),
+      supabase.from("roofing_partnership_targets").select("id", { count: "exact", head: true })
+        .gte("created_at", weekAgo),
+    ]);
+
+    const partnersByStatus: Record<string, number> = {};
+    for (const p of partnerStatusRes.data || []) {
+      partnersByStatus[p.status] = (partnersByStatus[p.status] || 0) + 1;
     }
-    const aeTaskCount = aeTasks.length;
-    const urgentTasks = aeTasks.filter((t: any) => t.priority === 1);
-    const pendingEscCount = pendingEscalations.length;
+    const activePartners  = partnersByStatus["active"]    || 0;
+    const contactedPartners = partnersByStatus["contacted"] || 0;
+    const newTargetsWeek  = newTargetsWeekRes.count || 0;
+    const outreachYest    = (partnerOutreachYestRes.data || []).length;
+    const partnerReplies  = (partnerRepliesRes.data || []);
 
-    // ----- 5. Build context blocks -----
-    const today = new Date().toLocaleDateString("en-US", {
-      weekday: "long", year: "numeric", month: "long", day: "numeric",
-      timeZone: "America/Denver",
-    });
+    // ── 4. Content queue ─────────────────────────────────────────────────────
+    const [ytReadyRes, ytPostedYestRes, contentQueueRes] = await Promise.all([
+      supabase.from("roofing_content").select("id, title").eq("youtube_upload_ready", true).is("published_url", null).limit(5),
+      supabase.from("roofing_content").select("title").not("published_url", "is", null).gte("updated_at", yest).limit(1),
+      supabase.from("roofing_content").select("channel, status").eq("status", "approved").not("channel", "is", null),
+    ]);
 
-    const fmt = (entries: any[], label: string) => {
-      if (!entries?.length) return "";
-      return `${label}:\n` + entries.map(e =>
-        `- [${e.entry_type || "note"}, importance ${e.importance || "?"}] ${e.content?.slice(0, 200)}`
-      ).join("\n");
-    };
+    const ytReady        = (ytReadyRes.data || []).length;
+    const ytPostedYest   = ytPostedYestRes.data?.[0]?.title || "none";
+    const contentByChannel: Record<string, number> = {};
+    for (const c of contentQueueRes.data || []) {
+      if (c.channel) contentByChannel[c.channel] = (contentByChannel[c.channel] || 0) + 1;
+    }
+    const ytQueueDays  = Math.round((contentByChannel["youtube"] || 0) / 1);
+    const fbQueueDays  = contentByChannel["facebook_page"] || 0;
+    const redQueueDays = contentByChannel["reddit"] || 0;
 
-    const openTasksFormatted = (openTasks.data || []).length
-      ? "OPEN TASKS (oldest first):\n" + (openTasks.data || []).map((t: any) => {
-          const ageMs = now - new Date(t.created_at).getTime();
-          const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
-          const ageLabel = ageDays === 0 ? "today" : ageDays === 1 ? "1 day old" : `${ageDays} days old`;
-          const overdue = ageMs > 48 * 60 * 60 * 1000 ? " ⚠️ overdue" : "";
-          return `- ${t.content?.slice(0, 200)} (${ageLabel}${overdue})`;
-        }).join("\n")
-      : "OPEN TASKS: none";
+    // ── 5. Revenue ───────────────────────────────────────────────────────────
+    const { data: contractors } = await supabase
+      .from("contractor_accounts").select("plan, plan_price_cents, status")
+      .eq("status", "active").neq("is_test_account", true);
 
-    const clientBriefContext = clientSummaries.length
-      ? "CLIENT BRAINS STATUS:\n" + clientSummaries.map(c =>
-          `- ${c.name} (${c.deal}) | VA: ${c.va} | ${c.hoursSilent !== null ? `silent ${c.hoursSilent}h` : "no activity yet"} | goals: ${c.goals}`
-        ).join("\n")
-      : "";
+    const freeCount = (contractors || []).filter((c: any) => c.plan === "free").length;
+    const paidCount = (contractors || []).filter((c: any) => c.plan !== "free").length;
+    const mrr = (contractors || [])
+      .filter((c: any) => c.plan !== "free")
+      .reduce((s: number, c: any) => s + (c.plan_price_cents || 0), 0);
 
-    const knowledgeContext = (recentKnowledge || []).length
-      ? "KNOWLEDGE BASE (recent):\n" + (recentKnowledge || []).map((k: any) =>
-          `• ${k.topic}: ${k.content.slice(0, 150)}`
-        ).join("\n")
-      : "";
+    // ── 6. Needs Zach (pending approvals, hot leads, partner replies) ─────────
+    const [pendingApprovals, pendingReddit, aeTasks] = await Promise.all([
+      supabase.from("nexus_roofing_proposals").select("title").eq("status", "pending").limit(3),
+      supabase.from("roofing_community_posts").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("roofing_va_tasks").select("title, priority")
+        .eq("date", today).eq("assigned_to", "ae").eq("status", "pending").order("priority").limit(3),
+    ]);
 
-    // Monday only: pull last week's self-improvement summary
+    const needsZach: string[] = [];
+    if (hotLeads.length > 0) hotLeads.forEach(l => needsZach.push(`📞 Call now: ${l}`));
+    if (partnerReplies.length > 0) partnerReplies.forEach((p: any) => needsZach.push(`🤝 Partner replied: ${p.name} (${p.email})`));
+    if ((pendingApprovals.data || []).length > 0) needsZach.push(`✅ Approve builds: ${(pendingApprovals.data || []).map((p: any) => p.title).join(", ")}`);
+    if ((pendingReddit.count || 0) > 0) needsZach.push(`💬 Approve ${pendingReddit.count} Reddit replies → Community tab`);
+
+    // ── 7. Personal brain items ──────────────────────────────────────────────
+    const openTaskCount    = (openTasks.data || []).length;
+    const overdueTaskCount = (overdueTasks.data || []).length;
+    const staleClientNames = (staleClients.data || []).map((c: any) => c.name).join(", ");
+
+    // Monday: weekly self-improvement summary
     const isMonday = new Date().getDay() === 1;
     let weeklySummary = "";
     if (isMonday) {
       const { data: lastReport } = await supabase
-        .from("weekly_reports")
-        .select("fixes_attempted, fixes_successful, report_content")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (lastReport) {
-        weeklySummary = `LAST WEEK SELF-IMPROVEMENT:\n• Fixes attempted: ${lastReport.fixes_attempted}\n• Fixes verified working: ${lastReport.fixes_successful}`;
-      }
+        .from("weekly_reports").select("fixes_attempted, fixes_successful")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (lastReport) weeklySummary = `\nLast week self-improvement: ${lastReport.fixes_successful}/${lastReport.fixes_attempted} fixes verified.`;
     }
 
-    const contextBlock = [
-      fmt(recent48.data || [], "LAST 48 HOURS (personal brain)"),
-      fmt(top7d.data || [], "TOP ENTRIES THIS WEEK (by importance)"),
-      openTasksFormatted,
-      (projects.data || []).length
-        ? "ACTIVE PROJECTS:\n" + (projects.data || []).map((p: any) => `- ${p.name} (${p.category})`).join("\n")
-        : "",
-      fmt(recentPeople.data || [], "RECENT PEOPLE MENTIONS"),
-      clientBriefContext,
-      healthSummary,
-      improvementsSummary,
-      knowledgeContext,
-      weeklySummary,
-      (roofingOpensCount > 0 || ariaCallsToday.length > 0)
-        ? `ROOFING OS (last 24h):\n- Real email opens: ${roofingOpensCount}\n- Aria calls: ${ariaCallsToday.length} (${ariaBooked} booked, ${ariaInterested} interested)${roofingOpensCount >= 3 ? "\n- HOT: check aria_call_queue, multiple openers ready to call" : ""}`
-        : "",
-      `GROWTH SCOREBOARD (1,000 signups in 60 days):\n- Yesterday: ${signupsYesterday} signups · ${visitsYesterday} visits · ${convRatePct}% conv\n- This week: ${signupsWeek} signups\n- Pace needed: ${paceNeeded}/day · ${onPace ? "✅ on pace" : "⚠️ behind pace"}\n- Total signups: ${totalSignups || 0}/1,000\n- Pending Reddit replies: ${pendingRedditCount}${pendingRedditCount > 0 ? " → approve in Community tab" : ""}\n- Facebook: check docs/facebook-posts-draft.md — post Variant A today if not done`,
-    ].filter(Boolean).join("\n\n");
-
-    // ----- 6. Generate briefing via Claude (with fallback) -----
-    let briefing: string;
-    try {
-    const prompt = `You are Nexus, Zach's personal Chief of Staff. Generate his morning briefing for ${today}.
-
-DATA:
-Open tasks (${(openTasks.data || []).length}): ${JSON.stringify((openTasks.data || []).slice(0, 20))}
-Overdue tasks: ${JSON.stringify(overdueTasks.data || [])}
-Clients: ${JSON.stringify(clientSummaries)}
-Recent entries (last 48hrs): ${JSON.stringify((recent48.data || []).slice(0, 15))}
-Pending improvements: ${JSON.stringify((pendingImprovements.data || []).slice(0, 5))}
-Active projects: ${JSON.stringify(activeProjects.data || [])}
-Stale clients (no activity 5+ days): ${JSON.stringify(staleClients.data || [])}
-${weeklySummary ? `Last week: ${weeklySummary}` : ""}
-Roofing OS (last 24h): opens=${roofingOpensCount}, aria_calls=${ariaCallsToday.length}, booked=${ariaBooked}, interested=${ariaInterested}
-Growth: signups_yesterday=${signupsYesterday}, visits_yesterday=${visitsYesterday}, conv_rate=${convRatePct}%, week_total=${signupsWeek}, total=${totalSignups || 0}/1000, pace_needed=${paceNeeded}/day, on_pace=${onPace}, pending_reddit=${pendingRedditCount}
-
-Generate a briefing in this EXACT format:
-
-🌅 *Good morning, Zach. Here's your ${dayOfWeek} briefing.*
-
-*🎯 Focus today:*
-[3 specific things he should accomplish today, ranked by importance. Be direct. No fluff.]
-
-*⚠️ Needs attention:*
-[List only real problems: overdue tasks, stale clients, blocked projects, pending approvals. Skip if nothing urgent.]
-
-*📋 Open tasks (${(openTasks.data || []).length}):*
-[Top 5 most important open tasks with context]
-
-*🏢 Client pulse:*
-[One line per active client: name, status, last activity, what's needed]
-
-*🔧 System:*
-[Pending auto-fix approvals, function health issues, improvements queued]
-
-*🏠 Roofing OS:*
-[Real email opens today, Aria call results, top prospect to follow up now. Skip if nothing.]
-
-*🚀 Growth scoreboard:*
-[Yesterday: X signups · Y visits · Z% conv. Week: N. Total: T/1,000. Pace: on track OR behind — need N/day. Pending Reddit replies: N. One action to take today on growth.]
-
-*💡 Zach, one thing:*
-[One strategic observation or nudge based on patterns you see. This is where you act like a real COO — notice what he's avoiding, what's slipping, what opportunity he should grab.]
-
-Be direct. Be specific. No generic advice. Talk like a trusted advisor, not an assistant. Keep under 800 words.`;
-
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-5",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }],
-      }),
+    // ── 8. Build the briefing ─────────────────────────────────────────────────
+    const dateLabel = new Date().toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric",
+      timeZone: "America/Denver",
     });
 
-    const data = await res.json();
-    briefing = data?.content?.[0]?.text;
+    const briefing = [
+      `🏠 ROOFING OS — ${dateLabel}`,
+      "",
+      `📈 GROWTH`,
+      `Signups today: ${signupsToday} | This week: ${signupsWeek} | Total: ${signupsTotal}/1,000`,
+      `Pace to 1,000: ${paceDays} days ${onPace ? "✅" : "⚠️ behind — need " + paceNeeded + "/day"}`,
+      visitsToday > 0 ? `Visits today: ${visitsToday} → conv rate ${visitsToday > 0 ? Math.round(signupsToday / visitsToday * 100) : 0}%` : "",
+      "",
+      `📞 OUTREACH`,
+      `Aria calls yesterday: ${ariaCalls.length} (${ariaAnswered} answered, ${ariaInterested} interested)`,
+      `Email opens: ${emailOpens}`,
+      hotLeads.length > 0 ? `Hot leads to call now:\n${hotLeads.map(l => `  • ${l}`).join("\n")}` : "No hot leads",
+      "",
+      `🤝 PARTNERSHIPS`,
+      `Active: ${activePartners} | In pipeline: ${contactedPartners} | New targets this week: ${newTargetsWeek}`,
+      `Outreach sent yesterday: ${outreachYest}`,
+      partnerReplies.length > 0
+        ? `Replies received: ${partnerReplies.length}\n${partnerReplies.map((p: any) => `  • ${p.name} REPLIED — respond now`).join("\n")}`
+        : "Replies received: 0",
+      "",
+      `📱 CONTENT`,
+      `YouTube uploaded: ${ytPostedYest}`,
+      `Queue depth: YouTube ${ytReady}d | FB ${fbQueueDays}d | Reddit ${redQueueDays}d`,
+      ytReady < 3 ? "⚠️ YouTube queue low — generating now" : "",
+      "",
+      `💰 REVENUE`,
+      `Free signups: ${freeCount} | Paid: ${paidCount} | MRR: $${Math.round(mrr / 100).toLocaleString()}`,
+      "",
+      needsZach.length > 0
+        ? `⚠️ NEEDS YOU\n${needsZach.map(n => `  ${n}`).join("\n")}`
+        : `✅ Nothing requires your decision right now.`,
+      openTaskCount > 0 ? `\n📋 Open tasks: ${openTaskCount} (${overdueTaskCount} overdue)` : "",
+      staleClientNames ? `\n🏢 Stale clients: ${staleClientNames}` : "",
+      weeklySummary,
+    ].filter(Boolean).join("\n");
 
-    if (!briefing) {
-      console.error("No briefing generated:", JSON.stringify(data));
-      return new Response("no briefing", { status: 200 });
+    await tg(chatId, briefing);
+
+    // AE tasks as a separate message if any
+    if ((aeTasks.data || []).length > 0) {
+      const aeMsg = `📋 AE tasks today:\n${(aeTasks.data || []).map((t: any) => `• ${t.title}`).join("\n")}\n\napp.nexuszc.com/roofing/ae`;
+      await tg(chatId, aeMsg);
     }
-    } catch (err: any) {
-      console.error("Briefing generation failed:", err);
-      briefing =
-        `🧠 NEXUS BRIEF — ${today}\n\n` +
-        `⚠️ Full brief generation encountered an error: ${err.message}\n\n` +
-        `Open tasks: ${(openTasks.data || []).length} pending\n` +
-        `Active clients: check app.nexuszc.com\n\n` +
-        `Send "nexus status" for system health.`;
-      await supabase.from("nexus_alerts").insert({
-        alert_type: "briefing_failed",
-        message: err.message,
+
+    // Bubble platform insights
+    if ((staleClients.data || []).length > 0) {
+      await supabase.from("platform_insights").insert({
+        insight: `${(staleClients.data || []).length} client(s) silent 5+ days: ${staleClientNames}`,
+        insight_type: "risk",
+        source_client_ids: [],
       }).catch(() => {});
     }
 
-    // ----- 7. Send AE task summary as separate message -----
-    if (aeTaskCount > 0) {
-      const urgentLines = urgentTasks.length > 0
-        ? "\nUrgent:\n" + urgentTasks.map((t: any) => `• ${t.title}`).join("\n")
-        : "";
-      const escalationLines = pendingEscCount > 0
-        ? `\n\nPending escalations: ${pendingEscCount}\n` +
-          (pendingEscalations || []).map((e: any) => `• ${e.title}`).join("\n")
-        : "";
-      const aeMsg = `📋 AE tasks ready — ${aeTaskCount} tasks${urgentLines}${escalationLines}\n\napp.nexuszc.com/roofing/ae`;
-      await sendTelegramMessage(chatId, aeMsg).catch(() => {});
-    }
+    return Response.json({ ok: true });
 
-    // ----- 8. Truncate and send main briefing to Telegram -----
-    const LIMIT = 4000;
-    const tgMessage = briefing.length > LIMIT
-      ? briefing.slice(0, LIMIT) + "... (truncated)"
-      : briefing;
-    await sendTelegramMessage(chatId, tgMessage);
-    console.log("Morning briefing sent to chat", chatId);
-
-    // ----- 8. Bubble platform insights -----
-    await bubbleInsights(supabase, clientSummaries);
-
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200, headers: { "Content-Type": "application/json" },
-    });
   } catch (err) {
     console.error("Briefing error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return Response.json({ error: String(err) }, { status: 500 });
   }
 });

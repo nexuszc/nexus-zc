@@ -512,6 +512,56 @@ async function autonomousAct(): Promise<string[]> {
     }
   } catch { /* non-fatal */ }
 
+  // 5. Aria queue depth — auto-refill if fewer than 50 pending calls
+  try {
+    const { count: pendingQ } = await supabase
+      .from("aria_call_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending")
+      .gte("fire_at", new Date().toISOString());
+
+    if ((pendingQ || 0) < 50) {
+      const needed = Math.min(100, 50 - (pendingQ || 0));
+      const { data: prospects } = await supabase
+        .from("roofing_prospects")
+        .select("id, company_name, phone, state, city")
+        .not("phone", "is", null)
+        .eq("status", "new")
+        .limit(needed);
+
+      const fireAt = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setUTCHours(15, 0, 0, 0);
+        const dow = d.getDay();
+        if (dow === 0) d.setDate(d.getDate() + 1);
+        if (dow === 6) d.setDate(d.getDate() + 2);
+        return d.toISOString();
+      })();
+
+      let refilled = 0;
+      for (const p of prospects || []) {
+        await supabase.from("aria_call_queue").insert({
+          call_type:    "cold_outreach",
+          contact_phone: p.phone,
+          contact_name: p.company_name,
+          contact_type: "roofing_prospect",
+          fire_at:      fireAt,
+          status:       "pending",
+          attempt_count: 0,
+          queue_reason: "auto_refill",
+          metadata:     { state: p.state, city: p.city },
+        }).catch(() => {});
+        refilled++;
+      }
+
+      if (refilled > 0) {
+        summary.push(`aria_refill:${refilled}`);
+        await log("autonomous_aria_refill", `Refilled Aria queue — ${refilled} calls added (was ${pendingQ || 0})`);
+      }
+    }
+  } catch { /* non-fatal */ }
+
   return summary;
 }
 
@@ -1736,6 +1786,186 @@ Deno.serve(async (req) => {
           body: JSON.stringify({})
         }).catch(() => {});
       }
+    }
+
+    // ── 7am MT (13:00 UTC) — CONTENT PUSH ────────────────────────────────────
+    if (_utcH === 13 && _utcM < 30) {
+      // YouTube: trigger uploads for any ready content not yet published
+      (async () => {
+        const { data: ready } = await supabase
+          .from("roofing_content")
+          .select("id, title")
+          .eq("youtube_upload_ready", true)
+          .is("published_url", null)
+          .limit(3);
+        for (const item of ready || []) {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-uploader`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ content_id: item.id }),
+          }).catch(() => {});
+        }
+        if ((ready || []).length > 0) {
+          await log("content_push_youtube", `Triggered ${ready!.length} YouTube uploads at 7am`);
+        }
+
+        // Community: post top approved Reddit/owned post
+        const { data: communityPosts } = await supabase
+          .from("roofing_community_posts")
+          .select("id, platform, content")
+          .eq("status", "approved")
+          .is("posted_at", null)
+          .eq("owns_community", true)
+          .limit(1);
+        if ((communityPosts || []).length > 0) {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-community-monitor`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ post_id: communityPosts![0].id }),
+          }).catch(() => {});
+          await log("content_push_community", `Triggered community post ${communityPosts![0].id}`);
+        }
+      })().catch(() => {});
+    }
+
+    // ── 1pm MT (19:00 UTC) — PARTNER OUTREACH + CONTENT GEN CHECK ────────────
+    if (_utcH === 19 && _utcM < 30) {
+      (async () => {
+        // Partner outreach: top 3 uncontacted targets with email
+        const { data: targets } = await supabase
+          .from("roofing_partnership_targets")
+          .select("id, name, email, audience_size, touch_count")
+          .eq("status", "target")
+          .is("first_contacted_at", null)
+          .not("email", "is", null)
+          .order("audience_size", { ascending: false })
+          .limit(3);
+
+        let sent = 0;
+        for (const t of targets || []) {
+          const firstName = (t.name || "there").split(" ")[0];
+          await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: t.email,
+              from: "Zach Curtis <zach@nexuszc.com>",
+              subject: "Free tool for your roofing audience — partnership idea",
+              text: `Hi ${firstName},\n\nI run Roofing OS — a free homeowner portal for insurance restoration contractors. Roofers use it to stop homeowner status calls, track supplement status, and auto-generate 5-star reviews. Completely free. No credit card. 4 minutes to set up.\n\nI'm reaching out because your audience would genuinely benefit from this. I'd love to offer your followers exclusive early access and explore a partnership that makes sense for both of us.\n\nWorth a 15-minute call?\n\nZach Curtis\nRoofing OS — roofingos.dev\nzach@nexuszc.com | (720) 500-6668`,
+            }),
+          }).catch(() => {});
+
+          const now = new Date().toISOString();
+          await supabase.from("roofing_partnership_targets")
+            .update({ status: "contacted", first_contacted_at: now, last_contacted_at: now, touch_count: 1 })
+            .eq("id", t.id);
+
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-core", action_type: "partner_outreach_sent",
+            action_detail: `Initial outreach to ${t.name} (${t.email})`,
+            autonomous: true, outcome: "success",
+          }).catch(() => {});
+          sent++;
+        }
+        if (sent > 0) await log("partner_outreach_cycle", `Sent ${sent} initial outreach emails`);
+
+        // Content gen check: if YouTube upload-ready queue < 5, trigger engine
+        const { count: ytReady } = await supabase
+          .from("roofing_content")
+          .select("*", { count: "exact", head: true })
+          .eq("youtube_upload_ready", true)
+          .is("published_url", null);
+
+        if ((ytReady || 0) < 5) {
+          fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: "queue_low", trigger: "1pm_cycle" }),
+          }).catch(() => {});
+          await log("content_gen_triggered", `YouTube queue at ${ytReady || 0} — engine triggered (1pm cycle)`);
+        }
+      })().catch(() => {});
+    }
+
+    // ── 7pm MT (01:00 UTC) — PARTNER FOLLOW-UP + DAILY SNAPSHOT ─────────────
+    if (_utcH === 1 && _utcM < 30) {
+      (async () => {
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Follow-up: contacted partners with no response for 3+ days (max 5, max 4 touches)
+        const { data: followUps } = await supabase
+          .from("roofing_partnership_targets")
+          .select("id, name, email, touch_count, audience_size")
+          .eq("status", "contacted")
+          .is("responded_at", null)
+          .lt("last_contacted_at", threeDaysAgo)
+          .not("email", "is", null)
+          .order("audience_size", { ascending: false })
+          .limit(5);
+
+        let sent = 0;
+        for (const t of followUps || []) {
+          const touch = t.touch_count || 1;
+          // After 4 touches with no response → mark no_response, try again in 30 days
+          if (touch >= 4) {
+            const retry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            await supabase.from("roofing_partnership_targets")
+              .update({ status: "no_response", last_contacted_at: retry })
+              .eq("id", t.id);
+            continue;
+          }
+
+          const firstName = (t.name || "there").split(" ")[0];
+          const isLast = touch === 3;
+          const subject = isLast ? `Last note — Roofing OS` : `Re: Roofing OS — quick follow-up`;
+          const text = isLast
+            ? `Hi ${firstName},\n\nLast note from me. If the timing isn't right, no worries. Roofing OS is free forever if your audience ever wants to check it out — roofingos.dev.\n\nZach`
+            : `Hi ${firstName},\n\nFollowing up on my note about Roofing OS. Still think this could be valuable for your audience — it's genuinely free, no credit card.\n\nWorth a quick call to explore?\n\nZach`;
+
+          await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ to: t.email, from: "Zach Curtis <zach@nexuszc.com>", subject, text }),
+          }).catch(() => {});
+
+          await supabase.from("roofing_partnership_targets")
+            .update({ last_contacted_at: new Date().toISOString(), touch_count: touch + 1 })
+            .eq("id", t.id);
+
+          await supabase.from("nexus_audit_log").insert({
+            engine: "nexus-core", action_type: "partner_followup_sent",
+            action_detail: `Follow-up touch ${touch + 1} to ${t.name}`,
+            autonomous: true, outcome: "success",
+          }).catch(() => {});
+          sent++;
+        }
+        if (sent > 0) await log("partner_followup_cycle", `Sent ${sent} partner follow-up emails`);
+
+        // 30-day no_response revival: flip back to target so outreach cycle picks them up
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        await supabase.from("roofing_partnership_targets")
+          .update({ status: "target", touch_count: 0, first_contacted_at: null, last_contacted_at: null })
+          .eq("status", "no_response")
+          .lt("last_contacted_at", thirtyDaysAgo)
+          .catch(() => {});
+
+        // Daily snapshot
+        const today = new Date().toISOString().split("T")[0];
+        const [
+          { count: ariaToday },
+          { count: emailsToday },
+          { count: signupsToday },
+          { count: partnerTouches },
+        ] = await Promise.all([
+          supabase.from("roofing_aria_calls").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`),
+          supabase.from("roofing_outreach_log").select("*", { count: "exact", head: true }).gte("sent_at", `${today}T00:00:00`).catch(() => ({ count: 0 })),
+          supabase.from("roofing_captures").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`),
+          supabase.from("nexus_audit_log").select("*", { count: "exact", head: true })
+            .in("action_type", ["partner_outreach_sent", "partner_followup_sent"])
+            .gte("created_at", `${today}T00:00:00`),
+        ]);
+        await log("daily_snapshot", `Day ${today}: ${ariaToday || 0} calls · ${emailsToday || 0} emails · ${signupsToday || 0} signups · ${partnerTouches || 0} partner touches`);
+      })().catch(() => {});
     }
 
     // Auto-sync CLAUDE.md at the end of every cycle

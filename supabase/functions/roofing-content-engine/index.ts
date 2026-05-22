@@ -219,12 +219,58 @@ async function generateScript(topic: { title: string; pain_point: string; format
   }
 }
 
+// ── QUEUE DEPTH CHECK ─────────────────────────────────────────────────────────
+// Minimums: 5 YouTube shorts ready, 7d FB page, 7d FB group, 7d Reddit
+const QUEUE_MINIMUMS = {
+  youtube:      5,
+  facebook_page: 7,
+  facebook_group: 7,
+  reddit:       7,
+};
+
+async function checkQueueDepth(): Promise<Record<string, number>> {
+  const { data } = await supabase
+    .from("roofing_content")
+    .select("channel, status, youtube_upload_ready, youtube_posted_at, published_url")
+    .eq("status", "approved");
+
+  const depth: Record<string, number> = {};
+  for (const row of data || []) {
+    const ch = row.channel || "unknown";
+    if (ch === "youtube") {
+      if (row.youtube_upload_ready && !row.youtube_posted_at && !row.published_url) {
+        depth["youtube"] = (depth["youtube"] || 0) + 1;
+      }
+    } else {
+      if (!row.published_url) {
+        depth[ch] = (depth[ch] || 0) + 1;
+      }
+    }
+  }
+  return depth;
+}
+
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
-    if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v3 ready" });
+    if (body.test) return Response.json({ ok: true, message: "roofing-content-engine v4 ready" });
+
+    // Queue depth check: report depths, generate if below minimums
+    if (body.check_queue || body.action === "check_queue") {
+      const depth = await checkQueueDepth();
+      const below: string[] = [];
+      for (const [ch, min] of Object.entries(QUEUE_MINIMUMS)) {
+        if ((depth[ch] || 0) < min) below.push(`${ch}: ${depth[ch] || 0}/${min}`);
+      }
+      // If any channel below minimum, fall through to generate content
+      if (below.length === 0) {
+        return Response.json({ ok: true, queue_depth: depth, below: [], generated: 0, message: "All queues above minimum" });
+      }
+      // Log and fall through to generate
+      console.log("Queue below minimum:", below.join(", "), "— generating content");
+    }
 
     const startMs = Date.now();
 

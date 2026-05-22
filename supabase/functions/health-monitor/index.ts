@@ -1,11 +1,11 @@
-// NEXUS health-monitor v2 — smarter error detection, known pattern matching
+// NEXUS health-monitor v3 — smarter error detection + Phase 7 self-healing pipeline
 // Runs hourly via pg_cron
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const ANTHROPIC_API_KEY        = Deno.env.get("ANTHROPIC_API_KEY")!;
+const TELEGRAM_BOT_TOKEN       = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const FUNCTIONS = ["chat", "briefing", "reminders", "provision", "health-monitor", "auto-fix", "generate-va-tasks", "roofing-ai", "contractor-auth"];
@@ -13,7 +13,6 @@ const FUNCTIONS = ["chat", "briefing", "reminders", "provision", "health-monitor
 Deno.serve(async () => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // Get Telegram chat ID
   const { data: channelRow } = await supabase
     .from("channel_conversations")
     .select("external_id")
@@ -78,8 +77,7 @@ Deno.serve(async () => {
   }
 
   // 5. COO daily checks — stale clients, project momentum, health scores
-  // These have internal deduplication — safe to fire every health-monitor run
-  const cooBase = `${SUPABASE_URL}/functions/v1/nexus-coo`;
+  const cooBase    = `${SUPABASE_URL}/functions/v1/nexus-coo`;
   const cooHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` };
   fetch(cooBase, { method: "POST", headers: cooHeaders, body: JSON.stringify({ action: "stale_check" }) }).catch(() => {});
   fetch(cooBase, { method: "POST", headers: cooHeaders, body: JSON.stringify({ action: "momentum_check" }) }).catch(() => {});
@@ -102,7 +100,6 @@ Deno.serve(async () => {
         .maybeSingle();
 
       if (!existingAlert) {
-        // Deal going cold stored to nexus_alerts — visible in dashboard Home action queue
         await supabase.from("nexus_alerts").insert({
           alert_type: `deal_cold_${client.id}`,
           message: `${client.name} has gone cold — no activity in 48h`,
@@ -168,7 +165,6 @@ Deno.serve(async () => {
       .maybeSingle();
 
     if (topFix && !recentFix && telegramChatId) {
-      // Improvement trigger stored to nexus_improvements — visible in dashboard
       fetch(`${SUPABASE_URL}/functions/v1/auto-fix`, {
         method: "POST",
         headers: {
@@ -184,11 +180,246 @@ Deno.serve(async () => {
     }
   }
 
-  // 10. Generate weekly report on Sundays at 13:00 UTC
+  // 10. Weekly report on Sundays at 13:00 UTC
   const now = new Date();
-  if (now.getDay() === 0 && now.getHours() === 13) {
+  if (now.getDay() === 0 && now.getUTCHours() === 13) {
     await generateWeeklyReport(supabase, telegramChatId);
   }
+
+  // ── PHASE 7: SELF-HEALING PIPELINE ─────────────────────────────────────────
+
+  // 11. Aria queue < 100 pending → auto-refill from roofing_prospects
+  try {
+    const { count: ariaQ } = await supabase
+      .from("aria_call_queue")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "pending")
+      .gte("fire_at", new Date().toISOString());
+
+    if ((ariaQ || 0) < 100) {
+      const needed = 100 - (ariaQ || 0);
+      const { data: prospects } = await supabase
+        .from("roofing_prospects")
+        .select("id, company_name, phone, state, city")
+        .not("phone", "is", null)
+        .eq("status", "new")
+        .limit(needed);
+
+      const fireAt = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        d.setUTCHours(15, 0, 0, 0);
+        const dow = d.getDay();
+        if (dow === 0) d.setDate(d.getDate() + 1);
+        if (dow === 6) d.setDate(d.getDate() + 2);
+        return d.toISOString();
+      })();
+
+      let refilled = 0;
+      for (const p of prospects || []) {
+        await supabase.from("aria_call_queue").insert({
+          call_type: "cold_outreach", contact_phone: p.phone,
+          contact_name: p.company_name, contact_type: "roofing_prospect",
+          fire_at: fireAt, status: "pending", attempt_count: 0,
+          queue_reason: "health_monitor_refill",
+          metadata: { state: p.state, city: p.city },
+        }).catch(() => {});
+        refilled++;
+      }
+
+      if (refilled > 0 && telegramChatId) {
+        await sendTelegram(telegramChatId,
+          `📞 *Aria queue low (${ariaQ || 0}) — refilled ${refilled} calls*`
+        );
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // 12. Active email sequences < 200 → auto-enroll new prospects
+  try {
+    const { count: activeSeqs } = await supabase
+      .from("email_sequences")
+      .select("*", { count: "exact", head: true })
+      .eq("completed", false)
+      .eq("unsubscribed", false);
+
+    if ((activeSeqs || 0) < 200) {
+      const needed = Math.min(50, 200 - (activeSeqs || 0));
+      const { data: unenrolled } = await supabase
+        .from("roofing_prospects")
+        .select("id, company_name, email, state")
+        .not("email", "is", null)
+        .eq("status", "new")
+        .limit(needed);
+
+      let enrolled = 0;
+      for (const p of unenrolled || []) {
+        const { data: alreadyIn } = await supabase
+          .from("email_sequences")
+          .select("id")
+          .eq("prospect_email", p.email)
+          .maybeSingle();
+        if (alreadyIn) continue;
+
+        await supabase.from("email_sequences").insert({
+          prospect_id: p.id, prospect_email: p.email,
+          prospect_name: p.company_name, market: p.state,
+          current_step: 0,
+          next_send_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          completed: false, unsubscribed: false,
+          status: "active", type: "cold_outreach",
+        }).catch(() => {});
+        enrolled++;
+      }
+
+      if (enrolled > 0 && telegramChatId) {
+        await sendTelegram(telegramChatId,
+          `📧 *Email sequences low (${activeSeqs || 0}) — enrolled ${enrolled} new prospects*`
+        );
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // 13. YouTube upload-ready queue < 3 → trigger content engine immediately
+  try {
+    const { count: ytReady } = await supabase
+      .from("roofing_content")
+      .select("*", { count: "exact", head: true })
+      .eq("youtube_upload_ready", true)
+      .is("published_url", null);
+
+    if ((ytReady || 0) < 3) {
+      fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "health_monitor_queue_low" }),
+      }).catch(() => {});
+
+      if (telegramChatId) {
+        await sendTelegram(telegramChatId,
+          `🎬 *YouTube queue low (${ytReady || 0} ready) — generating content now*`
+        );
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // 14. Partner follow-ups overdue > 5 → send follow-ups now
+  try {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: overduePartners } = await supabase
+      .from("roofing_partnership_targets")
+      .select("*", { count: "exact", head: true })
+      .eq("status", "contacted")
+      .is("responded_at", null)
+      .lt("last_contacted_at", threeDaysAgo)
+      .not("email", "is", null);
+
+    if ((overduePartners || 0) > 5) {
+      const { data: followUps } = await supabase
+        .from("roofing_partnership_targets")
+        .select("id, name, email, touch_count")
+        .eq("status", "contacted")
+        .is("responded_at", null)
+        .lt("last_contacted_at", threeDaysAgo)
+        .not("email", "is", null)
+        .order("audience_size", { ascending: false })
+        .limit(5);
+
+      let sent = 0;
+      for (const t of followUps || []) {
+        const touch = t.touch_count || 1;
+        if (touch >= 4) {
+          await supabase.from("roofing_partnership_targets")
+            .update({ status: "no_response" }).eq("id", t.id);
+          continue;
+        }
+        const firstName = (t.name || "there").split(" ")[0];
+        await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: t.email, from: "Zach Curtis <zach@nexuszc.com>",
+            subject: touch >= 3 ? "Last note — Roofing OS" : "Re: Roofing OS — quick follow-up",
+            text: touch >= 3
+              ? `Hi ${firstName},\n\nLast note. Roofing OS is free forever — roofingos.dev if you ever want to share it.\n\nZach`
+              : `Hi ${firstName},\n\nFollowing up — still think this would be valuable for your audience. Worth a quick call?\n\nZach`,
+          }),
+        }).catch(() => {});
+        await supabase.from("roofing_partnership_targets")
+          .update({ last_contacted_at: new Date().toISOString(), touch_count: touch + 1 })
+          .eq("id", t.id);
+        sent++;
+      }
+
+      if (sent > 0 && telegramChatId) {
+        await sendTelegram(telegramChatId,
+          `🤝 *Sent ${sent} overdue partner follow-ups (${overduePartners} were overdue)*`
+        );
+      }
+    }
+  } catch { /* non-fatal */ }
+
+  // 15. Zero signups for 3 consecutive days → alert + scale Aria queue to 500
+  try {
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: recentSignups } = await supabase
+      .from("roofing_captures")
+      .select("*", { count: "exact", head: true })
+      .gte("created_at", threeDaysAgo);
+
+    if ((recentSignups || 0) === 0) {
+      const { data: existingAlert } = await supabase
+        .from("nexus_alerts")
+        .select("id")
+        .eq("alert_type", "zero_signups_3days")
+        .eq("resolved", false)
+        .gt("sent_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .maybeSingle();
+
+      if (!existingAlert) {
+        // Scale Aria queue: add up to 500 prospects
+        const { data: prospects } = await supabase
+          .from("roofing_prospects")
+          .select("id, company_name, phone, state, city")
+          .not("phone", "is", null)
+          .eq("status", "new")
+          .limit(500);
+
+        const fireAt = (() => {
+          const d = new Date();
+          d.setDate(d.getDate() + 1);
+          d.setUTCHours(15, 0, 0, 0);
+          const dow = d.getDay();
+          if (dow === 0) d.setDate(d.getDate() + 1);
+          if (dow === 6) d.setDate(d.getDate() + 2);
+          return d.toISOString();
+        })();
+
+        let scaled = 0;
+        for (const p of prospects || []) {
+          await supabase.from("aria_call_queue").insert({
+            call_type: "cold_outreach", contact_phone: p.phone,
+            contact_name: p.company_name, contact_type: "roofing_prospect",
+            fire_at: fireAt, status: "pending", attempt_count: 0,
+            queue_reason: "zero_signup_scale",
+            metadata: { state: p.state, city: p.city },
+          }).catch(() => {});
+          scaled++;
+        }
+
+        await supabase.from("nexus_alerts").insert({
+          alert_type: "zero_signups_3days",
+          message: `3 consecutive days with 0 signups. Auto-scaled Aria queue to ${scaled} calls.`,
+        });
+
+        if (telegramChatId) {
+          await sendTelegram(telegramChatId,
+            `⚠️ *3 days with 0 signups.*\n\nTop action: Check roofingos.dev landing page is live and Aria outreach is firing.\nAuto-scaled Aria queue to ${scaled} calls for tomorrow.`
+          );
+        }
+      }
+    }
+  } catch { /* non-fatal */ }
 
   return new Response(JSON.stringify({
     ok: true,
@@ -198,76 +429,49 @@ Deno.serve(async () => {
   }), { headers: { "Content-Type": "application/json" } });
 });
 
-// ================================================================
-// HEALTH CHECK
-// ================================================================
 async function checkFunctionHealth(supabase: any, fnName: string) {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-
   const { data: usage } = await supabase
-    .from("nexus_usage")
-    .select("success, response_ms, logged_at")
-    .eq("ability", fnName)
-    .gt("logged_at", oneHourAgo);
+    .from("nexus_usage").select("success, response_ms, logged_at")
+    .eq("ability", fnName).gt("logged_at", oneHourAgo);
 
   const entries = usage || [];
-  const errors = entries.filter((e: any) => !e.success).length;
+  const errors    = entries.filter((e: any) => !e.success).length;
   const successes = entries.filter((e: any) => e.success).length;
-  const avgMs = entries.length
+  const avgMs     = entries.length
     ? Math.round(entries.reduce((a: number, e: any) => a + (e.response_ms || 0), 0) / entries.length)
     : 0;
 
-  // Pull last error from alerts
   const { data: lastAlert } = await supabase
-    .from("nexus_alerts")
-    .select("message")
+    .from("nexus_alerts").select("message")
     .ilike("alert_type", `%${fnName}%`)
-    .order("sent_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("sent_at", { ascending: false }).limit(1).maybeSingle();
 
   return { name: fnName, errors, successes, avgMs, lastError: lastAlert?.message || null };
 }
 
-// ================================================================
-// VERIFY RECENT FIXES ACTUALLY WORKED
-// ================================================================
 async function verifyRecentFixes(supabase: any, healthResults: any[], telegramChatId: string | null) {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
   const { data: recentlyFixed } = await supabase
-    .from("nexus_improvements")
-    .select("*")
-    .eq("status", "live")
-    .eq("fix_verified", false)
-    .gt("live_at", oneDayAgo);
+    .from("nexus_improvements").select("*")
+    .eq("status", "live").eq("fix_verified", false).gt("live_at", oneDayAgo);
 
   for (const fix of (recentlyFixed || [])) {
     const relatedHealth = healthResults.find((h: any) => h.name === fix.affected_function);
-
     if (relatedHealth) {
-      const isWorking = relatedHealth.errors === 0 || relatedHealth.successes > relatedHealth.errors;
-
       await supabase.from("nexus_improvements").update({
         fix_verified: true,
         fix_verified_at: new Date().toISOString(),
         post_fix_error_count: relatedHealth.errors,
       }).eq("id", fix.id);
-
-      // Fix regression/verified stored to nexus_improvements — visible in System fix queue
     }
   }
 }
 
-// ================================================================
-// USAGE ANALYSIS
-// ================================================================
 async function analyzeUsage(supabase: any) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: usage } = await supabase
-    .from("nexus_usage")
-    .select("ability, success, response_ms")
-    .gt("logged_at", sevenDaysAgo);
+  const { data: usage } = await supabase.from("nexus_usage")
+    .select("ability, success, response_ms").gt("logged_at", sevenDaysAgo);
 
   const counts: Record<string, { total: number; failures: number; avgMs: number }> = {};
   for (const u of (usage || [])) {
@@ -277,36 +481,18 @@ async function analyzeUsage(supabase: any) {
     counts[u.ability].avgMs = ((counts[u.ability].avgMs * (counts[u.ability].total - 1)) + (u.response_ms || 0)) / counts[u.ability].total;
   }
 
-  const allAbilities = [
-    "search", "research", "summarize", "draft email", "send email",
-    "generate proposal", "generate script", "generate report", "remind me",
-    "provision", "report", "competitors", "client snapshot", "prioritize tasks",
-    "generate invoice", "generate contract", "follow up", "weekly digest",
-    "generate sop", "generate pitch", "generate case study", "calculate roi",
-    "save knowledge", "recall knowledge", "learn from", "brain dump", "nexus audit",
-    "status update", "sprint plan", "task estimate",
-  ];
-  const unused = allAbilities.filter(a => !counts[a] || counts[a].total === 0);
-  const slow = Object.entries(counts).filter(([_, v]) => v.avgMs > 10000).map(([k]) => k);
+  const allAbilities = ["search","research","summarize","draft email","send email","generate proposal","generate script","generate report","remind me","provision","report","competitors","client snapshot","prioritize tasks","generate invoice","generate contract","follow up","weekly digest","generate sop","generate pitch","generate case study","calculate roi","save knowledge","recall knowledge","learn from","brain dump","nexus audit","status update","sprint plan","task estimate"];
+  const unused  = allAbilities.filter(a => !counts[a] || counts[a].total === 0);
+  const slow    = Object.entries(counts).filter(([_, v]) => v.avgMs > 10000).map(([k]) => k);
   const failing = Object.entries(counts).filter(([_, v]) => v.failures / v.total > 0.3).map(([k]) => k);
-
   return { counts, unused, slow, failing };
 }
 
-// ================================================================
-// IDENTIFY IMPROVEMENTS
-// ================================================================
-async function identifyImprovements(
-  health: any[], usage: any, detectedPatterns: string[], knownPatterns: any[]
-): Promise<any[]> {
-  const healthSummary = health
-    .filter(h => h.errors > 0 || h.successes > 0)
-    .map(h => `${h.name}: ${h.successes} ok, ${h.errors} errors, avg ${h.avgMs}ms`)
-    .join("\n") || "All functions healthy with no recent activity";
-
+async function identifyImprovements(health: any[], usage: any, detectedPatterns: string[], knownPatterns: any[]): Promise<any[]> {
+  const healthSummary = health.filter(h => h.errors > 0 || h.successes > 0)
+    .map(h => `${h.name}: ${h.successes} ok, ${h.errors} errors, avg ${h.avgMs}ms`).join("\n") || "All healthy";
   const usageSummary = Object.entries(usage.counts)
-    .map(([k, v]: any) => `${k}: ${v.total} uses, ${v.failures} failures, avg ${Math.round(v.avgMs)}ms`)
-    .join("\n") || "No usage data";
+    .map(([k, v]: any) => `${k}: ${v.total} uses, ${v.failures} failures, avg ${Math.round(v.avgMs)}ms`).join("\n") || "No usage data";
 
   const prompt = `You are analyzing the Nexus AI operating system to identify the top 3 improvements.
 
@@ -326,18 +512,15 @@ ${detectedPatterns.join("\n") || "none"}
 KNOWN FIXABLE PATTERNS:
 ${knownPatterns.map((p: any) => `${p.pattern_name}: seen ${p.times_seen}x, fixed ${p.times_fixed}x`).join("\n")}
 
-Identify the top 3 most impactful improvements. Focus on:
-1. Any detected error patterns that match known fixes
-2. Slow or failing abilities
-3. Missing functionality that would add real value
+Identify the top 3 most impactful improvements. Focus on error patterns and failing abilities first.
 
 Return ONLY a JSON array:
 [
   {
     "title": "Short specific title",
-    "problem": "Exact problem description with evidence from data above",
-    "recommended_fix": "Specific code-level fix — be precise about what to change",
-    "affected_function": "exact function name from: chat, briefing, reminders, provision, health-monitor, auto-fix, generate-va-tasks",
+    "problem": "Exact problem description",
+    "recommended_fix": "Specific code-level fix",
+    "affected_function": "exact function name",
     "priority": 1,
     "estimated_minutes": 20,
     "fix_confidence": 85
@@ -354,43 +537,34 @@ Return only the JSON array. No markdown.`;
   const data = await res.json();
   const text = data?.content?.[0]?.text || "[]";
   const jsonMatch = text.match(/\[[\s\S]*\]/);
-  try {
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-  } catch { return []; }
+  try { return jsonMatch ? JSON.parse(jsonMatch[0]) : []; }
+  catch { return []; }
 }
 
-// ================================================================
-// WEEKLY REPORT
-// ================================================================
 async function generateWeeklyReport(supabase: any, telegramChatId: string | null) {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
   const [{ data: fixes }, { data: usage }, { data: alerts }] = await Promise.all([
     supabase.from("nexus_improvements").select("title, status, fix_verified, fix_confidence").gt("identified_at", sevenDaysAgo),
     supabase.from("nexus_usage").select("ability, success").gt("logged_at", sevenDaysAgo),
     supabase.from("nexus_alerts").select("alert_type, message").gt("sent_at", sevenDaysAgo),
   ]);
 
-  const attempted = (fixes || []).filter((f: any) => f.auto_fix_attempted).length;
+  const attempted  = (fixes || []).filter((f: any) => f.auto_fix_attempted).length;
   const successful = (fixes || []).filter((f: any) => f.fix_verified).length;
-  const rejected = (fixes || []).filter((f: any) => f.status === "rejected").length;
+  const rejected   = (fixes || []).filter((f: any) => f.status === "rejected").length;
 
   const abilityCounts = (usage || []).reduce((acc: any, u: any) => {
-    acc[u.ability] = (acc[u.ability] || 0) + 1;
-    return acc;
+    acc[u.ability] = (acc[u.ability] || 0) + 1; return acc;
   }, {});
 
   const topAbilities = Object.entries(abilityCounts)
-    .sort(([, a]: any, [, b]: any) => b - a)
-    .slice(0, 5)
-    .map(([k, v]) => `${k}: ${v}x`);
+    .sort(([, a]: any, [, b]: any) => b - a).slice(0, 5).map(([k, v]) => `${k}: ${v}x`);
 
   const report = `🧠 NEXUS WEEKLY SELF-REPORT\nWeek ending ${new Date().toLocaleDateString()}\n\n` +
-    `SELF-IMPROVEMENT:\n• Fixes attempted: ${attempted}\n• Fixes verified working: ${successful}\n• Fixes rejected: ${rejected}\n\n` +
+    `SELF-IMPROVEMENT:\n• Fixes attempted: ${attempted}\n• Fixes verified: ${successful}\n• Fixes rejected: ${rejected}\n\n` +
     `TOP ABILITIES USED:\n${topAbilities.map(a => `• ${a}`).join("\n") || "• No usage data"}\n\n` +
     `ALERTS THIS WEEK: ${(alerts || []).length}\n\n` +
-    `HEALTH SCORE: ${attempted > 0 ? Math.round((successful / attempted) * 100) : 100}/100\n\n` +
-    `Nexus ran ${(usage || []).length} ability executions this week and self-improved ${successful} times.`;
+    `HEALTH SCORE: ${attempted > 0 ? Math.round((successful / attempted) * 100) : 100}/100`;
 
   await supabase.from("weekly_reports").insert({
     week_start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -400,9 +574,6 @@ async function generateWeeklyReport(supabase: any, telegramChatId: string | null
     fixes_rejected: rejected,
     abilities_used: abilityCounts,
   });
-
-  // MOVED_TO_DASHBOARD [date: 2026-05-17]: weekly system report visible in System tab (weekly_reports table)
-  // if (telegramChatId) await sendTelegram(telegramChatId, report);
 }
 
 async function sendTelegram(chatId: string, text: string): Promise<void> {
