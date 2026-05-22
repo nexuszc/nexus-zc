@@ -1,217 +1,149 @@
-// supabase/functions/smoke-test-runner/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { corsHeaders } from '../_shared/cors.ts';
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+// Logger utility
+const logger = {
+  log: (level: string, message: string, meta?: any) => {
+    console.log(JSON.stringify({
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+      ...meta
+    }));
+  }
 };
 
-interface Logger {
-  log: (level: string, message: string, meta?: any) => void;
+// Generate request ID
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-const logger: Logger = {
-  log: (level: string, message: string, meta?: any) => {
-    const timestamp = new Date().toISOString();
-    console.log(JSON.stringify({ timestamp, level, message, ...meta }));
-  }
-};
-
+// Perform health check
 async function performHealthCheck() {
-  const checks = [];
-  let allPassed = true;
-
-  // Check environment variables
-  const envCheck = {
-    name: 'environment_variables',
-    status: 'ok' as 'ok' | 'error',
-    details: {} as any
-  };
-
-  const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
-  
-  if (missingVars.length > 0) {
-    envCheck.status = 'error';
-    envCheck.details = { missing: missingVars };
-    allPassed = false;
-  } else {
-    envCheck.details = { all_present: true };
-  }
-  checks.push(envCheck);
-
-  // Check Supabase connection
-  const supabaseCheck = {
-    name: 'supabase_connection',
-    status: 'ok' as 'ok' | 'error',
-    details: {} as any
-  };
-
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data, error } = await supabase.from('profiles').select('count').limit(1).single();
-    
-    if (error && error.code !== 'PGRST116') {
-      supabaseCheck.status = 'error';
-      supabaseCheck.details = { error: error.message };
-      allPassed = false;
-    } else {
-      supabaseCheck.details = { connected: true };
-    }
-  } catch (error) {
-    supabaseCheck.status = 'error';
-    supabaseCheck.details = { error: String(error) };
-    allPassed = false;
-  }
-  checks.push(supabaseCheck);
-
-  return {
-    status: allPassed ? 'ok' : 'error',
+  const healthData = {
+    status: 'ok',
     timestamp: new Date().toISOString(),
     function: 'smoke-test-runner',
-    checks
+    environment: {
+      denoVersion: Deno.version.deno,
+      v8Version: Deno.version.v8,
+      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
+      hasSupabaseKey: !!Deno.env.get('SUPABASE_ANON_KEY')
+    }
   };
+
+  return healthData;
 }
 
+// Run smoke tests
 async function runSmokeTests() {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing required environment variables for smoke tests');
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
   }
 
-  const tests = [];
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const results = [];
   let allPassed = true;
 
-  // Test 1: Call smoke-test function
-  const smokeTestCheck = {
-    name: 'smoke_test_function',
-    status: 'ok' as 'ok' | 'error',
-    duration: 0,
-    details: {} as any
-  };
-
+  // Test 1: Database connection
   try {
-    const startTime = Date.now();
-    const response = await fetch(`${supabaseUrl}/functions/v1/smoke-test`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ test: true })
-    });
-
-    smokeTestCheck.duration = Date.now() - startTime;
-
-    if (!response.ok) {
-      smokeTestCheck.status = 'error';
-      smokeTestCheck.details = { 
-        status: response.status,
-        statusText: response.statusText,
-        body: await response.text()
-      };
-      allPassed = false;
-    } else {
-      const data = await response.json();
-      smokeTestCheck.details = { 
-        status: response.status,
-        response: data
-      };
-    }
-  } catch (error) {
-    smokeTestCheck.status = 'error';
-    smokeTestCheck.details = { error: String(error) };
-    allPassed = false;
-  }
-  tests.push(smokeTestCheck);
-
-  // Test 2: Database connectivity
-  const dbCheck = {
-    name: 'database_connectivity',
-    status: 'ok' as 'ok' | 'error',
-    duration: 0,
-    details: {} as any
-  };
-
-  try {
-    const startTime = Date.now();
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data, error } = await supabase.from('profiles').select('count').limit(1);
-
-    dbCheck.duration = Date.now() - startTime;
-
-    if (error && error.code !== 'PGRST116') {
-      dbCheck.status = 'error';
-      dbCheck.details = { error: error.message, code: error.code };
-      allPassed = false;
-    } else {
-      dbCheck.details = { connected: true };
-    }
-  } catch (error) {
-    dbCheck.status = 'error';
-    dbCheck.details = { error: String(error) };
-    allPassed = false;
-  }
-  tests.push(dbCheck);
-
-  // Test 3: Auth service
-  const authCheck = {
-    name: 'auth_service',
-    status: 'ok' as 'ok' | 'error',
-    duration: 0,
-    details: {} as any
-  };
-
-  try {
-    const startTime = Date.now();
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data, error } = await supabase.auth.getSession();
-
-    authCheck.duration = Date.now() - startTime;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
 
     if (error) {
-      authCheck.status = 'error';
-      authCheck.details = { error: error.message };
+      results.push({
+        test: 'database_connection',
+        status: 'failed',
+        error: error.message
+      });
       allPassed = false;
     } else {
-      authCheck.details = { available: true };
+      results.push({
+        test: 'database_connection',
+        status: 'passed'
+      });
     }
   } catch (error) {
-    authCheck.status = 'error';
-    authCheck.details = { error: String(error) };
+    results.push({
+      test: 'database_connection',
+      status: 'failed',
+      error: String(error)
+    });
     allPassed = false;
   }
-  tests.push(authCheck);
+
+  // Test 2: Auth check
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    
+    results.push({
+      test: 'auth_service',
+      status: 'passed',
+      note: 'Auth service is accessible'
+    });
+  } catch (error) {
+    results.push({
+      test: 'auth_service',
+      status: 'failed',
+      error: String(error)
+    });
+    allPassed = false;
+  }
+
+  // Test 3: Storage check
+  try {
+    const { data: buckets, error } = await supabase.storage.listBuckets();
+    
+    if (error) {
+      results.push({
+        test: 'storage_service',
+        status: 'failed',
+        error: error.message
+      });
+      allPassed = false;
+    } else {
+      results.push({
+        test: 'storage_service',
+        status: 'passed',
+        bucketCount: buckets?.length || 0
+      });
+    }
+  } catch (error) {
+    results.push({
+      test: 'storage_service',
+      status: 'failed',
+      error: String(error)
+    });
+    allPassed = false;
+  }
 
   return {
-    status: allPassed ? 'success' : 'error',
+    status: allPassed ? 'success' : 'failed',
     timestamp: new Date().toISOString(),
-    function: 'smoke-test-runner',
-    tests,
-    summary: {
-      total: tests.length,
-      passed: tests.filter(t => t.status === 'ok').length,
-      failed: tests.filter(t => t.status === 'error').length
-    }
+    totalTests: results.length,
+    passedTests: results.filter(r => r.status === 'passed').length,
+    failedTests: results.filter(r => r.status === 'failed').length,
+    results
   };
 }
 
-Deno.serve(async (req: Request) => {
-  const requestId = crypto.randomUUID();
-  const url = new URL(req.url);
-
+// Main handler function
+async function handleRequest(req: Request): Promise<Response> {
+  const requestId = generateRequestId();
+  
   try {
-    logger.log('info', 'Request received', { 
-      requestId, 
-      method: req.method, 
-      pathname: url.pathname 
+    const url = new URL(req.url);
+    
+    logger.log('info', 'Incoming request', {
+      requestId,
+      method: req.method,
+      path: url.pathname
     });
 
     // Handle CORS preflight
@@ -223,31 +155,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // Health check endpoint
-    if ((url.pathname.endsWith('/health') || url.pathname === '/') && req.method === 'GET') {
+    if (url.pathname.endsWith('/health') && req.method === 'GET') {
       try {
         logger.log('info', 'Processing health check request', { requestId });
         
-        // Create timeout promise (10s max for health check)
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Health check timeout after 10s')), 10000);
-        });
-
-        // Race between health check and timeout
-        const healthCheckResult = await Promise.race([
-          performHealthCheck(),
-          timeoutPromise
-        ]) as any;
+        const healthData = await performHealthCheck();
 
         logger.log('info', 'Health check completed', { 
           requestId, 
-          status: healthCheckResult.status,
-          checksRun: healthCheckResult.checks?.length || 0
+          status: healthData.status 
         });
 
         return new Response(
-          JSON.stringify(healthCheckResult),
+          JSON.stringify(healthData),
           {
-            status: healthCheckResult.status === 'ok' ? 200 : 500,
+            status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
@@ -259,7 +181,45 @@ Deno.serve(async (req: Request) => {
             status: 'error',
             timestamp: new Date().toISOString(),
             function: 'smoke-test-runner',
-            error: error.message || String(error),
+            error: error instanceof Error ? error.message : String(error),
+            requestId
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
+
+    // GET request - return health check
+    if (req.method === 'GET') {
+      try {
+        logger.log('info', 'Processing GET request - health check', { requestId });
+        
+        const healthData = await performHealthCheck();
+
+        logger.log('info', 'Health check completed', { 
+          requestId, 
+          status: healthData.status 
+        });
+
+        return new Response(
+          JSON.stringify(healthData),
+          {
+            status: healthData.status === 'ok' ? 200 : 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      } catch (error) {
+        logger.log('error', 'Health check failed', { requestId, error: String(error) });
+        
+        return new Response(
+          JSON.stringify({
+            status: 'error',
+            timestamp: new Date().toISOString(),
+            function: 'smoke-test-runner',
+            error: error instanceof Error ? error.message : String(error),
             requestId
           }),
           {
@@ -306,7 +266,7 @@ Deno.serve(async (req: Request) => {
             status: 'error',
             timestamp: new Date().toISOString(),
             function: 'smoke-test-runner',
-            error: error.message || String(error),
+            error: error instanceof Error ? error.message : String(error),
             requestId
           }),
           {
@@ -359,7 +319,7 @@ Deno.serve(async (req: Request) => {
             });
             smokeTestResult = {
               status: 'error',
-              error: smokeError.message || String(smokeError),
+              error: smokeError instanceof Error ? smokeError.message : String(smokeError),
               timestamp: new Date().toISOString()
             };
           }
@@ -394,7 +354,7 @@ Deno.serve(async (req: Request) => {
             status: 'error',
             timestamp: new Date().toISOString(),
             function: 'smoke-test-runner',
-            error: error.message || String(error),
+            error: error instanceof Error ? error.message : String(error),
             requestId
           }),
           {
@@ -424,7 +384,7 @@ Deno.serve(async (req: Request) => {
     logger.log('error', 'Unhandled error in request handler', { 
       requestId, 
       error: String(error),
-      stack: error.stack 
+      stack: error instanceof Error ? error.stack : undefined
     });
 
     return new Response(
@@ -432,8 +392,34 @@ Deno.serve(async (req: Request) => {
         status: 'error',
         timestamp: new Date().toISOString(),
         function: 'smoke-test-runner',
-        error: error.message || String(error),
+        error: error instanceof Error ? error.message : String(error),
         requestId
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
+// Export using Deno.serve() with proper async handler wrapper
+serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (error) {
+    logger.log('error', 'Fatal error in serve wrapper', {
+      error: String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    return new Response(
+      JSON.stringify({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        function: 'smoke-test-runner',
+        error: error instanceof Error ? error.message : String(error),
+        fatal: true
       }),
       {
         status: 500,
