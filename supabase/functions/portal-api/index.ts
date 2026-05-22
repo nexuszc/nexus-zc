@@ -196,6 +196,7 @@ Deno.serve(async (req) => {
         job: { ...job, progress, satellite_url: satelliteUrl },
         activities,
         timeline: activities,
+        photos: photosRes.data || [],
         insurance_status_plain: insurancePlainEnglish(claimRes.data),
         claim: claimRes.data,
         supplements: supplementsRes.data || [],
