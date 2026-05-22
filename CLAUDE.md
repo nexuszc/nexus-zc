@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v9
+# Last updated: May 22, 2026 — v8
 
 ---
 
@@ -97,6 +97,7 @@ Then productized and sold to other multi-business operators.
 | `ae-tasks` | See function source for details | Internal |
 | `aria-call-gate` | See function source for details | Internal |
 | `aria-queue-daily` | See function source for details | Internal |
+| `aria-queue-processor` | See function source for details | Internal |
 | `assess-project` | Run AI assessment on a project | On demand |
 | `auto-fix` | Read code from GitHub → Claude writes fix → commit to dev → notify | Called by health-monitor |
 | `brain-api` | REST API for brain browser access | GET/POST from nexus-brain.html |
@@ -178,6 +179,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-linkedin-poster` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
 | `roofing-measurements` | See function source for details | Internal |
+| `roofing-non-roofer-redirect` | See function source for details | Internal |
 | `roofing-notify` | SMS (Twilio) + email (Resend) dispatcher for all roofing events | Internal |
 | `roofing-nudge-email` | See function source for details | Internal |
 | `roofing-outreach` | See function source for details | Internal |
@@ -205,6 +207,8 @@ Then productized and sold to other multi-business operators.
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
 | `roofing-whale-alert` | See function source for details | Internal |
+| `roofing-youtube-analytics` | See function source for details | Internal |
+| `roofing-youtube-engage` | See function source for details | Internal |
 | `roofing-youtube-engine` | See function source for details | Internal |
 | `roofing-youtube-publisher` | See function source for details | Internal |
 | `roofing-youtube-uploader` | See function source for details | Internal |
@@ -414,39 +418,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**DONE (May 22, 2026 — YouTube machine overhaul):**
-- Content dashboard rebuilt: dead-simple "Post Today" page (Content.jsx, ~200 lines)
-- Nav: "📋 Post Today" added as first item, links to /roofing/content
-- YouTube machine full overhaul — all 10 phases deployed:
-  - roofing-youtube-engine v3: conversion-focused scripts, 8 categories, hook/thumbnail/keywords
-  - roofing-youtube-publisher v2: Adam voice, eleven_turbo_v2, stability 0.35/style 0.6
-  - roofing-youtube-uploader v7: Pexels stock footage, thumbnail, pinned comment, full description
-  - roofing-youtube-analytics (new): daily view/watch hours, Telegram milestones
-  - roofing-youtube-engage (new): daily comment auto-reply via Claude
-  - 60 short scripts + 4 long-form scripts generating in background
-  - Crons: engine 14/run (Mon+Thu), upload 9am MT + 9pm MT, analytics 6am, engage 10am
-  - 15 videos live, 18+ in voiceover pipeline now
-- PEXELS_API_KEY set ✅ — stock footage backgrounds now live for new uploads
+**DONE this session:**
+- (nothing yet this session)
 
-**DONE (May 21–22, 2026):**
-- Aria V1 deployed (TwiML outbound + inbound, Adam voice)
-- aria-queue-processor FIXED — 410 past-due calls now firing
-- roofing-outreach-sequencer: bounce retry loop fixed
-- smoke-test + system-heartbeat deployed
-
-**PENDING — needs Zach:**
-- Set PEXELS_API_KEY secret (free at pexels.com/api)
-- Check Telegram for hot Aria leads
-- LinkedIn post (3 minutes)
-- Reddit API approval — 3-5 days
-- Facebook Page token — Meta reviewing 1-2 weeks
-
-**SYSTEM STATE:**
-- YouTube: 15 live, 18 in voiceover pipeline, 10 ready to upload tonight
-- Engine: 60+ new scripts queued (Mon+Thu generates 14 more each run)
-- Long-form: 4 x 10-min scripts generating (watch hours pipeline)
-- Aria: queue processor firing Mon–Fri 8am/10am/12pm/2pm MT
-- Email sequences: 330 active, bounce retry fixed
+**NEXT:**
+1. Fix smoke_test_failed error
+2. Fix Recurring Smoke Test Failures
+3. Add Self-Learning Pattern Recognition
+4. Add memory consolidation ability
+5. Add Conversation Context Memory
+6. Draft operating agreement for Nexus ZC LLC
+7. Build Roofing OS go-to-market system and landing page
+8. Monitor and improve client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
