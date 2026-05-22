@@ -278,6 +278,44 @@ gtag('config', 'YOUR_GA4_ID');
   .signup-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
 
   .cta-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
+
+  /* ── MOBILE FIXES ─────────────────────────────────────────────────────── */
+  /* 44px tap targets */
+  .nav-cta { min-height: 44px; display: inline-flex; align-items: center; }
+  .nav-audit { min-height: 44px; display: inline-flex; align-items: center; }
+  .addon-card a { display: inline-flex; align-items: center; min-height: 44px; }
+  .cta-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .hero-cta { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+
+  @media (max-width: 430px) {
+    /* Hide audit link to prevent nav overflow on small screens */
+    .nav-audit { display: none; }
+
+    /* Hero phone — contain within viewport */
+    .phone-wrap { max-width: 100%; overflow: visible; }
+    .phone { max-width: calc(100vw - 48px); margin: 0 auto; }
+
+    /* Free card — tighter padding */
+    .free-card { padding: 24px 20px; }
+    .product-price { font-size: 40px; }
+
+    /* Addon cards — force single column */
+    .addons-grid { grid-template-columns: 1fr; }
+
+    /* All-in card — stack vertically */
+    .all-in-card { flex-direction: column; text-align: center; gap: 20px; padding: 24px 20px; }
+    .all-in-price { font-size: 36px; margin-bottom: 12px; }
+    .all-in-left p { max-width: 100%; }
+
+    /* Cancel table — tighter */
+    .cancel-row { padding: 12px 14px; font-size: 13px; }
+
+    /* Feature grid — single column */
+    .features-grid { grid-template-columns: 1fr; }
+
+    /* Section padding tighter */
+    section { padding: 60px 20px; }
+  }
 </style>
 </head>
 <body>
@@ -285,7 +323,7 @@ gtag('config', 'YOUR_GA4_ID');
 <nav>
   <a href="/" class="logo">Roofing<em>OS</em></a>
   <a href="/audit" class="nav-audit">Free supplement audit →</a>
-  <a href="https://roofingos.dev/dashboard" class="nav-cta">Get your free portal →</a>
+  <a href="https://roofingos.dev/dashboard" class="nav-cta">Free portal →</a>
 </nav>
 
 <!-- HERO -->
