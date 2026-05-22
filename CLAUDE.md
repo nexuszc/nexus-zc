@@ -414,18 +414,30 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE (May 21–22, 2026):**
+- YouTube pipeline fully working end-to-end (Creatomate renders → YouTube upload)
+- 9 videos live on YouTube channel
+- YouTube channel verified (youtube.com/verify) — daily limit lifted to 50/day
+- 10 videos queued for tonight's 9pm UTC cron (limit:15 updated)
+- Daily YouTube cron updated to limit:15 (was limit:7)
+- Aria queue processor FIXED — priority_score bug removed, was silently blocking all calls
+- aria-queue-processor function deployed, cron Mon–Fri 8am/10am/12pm/2pm MT
+- 410 past-due Aria calls will now fire starting today
+- roofing-outreach-sequencer: failed sends now mark sequence dead (stops retry loop)
+- smoke-test, smoke-test-runner, system-heartbeat deployed to Supabase
+- All morning fixes committed and pushed (a53889a)
 
-**NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Complete homeowner portal fixes and client deliverables
+**PENDING — needs Zach:**
+- Check Telegram for hot Aria leads → call before noon
+- LinkedIn post (3 minutes)
+- Reddit API approval — 3-5 days
+- Facebook Page token — Meta reviewing 1-2 weeks
+
+**SYSTEM STATE:**
+- Aria: 410 past-due calls, processor now firing up to 100/day
+- YouTube: 10 videos queued, will upload tonight at 9pm UTC
+- Email sequences: 330 active, 31 dead, bounce retry loop fixed
+- nexus-build loop: smoke-test deployed, should stop triggering
 
 ---
 
