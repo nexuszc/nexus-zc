@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v8
+# Last updated: May 22, 2026 — v8
 
 ---
 
@@ -424,8 +424,8 @@ Then productized and sold to other multi-business operators.
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system
-8. Complete homeowner portal and client features
+7. Build Roofing OS go-to-market system and public landing page
+8. Complete homeowner portal fixes and documentation
 
 ---
 
