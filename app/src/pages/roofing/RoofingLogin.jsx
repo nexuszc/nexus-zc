@@ -80,8 +80,8 @@ export default function RoofingLogin() {
             </button>
             <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', marginTop: '16px', marginBottom: 0 }}>
               New here?{' '}
-              <a href="https://roofingos.dev" style={{ color: '#4a9eff', textDecoration: 'none' }} target="_blank" rel="noopener">
-                Create your free account →
+              <a href="https://roofingos.dev/signup" style={{ color: '#4a9eff', textDecoration: 'none' }} target="_blank" rel="noopener">
+                New here? Create your free account →
               </a>
             </p>
           </form>
