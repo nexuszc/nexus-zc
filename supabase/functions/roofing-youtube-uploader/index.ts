@@ -314,7 +314,7 @@ Deno.serve(async (req) => {
 
   // Batch mode: query pending queue, process up to limit items
   if (body.force_upload) {
-    const limit = Math.min(body.limit ?? 1, 5);
+    const limit = Math.min(body.limit ?? 1, 20);
 
     const { data: queue } = await supabase
       .from("roofing_content")
@@ -322,6 +322,7 @@ Deno.serve(async (req) => {
       .eq("youtube_upload_ready", true)
       .is("youtube_posted_at", null)
       .not("mp3_url", "is", null)
+      .is("shotstack_render_id", null)
       .order("created_at", { ascending: true })
       .limit(limit);
 

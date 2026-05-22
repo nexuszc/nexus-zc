@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v9
+# Last updated: May 22, 2026 — v11
 
 ---
 
@@ -412,13 +412,35 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**YouTube pipeline fix (May 22, 2026):**
-- Backfilled `youtube_posted_at` for all rows with `youtube_video_id` set (was never populated — caused re-upload loop)
-- `roofing-youtube-uploader` rewritten v3→v4: GitHub Actions render eliminated; now uses Shotstack API
-- Upload chain: `force_upload:true` → Shotstack render (black bg + title text + roofingos.dev watermark) → `roofing-shotstack-webhook` → YouTube upload → `youtube_posted_at` set
-- 4 items with missing voiceovers backfilled via `roofing-voiceover-engine`
-- Deleted duplicate `roofing-youtube-upload` cron; daily cron now sends `{"force_upload":true,"limit":1}` at 21:00 UTC
-- 13 items in queue draining 1/day; confirmed end-to-end: QPhoh8MbR74 live on YouTube
+**DONE tonight:**
+- Pre-launch audit complete — GO status
+- 625 TCPA violations fixed in call queue
+- 741 calls queued, first fires 8am MT Friday
+- 5 email template stale pricing fixed
+- Aria scripts verified clean — 0 violations
+- Inbound (720)500-6668 → roofing-aria-inbound ✅
+- ZACH_CELL_PHONE confirmed set ✅
+- YouTube pipeline end-to-end confirmed live (QPhoh8MbR74 uploaded, full chain verified)
+- nexus-core + health-monitor status bug fixed
+- 5 YouTube videos rendering via Shotstack tonight (The 48-Hour Rule, Why homeowners don't trust roofers, You're Already Behind Without Software, Hail Storm Hit, Lost a $22K job)
+- uploader batch query fixed (skips already-rendering items, cap raised to 20)
+
+**PENDING — needs Zach manually:**
+- Top up Shotstack credits at dashboard.shotstack.io/subscription — 0.08 credits remain, 13 videos blocked at ~0.98 credits/render (~$13 to clear the queue)
+- LinkedIn post — 3 min, do tomorrow morning
+- Reddit API approval — submitted, 3-5 days
+- Facebook Page token — Meta reviewing, 1-2 weeks
+- LinkedIn company page — needs 500 connections
+- ElevenLabs voiceover check — confirm voice quality on uploaded videos
+- Email sequencer errors — 26 errors, 0 sent when `process_due` triggered; needs debug
+
+**TOMORROW MORNING CHECKLIST:**
+1. Check Telegram 7am — COO brief
+2. Hot Aria leads → call before noon
+3. Post on LinkedIn manually
+4. Check YouTube channel — 5+ videos should be live
+5. Top up Shotstack → re-run `{"force_upload":true,"limit":13}` to clear remaining 13
+6. Check roofingos.dev signups
 
 **DONE previous session:**
 - Deployed roofing-aria-inbound v2 (614-line Twilio TwiML state machine, live on 720-500-6668)
