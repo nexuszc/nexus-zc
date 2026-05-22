@@ -1,13 +1,16 @@
-// roofing-youtube-uploader v5
-// Two modes:
-//   1. {content_id} with video_url in DB → download MP4 + upload to YouTube
-//   2. {content_id} with mp3_url, no video_url → download MP3 + upload directly to YouTube (audio/mpeg)
-//   3. {force_upload: true, limit: N} → batch: picks N items from queue, runs mode 1 or 2
+// roofing-youtube-uploader v6
+// Upload flow for content with mp3_url but no video_url:
+//   1. Creatomate renders MP4 from mp3 + branded template (inline composition, no dashboard template needed)
+//   2. Poll until render complete (max ~4 min)
+//   3. Download rendered MP4
+//   4. Upload to YouTube via resumable API
+//   5. Set youtube_video_id + youtube_posted_at
 //
-// No GitHub Actions. No Shotstack. No rendering.
+// For content with video_url already set: skip to step 3.
+// Batch mode: {force_upload: true, limit: N} processes queue.
 //
 // Required secrets: YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
-//                   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+//                   CREATOMATE_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -16,6 +19,7 @@ const SERVICE_KEY           = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const YOUTUBE_CLIENT_ID     = Deno.env.get("YOUTUBE_CLIENT_ID") || "";
 const YOUTUBE_CLIENT_SECRET = Deno.env.get("YOUTUBE_CLIENT_SECRET") || "";
 const YOUTUBE_REFRESH_TOKEN = Deno.env.get("YOUTUBE_REFRESH_TOKEN") || "";
+const CREATOMATE_API_KEY    = Deno.env.get("CREATOMATE_API_KEY") || "";
 const TELEGRAM_BOT_TOKEN    = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID      = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
@@ -47,16 +51,212 @@ async function getYouTubeAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-// ── Upload to YouTube (video or audio) ───────────────────────────────────────
+// ── Creatomate: render MP3 → MP4 ─────────────────────────────────────────────
+
+function buildCreatomateSource(content: {
+  title: string;
+  hook_text?: string | null;
+  type?: string;
+  mp3_url: string;
+}): Record<string, unknown> {
+  const isShort = (content.type || "youtube_short").includes("short");
+  const titleText = content.title.slice(0, 120);
+  const hookText = (content.hook_text || "").slice(0, 160);
+
+  return {
+    output_format: "mp4",
+    frame_rate: 25,
+    width: isShort ? 1080 : 1920,
+    height: isShort ? 1920 : 1080,
+    duration: "auto",
+    elements: [
+      // Background
+      {
+        type: "rectangle",
+        track: 1,
+        time: 0,
+        width: "100%",
+        height: "100%",
+        fill_color: "#0f1923",
+      },
+      // Gradient overlay — subtle top fade
+      {
+        type: "rectangle",
+        track: 2,
+        time: 0,
+        width: "100%",
+        height: "40%",
+        y: "0%",
+        y_alignment: "0%",
+        fill_color: [
+          { position: 0, color: "#1a2332" },
+          { position: 1, color: "rgba(15,25,35,0)" },
+        ],
+      },
+      // Title text
+      {
+        type: "text",
+        track: 3,
+        time: 0,
+        width: "84%",
+        height: "auto",
+        x_alignment: "50%",
+        y_alignment: isShort ? "32%" : "40%",
+        text: titleText,
+        font_family: "Montserrat",
+        font_weight: "800",
+        font_size: isShort ? "54" : "72",
+        fill_color: "#ffffff",
+        letter_spacing: "-1",
+        line_height: "1.15",
+        x_alignment_text: "center",
+        animations: [
+          {
+            time: "start",
+            duration: 0.7,
+            type: "slide",
+            direction: "up",
+            easing: "quadratic-out",
+          },
+        ],
+      },
+      // Hook / subtitle (if present)
+      ...(hookText ? [{
+        type: "text",
+        track: 4,
+        time: 0.4,
+        width: "80%",
+        height: "auto",
+        x_alignment: "50%",
+        y_alignment: isShort ? "52%" : "60%",
+        text: hookText,
+        font_family: "Montserrat",
+        font_weight: "400",
+        font_size: isShort ? "32" : "42",
+        fill_color: "rgba(255,255,255,0.75)",
+        x_alignment_text: "center",
+        animations: [
+          {
+            time: "start",
+            duration: 0.7,
+            type: "fade",
+            easing: "quadratic-out",
+          },
+        ],
+      }] : []),
+      // Roofing OS wordmark bottom left
+      {
+        type: "text",
+        track: 5,
+        time: 0,
+        x: "5%",
+        y: "91%",
+        text: "ROOFING OS",
+        font_family: "Montserrat",
+        font_weight: "700",
+        font_size: isShort ? "28" : "36",
+        fill_color: "#e85d26",
+        letter_spacing: "2",
+      },
+      // roofingos.dev watermark bottom right
+      {
+        type: "text",
+        track: 6,
+        time: 0,
+        x: "95%",
+        y: "91%",
+        x_alignment: "100%",
+        text: "roofingos.dev",
+        font_family: "Montserrat",
+        font_weight: "400",
+        font_size: isShort ? "24" : "30",
+        fill_color: "rgba(255,255,255,0.5)",
+      },
+      // Audio track
+      {
+        type: "audio",
+        track: 7,
+        time: 0,
+        source: content.mp3_url,
+        volume: "100%",
+      },
+    ],
+  };
+}
+
+async function creatomateRender(content: {
+  title: string;
+  hook_text?: string | null;
+  type?: string;
+  mp3_url: string;
+}): Promise<string> {
+  if (!CREATOMATE_API_KEY) throw new Error("CREATOMATE_API_KEY not configured");
+
+  const source = buildCreatomateSource(content);
+
+  const res = await fetch("https://api.creatomate.com/v1/renders", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${CREATOMATE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ source }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(`Creatomate render request failed (${res.status}): ${err.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const renderId: string = Array.isArray(data) ? data[0]?.id : data?.id;
+  if (!renderId) throw new Error(`Creatomate response missing render id: ${JSON.stringify(data).slice(0, 200)}`);
+
+  console.log(`Creatomate render queued: ${renderId}`);
+  return renderId;
+}
+
+async function creatomateWaitForRender(renderId: string, timeoutMs = 250_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 3000));
+
+    const res = await fetch(`https://api.creatomate.com/v1/renders/${renderId}`, {
+      headers: { "Authorization": `Bearer ${CREATOMATE_API_KEY}` },
+    });
+
+    if (!res.ok) {
+      console.error(`Creatomate poll error: ${res.status}`);
+      continue;
+    }
+
+    const data = await res.json();
+    const status: string = data.status;
+    console.log(`Creatomate render ${renderId}: ${status}`);
+
+    if (status === "succeeded") {
+      if (!data.url) throw new Error("Creatomate render succeeded but no url in response");
+      return data.url as string;
+    }
+    if (status === "failed") {
+      throw new Error(`Creatomate render failed: ${data.error_message || "unknown error"}`);
+    }
+    // planned / waiting / rendering — keep polling
+  }
+
+  throw new Error(`Creatomate render timed out after ${timeoutMs / 1000}s`);
+}
+
+// ── YouTube upload ────────────────────────────────────────────────────────────
 
 async function uploadToYouTube(
   content: Record<string, unknown>,
-  mediaBuffer: ArrayBuffer,
-  mimeType: "video/mp4" | "audio/mpeg",
+  videoBuffer: ArrayBuffer,
 ): Promise<{ youtubeId: string; youtubeUrl: string }> {
   const accessToken = await getYouTubeAccessToken();
 
-  const isShort = content.type === "youtube_short";
+  const isShort = String(content.type || "").includes("short");
   const ytTitle = isShort
     ? `${String(content.title)} #Shorts`.slice(0, 100)
     : String(content.title).slice(0, 100);
@@ -68,9 +268,8 @@ async function uploadToYouTube(
   const tags = (content.tags as string[]) ||
     ["roofing", "insurance claim", "roofing contractor", "storm damage", "roofing os", "homeowner portal"];
 
-  const contentLength = mediaBuffer.byteLength;
+  const contentLength = videoBuffer.byteLength;
 
-  // Step 1: init resumable upload
   const initRes = await fetch(
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
     {
@@ -78,7 +277,7 @@ async function uploadToYouTube(
       headers: {
         "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json",
-        "X-Upload-Content-Type": mimeType,
+        "X-Upload-Content-Type": "video/mp4",
         "X-Upload-Content-Length": String(contentLength),
       },
       body: JSON.stringify({
@@ -95,22 +294,18 @@ async function uploadToYouTube(
   );
 
   if (!initRes.ok) {
-    const errText = await initRes.text().catch(() => "");
-    throw new Error(`YouTube init failed (${initRes.status}): ${errText.slice(0, 300)}`);
+    const err = await initRes.text().catch(() => "");
+    throw new Error(`YouTube init failed (${initRes.status}): ${err.slice(0, 300)}`);
   }
 
   const uploadUrl = initRes.headers.get("Location");
-  if (!uploadUrl) throw new Error(`No upload URL in YouTube init response`);
+  if (!uploadUrl) throw new Error("No upload URL in YouTube init response");
 
-  // Step 2: upload bytes
-  console.log(`Uploading ${(contentLength / 1024 / 1024).toFixed(1)} MB as ${mimeType}...`);
+  console.log(`Uploading ${(contentLength / 1024 / 1024).toFixed(1)} MB to YouTube...`);
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
-    headers: {
-      "Content-Type": mimeType,
-      "Content-Length": String(contentLength),
-    },
-    body: mediaBuffer,
+    headers: { "Content-Type": "video/mp4", "Content-Length": String(contentLength) },
+    body: videoBuffer,
   });
 
   const videoData = await uploadRes.json().catch(() => ({}));
@@ -120,13 +315,13 @@ async function uploadToYouTube(
   return { youtubeId, youtubeUrl: `https://youtube.com/watch?v=${youtubeId}` };
 }
 
-// ── Core: process one content item ───────────────────────────────────────────
+// ── Core: process one item ────────────────────────────────────────────────────
 
 interface ProcessResult {
   uploaded: boolean;
   already_uploaded?: boolean;
   youtube_url?: string;
-  mime?: string;
+  render_id?: string;
 }
 
 async function processOne(contentId: string): Promise<ProcessResult> {
@@ -148,20 +343,33 @@ async function processOne(contentId: string): Promise<ProcessResult> {
   ].filter(Boolean);
   if (missingYT.length) throw new Error(`Missing YouTube credentials: ${missingYT.join(", ")}`);
 
-  // Determine source URL and mime type
-  const mediaUrl: string | null = content.video_url || content.mp3_url || null;
-  if (!mediaUrl) throw new Error("No video or audio available — run voiceover engine first");
+  let videoUrl: string | null = content.video_url || null;
+  let renderId: string | undefined;
 
-  const mimeType: "video/mp4" | "audio/mpeg" = content.video_url ? "video/mp4" : "audio/mpeg";
+  // No video yet — render via Creatomate
+  if (!videoUrl) {
+    if (!content.mp3_url) throw new Error("No video or audio — run voiceover engine first");
 
-  console.log(`Fetching ${mimeType} from: ${mediaUrl}`);
-  const mediaRes = await fetch(mediaUrl);
-  if (!mediaRes.ok) throw new Error(`Failed to fetch media (${mediaRes.status}): ${mediaUrl}`);
-  const mediaBuffer = await mediaRes.arrayBuffer();
-  console.log(`Downloaded ${(mediaBuffer.byteLength / 1024 / 1024).toFixed(1)} MB`);
+    renderId = await creatomateRender({
+      title: content.title,
+      hook_text: content.hook_text || null,
+      type: content.type || "youtube_short",
+      mp3_url: content.mp3_url,
+    });
 
-  const { youtubeId, youtubeUrl } = await uploadToYouTube(content, mediaBuffer, mimeType);
-  console.log(`Uploaded: ${youtubeUrl}`);
+    videoUrl = await creatomateWaitForRender(renderId);
+    console.log(`Render complete: ${videoUrl}`);
+  }
+
+  // Download rendered video
+  console.log(`Fetching video: ${videoUrl}`);
+  const videoRes = await fetch(videoUrl);
+  if (!videoRes.ok) throw new Error(`Failed to fetch video (${videoRes.status})`);
+  const videoBuffer = await videoRes.arrayBuffer();
+  console.log(`Downloaded ${(videoBuffer.byteLength / 1024 / 1024).toFixed(1)} MB`);
+
+  const { youtubeId, youtubeUrl } = await uploadToYouTube(content, videoBuffer);
+  console.log(`YouTube upload complete: ${youtubeUrl}`);
 
   try {
     await supabase.from("roofing_content").update({
@@ -186,14 +394,14 @@ async function processOne(contentId: string): Promise<ProcessResult> {
     }),
   }).catch(() => {});
 
-  return { uploaded: true, youtube_url: youtubeUrl, mime: mimeType };
+  return { uploaded: true, youtube_url: youtubeUrl, render_id: renderId };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v5 ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v6 ready", creatomate: !!CREATOMATE_API_KEY });
 
   // Batch mode
   if (body.force_upload) {
@@ -224,7 +432,6 @@ Deno.serve(async (req) => {
         await tg(`❌ YouTube upload failed for \`${String(item.title).slice(0, 60)}\`\n${msg.slice(0, 200)}`);
         results.push({ id: item.id, title: item.title, ok: false, error: msg });
       }
-      if (results.length < queue.length) await new Promise(r => setTimeout(r, 500));
     }
 
     return Response.json({ ok: true, processed: results.length, results });
