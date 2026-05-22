@@ -8,6 +8,9 @@ async function sendSMS(to: string, body: string) {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
   const token = Deno.env.get('TWILIO_AUTH_TOKEN')!;
   const from = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+18005550100';
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
   await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
     method: 'POST',
     headers: {
@@ -25,7 +28,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from: 'Roofing OS <reports@nexuszc.com>', to, subject, html })
+    body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to, subject, html })
   }).catch(() => {});
 }
 

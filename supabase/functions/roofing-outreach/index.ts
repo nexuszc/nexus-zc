@@ -23,6 +23,9 @@ async function generateEmail(prospect: Record<string, unknown>, touchNumber: num
   const portalDemo = "https://app.nexuszc.com/roofing/portal/64afb2c5c1eacfd790a899493b23b867ce8ef8a277d31ee8";
   const trialLink = "https://roofingos.dev?ref=email";
   const calendlyLink = Deno.env.get("CALENDLY_LINK") || "https://calendly.com/zachcurtis/roofing-os-demo";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
   const angleInstructions: Record<string, string> = {
     cold_intro: "Introduce Roofing OS. Focus on the homeowner portal — roofers look more professional, win more bids. Include portal demo link. Keep it SHORT. 3 paragraphs max.",
@@ -107,7 +110,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: "Zach Curtis <roofing@nexuszc.com>",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to,
         subject,
         html

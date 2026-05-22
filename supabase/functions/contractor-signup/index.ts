@@ -23,6 +23,9 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   const plan = (contractor.plan as string || 'free').toLowerCase();
   const isFree = !plan || plan === 'free';
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
   const referralUrl = `https://roofingos.dev/r/${referralCode}`;
 
   const referralBlock = isFree && referralCode ? `
@@ -268,7 +271,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Zach Curtis <zach@nexuszc.com>',
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: owner_email,
         subject: `Welcome to Roofing OS — here's how to get started`,
         html: generateWelcomeEmail(contractor)

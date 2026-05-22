@@ -36,6 +36,9 @@ serve(async (req) => {
   }
 
   const apiKey = Deno.env.get("RESEND_API_KEY");
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
   if (!apiKey) {
     return new Response(
       JSON.stringify({ error: "RESEND_API_KEY secret not configured" }),
@@ -80,7 +83,7 @@ serve(async (req) => {
     // Build tracked HTML — pixel + click wrapping.
     const trackedHtml = injectPixel(wrapLinks(body_html as string, token), token);
 
-    const sender = `${from_name ?? "Nexus Ops"} <ops@nexuszc.com>`;
+    const sender = `${FROM_NAME} <${FROM_EMAIL}>`;
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -91,7 +94,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: sender,
         to: [to_email],
-        reply_to: "replies@nexuszc.com",
+        reply_to: FROM_EMAIL,
         subject,
         html: trackedHtml,
         text: body_text,

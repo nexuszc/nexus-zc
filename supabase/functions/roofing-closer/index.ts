@@ -11,6 +11,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const STRIPE_PAYMENT_LINK = Deno.env.get("STRIPE_PAYMENT_LINK") || "https://buy.stripe.com/roofingos499";
 const CALENDLY_LINK = Deno.env.get("CALENDLY_LINK") || "https://calendly.com/zachcurtis/roofing-os-demo";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const PORTAL_DEMO = "https://app.nexuszc.com/roofing/portal/64afb2c5c1eacfd790a899493b23b867ce8ef8a277d31ee8";
 
 Deno.serve(async (req) => {
@@ -132,7 +135,7 @@ Alert Zach (alert_zach: true) only if:
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@nexuszc.com>",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: prospect.email,
         subject: decision.response_email.subject,
         text: responseBody

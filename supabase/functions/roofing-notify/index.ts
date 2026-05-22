@@ -6,6 +6,9 @@ const TWILIO_ACCOUNT_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
 const TWILIO_AUTH_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
 const TWILIO_PHONE_NUMBER = Deno.env.get("TWILIO_PHONE_NUMBER") || "";
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -41,7 +44,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Roofing OS <notifications@nexuszc.com>",
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to,
       subject,
       html,

@@ -41,6 +41,9 @@ Deno.serve(async (req) => {
     const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
     const twilioAuth = Deno.env.get("TWILIO_AUTH_TOKEN");
     const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER") || Deno.env.get("RETELL_PHONE_NUMBER") || "";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
     if (twilioSid && twilioAuth) {
       await fetch(
         `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: `${contractorLabel} <roofing@nexuszc.com>`,
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: homeowner_email,
         subject: `Your ${contractorLabel} project portal is ready`,
         html: `

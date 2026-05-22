@@ -5,6 +5,9 @@ import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 // v1 scheduling: call this endpoint every 15 minutes from an external cron
 // (e.g. GitHub Actions). No native Supabase Edge Function cron yet.
 // Max 50 enrollments per run: ~300ms/send × 50 = ~15s, well within 150s limit.
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const BATCH_LIMIT = 50;
 
 const corsHeaders = {
@@ -75,7 +78,7 @@ async function sendAndLog(
 
   const { id: emailSendId, tracking_token: token } = row as { id: string; tracking_token: string };
   const trackedHtml = injectPixel(wrapLinks(body_html, token), token);
-  const sender = `${from_name ?? "Nexus Ops"} <ops@nexuszc.com>`;
+  const sender = `${FROM_NAME} <${FROM_EMAIL}>`;
 
   const resendRes = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -86,7 +89,7 @@ async function sendAndLog(
     body: JSON.stringify({
       from: sender,
       to: [to_email],
-      reply_to: "replies@nexuszc.com",
+      reply_to: FROM_EMAIL,
       subject,
       html: trackedHtml,
       text: body_text,

@@ -18,6 +18,9 @@ const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')!;
 const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')!;
 const TWILIO_PHONE_NUMBER = Deno.env.get('TWILIO_PHONE_NUMBER') || Deno.env.get('TWILIO_FROM_NUMBER') || '';
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -168,7 +171,7 @@ async function sendResendEmail(to: string, subject: string, html: string): Promi
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Roofing OS <zach@nexuszc.com>',
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to,
       subject,
       html,

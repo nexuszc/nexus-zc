@@ -9,6 +9,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x7E]/g, "").trim();
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -108,7 +111,7 @@ async function sendEmail(to: string, name: string, subject: string, body: string
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from: "Zach Curtis <zach@nexuszc.com>",
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: [to],
       subject,
       html: `<div style="font-family: Arial, sans-serif; max-width: 600px; line-height: 1.6; color: #333;">${body.replace(/\n/g, "<br>")}</div>`

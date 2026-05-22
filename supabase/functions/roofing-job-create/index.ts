@@ -2,6 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 Deno.serve(async (req) => {
@@ -146,7 +149,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Roofing OS <zach@nexuszc.com>",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: homeowner_email,
         subject: "Your roofing project is underway",
         html: `<div style="font-family:-apple-system,sans-serif;max-width:520px;line-height:1.7;color:#1a1a1a;padding:20px;">

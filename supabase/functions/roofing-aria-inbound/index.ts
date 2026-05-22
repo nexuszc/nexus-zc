@@ -6,6 +6,9 @@ const RESEND_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const TWILIO_SID = Deno.env.get("TWILIO_ACCOUNT_SID") || "";
 const TWILIO_TOKEN = Deno.env.get("TWILIO_AUTH_TOKEN") || "";
 const TWILIO_PHONE = Deno.env.get("TWILIO_PHONE_NUMBER") || Deno.env.get("TWILIO_FROM_NUMBER") || "";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const SELF = `${SUPABASE_URL}/functions/v1/roofing-aria-inbound`;
 const ZACH = "+17203948574";
 
@@ -29,7 +32,7 @@ async function sendLink(email: string, name = "there") {
     method: "POST",
     headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "Aria <ops@nexuszc.com>", reply_to: "zach@nexuszc.com", to: [email],
+      from: `${FROM_NAME} <${FROM_EMAIL}>`, reply_to: FROM_EMAIL, to: [email],
       subject: "Your free Roofing OS link",
       html: `<p>Hey ${name} &mdash;</p><p>Sign up free at <a href="https://roofingos.dev">roofingos.dev</a>. Takes 4 minutes. No credit card ever.</p><p>Zach<br>Roofing OS</p>`,
     }),

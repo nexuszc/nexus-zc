@@ -7,6 +7,9 @@ const ANTHROPIC_API_KEY        = Deno.env.get("ANTHROPIC_API_KEY")!;
 const TELEGRAM_BOT_TOKEN       = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const FUNCTIONS = ["chat", "briefing", "reminders", "provision", "health-monitor", "auto-fix", "generate-va-tasks", "roofing-ai", "contractor-auth"];
 
@@ -338,7 +341,7 @@ Deno.serve(async () => {
           method: "POST",
           headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            to: t.email, from: "Zach Curtis <zach@nexuszc.com>",
+            to: t.email, from: `${FROM_NAME} <${FROM_EMAIL}>`,
             subject: touch >= 3 ? "Last note — Roofing OS" : "Re: Roofing OS — quick follow-up",
             text: touch >= 3
               ? `Hi ${firstName},\n\nLast note. Roofing OS is free forever — roofingos.dev if you ever want to share it.\n\nZach`

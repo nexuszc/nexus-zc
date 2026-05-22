@@ -10,6 +10,9 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 const RESEND_KEY  = Deno.env.get("RESEND_API_KEY") || "";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const APP_URL     = "https://app.nexuszc.com";
 
 function genToken(): string {
@@ -54,7 +57,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Roofing OS <zach@nexuszc.com>",
+          from: `${FROM_NAME} <${FROM_EMAIL}>`,
           to: [email],
           subject: "Your Roofing OS login link",
           text: `Hi ${ae.name},\n\nHere is your login link:\n\n${link}\n\nThis link expires in 12 hours. If you did not request this, ignore this email.\n\n— Roofing OS`,

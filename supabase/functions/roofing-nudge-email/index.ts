@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -58,8 +61,8 @@ See the homeowner portal →</a></p>
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Zach Curtis <zach@nexuszc.com>",
-      reply_to: "zach@nexuszc.com",
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      reply_to: FROM_EMAIL,
       to: prospect.email,
       subject: subject || defaultSubject,
       html: html || defaultHtml,

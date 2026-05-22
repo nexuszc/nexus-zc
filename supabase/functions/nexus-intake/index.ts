@@ -7,6 +7,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -89,7 +92,7 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@nexuszc.com>",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: body.email,
         subject: "Your Nexus diagnostic is running...",
         html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">

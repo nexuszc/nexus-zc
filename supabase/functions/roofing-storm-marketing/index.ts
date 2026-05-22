@@ -9,6 +9,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -84,7 +87,7 @@ async function fireBundle(bundleId: string) {
           method: "POST",
           headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "Roofing OS Alert <alerts@nexuszc.com>",
+            from: `${FROM_NAME} <${FROM_EMAIL}>`,
             to: item.recipient_email,
             subject: emailTemplate?.title || "Storm Damage Alert for Your Area",
             html: body

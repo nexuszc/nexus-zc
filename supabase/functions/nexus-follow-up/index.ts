@@ -6,6 +6,9 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const BLAND_API_KEY = Deno.env.get("BLAND_API_KEY") || "";
 const CALENDLY_LINK = Deno.env.get("CALENDLY_LINK") || "https://calendly.com/zach-nexuszc/30min";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
@@ -37,7 +40,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   return fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "Zach Curtis <zach@nexuszc.com>", to, subject, html })
+    body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to, subject, html })
   }).then(r => r.json());
 }
 

@@ -7,6 +7,9 @@ const supabase = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 );
 const RESEND_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
@@ -40,7 +43,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@nexuszc.com>",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
         to: [t.email],
         subject: t.subject,
         text: t.body,

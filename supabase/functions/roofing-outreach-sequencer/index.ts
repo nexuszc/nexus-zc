@@ -11,6 +11,9 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x7E]/g, "").trim();
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const EMAIL_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-email-tracker`;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -75,8 +78,8 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
       method: "POST",
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Zach Curtis <zach@nexuszc.com>",
-        reply_to: "zach@nexuszc.com",
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        reply_to: FROM_EMAIL,
         to: [to],
         subject,
         html,
@@ -130,7 +133,7 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          from: "Zach Curtis <zach@nexuszc.com>",
+          from: `${FROM_NAME} <${FROM_EMAIL}>`,
           to: [body.debug_email],
           subject: "Resend test — roofing-outreach-sequencer v17",
           html: "<p>Sequencer v17 test email. If you see this, Resend is working.</p>",

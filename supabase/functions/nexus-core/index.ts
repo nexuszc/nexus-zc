@@ -7,6 +7,9 @@ const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY")!;
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
+const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+
 const GITHUB_REPO = "nexuszc/nexus-zc";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -1860,7 +1863,7 @@ Deno.serve(async (req) => {
             headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               to: t.email,
-              from: "Zach Curtis <zach@nexuszc.com>",
+              from: `${FROM_NAME} <${FROM_EMAIL}>`,
               subject: "Free tool for your roofing audience — partnership idea",
               text: `Hi ${firstName},\n\nI run Roofing OS — a free homeowner portal for insurance restoration contractors. Roofers use it to stop homeowner status calls, track supplement status, and auto-generate 5-star reviews. Completely free. No credit card. 4 minutes to set up.\n\nI'm reaching out because your audience would genuinely benefit from this. I'd love to offer your followers exclusive early access and explore a partnership that makes sense for both of us.\n\nWorth a 15-minute call?\n\nZach Curtis\nRoofing OS — roofingos.dev\nzach@nexuszc.com | (720) 500-6668`,
             }),
@@ -1936,7 +1939,7 @@ Deno.serve(async (req) => {
           await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ to: t.email, from: "Zach Curtis <zach@nexuszc.com>", subject, text }),
+            body: JSON.stringify({ to: t.email, from: `${FROM_NAME} <${FROM_EMAIL}>`, subject, text }),
           }).catch(() => {});
 
           await supabase.from("roofing_partnership_targets")
