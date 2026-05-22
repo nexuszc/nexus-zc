@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
@@ -28,6 +28,11 @@ import Brain        from './pages/Brain'
 import RoofingOS    from './pages/verticals/roofing/RoofingOS'
 import AEDashboard  from './pages/verticals/roofing/AEDashboard'
 import AELogin      from './pages/verticals/roofing/AELogin'
+
+function ContractorRoute({ session }) {
+  if (!session) return <Navigate to="/roofing/login" />
+  return <Outlet />
+}
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -61,6 +66,19 @@ export default function App() {
         <Route path="/roofing/ae" element={<AEDashboard />} />
         <Route path="/roofing/ae/login" element={<AELogin />} />
 
+        {/* Contractor routes — own auth gate, outside admin Layout */}
+        <Route element={<ContractorRoute session={session} />}>
+          <Route element={<ContractorProvider />}>
+            <Route path="/roofing/jobs" element={<RoofingDashboard />} />
+            <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
+            <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
+            <Route path="/roofing/crew" element={<RoofingCrew />} />
+            <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
+            <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
+            <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
+          </Route>
+        </Route>
+
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>
             {/* Nexus command center */}
@@ -68,15 +86,18 @@ export default function App() {
             <Route path="/brain" element={<Brain />} />
 
             {/* Roofing OS vertical — all sub-tabs handled inside RoofingOS */}
-            <Route path="/roofing" element={<RoofingOS />} />
-            <Route path="/roofing/pipeline" element={<RoofingOS />} />
-            <Route path="/roofing/content" element={<RoofingOS />} />
-            <Route path="/roofing/calls" element={<RoofingOS />} />
+            {/* Roofing OS — 5 tabs: Dashboard / Jobs / Funnel / Content / Settings */}
+            <Route path="/roofing"             element={<RoofingOS />} />
+            <Route path="/roofing/funnel"      element={<RoofingOS />} />
+            <Route path="/roofing/content"     element={<RoofingOS />} />
+            <Route path="/roofing/settings"    element={<RoofingOS />} />
+            {/* Legacy routes — activeTab() maps these to nearest new tab */}
+            <Route path="/roofing/pipeline"    element={<RoofingOS />} />
+            <Route path="/roofing/outbound"    element={<RoofingOS />} />
+            <Route path="/roofing/calls"       element={<RoofingOS />} />
             <Route path="/roofing/contractors" element={<RoofingOS />} />
-            <Route path="/roofing/outbound" element={<RoofingOS />} />
-            <Route path="/roofing/system" element={<RoofingOS />} />
-            <Route path="/roofing/funnel"   element={<RoofingOS />} />
-            <Route path="/roofing/exposure" element={<RoofingOS />} />
+            <Route path="/roofing/system"      element={<RoofingOS />} />
+            <Route path="/roofing/exposure"    element={<RoofingOS />} />
 
             {/* Legacy routes kept intact */}
             <Route path="/dashboard" element={<Dashboard />} />
@@ -87,16 +108,6 @@ export default function App() {
             <Route path="/va" element={<VAInterface />} />
             <Route path="/outreach" element={<OutreachDashboard />} />
 
-            {/* Contractor-facing job management */}
-            <Route element={<ContractorProvider />}>
-              <Route path="/roofing/jobs" element={<RoofingDashboard />} />
-              <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
-              <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
-              <Route path="/roofing/crew" element={<RoofingCrew />} />
-              <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
-              <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
-              <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
-            </Route>
           </Route>
         </Route>
       </Routes>

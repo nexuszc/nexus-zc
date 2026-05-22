@@ -105,57 +105,78 @@ export default function Nav({ session }) {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {/* Post Today — featured first */}
-          <NavLink
-            to="/roofing/content"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-indigo-500/10 text-indigo-400'
-                  : 'text-gray-500 hover:text-gray-200 hover:bg-white/[0.04]'
-              }`
-            }
-          >
-            <span className="text-base leading-none shrink-0">📋</span>
-            Post Today
-          </NavLink>
+          {isRoofing ? (
+            /* ── Roofing OS mode: 5 tabs ── */
+            <>
+              <NavLink
+                to="/"
+                end
+                className="flex items-center gap-2 px-3 py-1.5 mb-3 text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+              >
+                ← Nexus Home
+              </NavLink>
+              <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2">Roofing OS</div>
+              {[
+                { to: '/roofing',          label: 'Dashboard', icon: '🏠', end: true },
+                { to: '/roofing/jobs',     label: 'Jobs',      icon: '🔨' },
+                { to: '/roofing/funnel',   label: 'Funnel',    icon: '🎯' },
+                { to: '/roofing/content',  label: 'Content',   icon: '📋' },
+                { to: '/roofing/settings', label: 'Settings',  icon: '⚙️' },
+              ].map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-indigo-500/10 text-indigo-400'
+                        : 'text-gray-500 hover:text-gray-200 hover:bg-white/[0.04]'
+                    }`
+                  }
+                >
+                  <span className="text-base leading-none shrink-0">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </>
+          ) : (
+            /* ── Default Nexus mode ── */
+            <>
+              <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 pt-1">Nexus</div>
+              <NavItem to="/" icon="home" label="Home" end />
+              <NavItem to="/brain" icon="brain" label="Brain" />
 
-          {/* NEXUS section */}
-          <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 pt-3">Nexus</div>
-          <NavItem to="/" icon="home" label="Home" end />
-          <NavItem to="/brain" icon="brain" label="Brain" />
-
-          {/* VERTICALS section */}
-          <div className="pt-4">
-            <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 border-t border-[#1e1e2e] pt-3">Verticals</div>
-
-            <NavLink
-              to="/roofing"
-              className={() =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isRoofing
-                    ? 'bg-indigo-500/10 text-indigo-400'
-                    : 'text-gray-500 hover:text-gray-200 hover:bg-white/[0.04]'
-                }`
-              }
-            >
-              <span className="text-base leading-none shrink-0">🏠</span>
-              Roofing OS
-            </NavLink>
-
-            <div className="mt-1 space-y-0.5 opacity-35 pointer-events-none select-none">
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600">
-                <span className="text-base leading-none">💰</span>
-                <span>Cash Out Refi OS</span>
-                <span className="ml-auto text-[9px] bg-gray-800 text-gray-600 px-1.5 py-0.5 rounded font-medium uppercase">Soon</span>
+              <div className="pt-4">
+                <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 border-t border-[#1e1e2e] pt-3">Verticals</div>
+                <NavLink
+                  to="/roofing"
+                  className={() =>
+                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isRoofing
+                        ? 'bg-indigo-500/10 text-indigo-400'
+                        : 'text-gray-500 hover:text-gray-200 hover:bg-white/[0.04]'
+                    }`
+                  }
+                >
+                  <span className="text-base leading-none shrink-0">🏠</span>
+                  Roofing OS
+                </NavLink>
+                <div className="mt-1 space-y-0.5 opacity-35 pointer-events-none select-none">
+                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600">
+                    <span className="text-base leading-none">💰</span>
+                    <span>Cash Out Refi OS</span>
+                    <span className="ml-auto text-[9px] bg-gray-800 text-gray-600 px-1.5 py-0.5 rounded font-medium uppercase">Soon</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600">
+                    <span className="text-base leading-none">🌡️</span>
+                    <span>HVAC OS</span>
+                    <span className="ml-auto text-[9px] bg-gray-800 text-gray-600 px-1.5 py-0.5 rounded font-medium uppercase">Soon</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600">
-                <span className="text-base leading-none">🌡️</span>
-                <span>HVAC OS</span>
-                <span className="ml-auto text-[9px] bg-gray-800 text-gray-600 px-1.5 py-0.5 rounded font-medium uppercase">Soon</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </nav>
 
         {/* Bottom */}
@@ -182,50 +203,70 @@ export default function Nav({ session }) {
 
       {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0c0c14] border-t border-[#1e1e2e] flex items-stretch h-16 safe-bottom">
-        <NavLink to="/roofing/content" className={({ isActive }) =>
-          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
-        }>
-          <span className="text-xl leading-none">📋</span>
-          Post
-        </NavLink>
+        {isRoofing ? (
+          /* Roofing mode — 5 roofing tabs */
+          <>
+            {[
+              { to: '/roofing',          label: 'Dash',     icon: '🏠', end: true  },
+              { to: '/roofing/jobs',     label: 'Jobs',     icon: '🔨'             },
+              { to: '/roofing/funnel',   label: 'Funnel',   icon: '🎯'             },
+              { to: '/roofing/content',  label: 'Content',  icon: '📋'             },
+              { to: '/roofing/settings', label: 'Settings', icon: '⚙️'             },
+            ].map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
+                }
+              >
+                <span className="text-xl leading-none">{item.icon}</span>
+                {item.label}
+              </NavLink>
+            ))}
+          </>
+        ) : (
+          /* Default Nexus mode */
+          <>
+            <NavLink to="/" end className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
+            }>
+              <Icon path={ICONS.home} cls="w-5 h-5" />
+              Home
+            </NavLink>
 
-        <NavLink to="/" end className={({ isActive }) =>
-          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
-        }>
-          <Icon path={ICONS.home} cls="w-5 h-5" />
-          Home
-        </NavLink>
+            <NavLink to="/brain" className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
+            }>
+              <Icon path={ICONS.brain} cls="w-5 h-5" />
+              Brain
+            </NavLink>
 
-        <NavLink to="/brain" className={({ isActive }) =>
-          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
-        }>
-          <Icon path={ICONS.brain} cls="w-5 h-5" />
-          Brain
-        </NavLink>
+            <NavLink to="/roofing" className={() =>
+              `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isRoofing ? 'text-indigo-400' : 'text-gray-600'}`
+            }>
+              <span className="text-xl leading-none">🏠</span>
+              Roofing
+            </NavLink>
 
-        <NavLink to="/roofing" className={() =>
-          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isRoofing ? 'text-indigo-400' : 'text-gray-600'}`
-        }>
-          <span className="text-xl leading-none">🏠</span>
-          Roofing
-        </NavLink>
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-gray-600"
+            >
+              <Icon path={ICONS.search} cls="w-5 h-5" />
+              Search
+            </button>
 
-        {/* Search / Command bar — mobile */}
-        <button
-          onClick={() => setCmdOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-gray-600"
-        >
-          <Icon path={ICONS.search} cls="w-5 h-5" />
-          Search
-        </button>
-
-        <button
-          onClick={() => setMoreOpen(o => !o)}
-          className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${moreOpen ? 'text-indigo-400' : 'text-gray-600'}`}
-        >
-          <Icon path={ICONS.more} cls="w-5 h-5" />
-          More
-        </button>
+            <button
+              onClick={() => setMoreOpen(o => !o)}
+              className={`flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${moreOpen ? 'text-indigo-400' : 'text-gray-600'}`}
+            >
+              <Icon path={ICONS.more} cls="w-5 h-5" />
+              More
+            </button>
+          </>
+        )}
       </nav>
 
       {/* Mobile "More" tray */}

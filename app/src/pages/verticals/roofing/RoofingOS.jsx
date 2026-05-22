@@ -1,54 +1,55 @@
+import { useEffect }    from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import RoofingOverview from './RoofingOverview'
-import Pipeline        from './Pipeline'
-import Content         from './Content'
-import Calls           from './Calls'
-import Contractors     from './Contractors'
-import System          from './System'
-import Outbound        from './Outbound'
-import Exposure        from './Exposure'
 import Funnel          from './Funnel'
+import Content         from './Content'
+import System          from './System'
+
+// ── 5 tabs only ────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { key: 'overview',    label: 'Overview',     path: '/roofing' },
-  { key: 'funnel',      label: '🎯 Funnel',    path: '/roofing/funnel' },
-  { key: 'pipeline',    label: 'Pipeline',     path: '/roofing/pipeline' },
-  { key: 'content',     label: 'Content',      path: '/roofing/content' },
-  { key: 'outbound',    label: 'Outbound',     path: '/roofing/outbound' },
-  { key: 'calls',       label: 'Calls',        path: '/roofing/calls' },
-  { key: 'contractors', label: 'Contractors',  path: '/roofing/contractors' },
-  { key: 'system',      label: 'System',       path: '/roofing/system' },
-  { key: 'exposure',    label: 'Exposure',     path: '/roofing/exposure' },
+  { key: 'dashboard', label: 'Dashboard', path: '/roofing'          },
+  { key: 'jobs',      label: 'Jobs',      path: '/roofing/jobs'     },
+  { key: 'funnel',    label: '🎯 Funnel',  path: '/roofing/funnel'   },
+  { key: 'content',   label: 'Content',   path: '/roofing/content'  },
+  { key: 'settings',  label: 'Settings',  path: '/roofing/settings' },
 ]
 
 function activeTab(pathname) {
-  if (pathname === '/roofing')                         return 'overview'
-  if (pathname.startsWith('/roofing/funnel'))          return 'funnel'
-  if (pathname.startsWith('/roofing/pipeline'))        return 'pipeline'
+  if (pathname === '/roofing'
+    || pathname.startsWith('/roofing/contractors')
+    || pathname.startsWith('/roofing/exposure'))       return 'dashboard'
+  if (pathname.startsWith('/roofing/funnel')
+    || pathname.startsWith('/roofing/outbound')
+    || pathname.startsWith('/roofing/calls')
+    || pathname.startsWith('/roofing/pipeline'))       return 'funnel'
   if (pathname.startsWith('/roofing/content'))         return 'content'
-  if (pathname.startsWith('/roofing/outbound'))        return 'outbound'
-  if (pathname.startsWith('/roofing/calls'))           return 'calls'
-  if (pathname.startsWith('/roofing/contractors'))     return 'contractors'
-  if (pathname.startsWith('/roofing/system'))          return 'system'
-  if (pathname.startsWith('/roofing/exposure'))        return 'exposure'
-  return 'overview'
+  if (pathname.startsWith('/roofing/settings')
+    || pathname.startsWith('/roofing/system'))         return 'settings'
+  return 'dashboard'
+}
+
+// Jobs lives at /roofing/jobs inside ContractorProvider — navigate there directly
+function JobsRedirect() {
+  const navigate = useNavigate()
+  useEffect(() => { navigate('/roofing/jobs', { replace: true }) }, [navigate])
+  return <div className="flex items-center justify-center h-48 text-gray-600 text-sm">Loading…</div>
 }
 
 export default function RoofingOS() {
   const location = useLocation()
-  const navigate  = useNavigate()
-  const tab       = activeTab(location.pathname)
+  const navigate = useNavigate()
+  const tab      = activeTab(location.pathname)
 
   return (
     <div className="min-h-screen">
-      {/* Vertical header + sub-tab bar */}
+      {/* Header + 5-tab bar */}
       <div className="bg-[#0c0c14] border-b border-[#1e1e2e]">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center gap-2.5 pt-4 pb-3">
             <span className="text-base">🏠</span>
             <h1 className="text-sm font-bold text-white tracking-tight">Roofing OS</h1>
           </div>
-          {/* Sub-tabs — scrollable on mobile */}
           <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none">
             {TABS.map(t => (
               <button
@@ -68,15 +69,11 @@ export default function RoofingOS() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview'    && <RoofingOverview />}
-      {tab === 'funnel'      && <Funnel />}
-      {tab === 'pipeline'    && <Pipeline />}
-      {tab === 'content'     && <Content />}
-      {tab === 'outbound'    && <Outbound />}
-      {tab === 'calls'       && <Calls />}
-      {tab === 'contractors' && <Contractors />}
-      {tab === 'system'      && <System />}
-      {tab === 'exposure'    && <Exposure />}
+      {tab === 'dashboard' && <RoofingOverview />}
+      {tab === 'jobs'      && <JobsRedirect />}
+      {tab === 'funnel'    && <Funnel />}
+      {tab === 'content'   && <Content />}
+      {tab === 'settings'  && <System />}
     </div>
   )
 }
