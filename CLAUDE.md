@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v8
+# Last updated: May 22, 2026 — v9
 
 ---
 
@@ -414,30 +414,40 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
+**DONE (May 22, 2026 — YouTube machine overhaul):**
+- Content dashboard rebuilt: dead-simple "Post Today" page (Content.jsx, ~200 lines)
+- Nav: "📋 Post Today" added as first item, links to /roofing/content
+- YouTube machine full overhaul — all 10 phases deployed:
+  - roofing-youtube-engine v3: conversion-focused scripts, 8 categories, hook/thumbnail/keywords
+  - roofing-youtube-publisher v2: Adam voice, eleven_turbo_v2, stability 0.35/style 0.6
+  - roofing-youtube-uploader v7: Pexels stock footage, thumbnail, pinned comment, full description
+  - roofing-youtube-analytics (new): daily view/watch hours, Telegram milestones
+  - roofing-youtube-engage (new): daily comment auto-reply via Claude
+  - 60 short scripts + 4 long-form scripts generating in background
+  - Crons: engine 14/run (Mon+Thu), upload 9am MT + 9pm MT, analytics 6am, engage 10am
+  - 15 videos live, 18+ in voiceover pipeline now
+- **ACTION NEEDED: `supabase secrets set PEXELS_API_KEY=[your_key] --project-ref koqpbnxkhgbsnbdjwldx`**
+  Get a free key at pexels.com/api — needed for stock footage backgrounds
+
 **DONE (May 21–22, 2026):**
-- YouTube pipeline fully working end-to-end (Creatomate renders → YouTube upload)
-- 9 videos live on YouTube channel
-- YouTube channel verified (youtube.com/verify) — daily limit lifted to 50/day
-- 10 videos queued for tonight's 9pm UTC cron (limit:15 updated)
-- Daily YouTube cron updated to limit:15 (was limit:7)
-- Aria queue processor FIXED — priority_score bug removed, was silently blocking all calls
-- aria-queue-processor function deployed, cron Mon–Fri 8am/10am/12pm/2pm MT
-- 410 past-due Aria calls will now fire starting today
-- roofing-outreach-sequencer: failed sends now mark sequence dead (stops retry loop)
-- smoke-test, smoke-test-runner, system-heartbeat deployed to Supabase
-- All morning fixes committed and pushed (a53889a)
+- Aria V1 deployed (TwiML outbound + inbound, Adam voice)
+- aria-queue-processor FIXED — 410 past-due calls now firing
+- roofing-outreach-sequencer: bounce retry loop fixed
+- smoke-test + system-heartbeat deployed
 
 **PENDING — needs Zach:**
-- Check Telegram for hot Aria leads → call before noon
+- Set PEXELS_API_KEY secret (free at pexels.com/api)
+- Check Telegram for hot Aria leads
 - LinkedIn post (3 minutes)
 - Reddit API approval — 3-5 days
 - Facebook Page token — Meta reviewing 1-2 weeks
 
 **SYSTEM STATE:**
-- Aria: 410 past-due calls, processor now firing up to 100/day
-- YouTube: 10 videos queued, will upload tonight at 9pm UTC
-- Email sequences: 330 active, 31 dead, bounce retry loop fixed
-- nexus-build loop: smoke-test deployed, should stop triggering
+- YouTube: 15 live, 18 in voiceover pipeline, 10 ready to upload tonight
+- Engine: 60+ new scripts queued (Mon+Thu generates 14 more each run)
+- Long-form: 4 x 10-min scripts generating (watch hours pipeline)
+- Aria: queue processor firing Mon–Fri 8am/10am/12pm/2pm MT
+- Email sequences: 330 active, bounce retry fixed
 
 ---
 
