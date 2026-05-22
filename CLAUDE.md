@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v11
+# Last updated: May 22, 2026 — v11 (final)
 
 ---
 
@@ -412,37 +412,30 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**DONE tonight:**
+**DONE tonight (May 21-22, 2026):**
+- YouTube pipeline fully working end-to-end
+- Creatomate integrated — animated Shorts with audio, dark navy bg, white title, orange watermark
+- 9 videos live on YouTube channel
+- 7 remaining upload tomorrow at 3pm MT (daily cron updated to limit:7 for backlog clear)
 - Pre-launch audit complete — GO status
-- 625 TCPA violations fixed in call queue
-- 741 calls queued, first fires 8am MT Friday
-- 5 email template stale pricing fixed
-- Aria scripts verified clean — 0 violations
-- Inbound (720)500-6668 → roofing-aria-inbound ✅
-- ZACH_CELL_PHONE confirmed set ✅
-- YouTube pipeline end-to-end confirmed live (QPhoh8MbR74 uploaded, full chain verified)
-- nexus-core + health-monitor status bug fixed
-- 5 YouTube videos rendering via Shotstack tonight (The 48-Hour Rule, Why homeowners don't trust roofers, You're Already Behind Without Software, Hail Storm Hit, Lost a $22K job)
-- uploader batch query fixed (skips already-rendering items, cap raised to 20)
+- 741 Aria calls queued, first fires 8am MT Friday
+- 625 TCPA violations fixed
+- 5 email templates stale pricing fixed
+- Inbound (720)500-6668 live as sales line
+- Bounce handling fixed — 26 bad emails cleaned
+- Autonomous growth machine live and running
+- Partnership system — 15 targets, outreach live
+- CLAUDE.md v11
 
-**PENDING — needs Zach manually:**
-- Top up Shotstack credits at dashboard.shotstack.io/subscription — 0.08 credits remain, 13 videos blocked at ~0.98 credits/render (~$13 to clear the queue)
-- LinkedIn post — 3 min, do tomorrow morning
-- Reddit API approval — submitted, 3-5 days
+**PENDING — needs Zach tomorrow:**
+- Verify YouTube channel → youtube.com/verify (unlocks higher daily upload limit)
+- LinkedIn post — 3 minutes
+- Check Telegram 7am COO brief
+- Hot Aria leads → call before noon
+- Reddit API approval — 3-5 days
 - Facebook Page token — Meta reviewing, 1-2 weeks
-- LinkedIn company page — needs 500 connections
-- ElevenLabs voiceover check — confirm voice quality on uploaded videos
-- Email sequencer errors — 26 errors, 0 sent when `process_due` triggered; needs debug
 
-**TOMORROW MORNING CHECKLIST:**
-1. Check Telegram 7am — COO brief
-2. Hot Aria leads → call before noon
-3. Post on LinkedIn manually
-4. Check YouTube channel — 5+ videos should be live
-5. Top up Shotstack → re-run `{"force_upload":true,"limit":13}` to clear remaining 13
-6. Check roofingos.dev signups
-
-**DONE previous session:**
+**DONE previous sessions:**
 - Deployed roofing-aria-inbound v2 (614-line Twilio TwiML state machine, live on 720-500-6668)
 - Built autonomous growth machine (7 phases, all deployed + cron jobs live):
   - roofing-partner-scout: Monday 9am MT, finds 10 partnership targets/run via Serper
@@ -451,19 +444,6 @@ Then productized and sold to other multi-business operators.
   - health-monitor: 5 self-healing checks (Aria queue, email sequences, YT queue, partners, signups)
   - briefing v3: COO format (GROWTH/OUTREACH/PARTNERSHIPS/CONTENT/REVENUE/NEEDS YOU)
   - roofing-content-engine: queue depth minimums enforced (5 YT / 7d FB / 7d Reddit)
-  - pg_cron job 39 (partner-scout Mon 15:00 UTC), job 40 (lead-scout Tue+Fri 14:00 UTC)
-
-**PENDING (action required):**
-- Set `ZACH_CELL_PHONE` in Supabase secrets (for roofing-aria-inbound patch-to-Zach flow)
-
-**NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Stabilize client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
