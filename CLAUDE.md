@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v8
+# Last updated: May 22, 2026 — v9
 
 ---
 
@@ -9,6 +9,36 @@
 **Zach Curtis** -- Denver, CO. Multi-venture entrepreneur running a portfolio of businesses
 generating ~$1M/year in revenue. I operate as my own CEO/COO across all ventures.
 I am building Nexus to replace myself as COO and eventually productize it.
+
+---
+
+## DEBUGGING RULES — NON-NEGOTIABLE
+
+When something is broken:
+
+1. DIAGNOSE FIRST. Never write a fix before reading the actual error.
+   - Check browser console errors FIRST
+   - Check function logs FIRST
+   - Read the actual file before changing it
+   - One curl test beats 10 guesses
+
+2. ONE FIX AT A TIME. Never stack multiple changes for one bug.
+   - Fix one thing, test it, confirm it works, then move on
+   - If a fix doesn't work in 2 attempts — stop and re-diagnose
+
+3. NEVER TOUCH WORKING SYSTEMS. If auth worked yesterday,
+   the bug is in what changed today — not in auth itself.
+
+4. SAY WHAT'S BROKEN PLAINLY before writing any code.
+   "The CORS header is missing on contractor-auth"
+   not "let me try a few things"
+
+5. BROWSER CONSOLE IS THE ANSWER. For any frontend issue --
+   read the console errors before writing a single line.
+   If Zach sends a screenshot, check the console panel first.
+
+6. ROLLBACK IS ALWAYS AN OPTION. If 2 fixes fail,
+   git revert to last working state and start clean.
 
 ---
 
