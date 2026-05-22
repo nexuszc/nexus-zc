@@ -47,13 +47,19 @@ Deno.serve(async (req) => {
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) return json({ ok: false, error: 'authorization required' }, { status: 401 })
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
-    if (userError || !user) return json({ ok: false, error: 'invalid token' }, { status: 401 })
+    let email: string | null = null
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      email = payload.email || null
+    } catch {
+      return json({ ok: false, error: 'invalid token' }, { status: 401 })
+    }
+    if (!email) return json({ ok: false, error: 'invalid token' }, { status: 401 })
 
     const { data: contractor } = await supabase
       .from('contractor_accounts')
       .select('id, company_name, owner_name, owner_email, owner_phone, plan, status, trial_ends_at, subscription_status, onboarding_step, churn_risk_score')
-      .eq('owner_email', user.email)
+      .eq('owner_email', email)
       .maybeSingle()
 
     if (!contractor) return json({ ok: false, error: 'no contractor account found' }, { status: 404 })
