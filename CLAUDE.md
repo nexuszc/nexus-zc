@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v11 (final)
+# Last updated: May 21, 2026 — v8
 
 ---
 
@@ -174,6 +174,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-integration-webhook` | See function source for details | Internal |
 | `roofing-job-create` | See function source for details | Internal |
 | `roofing-job-pipeline` | See function source for details | Internal |
+| `roofing-lead-scout` | See function source for details | Internal |
 | `roofing-linkedin-poster` | See function source for details | Internal |
 | `roofing-material-order` | See function source for details | Internal |
 | `roofing-measurements` | See function source for details | Internal |
@@ -182,6 +183,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-outreach-sequencer` | See function source for details | Internal |
 | `roofing-page-visit` | See function source for details | Internal |
+| `roofing-partner-scout` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
@@ -190,7 +192,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-referral-engine` | See function source for details | Internal |
 | `roofing-self-improve` | See function source for details | Internal |
 | `roofing-seo-publisher` | See function source for details | Internal |
-| `roofing-shotstack-webhook` | Receives Shotstack render callbacks → sets video_url → triggers roofing-youtube-uploader | Internal |
+| `roofing-shotstack-webhook` | See function source for details | Internal |
 | `roofing-social-poster` | See function source for details | Internal |
 | `roofing-storm-marketing` | See function source for details | Internal |
 | `roofing-supplement-analyzer` | See function source for details | Internal |
@@ -203,9 +205,9 @@ Then productized and sold to other multi-business operators.
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
 | `roofing-whale-alert` | See function source for details | Internal |
-| `roofing-youtube-engine` | Generates YouTube scripts (8 slots/week) via Claude, saves to roofing_content | Cron Mon+Thu 13:00 UTC |
-| `roofing-youtube-publisher` | Approved scripts → ElevenLabs voiceover → Supabase Storage → blog post | On demand |
-| `roofing-youtube-uploader` | v4: {force_upload:true} picks queue; mp3_url → Shotstack render → webhook → YouTube upload; sets youtube_posted_at | Daily cron 21:00 UTC |
+| `roofing-youtube-engine` | See function source for details | Internal |
+| `roofing-youtube-publisher` | See function source for details | Internal |
+| `roofing-youtube-uploader` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
 | `send-partnership-emails` | See function source for details | Internal |
 | `smoke-test` | See function source for details | Internal |
@@ -412,38 +414,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**DONE tonight (May 21-22, 2026):**
-- YouTube pipeline fully working end-to-end
-- Creatomate integrated — animated Shorts with audio, dark navy bg, white title, orange watermark
-- 9 videos live on YouTube channel
-- 7 remaining upload tomorrow at 3pm MT (daily cron updated to limit:7 for backlog clear)
-- Pre-launch audit complete — GO status
-- 741 Aria calls queued, first fires 8am MT Friday
-- 625 TCPA violations fixed
-- 5 email templates stale pricing fixed
-- Inbound (720)500-6668 live as sales line
-- Bounce handling fixed — 26 bad emails cleaned
-- Autonomous growth machine live and running
-- Partnership system — 15 targets, outreach live
-- CLAUDE.md v11
+**DONE this session:**
+- (nothing yet this session)
 
-**PENDING — needs Zach tomorrow:**
-- Verify YouTube channel → youtube.com/verify (unlocks higher daily upload limit)
-- LinkedIn post — 3 minutes
-- Check Telegram 7am COO brief
-- Hot Aria leads → call before noon
-- Reddit API approval — 3-5 days
-- Facebook Page token — Meta reviewing, 1-2 weeks
-
-**DONE previous sessions:**
-- Deployed roofing-aria-inbound v2 (614-line Twilio TwiML state machine, live on 720-500-6668)
-- Built autonomous growth machine (7 phases, all deployed + cron jobs live):
-  - roofing-partner-scout: Monday 9am MT, finds 10 partnership targets/run via Serper
-  - roofing-lead-scout: Tue+Fri 8am MT, 100 prospects/run, auto-enrolls email + Aria queue
-  - nexus-core: 3x daily acts — 7am content push, 1pm partner outreach, 7pm follow-ups
-  - health-monitor: 5 self-healing checks (Aria queue, email sequences, YT queue, partners, signups)
-  - briefing v3: COO format (GROWTH/OUTREACH/PARTNERSHIPS/CONTENT/REVENUE/NEEDS YOU)
-  - roofing-content-engine: queue depth minimums enforced (5 YT / 7d FB / 7d Reddit)
+**NEXT:**
+1. Fix smoke_test_failed error
+2. Fix Recurring Smoke Test Failures
+3. Add Self-Learning Pattern Recognition
+4. Add memory consolidation ability
+5. Add Conversation Context Memory
+6. Draft operating agreement for Nexus ZC LLC
+7. Build Roofing OS go-to-market system
+8. Complete homeowner portal and client features
 
 ---
 
