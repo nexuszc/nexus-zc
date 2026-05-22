@@ -11,7 +11,7 @@ const COLUMNS = [
   { key: 'contacted',      label: 'CONTACTED',  count_color: 'text-blue-400',  bg: 'bg-blue-500/5',   border: 'border-blue-500/20',  dot: 'bg-blue-500'  },
   { key: 'interested',     label: 'INTERESTED', count_color: 'text-amber-400', bg: 'bg-amber-500/5',  border: 'border-amber-500/20', dot: 'bg-amber-400' },
   { key: 'signed_up',      label: 'SIGNED UP',  count_color: 'text-green-400', bg: 'bg-green-500/5',  border: 'border-green-500/20', dot: 'bg-green-500' },
-  { key: 'not_interested', label: 'DEAD',        count_color: 'text-red-400',   bg: 'bg-red-500/5',    border: 'border-red-500/20',   dot: 'bg-red-500'   },
+  { key: 'not_interested', label: 'DEAD',       count_color: 'text-red-400',   bg: 'bg-red-500/5',    border: 'border-red-500/20',   dot: 'bg-red-500'   },
 ]
 
 const COL_KEYS = new Set(COLUMNS.map(c => c.key))
@@ -44,17 +44,14 @@ const FILTERS = [
   { key: 'zach',  label: 'My Calls' },
   { key: 'aria',  label: 'Aria'     },
   { key: 'email', label: 'Email'    },
-  { key: 'CO',    label: 'Colorado' },
-  { key: 'TX',    label: 'Texas'    },
-  { key: 'FL',    label: 'Florida'  },
 ]
 
 const STATUS_OPTIONS = [
-  { key: 'new',            label: 'New',        cls: 'text-gray-400 bg-gray-500/10 border-gray-500/20'   },
-  { key: 'contacted',      label: 'Contacted',  cls: 'text-blue-400 bg-blue-500/10 border-blue-500/20'   },
+  { key: 'new',            label: 'New',        cls: 'text-gray-400 bg-gray-500/10 border-gray-500/20'    },
+  { key: 'contacted',      label: 'Contacted',  cls: 'text-blue-400 bg-blue-500/10 border-blue-500/20'    },
   { key: 'interested',     label: 'Interested', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   { key: 'signed_up',      label: 'Signed Up',  cls: 'text-green-400 bg-green-500/10 border-green-500/20' },
-  { key: 'not_interested', label: 'Dead',       cls: 'text-red-400 bg-red-500/10 border-red-500/20'      },
+  { key: 'not_interested', label: 'Dead',       cls: 'text-red-400 bg-red-500/10 border-red-500/20'       },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -102,10 +99,10 @@ function getHeat(c) {
 function getNextAction(c) {
   const tc   = c.touch_count || 0
   const heat = getHeat(c)
-  if (heat === 'hot')  return { label: '🔥 HOT — call now',  cls: 'text-red-400 font-semibold' }
-  if (tc === 0)        return { label: 'Aria calling today',  cls: 'text-gray-500' }
-  if (tc >= 7 && heat === 'dead') return { label: 'Mark as dead?', cls: 'text-red-500/60' }
-  if (tc >= 4 && heat === 'cold') return { label: 'Going cold',   cls: 'text-yellow-500' }
+  if (heat === 'hot')                return { label: '🔥 HOT — call now',  cls: 'text-red-400 font-semibold' }
+  if (tc === 0)                      return { label: 'Aria calling today',  cls: 'text-gray-500' }
+  if (tc >= 7 && heat === 'dead')    return { label: 'Mark as dead?',       cls: 'text-red-500/60' }
+  if (tc >= 4 && heat === 'cold')    return { label: 'Going cold',          cls: 'text-yellow-500' }
   const last = [...(c.touches || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
   if (last?.touch_type === 'aria_call' && last?.status === 'no_answer')
     return { label: 'Email tomorrow', cls: 'text-blue-400' }
@@ -133,29 +130,21 @@ function emailHref(c) {
 
 // ── DailyDigest ────────────────────────────────────────────────────────────────
 
-function DailyDigest({ campaigns }) {
+function DailyDigest({ campaigns, todayStats }) {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
-  const allTouches  = campaigns.flatMap(c => c.touches || [])
-  const todayTouches = allTouches.filter(t => new Date(t.created_at) >= todayStart)
-
-  const ariaMade    = todayTouches.filter(t => t.touch_type === 'aria_call').length
-  const ariaAnswered = todayTouches.filter(t => t.touch_type === 'aria_call' && t.status === 'answered').length
-  const emailsSent  = todayTouches.filter(t => t.touch_type === 'email').length
-  const emailsOpen  = todayTouches.filter(t => t.touch_type === 'email' && t.status === 'opened').length
   const newToday    = campaigns.filter(c => new Date(c.created_at) >= todayStart).length
   const signedToday = campaigns.filter(c => c.signed_up_at && new Date(c.signed_up_at) >= todayStart).length
-
-  const hotNow = campaigns.filter(c => getHeat(c) === 'hot')
+  const hotNow      = campaigns.filter(c => getHeat(c) === 'hot')
 
   const stats = [
-    { label: 'Aria calls', val: ariaMade,    sub: `${ariaAnswered} answered` },
-    { label: 'Emails sent', val: emailsSent, sub: `${emailsOpen} opened`    },
-    { label: 'Hot leads',   val: hotNow.length, sub: 'last 4h', hot: hotNow.length > 0 },
-    { label: 'New today',   val: newToday,   sub: 'added'                   },
-    { label: 'Signed up',   val: signedToday, sub: 'today'                  },
-    { label: 'Total',       val: campaigns.length, sub: 'in funnel'         },
+    { label: 'Aria calls',  val: todayStats.ariaMade,     sub: `${todayStats.ariaAnswered} answered` },
+    { label: 'Emails sent', val: todayStats.emailsSent,   sub: `${todayStats.emailsOpened} opened`   },
+    { label: 'Hot leads',   val: hotNow.length,           sub: 'last 4h', hot: hotNow.length > 0     },
+    { label: 'New today',   val: newToday,                sub: 'added'                                },
+    { label: 'Signed up',   val: signedToday,             sub: 'today'                                },
+    { label: 'Total',       val: campaigns.length,        sub: 'in funnel'                            },
   ]
 
   return (
@@ -207,19 +196,12 @@ function CampaignCard({ c, onSelect, onStatusChange }) {
     dead: 'opacity-40',
   }[heat] || ''
 
-  const sourceBadge = {
-    aria:     'bg-purple-500/20 text-purple-400',
-    email:    'bg-blue-500/20 text-blue-400',
-    manual:   'bg-gray-500/20 text-gray-400',
-    referral: 'bg-green-500/20 text-green-400',
-  }[c.source] || 'bg-gray-500/20 text-gray-400'
-
   function lastTouchDesc() {
     if (!lastTouch) return 'No touches yet'
-    const icon  = TOUCH_ICONS[lastTouch.touch_type] || '•'
-    const type  = (lastTouch.touch_type || 'touch').replace(/_/g, ' ')
-    const stat  = TOUCH_STATUS_LABEL[lastTouch.status] || lastTouch.status || ''
-    const when  = ago(lastTouch.created_at) || ''
+    const icon = TOUCH_ICONS[lastTouch.touch_type] || '•'
+    const type = (lastTouch.touch_type || 'touch').replace(/_/g, ' ')
+    const stat = TOUCH_STATUS_LABEL[lastTouch.status] || lastTouch.status || ''
+    const when = ago(lastTouch.created_at) || ''
     return `${icon} ${type}${stat ? ` — ${stat}` : ''}${when ? ` · ${when}` : ''}`
   }
 
@@ -228,30 +210,50 @@ function CampaignCard({ c, onSelect, onStatusChange }) {
       onClick={() => onSelect(c)}
       className={`bg-[#0f0f1a] border border-[#1e1e2e] rounded-lg p-3 cursor-pointer hover:border-[#2e2e3e] transition-all ${heatBorderCls}`}
     >
+      {/* Company + source badge */}
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-white leading-tight truncate">{c.company_name || '(no name)'}</div>
           {c.contact_name && <div className="text-[10px] text-gray-600 mt-0.5">{c.contact_name}</div>}
+          {c.phone && <div className="text-[10px] text-gray-700 font-mono">{c.phone}</div>}
         </div>
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${sourceBadge}`}>
-          {c.source || 'manual'}
-        </span>
+        {c.source && (
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
+            c.source === 'aria'     ? 'bg-purple-500/20 text-purple-400' :
+            c.source === 'email'   ? 'bg-blue-500/20 text-blue-400'     :
+            c.source === 'referral'? 'bg-green-500/20 text-green-400'   :
+                                     'bg-gray-500/20 text-gray-400'
+          }`}>
+            {c.source}
+          </span>
+        )}
       </div>
 
+      {/* Last touch + next action */}
       <div className="text-[10px] text-gray-600 mb-1 truncate">{lastTouchDesc()}</div>
       <div className={`text-[10px] mb-2 ${next.cls}`}>{next.label}</div>
 
+      {/* Quick action buttons */}
       <div className="flex items-center justify-between">
         <span className="text-[9px] text-gray-700">{c.touch_count || 0} touches</span>
         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
           {c.phone && (
-            <a href={`tel:${c.phone}`} title="Call" className="text-gray-600 hover:text-green-400 transition-colors text-xs">📞</a>
+            <a href={`tel:${c.phone}`} title="Call"
+               className="text-[10px] text-gray-600 hover:text-green-400 transition-colors bg-green-500/5 hover:bg-green-500/10 border border-green-500/10 rounded px-1.5 py-0.5">
+              📞 Call
+            </a>
           )}
           {c.phone && (
-            <a href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`} title="Text" className="text-gray-600 hover:text-blue-400 transition-colors text-xs">💬</a>
+            <a href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`} title="Text"
+               className="text-[10px] text-gray-600 hover:text-blue-400 transition-colors bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/10 rounded px-1.5 py-0.5">
+              💬 Text
+            </a>
           )}
           {c.email && (
-            <a href={emailHref(c)} title="Email" className="text-gray-600 hover:text-indigo-400 transition-colors text-xs">📧</a>
+            <a href={emailHref(c)} title="Email"
+               className="text-[10px] text-gray-600 hover:text-indigo-400 transition-colors bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/10 rounded px-1.5 py-0.5">
+              📧 Email
+            </a>
           )}
         </div>
       </div>
@@ -300,7 +302,8 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange }) {
             <div>
               <h2 className="text-base font-bold text-white">{c.company_name}</h2>
               {c.contact_name && <div className="text-xs text-gray-500 mt-0.5">{c.contact_name}</div>}
-              {c.phone && <div className="text-xs text-gray-600 mt-0.5">{c.phone}</div>}
+              {c.phone && <div className="text-xs text-gray-600 font-mono mt-0.5">{c.phone}</div>}
+              {c.email && <div className="text-xs text-gray-700 mt-0.5">{c.email}</div>}
             </div>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-xl leading-none mt-0.5 shrink-0">✕</button>
           </div>
@@ -408,21 +411,21 @@ function LogTouchModal({ c, onSave, onClose }) {
   const [saving,    setSaving]    = useState(false)
 
   const TYPES = [
-    { key: 'manual_call',  label: 'Called them'   },
-    { key: 'manual_text',  label: 'Texted them'   },
-    { key: 'manual_email', label: 'Emailed them'  },
+    { key: 'manual_call',  label: 'Called them'    },
+    { key: 'manual_text',  label: 'Texted them'    },
+    { key: 'manual_email', label: 'Emailed them'   },
     { key: 'inbound_call', label: 'They called me' },
     { key: 'sms',          label: 'They texted me' },
     { key: 'meeting',      label: 'Met in person'  },
   ]
 
   const OUTCOMES = [
-    { key: 'no_answer',      label: 'No answer / voicemail' },
+    { key: 'no_answer',      label: 'No answer / voicemail'   },
     { key: 'not_interested', label: 'Talked — not interested' },
-    { key: 'interested',     label: 'Talked — interested' },
-    { key: 'signed_up',      label: 'Talked — signed up' },
-    { key: 'left_message',   label: 'Left message' },
-    { key: 'sent_info',      label: 'Sent info' },
+    { key: 'interested',     label: 'Talked — interested'     },
+    { key: 'signed_up',      label: 'Talked — signed up'      },
+    { key: 'left_message',   label: 'Left message'            },
+    { key: 'sent_info',      label: 'Sent info'               },
   ]
 
   const isCall = touchType.includes('call') || touchType === 'meeting'
@@ -526,33 +529,64 @@ function LogTouchModal({ c, onSave, onClose }) {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
+const EMPTY_STATS = { ariaMade: 0, ariaAnswered: 0, emailsSent: 0, emailsOpened: 0 }
+
 export default function Funnel() {
-  const [campaigns, setCampaigns] = useState([])
-  const [selected,  setSelected]  = useState(null)
-  const [showLog,   setShowLog]   = useState(false)
-  const [search,    setSearch]    = useState('')
-  const [filter,    setFilter]    = useState('all')
-  const [sort,      setSort]      = useState('last_touch')
-  const [loading,   setLoading]   = useState(true)
+  const [campaigns,  setCampaigns]  = useState([])
+  const [todayStats, setTodayStats] = useState(EMPTY_STATS)
+  const [selected,   setSelected]   = useState(null)
+  const [showLog,    setShowLog]    = useState(false)
+  const [search,     setSearch]     = useState('')
+  const [filter,     setFilter]     = useState('all')
+  const [sort,       setSort]       = useState('last_touch')
+  const [loading,    setLoading]    = useState(true)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('roofing_campaigns')
-      .select(`
-        id, prospect_id, company_name, contact_name, phone, email,
-        source, status, campaign_start, last_touch_at, next_touch_at,
-        touch_count, signed_up_at, notes, assigned_to, created_at,
-        touches:roofing_touches(
-          id, touch_type, direction, status, content_preview,
-          duration_seconds, outcome, zach_notes, created_at
-        )
-      `)
-      .order('last_touch_at', { ascending: false, nullsFirst: false })
-      .limit(400)
-    if (!error) setCampaigns(data || [])
+
+    const todayISO = new Date()
+    todayISO.setHours(0, 0, 0, 0)
+    const todayStr = todayISO.toISOString()
+
+    const [campaignsRes, ariaRes, emailRes] = await Promise.all([
+      supabase
+        .from('roofing_campaigns')
+        .select(`
+          id, prospect_id, company_name, contact_name, phone, email,
+          source, status, campaign_start, last_touch_at, next_touch_at,
+          touch_count, signed_up_at, notes, assigned_to, created_at,
+          touches:roofing_touches(
+            id, touch_type, direction, status, content_preview,
+            duration_seconds, outcome, zach_notes, created_at
+          )
+        `)
+        .order('last_touch_at', { ascending: false, nullsFirst: false })
+        .limit(400),
+
+      supabase
+        .from('roofing_aria_calls')
+        .select('id, outcome, call_type')
+        .gte('created_at', todayStr),
+
+      supabase
+        .from('email_log')
+        .select('id, opened_at')
+        .gte('created_at', todayStr),
+    ])
+
+    if (!campaignsRes.error) setCampaigns(campaignsRes.data || [])
+
+    const ariaCalls   = ariaRes.data  || []
+    const emailsSent  = emailRes.data || []
+    setTodayStats({
+      ariaMade:     ariaCalls.filter(c => c.call_type === 'outbound').length,
+      ariaAnswered: ariaCalls.filter(c => ['answered','interested','appointment_booked'].includes(c.outcome)).length,
+      emailsSent:   emailsSent.length,
+      emailsOpened: emailsSent.filter(e => e.opened_at).length,
+    })
+
     setLoading(false)
   }
 
@@ -590,10 +624,7 @@ export default function Funnel() {
 
     await supabase.from('roofing_campaigns').update(patch).eq('id', selected.id)
 
-    const updated = {
-      ...selected, ...patch,
-      touches: [touch, ...(selected.touches || [])],
-    }
+    const updated = { ...selected, ...patch, touches: [touch, ...(selected.touches || [])] }
     setSelected(updated)
     setCampaigns(cs => cs.map(c => c.id === selected.id ? updated : c))
   }
@@ -611,10 +642,9 @@ export default function Funnel() {
     if (filter === 'zach')  return c.assigned_to === 'zach'
     if (filter === 'aria')  return c.source === 'aria'
     if (filter === 'email') return c.source === 'email'
-    if (['CO','TX','FL'].includes(filter)) return c.state === filter
     return true
   }).sort((a, b) => {
-    if (sort === 'last_touch')   return (new Date(b.last_touch_at || 0)) - (new Date(a.last_touch_at || 0))
+    if (sort === 'last_touch')   return new Date(b.last_touch_at || 0) - new Date(a.last_touch_at || 0)
     if (sort === 'most_touches') return (b.touch_count || 0) - (a.touch_count || 0)
     if (sort === 'newest')       return new Date(b.created_at) - new Date(a.created_at)
     if (sort === 'oldest')       return new Date(a.created_at) - new Date(b.created_at)
@@ -631,14 +661,14 @@ export default function Funnel() {
 
   return (
     <div className="p-4 min-h-screen">
-      <DailyDigest campaigns={campaigns} />
+      <DailyDigest campaigns={campaigns} todayStats={todayStats} />
 
       {/* Search + Filters + Sort */}
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search company or name…"
+          placeholder="Search company, name, or phone…"
           className="flex-1 bg-[#0f0f1a] border border-[#1e1e2e] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/40"
         />
         <div className="flex gap-1.5 flex-wrap">
@@ -666,6 +696,12 @@ export default function Funnel() {
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
         </select>
+        <button
+          onClick={load}
+          className="text-[11px] text-gray-500 hover:text-gray-300 px-3 py-1.5 rounded-lg bg-[#0f0f1a] border border-[#1e1e2e] hover:border-[#2e2e3e] transition-colors"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Kanban board */}
