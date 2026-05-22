@@ -314,8 +314,14 @@ form.addEventListener('submit', async (e) => {
     });
 
     if (!otpRes.ok) {
-      // Non-fatal — account was created, welcome email already sent
-      console.warn('OTP send failed, welcome email fallback active');
+      const otpData = await otpRes.json().catch(() => ({}));
+      const msg = (otpData.msg || otpData.error_description || otpData.message || '').toLowerCase();
+      const isRateLimit = otpRes.status === 429 || msg.includes('rate') || msg.includes('security');
+      if (isRateLimit) {
+        showError('Already sent a link — check your email (including spam). It\'s valid for 24 hours.');
+        return;
+      }
+      // Non-fatal for other errors — account was created, welcome email already sent
     }
 
     showSuccess(owner_email);

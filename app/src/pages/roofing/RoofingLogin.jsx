@@ -14,11 +14,16 @@ export default function RoofingLogin() {
 
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/roofing/jobs` },
+      options: { emailRedirectTo: 'https://app.nexuszc.com/roofing/jobs' },
     })
 
     if (err) {
-      setError(err.message)
+      const isRateLimit = err.message.toLowerCase().includes('rate') ||
+        err.message.toLowerCase().includes('security') ||
+        err.status === 429
+      setError(isRateLimit
+        ? 'Already sent a link — check your email (including spam). It\'s valid for 24 hours.'
+        : err.message)
     } else {
       setSent(true)
     }
