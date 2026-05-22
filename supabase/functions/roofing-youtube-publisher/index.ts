@@ -1,23 +1,22 @@
-// roofing-youtube-publisher v1
-// Approved youtube_scripts → ElevenLabs voiceover → Supabase Storage → Blog post → Telegram delivery
+// roofing-youtube-publisher v2
+// Voice: Adam (pNInz6obpgDQGcFmaJgB) eleven_turbo_v2, more natural settings.
+// Description: full Phase 6 optimized template with chapters, CTA, hashtags.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY")!;
-// Set ELEVENLABS_VOICE_ID in Supabase secrets to override.
-// Default: Adam (pNInz6obpgDQGcFmaJgB) — deep, professional narration voice.
-// Browse voices at elevenlabs.io/voice-library and swap anytime.
+const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY         = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ELEVENLABS_API_KEY  = Deno.env.get("ELEVENLABS_API_KEY")!;
+// Default: Adam — authoritative, trusted, contractor-audience voice.
 const ELEVENLABS_VOICE_ID = Deno.env.get("ELEVENLABS_VOICE_ID") || "pNInz6obpgDQGcFmaJgB";
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
-const GITHUB_TOKEN = Deno.env.get("GITHUB_TOKEN")!;
-const GITHUB_REPO = "nexuszc/nexus-zc";
+const TELEGRAM_BOT_TOKEN  = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
+const TELEGRAM_CHAT_ID    = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const GITHUB_TOKEN        = Deno.env.get("GITHUB_TOKEN")!;
+const GITHUB_REPO         = "nexuszc/nexus-zc";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-// ── HELPERS ────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function slugify(title: string): string {
   return title
@@ -28,94 +27,84 @@ function slugify(title: string): string {
     .slice(0, 80);
 }
 
-// Strip markdown and section labels for clean TTS input.
-// Preserves natural sentence flow.
 function cleanForTTS(script: string, maxChars = 4800): string {
   return script
-    .replace(/\[(HOOK|PROBLEM|EDUCATION|BRIDGE|CTA|INTRO|OUTRO)\]/gi, "")
+    .replace(/\[(HOOK|PROBLEM|SOLUTION|CTA|INTRO|OUTRO|SECTION \d+[^)]*)\]/gi, "")
+    .replace(/^(HOOK|PROBLEM|SOLUTION|CTA|INTRO|OUTRO):\s*/gim, "")
     .replace(/#{1,6}\s+/g, "")
     .replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
-    .replace(/https?:\/\/\S+/g, "")
+    .replace(/https?:\/\/\S+/g, "roofingos.dev")
     .replace(/`[^`]+`/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
     .slice(0, maxChars);
 }
 
-// Build approximate YouTube chapter timestamps from script sections.
-// Assumes ~130 words/minute speaking rate.
-function buildChapters(script: string): string {
-  const sections: Array<{ label: string; charPos: number }> = [];
-  const markers = [
-    { tag: /\[HOOK\]/i, label: "Intro" },
-    { tag: /\[PROBLEM\]/i, label: "The Problem" },
-    { tag: /\[EDUCATION\]/i, label: "What You Need to Know" },
-    { tag: /\[BRIDGE\]/i, label: "How Contractors Are Solving This" },
-    { tag: /\[CTA\]/i, label: "Next Step" },
-  ];
-
-  for (const { tag, label } of markers) {
-    const match = script.search(tag);
-    if (match !== -1) sections.push({ label, charPos: match });
-  }
-
-  if (!sections.length) return "";
-
-  const wordsPerChar = 0.167; // ~6 chars/word average
-  const wordsPerMinute = 130;
-
-  return sections
-    .map(({ label, charPos }) => {
-      const words = charPos * wordsPerChar;
-      const totalSeconds = Math.round((words / wordsPerMinute) * 60);
-      const mins = Math.floor(totalSeconds / 60);
-      const secs = totalSeconds % 60;
-      return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")} ${label}`;
-    })
-    .join("\n");
-}
-
 function buildYouTubeDescription(content: {
   title: string;
-  body: string;
   hook?: string;
-  target_keyword?: string;
-  market?: string;
-  tags?: string[];
+  hook_text?: string;
+  target_keywords?: string[] | null;
+  topic_category?: string | null;
+  market?: string | null;
+  tags?: string[] | null;
   blog_url?: string | null;
-  mp3_url?: string;
+  type?: string;
 }): string {
-  const chapters = buildChapters(content.body || "");
-  const keyword = content.target_keyword || "roofing contractor";
-  const market = content.market || "Colorado";
-  const tags = (content.tags || []).join(", ");
-  const blogLink = content.blog_url ? `\n📖 Full script + resources: ${content.blog_url}` : "";
-  const audioLink = content.mp3_url ? `\n🎧 Audio version: ${content.mp3_url}` : "";
+  const hook = (content.hook_text || content.hook || content.title).slice(0, 200);
+  const isLong = (content.type || "").includes("long");
+
+  const chapters = isLong
+    ? [
+        "=== CHAPTERS ===",
+        "0:00 The Problem",
+        "1:00 Why It Keeps Happening",
+        "3:00 The Solution (Roofing OS)",
+        "6:00 Real Results",
+        "8:00 Get Started Free",
+        "",
+      ]
+    : [
+        "=== CHAPTERS ===",
+        "0:00 The Problem",
+        "0:08 Why It Keeps Happening",
+        "0:15 The Fix",
+        "0:25 Get Started Free",
+        "",
+      ];
+
+  const blogLine = content.blog_url ? `📖 Full breakdown: ${content.blog_url}\n` : "";
+
+  const extraKeywords = (content.target_keywords || []).slice(0, 5).join(", ");
+  const market = content.market ? `${content.market} roofing | ` : "";
 
   return [
-    content.hook || content.title,
+    hook,
     "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "🏗️ FREE TOOLS FOR ROOFING CONTRACTORS",
-    "• Homeowner portal (track jobs, supplements, photos)",
-    "• AI supplement request generator",
-    "• Carrier intelligence reports",
-    "→ roofingos.dev",
-    "━━━━━━━━━━━━━━━━━━━━",
-    chapters ? `CHAPTERS:\n${chapters}\n` : "",
-    `${keyword} | ${market} roofing | roofing business tips`,
-    blogLink,
-    audioLink,
+    "🏠 Try Roofing OS FREE → roofingos.dev",
     "",
-    "━━━━━━━━━━━━━━━━━━━━",
-    `TAGS: ${tags || "roofing contractor, roofing business, supplement tracking, hail damage, insurance claim, roofing software"}`,
+    "✅ Free forever — no credit card ever",
+    "✅ Homeowner portal in 4 minutes",
+    "✅ AI supplement tool",
+    "✅ Replace CompanyCam at $0",
+    "✅ Storm leads for your market",
+    "",
+    "📞 Questions? Call us: (720) 500-6668",
+    "",
+    blogLine,
+    ...chapters,
+    "=== ABOUT ROOFING OS ===",
+    "Roofing OS is a free homeowner portal and AI supplement tool for roofing contractors. Cancel CompanyCam. Keep everything. Pay nothing. Ever.",
+    "",
+    `${market}${extraKeywords ? extraKeywords + " | " : ""}roofing contractor tips 2026`,
+    "",
+    "#roofing #roofingcontractor #roofer #supplement #stormrestoration #roofingOS #freeroofingsoftware #homeowner #insuranceclaim #hail #companycamp #contractortips",
   ]
-    .filter(l => l !== null)
     .join("\n")
-    .slice(0, 4900);
+    .slice(0, 5000);
 }
 
-// ── ELEVENLABS ─────────────────────────────────────────────────────────────────
+// ── ElevenLabs voiceover ──────────────────────────────────────────────────────
 
 async function generateVoiceover(text: string): Promise<{ buffer: ArrayBuffer; chars: number } | null> {
   if (!ELEVENLABS_API_KEY) return null;
@@ -131,11 +120,11 @@ async function generateVoiceover(text: string): Promise<{ buffer: ArrayBuffer; c
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_monolingual_v1",
+        model_id: "eleven_turbo_v2",
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-          style: 0.2,
+          stability: 0.35,
+          similarity_boost: 0.85,
+          style: 0.6,
           use_speaker_boost: true,
         },
       }),
@@ -151,7 +140,7 @@ async function generateVoiceover(text: string): Promise<{ buffer: ArrayBuffer; c
   return { buffer, chars: text.length };
 }
 
-// ── GITHUB ─────────────────────────────────────────────────────────────────────
+// ── GitHub blog post ──────────────────────────────────────────────────────────
 
 async function getFileSha(path: string): Promise<string | null> {
   const res = await fetch(
@@ -184,91 +173,72 @@ async function writeGitHub(path: string, content: string, message: string): Prom
   return data.commit?.sha?.slice(0, 8) || null;
 }
 
-// ── BLOG POST ──────────────────────────────────────────────────────────────────
-
 function buildBlogHtml(content: {
   title: string;
   body: string;
   hook?: string;
+  hook_text?: string;
   market?: string;
   tags?: string[];
   mp3_url?: string;
-  seo_description?: string;
-  target_keyword?: string;
+  target_keywords?: string[];
 }, slug: string): string {
-  const desc = content.seo_description || content.hook || content.title;
-  const keyword = content.target_keyword || "roofing contractor";
-  const market = content.market || "";
+  const desc = (content.hook_text || content.hook || content.title).slice(0, 160);
+  const keyword = (content.target_keywords || [])[0] || "roofing contractor";
   const tags = (content.tags || []).join(", ");
 
-  // Convert script body to HTML paragraphs, preserve section headers
   const htmlBody = (content.body || "")
-    .replace(/\[(HOOK|PROBLEM|EDUCATION|BRIDGE|CTA|INTRO|OUTRO)\]/gi,
-      (_, s) => `<h2 class="section-label">${s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ")}</h2>`)
+    .replace(/\[(HOOK|PROBLEM|SOLUTION|CTA|INTRO|OUTRO|SECTION \d+[^)]*)\]/gi,
+      (_: string, s: string) => `<h2 class="section-label">${s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, " ")}</h2>`)
+    .replace(/^(HOOK|PROBLEM|SOLUTION|CTA|INTRO|OUTRO):\s*/gim, "")
     .replace(/#{2,3}\s+(.+)/g, "<h3>$1</h3>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .split(/\n\n+/)
-    .filter(p => p.trim())
-    .map(p => p.startsWith("<h") ? p : `<p>${p.replace(/\n/g, " ").trim()}</p>`)
+    .filter((p: string) => p.trim())
+    .map((p: string) => p.startsWith("<h") ? p : `<p>${p.replace(/\n/g, " ").trim()}</p>`)
     .join("\n");
 
   const audioSection = content.mp3_url
-    ? `<div class="audio-section">
-        <h3>🎧 Listen to This Episode</h3>
-        <audio controls style="width:100%">
-          <source src="${content.mp3_url}" type="audio/mpeg">
-        </audio>
-        <p class="audio-note">Download: <a href="${content.mp3_url}">MP3 file</a></p>
-      </div>`
+    ? `<div class="audio-section"><h3>🎧 Listen</h3><audio controls style="width:100%"><source src="${content.mp3_url}" type="audio/mpeg"></audio></div>`
     : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>${content.title} | Roofing OS</title>
-  <meta name="description" content="${desc.slice(0, 160).replace(/"/g, "&quot;")}">
-  <meta name="keywords" content="${keyword}, ${market}, roofing contractor tips, ${tags}">
+  <meta name="description" content="${desc.replace(/"/g, "&quot;")}">
+  <meta name="keywords" content="${keyword}, ${content.market || ""}, roofing contractor, ${tags}">
   <meta property="og:title" content="${content.title}">
-  <meta property="og:description" content="${desc.slice(0, 200).replace(/"/g, "&quot;")}">
-  <meta property="og:type" content="article">
+  <meta property="og:description" content="${desc.replace(/"/g, "&quot;")}">
   <link rel="canonical" href="https://roofingos.dev/blog/${slug}">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 780px; margin: 0 auto; padding: 2rem 1.5rem; color: #1a1a1a; line-height: 1.7; }
-    h1 { font-size: 2rem; line-height: 1.25; margin-bottom: 0.5rem; }
-    h2.section-label { background: #f5f5f5; padding: 0.5rem 1rem; border-left: 4px solid #e85d26; margin: 2rem 0 1rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #666; }
-    h3 { font-size: 1.2rem; margin: 1.5rem 0 0.5rem; }
-    p { margin: 0 0 1rem; }
-    .meta { color: #888; font-size: 0.9rem; margin-bottom: 2rem; }
-    .audio-section { background: #f9f7f5; border: 1px solid #e0d8d0; border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
-    .audio-note { font-size: 0.85rem; color: #888; margin-top: 0.5rem; }
-    .cta-box { background: #e85d26; color: white; border-radius: 8px; padding: 2rem; margin: 3rem 0; text-align: center; }
-    .cta-box h3 { color: white; margin: 0 0 0.5rem; }
-    .cta-box p { color: rgba(255,255,255,0.9); margin: 0 0 1rem; }
-    .cta-box a { display: inline-block; background: white; color: #e85d26; font-weight: 700; padding: 0.75rem 2rem; border-radius: 6px; text-decoration: none; }
-    nav { margin-bottom: 2rem; }
-    nav a { color: #e85d26; text-decoration: none; font-size: 0.9rem; }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:780px;margin:0 auto;padding:2rem 1.5rem;color:#1a1a1a;line-height:1.7}
+    h1{font-size:2rem;line-height:1.25;margin-bottom:.5rem}
+    h2.section-label{background:#f5f5f5;padding:.5rem 1rem;border-left:4px solid #e85d26;margin:2rem 0 1rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:#666}
+    h3{font-size:1.2rem;margin:1.5rem 0 .5rem}p{margin:0 0 1rem}
+    .meta{color:#888;font-size:.9rem;margin-bottom:2rem}
+    .audio-section{background:#f9f7f5;border:1px solid #e0d8d0;border-radius:8px;padding:1.5rem;margin:2rem 0}
+    .cta-box{background:#e85d26;color:#fff;border-radius:8px;padding:2rem;margin:3rem 0;text-align:center}
+    .cta-box h3{color:#fff;margin:0 0 .5rem}.cta-box p{color:rgba(255,255,255,.9);margin:0 0 1rem}
+    .cta-box a{display:inline-block;background:#fff;color:#e85d26;font-weight:700;padding:.75rem 2rem;border-radius:6px;text-decoration:none}
+    nav{margin-bottom:2rem}nav a{color:#e85d26;text-decoration:none;font-size:.9rem}
   </style>
 </head>
 <body>
   <nav><a href="/blog">← Blog</a> | <a href="/">Roofing OS</a></nav>
   <h1>${content.title}</h1>
-  <p class="meta">Roofing OS &middot; ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+  <p class="meta">Roofing OS · ${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</p>
   ${audioSection}
-  <div class="script-content">
-    ${htmlBody}
-  </div>
+  <div class="script-content">${htmlBody}</div>
   <div class="cta-box">
-    <h3>Stop leaving supplement money on the table.</h3>
-    <p>Roofing OS generates your supplement requests automatically — with the exact Xactimate codes your carrier approves.</p>
-    <a href="https://roofingos.dev">See How It Works →</a>
+    <h3>Stop leaving money on the table.</h3>
+    <p>Roofing OS is free forever. No credit card. Takes 4 minutes to set up.</p>
+    <a href="https://roofingos.dev">Get Started Free →</a>
   </div>
 </body>
 </html>`;
 }
-
-// ── TELEGRAM ───────────────────────────────────────────────────────────────────
 
 async function tg(text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -278,89 +248,56 @@ async function tg(text: string) {
   }).catch(() => {});
 }
 
-async function tgAudio(mp3Url: string, caption: string, title: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      audio: mp3Url,
-      caption: caption.slice(0, 1000),
-      title,
-      performer: "Roofing OS",
-      parse_mode: "Markdown",
-    }),
-  }).catch(() => {});
-}
+// ── Process one script ────────────────────────────────────────────────────────
 
-// ── PROCESS ONE SCRIPT ─────────────────────────────────────────────────────────
-
-async function processScript(content: {
-  id: string;
-  title: string;
-  body: string;
-  hook?: string;
-  thumbnail_text?: string;
-  tags?: string[];
-  market?: string;
-  target_keyword?: string;
-  seo_description?: string;
-  scheduled_topic?: string;
-}): Promise<{ mp3_url: string | null; blog_url: string | null; description: string }> {
-  const slug = slugify(content.title);
+async function processScript(content: Record<string, unknown>): Promise<{ mp3_url: string | null; blog_url: string | null }> {
+  const slug = slugify(String(content.title || ""));
   let mp3Url: string | null = null;
   let blogUrl: string | null = null;
   let voiceoverChars = 0;
-  let truncated = false;
 
-  // 1. Generate voiceover
+  // 1. Voiceover
   try {
-    const ttsText = cleanForTTS(content.body || "", 4800);
-    truncated = (content.body || "").replace(/\s+/g, " ").length > 4800;
+    const ttsText = cleanForTTS(String(content.body || ""), 4800);
     const voiceover = await generateVoiceover(ttsText);
-
     if (voiceover) {
       voiceoverChars = voiceover.chars;
       const filename = `${content.id}.mp3`;
-
       const { error: uploadError } = await supabase.storage
         .from("voiceovers")
-        .upload(filename, voiceover.buffer, {
-          contentType: "audio/mpeg",
-          upsert: true,
-        });
-
+        .upload(filename, voiceover.buffer, { contentType: "audio/mpeg", upsert: true });
       if (!uploadError) {
-        const { data: urlData } = supabase.storage
-          .from("voiceovers")
-          .getPublicUrl(filename);
+        const { data: urlData } = supabase.storage.from("voiceovers").getPublicUrl(filename);
         mp3Url = urlData.publicUrl;
-      } else {
-        console.error("Storage upload error:", uploadError.message);
       }
     }
   } catch (err) {
     console.error("Voiceover error:", err);
-    await tg(`⚠️ Voiceover failed for "${content.title.slice(0, 60)}": ${String(err).slice(0, 200)}`);
+    await tg(`⚠️ Voiceover failed for "${String(content.title || "").slice(0, 60)}": ${String(err).slice(0, 200)}`);
   }
 
-  // 2. Publish blog post to GitHub
+  // 2. Blog post
   try {
-    const blogHtml = buildBlogHtml({ ...content, mp3_url: mp3Url || undefined }, slug);
-    const path = `roofingos-landing/blog/${slug}.html`;
-    const commitSha = await writeGitHub(
-      path,
-      blogHtml,
-      `[blog] ${content.title.slice(0, 72)}`
-    );
+    const blogHtml = buildBlogHtml({
+      title: String(content.title || ""),
+      body:  String(content.body || ""),
+      hook:  String(content.hook || ""),
+      hook_text: String(content.hook_text || ""),
+      market: content.market as string | undefined,
+      tags: content.tags as string[] | undefined,
+      mp3_url: mp3Url || undefined,
+      target_keywords: content.target_keywords as string[] | undefined,
+    }, slug);
 
+    const commitSha = await writeGitHub(
+      `roofingos-landing/blog/${slug}.html`,
+      blogHtml,
+      `[blog] ${String(content.title || "").slice(0, 72)}`
+    );
     if (commitSha) {
       blogUrl = `https://roofingos.dev/blog/${slug}`;
-
-      // Update blog index.json
       try {
         const indexPath = "roofingos-landing/blog/index.json";
-        const indexSha = await getFileSha(indexPath);
         const existingRes = await fetch(
           `https://api.github.com/repos/${GITHUB_REPO}/contents/${indexPath}?ref=main`,
           { headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json" } }
@@ -370,96 +307,97 @@ async function processScript(content: {
           const d = await existingRes.json();
           try { index = JSON.parse(atob(d.content.replace(/\n/g, ""))); } catch { index = []; }
         }
-        // Prepend new entry, dedup by slug
         index = [
-          { slug, title: content.title, date: new Date().toISOString().slice(0, 10), type: "youtube_companion" },
+          { slug, title: String(content.title || ""), date: new Date().toISOString().slice(0, 10), type: "youtube_companion" },
           ...index.filter((e: Record<string, string>) => e.slug !== slug),
         ].slice(0, 100);
-
         await writeGitHub(indexPath, JSON.stringify(index, null, 2), `[blog] update index — ${slug}`);
       } catch { /* non-fatal */ }
     }
   } catch (err) {
-    console.error("Blog publish error:", err);
+    console.error("Blog error:", err);
   }
 
-  // 3. Build YouTube description
+  // 3. Build description
   const description = buildYouTubeDescription({
-    title: content.title,
-    body: content.body,
-    hook: content.hook,
-    target_keyword: content.target_keyword,
-    market: content.market,
-    tags: content.tags,
-    blog_url: blogUrl,
-    mp3_url: mp3Url || undefined,
+    title:           String(content.title || ""),
+    hook:            String(content.hook || ""),
+    hook_text:       String(content.hook_text || ""),
+    target_keywords: content.target_keywords as string[] | undefined,
+    topic_category:  content.topic_category as string | undefined,
+    market:          content.market as string | undefined,
+    tags:            content.tags as string[] | undefined,
+    blog_url:        blogUrl,
+    type:            String(content.type || ""),
   });
 
-  // 4. Update DB record
-  await supabase.from("roofing_content").update({
-    status: "published",
-    published_at: new Date().toISOString(),
-    mp3_url: mp3Url,
-    voiceover_chars: voiceoverChars || null,
-    blog_url: blogUrl,
-    published_url: blogUrl,
-    youtube_description: description,
-    youtube_upload_ready: true,
-  }).eq("id", content.id);
+  // 4. Update DB
+  try {
+    await supabase.from("roofing_content").update({
+      status:               "published",
+      published_at:         new Date().toISOString(),
+      mp3_url:              mp3Url,
+      voiceover_chars:      voiceoverChars || null,
+      blog_url:             blogUrl,
+      published_url:        blogUrl,
+      youtube_description:  description,
+      youtube_upload_ready: true,
+    }).eq("id", content.id);
+  } catch (dbErr) {
+    console.error("DB update failed:", dbErr);
+  }
 
-  // Kick off Shotstack video render — webhook handles YouTube upload when done
+  // 5. Kick off uploader (fire-and-forget)
   fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-uploader`, {
     method: "POST",
     headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ content_id: content.id }),
   }).catch(() => {});
 
-  return { mp3_url: mp3Url, blog_url: blogUrl, description };
+  return { mp3_url: mp3Url, blog_url: blogUrl };
 }
 
-// ── MAIN ───────────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-publisher ready" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-publisher v2 ready", voice: ELEVENLABS_VOICE_ID });
 
   const startMs = Date.now();
 
-  // Process a specific content ID
   if (body.content_id) {
     const { data: content } = await supabase
       .from("roofing_content")
       .select("*")
       .eq("id", body.content_id)
       .maybeSingle();
-
     if (!content) return Response.json({ error: "content not found" }, { status: 404 });
-
     const result = await processScript(content);
     return Response.json({ ok: true, content_id: body.content_id, ...result, duration_ms: Date.now() - startMs });
   }
 
-  // Process all approved youtube_scripts (batch mode, up to 5 at a time)
-  const { data: approvedScripts } = await supabase
+  // Batch: pick approved youtube_short or youtube_long with no voiceover yet
+  const limit = Math.min(body.limit || 5, 10);
+  const { data: pending } = await supabase
     .from("roofing_content")
     .select("*")
-    .eq("type", "youtube_script")
+    .in("type", ["youtube_short", "youtube_long"])
     .eq("status", "approved")
-    .order("approved_at", { ascending: true })
-    .limit(5);
+    .eq("youtube_upload_ready", false)
+    .is("mp3_url", null)
+    .order("created_at", { ascending: true })
+    .limit(limit);
 
-  if (!approvedScripts?.length) {
-    return Response.json({ ok: true, processed: 0, message: "no approved scripts pending" });
+  if (!pending?.length) {
+    return Response.json({ ok: true, processed: 0, message: "no pending scripts" });
   }
 
   const results: Array<{ id: string; title: string; mp3_url: string | null; blog_url: string | null }> = [];
-
-  for (const script of approvedScripts) {
+  for (const script of pending) {
     try {
       const { mp3_url, blog_url } = await processScript(script);
       results.push({ id: script.id, title: script.title, mp3_url, blog_url });
-      // Stagger to avoid Telegram rate limits
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await tg(`❌ Publisher error for "${(script.title || "").slice(0, 50)}": ${msg.slice(0, 200)}`);
@@ -467,12 +405,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  await supabase.from("system_heartbeats").insert({
-    function_name: "roofing-youtube-publisher",
-    status: "ok",
-    response_ms: Date.now() - startMs,
-    checked_at: new Date().toISOString(),
-  }).catch(() => {});
+  try {
+    await supabase.from("system_heartbeats").insert({
+      function_name: "roofing-youtube-publisher",
+      status: "ok",
+      response_ms: Date.now() - startMs,
+      checked_at: new Date().toISOString(),
+    });
+  } catch { /* non-fatal */ }
 
   return Response.json({ ok: true, processed: results.length, results, duration_ms: Date.now() - startMs });
 });

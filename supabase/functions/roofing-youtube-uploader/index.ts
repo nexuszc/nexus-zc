@@ -1,16 +1,15 @@
-// roofing-youtube-uploader v6
-// Upload flow for content with mp3_url but no video_url:
-//   1. Creatomate renders MP4 from mp3 + branded template (inline composition, no dashboard template needed)
-//   2. Poll until render complete (max ~4 min)
-//   3. Download rendered MP4
-//   4. Upload to YouTube via resumable API
-//   5. Set youtube_video_id + youtube_posted_at
+// roofing-youtube-uploader v7
+// Pexels stock footage background, improved Creatomate visuals, thumbnail generation,
+// pinned comment, full optimized description. Always inline source (no dashboard template).
 //
-// For content with video_url already set: skip to step 3.
-// Batch mode: {force_upload: true, limit: N} processes queue.
-//
-// Required secrets: YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN,
-//                   CREATOMATE_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+// Flow per video:
+//   1. Detect topic from title → fetch Pexels portrait video
+//   2. Creatomate: Pexels bg + dark overlay + hook text + title + CTA bar → MP4
+//   3. Creatomate thumbnail render (1280×720) in parallel
+//   4. Download MP4 → upload to YouTube
+//   5. Upload thumbnail via YouTube API
+//   6. Post + pin comment
+//   7. DB update
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -19,14 +18,12 @@ const SERVICE_KEY           = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const YOUTUBE_CLIENT_ID     = Deno.env.get("YOUTUBE_CLIENT_ID") || "";
 const YOUTUBE_CLIENT_SECRET = Deno.env.get("YOUTUBE_CLIENT_SECRET") || "";
 const YOUTUBE_REFRESH_TOKEN = Deno.env.get("YOUTUBE_REFRESH_TOKEN") || "";
-const CREATOMATE_API_KEY     = Deno.env.get("CREATOMATE_API_KEY") || "";
-const CREATOMATE_TEMPLATE_ID = Deno.env.get("CREATOMATE_TEMPLATE_ID") || "";
+const CREATOMATE_API_KEY    = Deno.env.get("CREATOMATE_API_KEY") || "";
+const PEXELS_API_KEY        = Deno.env.get("PEXELS_API_KEY") || "";
 const TELEGRAM_BOT_TOKEN    = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID      = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function tg(text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -52,220 +49,312 @@ async function getYouTubeAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-// ── Creatomate: render MP3 → MP4 ─────────────────────────────────────────────
+// ── Pexels stock footage ──────────────────────────────────────────────────────
 
-function buildCreatomateSource(content: {
-  title: string;
-  hook_text?: string | null;
-  type?: string;
-  mp3_url: string;
-}): Record<string, unknown> {
-  const isShort = (content.type || "youtube_short").includes("short");
-  const titleText = content.title.slice(0, 120);
-  const hookText = (content.hook_text || "").slice(0, 160);
+const PEXELS_QUERIES: Record<string, string> = {
+  homeowner_communication: "roofing contractor homeowner house",
+  supplement_recovery:     "insurance adjuster roof damage inspection",
+  storm_leads:             "hail storm roof damage neighborhood",
+  companycam_replacement:  "roofing crew working residential house",
+  carrier_tactics:         "insurance paperwork claim documents",
+  crew_management:         "construction crew team working",
+  reviews_closing:         "contractor handshake client happy",
+  product_demo:            "roofing contractor phone app",
+  default:                 "roofing contractor house",
+};
 
-  return {
-    output_format: "mp4",
-    frame_rate: 25,
-    width: isShort ? 1080 : 1920,
-    height: isShort ? 1920 : 1080,
-    duration: "auto",
-    elements: [
-      // Background
-      {
-        type: "rectangle",
-        track: 1,
-        time: 0,
-        width: "100%",
-        height: "100%",
-        fill_color: "#0f1923",
-      },
-      // Gradient overlay — subtle top fade
-      {
-        type: "rectangle",
-        track: 2,
-        time: 0,
-        width: "100%",
-        height: "40%",
-        y: "0%",
-        y_alignment: "0%",
-        fill_color: [
-          { position: 0, color: "#1a2332" },
-          { position: 1, color: "rgba(15,25,35,0)" },
-        ],
-      },
-      // Title text
-      {
-        type: "text",
-        track: 3,
-        time: 0,
-        width: "84%",
-        height: "auto",
-        x_alignment: "50%",
-        y_alignment: isShort ? "32%" : "40%",
-        text: titleText,
-        font_family: "Montserrat",
-        font_weight: "800",
-        font_size: isShort ? "54" : "72",
-        fill_color: "#ffffff",
-        letter_spacing: "-1",
-        line_height: "1.15",
-        x_alignment_text: "center",
-        animations: [
-          {
-            time: "start",
-            duration: 0.7,
-            type: "slide",
-            direction: "up",
-            easing: "quadratic-out",
-          },
-        ],
-      },
-      // Hook / subtitle (if present)
-      ...(hookText ? [{
-        type: "text",
-        track: 4,
-        time: 0.4,
-        width: "80%",
-        height: "auto",
-        x_alignment: "50%",
-        y_alignment: isShort ? "52%" : "60%",
-        text: hookText,
-        font_family: "Montserrat",
-        font_weight: "400",
-        font_size: isShort ? "32" : "42",
-        fill_color: "rgba(255,255,255,0.75)",
-        x_alignment_text: "center",
-        animations: [
-          {
-            time: "start",
-            duration: 0.7,
-            type: "fade",
-            easing: "quadratic-out",
-          },
-        ],
-      }] : []),
-      // Roofing OS wordmark bottom left
-      {
-        type: "text",
-        track: 5,
-        time: 0,
-        x: "5%",
-        y: "91%",
-        text: "ROOFING OS",
-        font_family: "Montserrat",
-        font_weight: "700",
-        font_size: isShort ? "28" : "36",
-        fill_color: "#e85d26",
-        letter_spacing: "2",
-      },
-      // roofingos.dev watermark bottom right
-      {
-        type: "text",
-        track: 6,
-        time: 0,
-        x: "95%",
-        y: "91%",
-        x_alignment: "100%",
-        text: "roofingos.dev",
-        font_family: "Montserrat",
-        font_weight: "400",
-        font_size: isShort ? "24" : "30",
-        fill_color: "rgba(255,255,255,0.5)",
-      },
-      // Audio track
-      {
-        type: "audio",
-        track: 7,
-        time: 0,
-        source: content.mp3_url,
-        volume: "100%",
-      },
-    ],
-  };
+function detectTopic(title: string): string {
+  const t = title.toLowerCase();
+  if (/homeowner|call|portal|communication/.test(t)) return "homeowner_communication";
+  if (/supplement|carrier|state farm|allstate|usaa|adjuster|denied/.test(t)) return "supplement_recovery";
+  if (/storm|hail|weather|market/.test(t)) return "storm_leads";
+  if (/companycam|company cam|camera|photo|cancel/.test(t)) return "companycam_replacement";
+  if (/crew|team|worker|show up/.test(t)) return "crew_management";
+  if (/review|star|closing|close|job/.test(t)) return "reviews_closing";
+  return "default";
 }
 
-async function creatomateRender(content: {
+async function getPexelsVideo(topic: string): Promise<string | null> {
+  if (!PEXELS_API_KEY) return null;
+  try {
+    const query = PEXELS_QUERIES[topic] || PEXELS_QUERIES.default;
+    const res = await fetch(
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=5&orientation=portrait&size=medium`,
+      { headers: { Authorization: PEXELS_API_KEY } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const video = data.videos?.[0];
+    const file = video?.video_files?.find(
+      (f: Record<string, unknown>) => f.quality === "hd" && Number(f.height) > Number(f.width)
+    ) || video?.video_files?.find(
+      (f: Record<string, unknown>) => Number(f.height) > Number(f.width)
+    ) || video?.video_files?.[0];
+    return file?.link || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Creatomate: video render ──────────────────────────────────────────────────
+
+function buildVideoSource(content: {
   title: string;
   hook_text?: string | null;
   type?: string;
   mp3_url: string;
-}): Promise<string> {
-  if (!CREATOMATE_API_KEY) throw new Error("CREATOMATE_API_KEY not configured");
+}, pexelsUrl: string | null): Record<string, unknown> {
+  const isShort = (content.type || "youtube_short").includes("short");
+  const W = isShort ? 1080 : 1920;
+  const H = isShort ? 1920 : 1080;
+  const hookText = (content.hook_text || "").slice(0, 120);
+  const titleText = content.title.slice(0, 120);
 
-  // Use dashboard template if configured, otherwise fall back to inline source
-  const requestBody = CREATOMATE_TEMPLATE_ID
-    ? {
-        template_id: CREATOMATE_TEMPLATE_ID,
-        modifications: {
-          title: content.title.slice(0, 120),
-          audio: content.mp3_url,
-          hook: (content.hook_text || "").slice(0, 160),
-          watermark: "roofingos.dev",
-        },
-      }
-    : { source: buildCreatomateSource(content) };
+  const elements: Record<string, unknown>[] = [];
 
-  const res = await fetch("https://api.creatomate.com/v1/renders", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${CREATOMATE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    throw new Error(`Creatomate render request failed (${res.status}): ${err.slice(0, 300)}`);
+  // Layer 1: Background
+  if (pexelsUrl) {
+    elements.push({
+      type: "video", track: 1, time: 0,
+      source: pexelsUrl,
+      width: "100%", height: "100%",
+      x_alignment: "50%", y_alignment: "50%",
+      fit: "cover", volume: "0%", loop: true,
+      opacity: "40%",
+    });
+  } else {
+    elements.push({
+      type: "rectangle", track: 1, time: 0,
+      width: "100%", height: "100%",
+      fill_color: "#0f1923",
+    });
   }
 
-  const data = await res.json();
-  const renderId: string = Array.isArray(data) ? data[0]?.id : data?.id;
-  if (!renderId) throw new Error(`Creatomate response missing render id: ${JSON.stringify(data).slice(0, 200)}`);
+  // Layer 2: Dark overlay
+  elements.push({
+    type: "rectangle", track: 2, time: 0,
+    width: "100%", height: "100%",
+    fill_color: "rgba(10,15,26,0.65)",
+  });
 
-  console.log(`Creatomate render queued: ${renderId}`);
-  return renderId;
+  // Layer 3: Hook text (top, first 4 seconds)
+  if (hookText) {
+    elements.push({
+      type: "text", track: 3, time: 0, duration: 4,
+      width: "88%", height: "auto",
+      x_alignment: "50%",
+      y: isShort ? "22%" : "26%",
+      y_alignment: "50%",
+      text: hookText,
+      font_family: "Montserrat",
+      font_weight: "900",
+      font_size: isShort ? "60" : "68",
+      fill_color: "#ffffff",
+      x_alignment_text: "center",
+      line_height: "1.15",
+      animations: [{ time: "start", duration: 0.3, type: "slide", direction: "down", easing: "quadratic-out" }],
+    });
+  }
+
+  // Layer 4: Title (appears at 1.5s, stays)
+  elements.push({
+    type: "text", track: 4, time: hookText ? 1.8 : 0,
+    width: "86%", height: "auto",
+    x_alignment: "50%",
+    y: isShort ? "50%" : "50%",
+    y_alignment: "50%",
+    text: titleText,
+    font_family: "Montserrat",
+    font_weight: "800",
+    font_size: isShort ? "50" : "62",
+    fill_color: "#ffffff",
+    letter_spacing: "-1",
+    line_height: "1.2",
+    x_alignment_text: "center",
+    animations: [{ time: "start", duration: 0.5, type: "fade", easing: "quadratic-out" }],
+  });
+
+  // Layer 5: ROOFING OS watermark top-right
+  elements.push({
+    type: "text", track: 5, time: 0,
+    x: "95%", y: "3.5%",
+    x_alignment: "100%", y_alignment: "0%",
+    text: "ROOFING OS",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: isShort ? "22" : "28",
+    fill_color: "rgba(255,255,255,0.2)",
+    letter_spacing: "2",
+  });
+
+  // Layer 6: CTA bar background (bottom)
+  elements.push({
+    type: "rectangle", track: 6, time: 0,
+    x_alignment: "50%", y_alignment: "100%",
+    width: "100%", height: isShort ? "8%" : "10%",
+    fill_color: "#4a9eff",
+  });
+
+  // Layer 7: CTA text
+  elements.push({
+    type: "text", track: 7, time: 0,
+    width: "90%", height: "auto",
+    x_alignment: "50%",
+    y: isShort ? "96%" : "95%",
+    y_alignment: "50%",
+    text: "roofingos.dev — FREE FOREVER",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: isShort ? "30" : "36",
+    fill_color: "#ffffff",
+    x_alignment_text: "center",
+    letter_spacing: "0.5",
+  });
+
+  // Layer 8: Audio
+  elements.push({
+    type: "audio", track: 8, time: 0,
+    source: content.mp3_url,
+    volume: "100%",
+  });
+
+  return { output_format: "mp4", frame_rate: 25, width: W, height: H, duration: "auto", elements };
 }
 
-async function creatomateWaitForRender(renderId: string, timeoutMs = 250_000): Promise<string> {
-  const deadline = Date.now() + timeoutMs;
+function buildThumbnailSource(content: {
+  title: string;
+  hook_text?: string | null;
+  thumbnail_text?: string | null;
+}, pexelsUrl: string | null): Record<string, unknown> {
+  const thumbText = (content.thumbnail_text || "").toUpperCase();
+  const numMatch  = (content.title + " " + thumbText).match(/\$[\d,]+|\d+%|\d+(?:\s+\w+)?/);
+  const statText  = numMatch ? numMatch[0].toUpperCase() : "";
+  const hookLine  = (content.hook_text || content.title).slice(0, 55).toUpperCase();
 
+  const elements: Record<string, unknown>[] = [];
+
+  if (pexelsUrl) {
+    elements.push({
+      type: "video", track: 1, time: 0, duration: 1,
+      source: pexelsUrl,
+      width: "100%", height: "100%",
+      x_alignment: "50%", y_alignment: "50%",
+      fit: "cover", volume: "0%",
+    });
+  } else {
+    elements.push({ type: "rectangle", track: 1, time: 0, width: "100%", height: "100%", fill_color: "#0f1923" });
+  }
+
+  elements.push({
+    type: "rectangle", track: 2, time: 0,
+    width: "100%", height: "100%",
+    fill_color: "rgba(10,15,26,0.55)",
+  });
+
+  if (statText) {
+    elements.push({
+      type: "text", track: 3, time: 0,
+      x: "6%", y: "20%",
+      x_alignment: "0%", y_alignment: "50%",
+      text: statText,
+      font_family: "Montserrat",
+      font_weight: "900",
+      font_size: "160",
+      fill_color: "#FFD700",
+    });
+  }
+
+  elements.push({
+    type: "text", track: 4, time: 0,
+    x: "6%", y: statText ? "62%" : "42%",
+    x_alignment: "0%", y_alignment: "50%",
+    width: "84%",
+    text: hookLine,
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "68",
+    fill_color: "#ffffff",
+    line_height: "1.1",
+  });
+
+  elements.push({
+    type: "text", track: 5, time: 0,
+    x: "96%", y: "90%",
+    x_alignment: "100%", y_alignment: "50%",
+    text: "ROOFING OS",
+    font_family: "Montserrat",
+    font_weight: "700",
+    font_size: "32",
+    fill_color: "rgba(255,255,255,0.55)",
+    letter_spacing: "2",
+  });
+
+  return { output_format: "jpg", width: 1280, height: 720, elements };
+}
+
+async function creatomateSubmit(source: Record<string, unknown>): Promise<string> {
+  const res = await fetch("https://api.creatomate.com/v1/renders", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${CREATOMATE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (!res.ok) throw new Error(`Creatomate ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const data = await res.json();
+  const id = Array.isArray(data) ? data[0]?.id : data?.id;
+  if (!id) throw new Error(`Creatomate missing render id: ${JSON.stringify(data).slice(0, 100)}`);
+  return id;
+}
+
+async function creatomateWait(renderId: string, timeoutMs = 260_000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 3000));
-
     const res = await fetch(`https://api.creatomate.com/v1/renders/${renderId}`, {
       headers: { "Authorization": `Bearer ${CREATOMATE_API_KEY}` },
     });
-
-    if (!res.ok) {
-      console.error(`Creatomate poll error: ${res.status}`);
-      continue;
+    if (!res.ok) continue;
+    const d = await res.json();
+    if (d.status === "succeeded") {
+      if (!d.url) throw new Error("Render succeeded but no url");
+      return d.url as string;
     }
-
-    const data = await res.json();
-    const status: string = data.status;
-    console.log(`Creatomate render ${renderId}: ${status}`);
-
-    if (status === "succeeded") {
-      if (!data.url) throw new Error("Creatomate render succeeded but no url in response");
-      return data.url as string;
-    }
-    if (status === "failed") {
-      throw new Error(`Creatomate render failed: ${data.error_message || "unknown error"}`);
-    }
-    // planned / waiting / rendering — keep polling
+    if (d.status === "failed") throw new Error(`Render failed: ${d.error_message || "unknown"}`);
   }
-
-  throw new Error(`Creatomate render timed out after ${timeoutMs / 1000}s`);
+  throw new Error(`Render timed out after ${timeoutMs / 1000}s`);
 }
 
-// ── YouTube upload ────────────────────────────────────────────────────────────
+async function creatomateWaitShort(renderId: string): Promise<string | null> {
+  const deadline = Date.now() + 70_000;
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 2500));
+    try {
+      const res = await fetch(`https://api.creatomate.com/v1/renders/${renderId}`, {
+        headers: { "Authorization": `Bearer ${CREATOMATE_API_KEY}` },
+      });
+      if (!res.ok) continue;
+      const d = await res.json();
+      if (d.status === "succeeded") return d.url as string;
+      if (d.status === "failed") return null;
+    } catch { continue; }
+  }
+  return null;
+}
+
+// ── YouTube API helpers ───────────────────────────────────────────────────────
+
+function buildTags(): string[] {
+  return [
+    "roofing", "roofingcontractor", "roofer", "supplement", "homeowner",
+    "companycam", "roofingOS", "freeroofingsoftware", "stormrestoration",
+    "insuranceclaim", "roofingbusiness", "contractortips", "hail",
+    "roofingos", "roofingtools", "supplementrecovery",
+  ];
+}
 
 async function uploadToYouTube(
   content: Record<string, unknown>,
   videoBuffer: ArrayBuffer,
-): Promise<{ youtubeId: string; youtubeUrl: string }> {
+): Promise<{ youtubeId: string; youtubeUrl: string; accessToken: string }> {
   const accessToken = await getYouTubeAccessToken();
 
   const isShort = String(content.type || "").includes("short");
@@ -273,15 +362,10 @@ async function uploadToYouTube(
     ? `${String(content.title)} #Shorts`.slice(0, 100)
     : String(content.title).slice(0, 100);
 
-  const description =
-    String(content.seo_description || content.youtube_description || content.title) +
-    "\n\n🏠 roofingos.dev\n📱 Free demo: roofingos.dev/portal-demo";
-
-  const tags = (content.tags as string[]) ||
-    ["roofing", "insurance claim", "roofing contractor", "storm damage", "roofing os", "homeowner portal"];
+  const description = String(content.youtube_description || "").slice(0, 5000) ||
+    `${String(content.hook_text || content.title)}\n\n🏠 roofingos.dev\n✅ Free forever — no credit card\n📞 (720) 500-6668\n\n#roofing #roofingcontractor #supplement #stormrestoration #roofingOS`.slice(0, 5000);
 
   const contentLength = videoBuffer.byteLength;
-
   const initRes = await fetch(
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
     {
@@ -295,8 +379,8 @@ async function uploadToYouTube(
       body: JSON.stringify({
         snippet: {
           title: ytTitle,
-          description: description.slice(0, 5000),
-          tags: tags.slice(0, 500),
+          description,
+          tags: buildTags(),
           categoryId: "22",
           defaultLanguage: "en",
         },
@@ -305,15 +389,12 @@ async function uploadToYouTube(
     }
   );
 
-  if (!initRes.ok) {
-    const err = await initRes.text().catch(() => "");
-    throw new Error(`YouTube init failed (${initRes.status}): ${err.slice(0, 300)}`);
-  }
+  if (!initRes.ok) throw new Error(`YouTube init failed (${initRes.status}): ${(await initRes.text().catch(() => "")).slice(0, 200)}`);
 
   const uploadUrl = initRes.headers.get("Location");
-  if (!uploadUrl) throw new Error("No upload URL in YouTube init response");
+  if (!uploadUrl) throw new Error("No upload URL from YouTube init");
 
-  console.log(`Uploading ${(contentLength / 1024 / 1024).toFixed(1)} MB to YouTube...`);
+  console.log(`Uploading ${(contentLength / 1024 / 1024).toFixed(1)} MB to YouTube…`);
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": "video/mp4", "Content-Length": String(contentLength) },
@@ -322,9 +403,66 @@ async function uploadToYouTube(
 
   const videoData = await uploadRes.json().catch(() => ({}));
   const youtubeId = videoData.id;
-  if (!youtubeId) throw new Error(`YouTube upload failed: ${JSON.stringify(videoData).slice(0, 300)}`);
+  if (!youtubeId) throw new Error(`YouTube upload failed: ${JSON.stringify(videoData).slice(0, 200)}`);
 
-  return { youtubeId, youtubeUrl: `https://youtube.com/watch?v=${youtubeId}` };
+  return { youtubeId, youtubeUrl: `https://youtube.com/watch?v=${youtubeId}`, accessToken };
+}
+
+async function uploadThumbnail(youtubeId: string, accessToken: string, thumbnailUrl: string): Promise<void> {
+  try {
+    const thumbRes = await fetch(thumbnailUrl);
+    if (!thumbRes.ok) return;
+    const thumbBuffer = await thumbRes.arrayBuffer();
+    const uploadRes = await fetch(
+      `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${youtubeId}&uploadType=media`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "image/jpeg",
+          "Content-Length": String(thumbBuffer.byteLength),
+        },
+        body: thumbBuffer,
+      }
+    );
+    if (uploadRes.ok) console.log(`Thumbnail uploaded for ${youtubeId}`);
+    else console.error(`Thumbnail upload error: ${uploadRes.status}`);
+  } catch (err) {
+    console.error("Thumbnail upload failed (non-fatal):", err);
+  }
+}
+
+async function postPinnedComment(youtubeId: string, accessToken: string): Promise<void> {
+  try {
+    const commentText = `🏠 Try Roofing OS free → roofingos.dev
+✅ Free forever — no credit card ever
+✅ Homeowner portal in 4 minutes
+✅ AI supplement tool
+✅ Cancel CompanyCam today
+Drop a ❓ below if you have questions`;
+
+    const insertRes = await fetch(
+      "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet",
+      {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          snippet: {
+            videoId: youtubeId,
+            topLevelComment: { snippet: { textOriginal: commentText } },
+          },
+        }),
+      }
+    );
+    if (insertRes.ok) {
+      console.log(`Pinned comment posted for ${youtubeId}`);
+    } else {
+      const err = await insertRes.text().catch(() => "");
+      console.error(`Pinned comment failed ${insertRes.status}: ${err.slice(0, 100)}`);
+    }
+  } catch (err) {
+    console.error("Pinned comment error (non-fatal):", err);
+  }
 }
 
 // ── Core: process one item ────────────────────────────────────────────────────
@@ -333,20 +471,13 @@ interface ProcessResult {
   uploaded: boolean;
   already_uploaded?: boolean;
   youtube_url?: string;
-  render_id?: string;
+  thumbnail_url?: string;
 }
 
 async function processOne(contentId: string): Promise<ProcessResult> {
-  const { data: content, error } = await supabase
-    .from("roofing_content")
-    .select("*")
-    .eq("id", contentId)
-    .single();
-
+  const { data: content, error } = await supabase.from("roofing_content").select("*").eq("id", contentId).single();
   if (error || !content) throw new Error("Content not found");
-  if (content.youtube_video_id) {
-    return { uploaded: false, already_uploaded: true, youtube_url: content.youtube_url };
-  }
+  if (content.youtube_video_id) return { uploaded: false, already_uploaded: true, youtube_url: content.youtube_url };
 
   const missingYT = [
     !YOUTUBE_CLIENT_ID     && "YOUTUBE_CLIENT_ID",
@@ -355,41 +486,64 @@ async function processOne(contentId: string): Promise<ProcessResult> {
   ].filter(Boolean);
   if (missingYT.length) throw new Error(`Missing YouTube credentials: ${missingYT.join(", ")}`);
 
-  let videoUrl: string | null = content.video_url || null;
-  let renderId: string | undefined;
+  if (!content.mp3_url) throw new Error("No audio — run publisher first");
 
-  // No video yet — render via Creatomate
-  if (!videoUrl) {
-    if (!content.mp3_url) throw new Error("No video or audio — run voiceover engine first");
+  const topic = detectTopic(content.title || "");
+  const pexelsUrl = await getPexelsVideo(topic);
+  console.log(`Topic: ${topic}, Pexels: ${pexelsUrl ? "found" : "none"}`);
 
-    renderId = await creatomateRender({
-      title: content.title,
-      hook_text: content.hook_text || null,
-      type: content.type || "youtube_short",
-      mp3_url: content.mp3_url,
-    });
+  // Kick off both renders in parallel
+  const videoRenderId  = await creatomateSubmit(buildVideoSource({
+    title:     content.title,
+    hook_text: content.hook_text || content.hook || null,
+    type:      content.type || "youtube_short",
+    mp3_url:   content.mp3_url,
+  }, pexelsUrl));
 
-    videoUrl = await creatomateWaitForRender(renderId);
-    console.log(`Render complete: ${videoUrl}`);
+  let thumbRenderId: string | null = null;
+  if (CREATOMATE_API_KEY) {
+    try {
+      thumbRenderId = await creatomateSubmit(buildThumbnailSource({
+        title:          content.title,
+        hook_text:      content.hook_text || content.hook || null,
+        thumbnail_text: content.thumbnail_text || null,
+      }, pexelsUrl));
+    } catch (err) {
+      console.error("Thumbnail render submit failed (non-fatal):", err);
+    }
   }
 
-  // Download rendered video
-  console.log(`Fetching video: ${videoUrl}`);
+  // Wait for video (long timeout)
+  const videoUrl = await creatomateWait(videoRenderId);
+  console.log(`Video render done: ${videoUrl}`);
+
+  // Wait for thumbnail (short timeout, non-blocking)
+  const thumbnailPromise = thumbRenderId
+    ? creatomateWaitShort(thumbRenderId)
+    : Promise.resolve(null);
+
+  // Download video
   const videoRes = await fetch(videoUrl);
   if (!videoRes.ok) throw new Error(`Failed to fetch video (${videoRes.status})`);
   const videoBuffer = await videoRes.arrayBuffer();
   console.log(`Downloaded ${(videoBuffer.byteLength / 1024 / 1024).toFixed(1)} MB`);
 
-  const { youtubeId, youtubeUrl } = await uploadToYouTube(content, videoBuffer);
+  const { youtubeId, youtubeUrl, accessToken } = await uploadToYouTube(content, videoBuffer);
   console.log(`YouTube upload complete: ${youtubeUrl}`);
+
+  // Thumbnail + pinned comment
+  const thumbnailUrl = await thumbnailPromise;
+  if (thumbnailUrl) await uploadThumbnail(youtubeId, accessToken, thumbnailUrl);
+  await postPinnedComment(youtubeId, accessToken);
 
   try {
     await supabase.from("roofing_content").update({
-      status: "published",
-      youtube_video_id: youtubeId,
-      youtube_url: youtubeUrl,
+      status:            "published",
+      youtube_video_id:  youtubeId,
+      youtube_url:       youtubeUrl,
       youtube_posted_at: new Date().toISOString(),
-      published_at: new Date().toISOString(),
+      published_at:      new Date().toISOString(),
+      thumbnail_url:     thumbnailUrl || null,
     }).eq("id", contentId);
   } catch (dbErr) {
     console.error("DB update failed (upload succeeded):", dbErr);
@@ -398,40 +552,30 @@ async function processOne(contentId: string): Promise<ProcessResult> {
   fetch(`${SUPABASE_URL}/functions/v1/roofing-social-poster`, {
     method: "POST",
     headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      content_id: contentId,
-      youtube_url: youtubeUrl,
-      title: content.title,
-      hook: content.hook_text || content.title,
-    }),
+    body: JSON.stringify({ content_id: contentId, youtube_url: youtubeUrl, title: content.title, hook: content.hook_text || content.title }),
   }).catch(() => {});
 
-  return { uploaded: true, youtube_url: youtubeUrl, render_id: renderId };
+  return { uploaded: true, youtube_url: youtubeUrl, thumbnail_url: thumbnailUrl || undefined };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v6 ready", creatomate: !!CREATOMATE_API_KEY, template: CREATOMATE_TEMPLATE_ID || "inline-source" });
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v7 ready", creatomate: !!CREATOMATE_API_KEY, pexels: !!PEXELS_API_KEY });
 
-  // Batch mode
   if (body.force_upload) {
-    const limit = Math.min(body.limit ?? 1, 20);
-
+    const limit = Math.min(body.limit ?? 2, 20);
     const { data: queue } = await supabase
       .from("roofing_content")
-      .select("id, title, type, mp3_url, video_url, youtube_video_id")
+      .select("id, title, type, mp3_url, youtube_video_id")
       .eq("youtube_upload_ready", true)
       .is("youtube_posted_at", null)
       .not("mp3_url", "is", null)
-      .is("shotstack_render_id", null)
       .order("created_at", { ascending: true })
       .limit(limit);
 
-    if (!queue?.length) {
-      return Response.json({ ok: true, processed: 0, message: "Queue empty" });
-    }
+    if (!queue?.length) return Response.json({ ok: true, processed: 0, message: "Queue empty" });
 
     const results = [];
     for (const item of queue) {
@@ -445,11 +589,9 @@ Deno.serve(async (req) => {
         results.push({ id: item.id, title: item.title, ok: false, error: msg });
       }
     }
-
     return Response.json({ ok: true, processed: results.length, results });
   }
 
-  // Single content_id mode
   const { content_id } = body;
   if (!content_id) return Response.json({ error: "content_id or force_upload required" }, { status: 400 });
 
