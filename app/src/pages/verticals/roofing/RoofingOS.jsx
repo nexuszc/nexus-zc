@@ -7,9 +7,11 @@ import Contractors     from './Contractors'
 import System          from './System'
 import Outbound        from './Outbound'
 import Exposure        from './Exposure'
+import Funnel          from './Funnel'
 
 const TABS = [
   { key: 'overview',    label: 'Overview',     path: '/roofing' },
+  { key: 'funnel',      label: '🎯 Funnel',    path: '/roofing/funnel' },
   { key: 'pipeline',    label: 'Pipeline',     path: '/roofing/pipeline' },
   { key: 'content',     label: 'Content',      path: '/roofing/content' },
   { key: 'outbound',    label: 'Outbound',     path: '/roofing/outbound' },
@@ -21,6 +23,7 @@ const TABS = [
 
 function activeTab(pathname) {
   if (pathname === '/roofing')                         return 'overview'
+  if (pathname.startsWith('/roofing/funnel'))          return 'funnel'
   if (pathname.startsWith('/roofing/pipeline'))        return 'pipeline'
   if (pathname.startsWith('/roofing/content'))         return 'content'
   if (pathname.startsWith('/roofing/outbound'))        return 'outbound'
@@ -66,6 +69,7 @@ export default function RoofingOS() {
 
       {/* Tab content */}
       {tab === 'overview'    && <RoofingOverview />}
+      {tab === 'funnel'      && <Funnel />}
       {tab === 'pipeline'    && <Pipeline />}
       {tab === 'content'     && <Content />}
       {tab === 'outbound'    && <Outbound />}
