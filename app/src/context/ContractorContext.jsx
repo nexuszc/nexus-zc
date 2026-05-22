@@ -40,8 +40,9 @@ export function ContractorProvider() {
         }
       } catch {
         navigate('/roofing/login')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
 
     load()
