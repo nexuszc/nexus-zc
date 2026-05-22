@@ -7,8 +7,7 @@ export default function ProtectedRoute({ session }) {
   // Contractor routes have their own ContractorRoute guard — let them through
   if (window.location.pathname.startsWith('/roofing')) return <Outlet />
   if (!ADMIN_EMAILS.includes(session.user?.email?.toLowerCase())) {
-    window.location.href = 'https://roofingos.dev'
-    return null
+    return <Navigate to="/roofing/jobs" />
   }
   return <Outlet />
 }
