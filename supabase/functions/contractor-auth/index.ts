@@ -4,6 +4,19 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+function json(data: unknown, init: ResponseInit = {}) {
+  return Response.json(data, {
+    ...init,
+    headers: { ...corsHeaders, ...(init.headers || {}) },
+  });
+}
+
 async function sendSMS(to: string, body: string) {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
   const token = Deno.env.get('TWILIO_AUTH_TOKEN')!;
@@ -19,15 +32,19 @@ async function sendSMS(to: string, body: string) {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: 'contractor-auth ready' });
+  if (body.test) return json({ ok: true, message: 'contractor-auth ready' });
 
   const { action } = body;
 
   // SEND MAGIC LINK — phone-primary auth
   if (action === 'send_magic_link') {
     const { phone, contractor_id } = body;
-    if (!phone) return Response.json({ ok: false, error: 'phone required' }, { status: 400 });
+    if (!phone) return json({ ok: false, error: 'phone required' }, { status: 400 });
 
     let resolvedContractorId = contractor_id;
 
@@ -55,7 +72,7 @@ Deno.serve(async (req) => {
     }
 
     if (!resolvedContractorId) {
-      return Response.json({ ok: false, error: 'No active account found for this phone number' }, { status: 404 });
+      return json({ ok: false, error: 'No active account found for this phone number' }, { status: 404 });
     }
 
     // Look up employee record for this phone
@@ -78,20 +95,20 @@ Deno.serve(async (req) => {
       .select('token')
       .single();
 
-    if (!session) return Response.json({ ok: false, error: 'failed to create session' }, { status: 500 });
+    if (!session) return json({ ok: false, error: 'failed to create session' }, { status: 500 });
 
     const baseUrl = Deno.env.get('DASHBOARD_URL') || 'https://roofingos.dev';
     const link = `${baseUrl}/dashboard/?token=${session.token}`;
 
     await sendSMS(phone, `Your Roofing OS login link (15 min):\n${link}\n\nDo not share this link.`);
 
-    return Response.json({ ok: true, sent: true });
+    return json({ ok: true, sent: true });
   }
 
   // VERIFY TOKEN — called by dashboard on load
   if (action === 'verify_token') {
     const { token } = body;
-    if (!token) return Response.json({ ok: false, error: 'token required' }, { status: 400 });
+    if (!token) return json({ ok: false, error: 'token required' }, { status: 400 });
 
     const { data: session } = await supabase
       .from('contractor_sessions')
@@ -99,9 +116,9 @@ Deno.serve(async (req) => {
       .eq('token', token)
       .single();
 
-    if (!session) return Response.json({ ok: false, error: 'invalid token' }, { status: 401 });
+    if (!session) return json({ ok: false, error: 'invalid token' }, { status: 401 });
     if (new Date(session.expires_at) < new Date()) {
-      return Response.json({ ok: false, error: 'token expired' }, { status: 401 });
+      return json({ ok: false, error: 'token expired' }, { status: 401 });
     }
 
     // Extend session to 7-day rolling window
@@ -146,13 +163,13 @@ Deno.serve(async (req) => {
       contractor.onboarding_step = onboardingUpdate.onboarding_step as string;
     }
 
-    return Response.json({ ok: true, authenticated: true, contractor, employee, session_token: token });
+    return json({ ok: true, authenticated: true, contractor, employee, session_token: token });
   }
 
   // LIST EMPLOYEES — returns all team members for this contractor
   if (action === 'list_employees') {
     const { token } = body;
-    if (!token) return Response.json({ ok: false, error: 'token required' }, { status: 400 });
+    if (!token) return json({ ok: false, error: 'token required' }, { status: 400 });
 
     const { data: session } = await supabase
       .from('contractor_sessions')
@@ -161,7 +178,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (!session || new Date(session.expires_at) < new Date()) {
-      return Response.json({ ok: false, error: 'invalid session' }, { status: 401 });
+      return json({ ok: false, error: 'invalid session' }, { status: 401 });
     }
 
     const { data: employees } = await supabase
@@ -170,13 +187,13 @@ Deno.serve(async (req) => {
       .eq('contractor_id', session.contractor_id)
       .order('is_owner', { ascending: false });
 
-    return Response.json({ ok: true, employees: employees || [] });
+    return json({ ok: true, employees: employees || [] });
   }
 
   // PING — session keepalive
   if (action === 'ping') {
     const { token } = body;
-    if (!token) return Response.json({ ok: false, error: 'token required' }, { status: 400 });
+    if (!token) return json({ ok: false, error: 'token required' }, { status: 400 });
 
     const { data: session } = await supabase
       .from('contractor_sessions')
@@ -185,7 +202,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (!session || new Date(session.expires_at) < new Date()) {
-      return Response.json({ ok: false, authenticated: false });
+      return json({ ok: false, authenticated: false });
     }
 
     await supabase
@@ -193,14 +210,14 @@ Deno.serve(async (req) => {
       .update({ last_seen_at: new Date().toISOString() })
       .eq('id', session.id);
 
-    return Response.json({ ok: true, authenticated: true, contractor_id: session.contractor_id });
+    return json({ ok: true, authenticated: true, contractor_id: session.contractor_id });
   }
 
   // ADD EMPLOYEE — owner/office only
   if (action === 'add_employee') {
     const { contractor_id, session_token, name, phone, role } = body;
     if (!contractor_id || !session_token || !name) {
-      return Response.json({ ok: false, error: 'contractor_id, session_token, name required' }, { status: 400 });
+      return json({ ok: false, error: 'contractor_id, session_token, name required' }, { status: 400 });
     }
 
     const { data: callerSession } = await supabase
@@ -210,7 +227,7 @@ Deno.serve(async (req) => {
       .eq('contractor_id', contractor_id)
       .single();
 
-    if (!callerSession) return Response.json({ ok: false, error: 'unauthorized' }, { status: 403 });
+    if (!callerSession) return json({ ok: false, error: 'unauthorized' }, { status: 403 });
 
     if (callerSession.employee_id) {
       const { data: emp } = await supabase
@@ -219,7 +236,7 @@ Deno.serve(async (req) => {
         .eq('id', callerSession.employee_id)
         .single();
       if (emp && emp.role !== 'owner' && emp.role !== 'office') {
-        return Response.json({ ok: false, error: 'only owners/office can add employees' }, { status: 403 });
+        return json({ ok: false, error: 'only owners/office can add employees' }, { status: 403 });
       }
     }
 
@@ -229,8 +246,8 @@ Deno.serve(async (req) => {
       .select('id, name, role')
       .single();
 
-    return Response.json({ ok: true, employee: newEmp });
+    return json({ ok: true, employee: newEmp });
   }
 
-  return Response.json({ ok: false, error: 'action required: send_magic_link | verify_token | ping | add_employee | list_employees' }, { status: 400 });
+  return json({ ok: false, error: 'action required: send_magic_link | verify_token | ping | add_employee | list_employees' }, { status: 400 });
 });
