@@ -1,289 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
-
-/**
- * Types
- */
-interface CheckResult {
-  name: string;
-  status: 'pass' | 'fail' | 'warn';
-  duration_ms: number;
-  message: string;
-  details?: Record<string, unknown>;
-  error?: string;
-}
-
-interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  timestamp: string;
-  checks: CheckResult[];
-  summary: {
-    total: number;
-    passed: number;
-    failed: number;
-    warnings: number;
-  };
-}
-
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-/**
- * Logger utility
- */
-const logger = {
-  info: (message: string, data?: unknown) => {
-    console.log(JSON.stringify({ level: 'info', message, data, timestamp: new Date().toISOString() }));
-  },
-  warn: (message: string, data?: unknown) => {
-    console.warn(JSON.stringify({ level: 'warn', message, data, timestamp: new Date().toISOString() }));
-  },
-  error: (message: string, error?: unknown) => {
-    console.error(JSON.stringify({ 
-      level: 'error', 
-      message, 
-      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
-      timestamp: new Date().toISOString() 
-    }));
-  },
-};
-
-/**
- * Environment validation
- */
-function getRequiredEnv(key: string): string {
-  const value = Deno.env.get(key);
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-}
-
-/**
- * Check database connectivity
- */
-async function checkDatabase(): Promise<CheckResult> {
-  const startTime = performance.now();
-  
-  try {
-    logger.info('Starting database check');
-    
-    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
-    const supabaseKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase
-      .from('users')
-      .select('id')
-      .limit(1);
-
-    if (error) {
-      logger.error('Database check failed', error);
-      return {
-        name: 'database',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Database connectivity check failed',
-        error: error.message,
-      };
-    }
-
-    logger.info('Database check completed', { hasData: !!data });
-    
-    return {
-      name: 'database',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'Database is accessible and responding',
-      details: {
-        hasData: !!data,
-      },
-    };
-  } catch (error) {
-    logger.error('Database check error', error);
-    return {
-      name: 'database',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Database connectivity check error',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check authentication functionality
- */
-async function checkAuthentication(): Promise<CheckResult> {
-  const startTime = performance.now();
-  
-  try {
-    logger.info('Starting authentication check');
-    
-    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
-    const supabaseKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase.auth.getUser();
-
-    if (error && error.message !== 'Auth session missing!') {
-      logger.error('Authentication check failed', error);
-      return {
-        name: 'authentication',
-        status: 'fail',
-        duration_ms: performance.now() - startTime,
-        message: 'Authentication service check failed',
-        error: error.message,
-      };
-    }
-
-    logger.info('Authentication check completed');
-    
-    return {
-      name: 'authentication',
-      status: 'pass',
-      duration_ms: performance.now() - startTime,
-      message: 'Authentication service is operational',
-      details: {
-        authEnabled: true,
-      },
-    };
-  } catch (error) {
-    logger.error('Authentication check error', error);
-    return {
-      name: 'authentication',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Authentication service check error',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check external services
- */
-async function checkExternalServices(): Promise<CheckResult> {
-  const startTime = performance.now();
-  
-  try {
-    logger.info('Starting external services check');
-    
-    const openAIKey = Deno.env.get('OPENAI_API_KEY');
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
-    
-    const servicesStatus = {
-      openai: !!openAIKey,
-      anthropic: !!anthropicKey,
-    };
-
-    const allConfigured = Object.values(servicesStatus).every(status => status);
-    
-    logger.info('External services check completed', servicesStatus);
-    
-    return {
-      name: 'external_services',
-      status: allConfigured ? 'pass' : 'warn',
-      duration_ms: performance.now() - startTime,
-      message: allConfigured 
-        ? 'All external services are configured'
-        : 'Some external services may not be configured',
-      details: servicesStatus,
-    };
-  } catch (error) {
-    logger.error('External services check error', error);
-    return {
-      name: 'external_services',
-      status: 'warn',
-      duration_ms: performance.now() - startTime,
-      message: 'External services check error',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Check Supabase client connectivity
- */
-async function checkSupabaseClient(): Promise<CheckResult> {
-  const startTime = performance.now();
-  
-  try {
-    logger.info('Starting Supabase client check');
-    
-    const supabaseUrl = getRequiredEnv('SUPABASE_URL');
-    const supabaseKey = getRequiredEnv('SUPABASE_ANON_KEY');
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    
-    try {
-      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      logger.info('Supabase client check completed', { status: response.status });
-      return {
-        name: 'supabase_client',
-        status: 'pass',
-        duration_ms: performance.now() - startTime,
-        message: 'Supabase client is connected and operational',
-        details: {
-          status: response.status,
-        },
-      };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        logger.error('Supabase client check timed out');
-        return {
-          name: 'supabase_client',
-          status: 'fail',
-          duration_ms: performance.now() - startTime,
-          message: 'Supabase client check timed out',
-          error: 'Request timeout after 5 seconds',
-        };
-      }
-      throw fetchError;
-    }
-  } catch (error) {
-    logger.error('Supabase client connectivity check failed', error);
-    return {
-      name: 'supabase_client',
-      status: 'fail',
-      duration_ms: performance.now() - startTime,
-      message: 'Supabase client connectivity check failed',
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * Run all health checks and aggregate results
- */
-async function runHealthChecks(): Promise<HealthStatus> {
-  logger.info('Starting comprehensive health checks');
-  
-  const checks = await Promise.all([
-    checkDatabase(),
-    checkAuthentication(),
-    checkExternalServices(),
-    checkSupabaseClient(),
-  ]);
-
-  const summary = {
+summary = {
     total: checks.length,
     passed: checks.filter(c => c.status === 'pass').length,
     failed: checks.filter(c => c.status === 'fail').length,
@@ -312,6 +27,89 @@ async function runHealthChecks(): Promise<HealthStatus> {
 }
 
 /**
+ * Validate required environment variables
+ */
+function validateEnvironment(): { valid: boolean; missing: string[] } {
+  const required = [
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY'
+  ];
+  
+  const missing = required.filter(key => !Deno.env.get(key));
+  
+  if (missing.length > 0) {
+    logger.error('Missing required environment variables', { missing });
+  }
+  
+  return {
+    valid: missing.length === 0,
+    missing
+  };
+}
+
+/**
+ * Wrapper for fetch with timeout and error handling
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = 10000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Validate response structure
+ */
+function validateHealthResponse(data: unknown): data is HealthStatus {
+  if (!data || typeof data !== 'object') {
+    logger.error('Invalid health response: not an object', { data });
+    return false;
+  }
+  
+  const health = data as Record<string, unknown>;
+  
+  if (!health.status || !['healthy', 'degraded', 'unhealthy'].includes(health.status as string)) {
+    logger.error('Invalid health response: invalid status', { status: health.status });
+    return false;
+  }
+  
+  if (!health.timestamp || typeof health.timestamp !== 'string') {
+    logger.error('Invalid health response: invalid timestamp', { timestamp: health.timestamp });
+    return false;
+  }
+  
+  if (!Array.isArray(health.checks)) {
+    logger.error('Invalid health response: checks is not an array', { checks: health.checks });
+    return false;
+  }
+  
+  if (!health.summary || typeof health.summary !== 'object') {
+    logger.error('Invalid health response: invalid summary', { summary: health.summary });
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Add CORS headers to response
  */
 function addCorsHeaders(headers: Headers): Headers {
@@ -322,106 +120,185 @@ function addCorsHeaders(headers: Headers): Headers {
 }
 
 /**
+ * Create error response with proper headers
+ */
+function createErrorResponse(
+  message: string,
+  statusCode: number = 500,
+  details?: unknown
+): Response {
+  logger.error('Creating error response', { message, statusCode, details });
+  
+  const errorResponse: ApiResponse = {
+    success: false,
+    error: message,
+  };
+  
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  addCorsHeaders(headers);
+  
+  return new Response(
+    JSON.stringify(errorResponse, null, 2),
+    {
+      status: statusCode,
+      headers
+    }
+  );
+}
+
+/**
+ * Create success response with proper headers
+ */
+function createSuccessResponse<T>(
+  data: T,
+  statusCode: number = 200
+): Response {
+  const response: ApiResponse<T> = {
+    success: true,
+    data,
+  };
+  
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  addCorsHeaders(headers);
+  
+  return new Response(
+    JSON.stringify(response, null, 2),
+    {
+      status: statusCode,
+      headers
+    }
+  );
+}
+
+/**
  * Main handler function
  */
 async function handler(req: Request): Promise<Response> {
-  logger.info('Smoke test endpoint called', { method: req.method });
-
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    const headers = new Headers();
-    addCorsHeaders(headers);
-    return new Response(null, { status: 204, headers });
-  }
-
-  if (req.method !== 'GET') {
-    logger.warn('Invalid method for smoke test', { method: req.method });
-    const errorResponse: ApiResponse = {
-      success: false,
-      error: 'Method not allowed',
-    };
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    addCorsHeaders(headers);
-    return new Response(
-      JSON.stringify(errorResponse),
-      { 
-        status: 405,
-        headers
-      }
-    );
-  }
+  const startTime = Date.now();
+  logger.info('Smoke test endpoint called', { 
+    method: req.method,
+    url: req.url,
+    timestamp: new Date().toISOString()
+  });
 
   try {
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      logger.info('Handling CORS preflight request');
+      const headers = new Headers();
+      addCorsHeaders(headers);
+      return new Response(null, { status: 204, headers });
+    }
+
+    if (req.method !== 'GET') {
+      logger.warn('Invalid method for smoke test', { method: req.method });
+      return createErrorResponse('Method not allowed', 405);
+    }
+
+    // Validate environment variables
+    const envValidation = validateEnvironment();
+    if (!envValidation.valid) {
+      logger.error('Environment validation failed', { missing: envValidation.missing });
+      return createErrorResponse(
+        `Missing required environment variables: ${envValidation.missing.join(', ')}`,
+        500,
+        { missing: envValidation.missing }
+      );
+    }
+
     const url = new URL(req.url);
+    logger.info('Processing request', { pathname: url.pathname });
     
     if (url.pathname.endsWith('/health')) {
       logger.info('Health endpoint called');
+      
+      try {
+        const healthStatus = await runHealthChecks();
+        
+        // Validate health status structure
+        if (!validateHealthResponse(healthStatus)) {
+          logger.error('Invalid health status structure returned');
+          return createErrorResponse('Invalid health check response structure', 500);
+        }
+        
+        const statusCode = healthStatus.status === 'healthy' ? 200 :
+                          healthStatus.status === 'degraded' ? 200 : 503;
+
+        const elapsed = Date.now() - startTime;
+        logger.info('Health check completed', { 
+          status: healthStatus.status, 
+          statusCode,
+          elapsed,
+          summary: healthStatus.summary
+        });
+
+        return createSuccessResponse(healthStatus, statusCode);
+      } catch (healthError) {
+        logger.error('Health check execution error', {
+          error: healthError instanceof Error ? healthError.message : String(healthError),
+          stack: healthError instanceof Error ? healthError.stack : undefined,
+          elapsed: Date.now() - startTime
+        });
+        
+        return createErrorResponse(
+          `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
+          500,
+          { error: healthError }
+        );
+      }
+    }
+
+    // Default to health check for root path
+    logger.info('Default health check execution');
+    
+    try {
       const healthStatus = await runHealthChecks();
+      
+      // Validate health status structure
+      if (!validateHealthResponse(healthStatus)) {
+        logger.error('Invalid health status structure returned');
+        return createErrorResponse('Invalid health check response structure', 500);
+      }
       
       const statusCode = healthStatus.status === 'healthy' ? 200 :
                         healthStatus.status === 'degraded' ? 200 : 503;
 
-      const response: ApiResponse<HealthStatus> = {
-        success: healthStatus.status !== 'unhealthy',
-        data: healthStatus,
-      };
-
-      logger.info('Returning health status', { 
+      const elapsed = Date.now() - startTime;
+      logger.info('Health check completed', { 
         status: healthStatus.status, 
-        statusCode 
+        statusCode,
+        elapsed,
+        summary: healthStatus.summary
       });
 
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      addCorsHeaders(headers);
-      return new Response(
-        JSON.stringify(response, null, 2),
-        {
-          status: statusCode,
-          headers
-        }
+      return createSuccessResponse(healthStatus, statusCode);
+    } catch (healthError) {
+      logger.error('Health check execution error', {
+        error: healthError instanceof Error ? healthError.message : String(healthError),
+        stack: healthError instanceof Error ? healthError.stack : undefined,
+        elapsed: Date.now() - startTime
+      });
+      
+      return createErrorResponse(
+        `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
+        500,
+        { error: healthError }
       );
     }
-
-    const healthStatus = await runHealthChecks();
-    
-    const statusCode = healthStatus.status === 'healthy' ? 200 :
-                      healthStatus.status === 'degraded' ? 200 : 503;
-
-    const response: ApiResponse<HealthStatus> = {
-      success: healthStatus.status !== 'unhealthy',
-      data: healthStatus,
-    };
-
-    logger.info('Returning health status', { 
-      status: healthStatus.status, 
-      statusCode 
-    });
-
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    addCorsHeaders(headers);
-    return new Response(
-      JSON.stringify(response, null, 2),
-      {
-        status: statusCode,
-        headers
-      }
-    );
   } catch (error) {
-    logger.error('Smoke test execution failed', error);
-    
-    const errorResponse: ApiResponse = {
-      success: false,
+    const elapsed = Date.now() - startTime;
+    logger.error('Smoke test execution failed with unhandled error', {
       error: error instanceof Error ? error.message : String(error),
-    };
-
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    addCorsHeaders(headers);
-    return new Response(
-      JSON.stringify(errorResponse, null, 2),
-      {
-        status: 500,
-        headers
-      }
+      stack: error instanceof Error ? error.stack : undefined,
+      elapsed,
+      url: req.url,
+      method: req.method
+    });
+    
+    return createErrorResponse(
+      `Smoke test execution failed: ${error instanceof Error ? error.message : String(error)}`,
+      500,
+      { error }
     );
   }
 }
@@ -431,63 +308,118 @@ async function handler(req: Request): Promise<Response> {
  */
 function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
   return async (req: Request): Promise<Response> => {
+    const requestId = crypto.randomUUID();
+    const startTime = Date.now();
+    
+    logger.info('Request received', {
+      requestId,
+      method: req.method,
+      url: req.url,
+      timestamp: new Date().toISOString()
+    });
+
     try {
       const url = new URL(req.url);
       
       // Handle CORS preflight
       if (req.method === 'OPTIONS') {
+        logger.info('Handling CORS preflight in wrapper', { requestId });
         const headers = new Headers();
         addCorsHeaders(headers);
         return new Response(null, { status: 204, headers });
       }
       
+      // Validate environment before processing
+      const envValidation = validateEnvironment();
+      if (!envValidation.valid) {
+        logger.error('Environment validation failed in wrapper', {
+          requestId,
+          missing: envValidation.missing
+        });
+        return createErrorResponse(
+          `Missing required environment variables: ${envValidation.missing.join(', ')}`,
+          500,
+          { missing: envValidation.missing, requestId }
+        );
+      }
+      
       if (url.pathname === '/health' || url.pathname.endsWith('/health')) {
-        logger.info('Health check endpoint hit');
+        logger.info('Health check endpoint hit in wrapper', { requestId });
+        
         try {
           const healthStatus = await runHealthChecks();
+          
+          // Validate response structure
+          if (!validateHealthResponse(healthStatus)) {
+            logger.error('Invalid health status structure in wrapper', { requestId });
+            return createErrorResponse('Invalid health check response structure', 500);
+          }
+          
           const statusCode = healthStatus.status === 'healthy' ? 200 :
                             healthStatus.status === 'degraded' ? 200 : 503;
 
-          const response: ApiResponse<HealthStatus> = {
-            success: healthStatus.status !== 'unhealthy',
-            data: healthStatus,
-          };
+          const elapsed = Date.now() - startTime;
+          logger.info('Health check completed in wrapper', {
+            requestId,
+            status: healthStatus.status,
+            statusCode,
+            elapsed,
+            summary: healthStatus.summary
+          });
 
-          const headers = new Headers({ 'Content-Type': 'application/json' });
-          addCorsHeaders(headers);
-          return new Response(
-            JSON.stringify(response, null, 2),
-            {
-              status: statusCode,
-              headers
-            }
-          );
+          return createSuccessResponse(healthStatus, statusCode);
         } catch (healthError) {
-          logger.error('Health check failed', healthError);
-          const errorResponse: ApiResponse = {
-            success: false,
+          const elapsed = Date.now() - startTime;
+          logger.error('Health check failed in wrapper', {
+            requestId,
             error: healthError instanceof Error ? healthError.message : String(healthError),
-          };
-          const headers = new Headers({ 'Content-Type': 'application/json' });
-          addCorsHeaders(headers);
-          return new Response(
-            JSON.stringify(errorResponse, null, 2),
-            {
-              status: 500,
-              headers
-            }
+            stack: healthError instanceof Error ? healthError.stack : undefined,
+            elapsed
+          });
+          
+          return createErrorResponse(
+            `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
+            500,
+            { error: healthError, requestId }
           );
         }
       }
       
-      return await handler(req);
+      logger.info('Delegating to main handler', { requestId });
+      const response = await handler(req);
+      
+      const elapsed = Date.now() - startTime;
+      logger.info('Request completed', {
+        requestId,
+        status: response.status,
+        elapsed
+      });
+      
+      return response;
     } catch (error) {
-      logger.error('Request handling failed', error);
-      const errorResponse: ApiResponse = {
-        success: false,
+      const elapsed = Date.now() - startTime;
+      logger.error('Request handling failed in wrapper', {
+        requestId,
         error: error instanceof Error ? error.message : String(error),
-      };
-      const headers = new Headers({ 'Content-Type': 'application/json' });
-      addCorsHeaders(headers);
-      return new Response(
-        JSON
+        stack: error instanceof Error ? error.stack : undefined,
+        elapsed,
+        url: req.url,
+        method: req.method
+      });
+      
+      return createErrorResponse(
+        `Request handling failed: ${error instanceof Error ? error.message : String(error)}`,
+        500,
+        { error, requestId }
+      );
+    }
+  };
+}
+
+logger.info('Smoke test function initialized', {
+  timestamp: new Date().toISOString(),
+  denoVersion: Deno.version.deno,
+  v8Version: Deno.version.v8
+});
+
+Deno.serve(serveWithHealthCheck(handler));
