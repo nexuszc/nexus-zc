@@ -302,7 +302,7 @@ Deno.serve(async (req) => {
         body: new URLSearchParams({
           To: owner_phone,
           From: twilioNumber,
-          Body: `Hey ${firstName} — welcome to Roofing OS. Log in here: app.nexuszc.com/roofing/login\nEnter your email (${owner_email}) and we'll send you a magic link. No password needed.`
+          Body: `Hey ${firstName} — welcome to Roofing OS. Your dashboard: roofingos.dev/dashboard\nLog in with your phone number — we'll text you a one-click link.`
         }).toString()
       }).catch(() => {});
     })() : Promise.resolve(),
@@ -333,6 +333,6 @@ Deno.serve(async (req) => {
     subdomain,
     referral_code: referralCode,
     trial_ends_at: trialEndsAt,
-    dashboard_url: `https://app.nexuszc.com/roofing/login`
+    dashboard_url: `https://roofingos.dev/dashboard`
   }, { headers: corsHeaders });
 });
