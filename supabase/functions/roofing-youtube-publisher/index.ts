@@ -1,12 +1,13 @@
-// roofing-youtube-publisher v2
-// Voice: Adam (pNInz6obpgDQGcFmaJgB) eleven_turbo_v2, more natural settings.
+// roofing-youtube-publisher v3
+// Voice: OpenAI TTS (tts-1-hd, onyx) primary; ElevenLabs Adam fallback; youtube_long uses ElevenLabs primary.
 // Description: full Phase 6 optimized template with chapters, CTA, hashtags.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL        = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY         = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ELEVENLABS_API_KEY  = Deno.env.get("ELEVENLABS_API_KEY")!;
+const OPENAI_API_KEY      = Deno.env.get("OPENAI_API_KEY") || "";
+const ELEVENLABS_API_KEY  = Deno.env.get("ELEVENLABS_API_KEY") || "";
 // Default: Adam — authoritative, trusted, contractor-audience voice.
 const ELEVENLABS_VOICE_ID = Deno.env.get("ELEVENLABS_VOICE_ID") || "pNInz6obpgDQGcFmaJgB";
 const TELEGRAM_BOT_TOKEN  = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
@@ -104,40 +105,65 @@ function buildYouTubeDescription(content: {
     .slice(0, 5000);
 }
 
-// ── ElevenLabs voiceover ──────────────────────────────────────────────────────
+// ── TTS engines ───────────────────────────────────────────────────────────────
 
-async function generateVoiceover(text: string): Promise<{ buffer: ArrayBuffer; chars: number } | null> {
-  if (!ELEVENLABS_API_KEY) return null;
+async function ttsOpenAI(text: string): Promise<ArrayBuffer> {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
+  const res = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "tts-1-hd", input: text.slice(0, 4090), voice: "onyx", speed: 0.95 }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "unknown");
+    throw new Error(`OpenAI TTS error ${res.status}: ${err.slice(0, 200)}`);
+  }
+  return await res.arrayBuffer();
+}
 
+async function ttsElevenLabs(text: string): Promise<ArrayBuffer> {
+  if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY not set");
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
     {
       method: "POST",
-      headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "audio/mpeg",
-      },
+      headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json", "Accept": "audio/mpeg" },
       body: JSON.stringify({
         text,
         model_id: "eleven_turbo_v2",
-        voice_settings: {
-          stability: 0.35,
-          similarity_boost: 0.85,
-          style: 0.6,
-          use_speaker_boost: true,
-        },
+        voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.6, use_speaker_boost: true },
       }),
     }
   );
-
   if (!res.ok) {
     const err = await res.text().catch(() => "unknown");
     throw new Error(`ElevenLabs error ${res.status}: ${err.slice(0, 200)}`);
   }
+  return await res.arrayBuffer();
+}
 
-  const buffer = await res.arrayBuffer();
-  return { buffer, chars: text.length };
+async function generateVoiceover(
+  text: string,
+  contentType: string,
+): Promise<{ buffer: ArrayBuffer; chars: number; engine: string } | null> {
+  const isLongForm = contentType === "youtube_long";
+  const [primary, secondary, primaryName, secondaryName] = isLongForm
+    ? [ttsElevenLabs, ttsOpenAI, "elevenlabs", "openai"] as const
+    : [ttsOpenAI, ttsElevenLabs, "openai", "elevenlabs"] as const;
+
+  try {
+    const buffer = await primary(text);
+    return { buffer, chars: text.length, engine: primaryName };
+  } catch (e1) {
+    console.error(`${primaryName} TTS failed:`, e1);
+    try {
+      const buffer = await secondary(text);
+      return { buffer, chars: text.length, engine: secondaryName };
+    } catch (e2) {
+      console.error(`${secondaryName} TTS also failed:`, e2);
+      return null;
+    }
+  }
 }
 
 // ── GitHub blog post ──────────────────────────────────────────────────────────
@@ -259,7 +285,7 @@ async function processScript(content: Record<string, unknown>): Promise<{ mp3_ur
   // 1. Voiceover
   try {
     const ttsText = cleanForTTS(String(content.body || ""), 4800);
-    const voiceover = await generateVoiceover(ttsText);
+    const voiceover = await generateVoiceover(ttsText, String(content.type || ""));
     if (voiceover) {
       voiceoverChars = voiceover.chars;
       const filename = `${content.id}.mp3`;
@@ -361,7 +387,7 @@ async function processScript(content: Record<string, unknown>): Promise<{ mp3_ur
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-publisher v2 ready", voice: ELEVENLABS_VOICE_ID });
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-publisher v3 ready", openai_tts: !!OPENAI_API_KEY, elevenlabs: !!ELEVENLABS_API_KEY });
 
   const startMs = Date.now();
 

@@ -109,10 +109,15 @@ Deno.serve(async (req) => {
     const partnerReplies  = (partnerRepliesRes.data || []);
 
     // ── 4. Content queue ─────────────────────────────────────────────────────
-    const [ytReadyRes, ytPostedYestRes, contentQueueRes] = await Promise.all([
+    const [ytReadyRes, ytPostedYestRes, contentQueueRes, ytAnalyticsRes, voiceoverCostRes] = await Promise.all([
       supabase.from("roofing_content").select("id, title").eq("youtube_upload_ready", true).is("published_url", null).limit(5),
       supabase.from("roofing_content").select("title").not("published_url", "is", null).gte("updated_at", yest).limit(1),
       supabase.from("roofing_content").select("channel, status").eq("status", "approved").not("channel", "is", null),
+      supabase.from("system_heartbeats").select("metadata, recorded_at")
+        .eq("function_name", "roofing-youtube-analytics")
+        .order("recorded_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("roofing_content").select("voiceover_chars")
+        .not("voiceover_chars", "is", null).gte("updated_at", weekAgo),
     ]);
 
     const ytReady        = (ytReadyRes.data || []).length;
@@ -124,6 +129,18 @@ Deno.serve(async (req) => {
     const ytQueueDays  = Math.round((contentByChannel["youtube"] || 0) / 1);
     const fbQueueDays  = contentByChannel["facebook_page"] || 0;
     const redQueueDays = contentByChannel["reddit"] || 0;
+
+    // YouTube channel stats
+    const ytMeta        = ((ytAnalyticsRes.data as { metadata?: Record<string, number> } | null)?.metadata) || {};
+    const ytSubs        = (ytMeta as Record<string, number>).subscribers || 0;
+    const ytWatchHours  = (ytMeta as Record<string, number>).watch_hours || 0;
+    const ytTotalViews  = (ytMeta as Record<string, number>).total_views || 0;
+    const ytSubsPct     = Math.min(100, Math.round(ytSubs / 1000 * 100));
+    const ytHoursPct    = Math.min(100, Math.round(ytWatchHours / 4000 * 100));
+
+    // TTS cost this week (~$0.030 per 1K chars for OpenAI tts-1-hd)
+    const voiceoverCharsWeek = (voiceoverCostRes.data || []).reduce((s: number, r: any) => s + (r.voiceover_chars || 0), 0);
+    const ttsWeekCost = (voiceoverCharsWeek / 1000 * 0.030).toFixed(2);
 
     // ── 5. Revenue ───────────────────────────────────────────────────────────
     const { data: contractors } = await supabase
@@ -192,8 +209,10 @@ Deno.serve(async (req) => {
         : "Replies received: 0",
       "",
       `📱 CONTENT`,
-      `YouTube uploaded: ${ytPostedYest}`,
-      `Queue depth: YouTube ${ytReady}d | FB ${fbQueueDays}d | Reddit ${redQueueDays}d`,
+      `YouTube last upload: ${ytPostedYest}`,
+      `Queue: ${ytReady} ready to upload | FB ${fbQueueDays}d | Reddit ${redQueueDays}d`,
+      ytSubs > 0 ? `Channel: ${ytSubs} subs (${ytSubsPct}%) | ${ytTotalViews.toLocaleString()} views | ${ytWatchHours.toFixed(0)} hrs (${ytHoursPct}% to monetize)` : "",
+      voiceoverCharsWeek > 0 ? `TTS this week: ${(voiceoverCharsWeek / 1000).toFixed(1)}K chars ≈ $${ttsWeekCost}` : "",
       ytReady < 3 ? "⚠️ YouTube queue low — generating now" : "",
       "",
       `💰 REVENUE`,
