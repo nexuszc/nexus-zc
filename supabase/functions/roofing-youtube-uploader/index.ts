@@ -19,7 +19,8 @@ const SERVICE_KEY           = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const YOUTUBE_CLIENT_ID     = Deno.env.get("YOUTUBE_CLIENT_ID") || "";
 const YOUTUBE_CLIENT_SECRET = Deno.env.get("YOUTUBE_CLIENT_SECRET") || "";
 const YOUTUBE_REFRESH_TOKEN = Deno.env.get("YOUTUBE_REFRESH_TOKEN") || "";
-const CREATOMATE_API_KEY    = Deno.env.get("CREATOMATE_API_KEY") || "";
+const CREATOMATE_API_KEY     = Deno.env.get("CREATOMATE_API_KEY") || "";
+const CREATOMATE_TEMPLATE_ID = Deno.env.get("CREATOMATE_TEMPLATE_ID") || "";
 const TELEGRAM_BOT_TOKEN    = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID      = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
@@ -192,7 +193,18 @@ async function creatomateRender(content: {
 }): Promise<string> {
   if (!CREATOMATE_API_KEY) throw new Error("CREATOMATE_API_KEY not configured");
 
-  const source = buildCreatomateSource(content);
+  // Use dashboard template if configured, otherwise fall back to inline source
+  const requestBody = CREATOMATE_TEMPLATE_ID
+    ? {
+        template_id: CREATOMATE_TEMPLATE_ID,
+        modifications: {
+          title: content.title.slice(0, 120),
+          audio: content.mp3_url,
+          hook: (content.hook_text || "").slice(0, 160),
+          watermark: "roofingos.dev",
+        },
+      }
+    : { source: buildCreatomateSource(content) };
 
   const res = await fetch("https://api.creatomate.com/v1/renders", {
     method: "POST",
@@ -200,7 +212,7 @@ async function creatomateRender(content: {
       "Authorization": `Bearer ${CREATOMATE_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ source }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
@@ -401,7 +413,7 @@ async function processOne(contentId: string): Promise<ProcessResult> {
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v6 ready", creatomate: !!CREATOMATE_API_KEY });
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-uploader v6 ready", creatomate: !!CREATOMATE_API_KEY, template: CREATOMATE_TEMPLATE_ID || "inline-source" });
 
   // Batch mode
   if (body.force_upload) {
