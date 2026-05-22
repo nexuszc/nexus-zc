@@ -413,7 +413,18 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- Deployed roofing-aria-inbound v2 (614-line Twilio TwiML state machine, live on 720-500-6668)
+- Built autonomous growth machine (7 phases, all deployed + cron jobs live):
+  - roofing-partner-scout: Monday 9am MT, finds 10 partnership targets/run via Serper
+  - roofing-lead-scout: Tue+Fri 8am MT, 100 prospects/run, auto-enrolls email + Aria queue
+  - nexus-core: 3x daily acts — 7am content push, 1pm partner outreach, 7pm follow-ups
+  - health-monitor: 5 self-healing checks (Aria queue, email sequences, YT queue, partners, signups)
+  - briefing v3: COO format (GROWTH/OUTREACH/PARTNERSHIPS/CONTENT/REVENUE/NEEDS YOU)
+  - roofing-content-engine: queue depth minimums enforced (5 YT / 7d FB / 7d Reddit)
+  - pg_cron job 39 (partner-scout Mon 15:00 UTC), job 40 (lead-scout Tue+Fri 14:00 UTC)
+
+**PENDING (action required):**
+- Set `ZACH_CELL_PHONE` in Supabase secrets (for roofing-aria-inbound patch-to-Zach flow)
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -422,8 +433,7 @@ Then productized and sold to other multi-business operators.
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Stabilize client health scores (Brian: 65, Denver Pro Roofing: 50)
+7. Stabilize client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
