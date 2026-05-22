@@ -1,247 +1,4 @@
-summary = {
-    total: checks.length,
-    passed: checks.filter(c => c.status === 'pass').length,
-    failed: checks.filter(c => c.status === 'fail').length,
-    warnings: checks.filter(c => c.status === 'warn').length,
-  };
-
-  let status: 'healthy' | 'degraded' | 'unhealthy';
-  if (summary.failed > 0) {
-    status = 'unhealthy';
-  } else if (summary.warnings > 0) {
-    status = 'degraded';
-  } else {
-    status = 'healthy';
-  }
-
-  const healthStatus: HealthStatus = {
-    status,
-    timestamp: new Date().toISOString(),
-    checks,
-    summary,
-  };
-
-  logger.info('Health checks completed', { status, summary });
-  
-  return healthStatus;
-}
-
-/**
- * Validate required environment variables
- */
-function validateEnvironment(): { valid: boolean; missing: string[] } {
-  const required = [
-    'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY'
-  ];
-  
-  const missing = required.filter(key => !Deno.env.get(key));
-  
-  if (missing.length > 0) {
-    logger.error('Missing required environment variables', { missing });
-  }
-  
-  return {
-    valid: missing.length === 0,
-    missing
-  };
-}
-
-/**
- * Wrapper for fetch with timeout and error handling
- */
-async function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeoutMs: number = 10000
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Request timeout after ${timeoutMs}ms`);
-    }
-    throw error;
-  }
-}
-
-/**
- * Validate response structure
- */
-function validateHealthResponse(data: unknown): data is HealthStatus {
-  if (!data || typeof data !== 'object') {
-    logger.error('Invalid health response: not an object', { data });
-    return false;
-  }
-  
-  const health = data as Record<string, unknown>;
-  
-  if (!health.status || !['healthy', 'degraded', 'unhealthy'].includes(health.status as string)) {
-    logger.error('Invalid health response: invalid status', { status: health.status });
-    return false;
-  }
-  
-  if (!health.timestamp || typeof health.timestamp !== 'string') {
-    logger.error('Invalid health response: invalid timestamp', { timestamp: health.timestamp });
-    return false;
-  }
-  
-  if (!Array.isArray(health.checks)) {
-    logger.error('Invalid health response: checks is not an array', { checks: health.checks });
-    return false;
-  }
-  
-  if (!health.summary || typeof health.summary !== 'object') {
-    logger.error('Invalid health response: invalid summary', { summary: health.summary });
-    return false;
-  }
-  
-  return true;
-}
-
-/**
- * Add CORS headers to response
- */
-function addCorsHeaders(headers: Headers): Headers {
-  headers.set('Access-Control-Allow-Origin', '*');
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  headers.set('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type');
-  return headers;
-}
-
-/**
- * Create error response with proper headers
- */
-function createErrorResponse(
-  message: string,
-  statusCode: number = 500,
-  details?: unknown
-): Response {
-  logger.error('Creating error response', { message, statusCode, details });
-  
-  const errorResponse: ApiResponse = {
-    success: false,
-    error: message,
-  };
-  
-  const headers = new Headers({ 'Content-Type': 'application/json' });
-  addCorsHeaders(headers);
-  
-  return new Response(
-    JSON.stringify(errorResponse, null, 2),
-    {
-      status: statusCode,
-      headers
-    }
-  );
-}
-
-/**
- * Create success response with proper headers
- */
-function createSuccessResponse<T>(
-  data: T,
-  statusCode: number = 200
-): Response {
-  const response: ApiResponse<T> = {
-    success: true,
-    data,
-  };
-  
-  const headers = new Headers({ 'Content-Type': 'application/json' });
-  addCorsHeaders(headers);
-  
-  return new Response(
-    JSON.stringify(response, null, 2),
-    {
-      status: statusCode,
-      headers
-    }
-  );
-}
-
-/**
- * Main handler function
- */
-async function handler(req: Request): Promise<Response> {
-  const startTime = Date.now();
-  logger.info('Smoke test endpoint called', { 
-    method: req.method,
-    url: req.url,
-    timestamp: new Date().toISOString()
-  });
-
-  try {
-    // Handle CORS preflight
-    if (req.method === 'OPTIONS') {
-      logger.info('Handling CORS preflight request');
-      const headers = new Headers();
-      addCorsHeaders(headers);
-      return new Response(null, { status: 204, headers });
-    }
-
-    if (req.method !== 'GET') {
-      logger.warn('Invalid method for smoke test', { method: req.method });
-      return createErrorResponse('Method not allowed', 405);
-    }
-
-    // Validate environment variables
-    const envValidation = validateEnvironment();
-    if (!envValidation.valid) {
-      logger.error('Environment validation failed', { missing: envValidation.missing });
-      return createErrorResponse(
-        `Missing required environment variables: ${envValidation.missing.join(', ')}`,
-        500,
-        { missing: envValidation.missing }
-      );
-    }
-
-    const url = new URL(req.url);
-    logger.info('Processing request', { pathname: url.pathname });
-    
-    if (url.pathname.endsWith('/health')) {
-      logger.info('Health endpoint called');
-      
-      try {
-        const healthStatus = await runHealthChecks();
-        
-        // Validate health status structure
-        if (!validateHealthResponse(healthStatus)) {
-          logger.error('Invalid health status structure returned');
-          return createErrorResponse('Invalid health check response structure', 500);
-        }
-        
-        const statusCode = healthStatus.status === 'healthy' ? 200 :
-                          healthStatus.status === 'degraded' ? 200 : 503;
-
-        const elapsed = Date.now() - startTime;
-        logger.info('Health check completed', { 
-          status: healthStatus.status, 
-          statusCode,
-          elapsed,
-          summary: healthStatus.summary
-        });
-
-        return createSuccessResponse(healthStatus, statusCode);
-      } catch (healthError) {
-        logger.error('Health check execution error', {
-          error: healthError instanceof Error ? healthError.message : String(healthError),
-          stack: healthError instanceof Error ? healthError.stack : undefined,
-          elapsed: Date.now() - startTime
-        });
-        
-        return createErrorResponse(
-          `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
+failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
           500,
           { error: healthError }
         );
@@ -301,6 +58,191 @@ async function handler(req: Request): Promise<Response> {
       { error }
     );
   }
+}
+
+/**
+ * Enhanced test runner with better error handling and timeout support
+ */
+async function runEndpointTests(): Promise<{ passed: number; failed: number; results: any[] }> {
+  const testTimeout = 30000; // 30 second timeout per test
+  let passed = 0;
+  let failed = 0;
+  const results: any[] = [];
+
+  const testCases = [
+    {
+      name: 'health-monitor endpoint',
+      endpoint: '/health-monitor',
+      method: 'GET',
+      expectedStatus: [200, 503],
+      requiresAuth: false,
+      validateResponse: (data: any) => {
+        return data && typeof data.status === 'string' && 
+               (data.status === 'healthy' || data.status === 'degraded' || data.status === 'unhealthy');
+      }
+    },
+    {
+      name: 'get-public-config endpoint',
+      endpoint: '/get-public-config',
+      method: 'GET',
+      expectedStatus: [200],
+      requiresAuth: false,
+      validateResponse: (data: any) => {
+        return data && typeof data === 'object' && data.nexusVersion !== undefined;
+      }
+    },
+    {
+      name: 'nexus-core health',
+      endpoint: '/nexus-core/health',
+      method: 'GET',
+      expectedStatus: [200],
+      requiresAuth: false,
+      validateResponse: (data: any) => {
+        return data && (data.status === 'healthy' || data.status === 'degraded' || data.status === 'unhealthy');
+      }
+    },
+    {
+      name: 'brain-api health',
+      endpoint: '/brain-api/health',
+      method: 'GET',
+      expectedStatus: [200, 503],
+      requiresAuth: false,
+      validateResponse: (data: any) => {
+        return data && typeof data.status === 'string';
+      }
+    },
+    {
+      name: 'nexus-core authenticated endpoint',
+      endpoint: '/nexus-core',
+      method: 'POST',
+      expectedStatus: [200, 400, 401],
+      requiresAuth: true,
+      body: { action: 'test' },
+      validateResponse: (data: any, status: number) => {
+        // Accept 401 as valid for auth-required endpoints
+        if (status === 401) return true;
+        // Accept 400 for malformed requests
+        if (status === 400) return true;
+        return data !== null;
+      }
+    }
+  ];
+
+  const baseUrl = Deno.env.get('SUPABASE_URL') || 'http://localhost:54321';
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+
+  for (const test of testCases) {
+    const testStartTime = Date.now();
+    logger.info(`Running test: ${test.name}`, { endpoint: test.endpoint });
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), testTimeout);
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+      };
+
+      if (test.requiresAuth && serviceRoleKey) {
+        headers['Authorization'] = `Bearer ${serviceRoleKey}`;
+      }
+
+      const requestOptions: RequestInit = {
+        method: test.method,
+        headers,
+        signal: controller.signal
+      };
+
+      if (test.body) {
+        requestOptions.body = JSON.stringify(test.body);
+      }
+
+      const response = await fetch(`${baseUrl}/functions/v1${test.endpoint}`, requestOptions);
+      clearTimeout(timeoutId);
+
+      const elapsed = Date.now() - testStartTime;
+      const responseText = await response.text();
+      let responseData;
+
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        responseData = responseText;
+      }
+
+      const statusMatch = test.expectedStatus.includes(response.status);
+      const validationPassed = test.validateResponse(responseData, response.status);
+
+      if (statusMatch && validationPassed) {
+        passed++;
+        results.push({
+          test: test.name,
+          status: 'PASS',
+          endpoint: test.endpoint,
+          statusCode: response.status,
+          elapsed,
+          details: 'Test passed successfully'
+        });
+        logger.info(`Test passed: ${test.name}`, { elapsed, statusCode: response.status });
+      } else {
+        failed++;
+        results.push({
+          test: test.name,
+          status: 'FAIL',
+          endpoint: test.endpoint,
+          statusCode: response.status,
+          expectedStatus: test.expectedStatus,
+          elapsed,
+          details: !statusMatch 
+            ? `Status code mismatch. Expected: ${test.expectedStatus.join(' or ')}, Got: ${response.status}`
+            : 'Response validation failed',
+          response: responseData
+        });
+        logger.error(`Test failed: ${test.name}`, {
+          elapsed,
+          statusCode: response.status,
+          expectedStatus: test.expectedStatus,
+          validationPassed,
+          responsePreview: typeof responseData === 'string' ? responseData.substring(0, 200) : JSON.stringify(responseData).substring(0, 200)
+        });
+      }
+    } catch (error) {
+      const elapsed = Date.now() - testStartTime;
+      failed++;
+      
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTimeout = errorMessage.includes('abort');
+      
+      results.push({
+        test: test.name,
+        status: 'ERROR',
+        endpoint: test.endpoint,
+        elapsed,
+        error: errorMessage,
+        errorType: isTimeout ? 'timeout' : 'exception',
+        details: isTimeout 
+          ? `Test timed out after ${testTimeout}ms`
+          : `Test threw exception: ${errorMessage}`,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      logger.error(`Test error: ${test.name}`, {
+        error: errorMessage,
+        elapsed,
+        isTimeout,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }
+
+  logger.info('All tests completed', { 
+    passed, 
+    failed, 
+    total: testCases.length,
+    passRate: `${((passed / testCases.length) * 100).toFixed(1)}%`
+  });
+
+  return { passed, failed, results };
 }
 
 /**
