@@ -43,8 +43,16 @@ export default function App() {
       setSession(session)
       setLoading(false)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      if (event === 'SIGNED_IN' && session && window.location.pathname === '/') {
+        supabase
+          .from('contractor_accounts')
+          .select('id')
+          .eq('owner_email', session.user.email)
+          .maybeSingle()
+          .then(({ data }) => { if (data) window.location.replace('/roofing/jobs') })
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
