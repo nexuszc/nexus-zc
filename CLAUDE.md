@@ -426,8 +426,7 @@ Then productized and sold to other multi-business operators.
   - 60 short scripts + 4 long-form scripts generating in background
   - Crons: engine 14/run (Mon+Thu), upload 9am MT + 9pm MT, analytics 6am, engage 10am
   - 15 videos live, 18+ in voiceover pipeline now
-- **ACTION NEEDED: `supabase secrets set PEXELS_API_KEY=[your_key] --project-ref koqpbnxkhgbsnbdjwldx`**
-  Get a free key at pexels.com/api — needed for stock footage backgrounds
+- PEXELS_API_KEY set ✅ — stock footage backgrounds now live for new uploads
 
 **DONE (May 21–22, 2026):**
 - Aria V1 deployed (TwiML outbound + inbound, Adam voice)
