@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v10
+# Last updated: May 22, 2026 — v8
 
 ---
 
@@ -467,13 +467,7 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
 **DONE this session:**
-- Fixed contractor auth end to end (Genesis can now log in)
-- Fixed `ProtectedRoute` — non-admins sent to `/roofing/jobs`, not `roofingos.dev`
-- Fixed CORS on `contractor-auth` edge function
-- Fixed `get_contractor` JWT decode (atob vs supabase.auth.getUser)
-- Fixed `ContractorContext` spinner (setLoading in finally block)
-- Fixed dashboard syntax error (escaped apostrophe in onboarding label)
-- Redirected `roofingos.dev/dashboard` → `app.nexuszc.com/roofing/jobs`
+- (nothing yet this session)
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -483,7 +477,7 @@ Then productized and sold to other multi-business operators.
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
 7. Build Roofing OS go-to-market system and landing page
-8. Monitor and improve client health scores (Brian: 65, Denver Pro Roofing: 50)
+8. Improve Brian client health from 65 to 80+
 
 ---
 
