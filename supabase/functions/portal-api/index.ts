@@ -21,7 +21,7 @@ function insurancePlainEnglish(claim: Record<string, unknown> | null): string {
   const status = claim.status as string || "";
   const carrier = claim.carrier_name as string || "your insurance company";
   const adjuster = claim.adjuster_name as string || "";
-  const estimate = claim.estimate_amount ? `$${((claim.estimate_amount as number) / 100).toLocaleString()}` : null;
+  const estimate = claim.original_estimate ? `$${((claim.original_estimate as number) / 100).toLocaleString()}` : null;
   const supplement = claim.supplement_requested ? `$${((claim.supplement_requested as number) / 100).toLocaleString()}` : null;
 
   const statusMessages: Record<string, string> = {
@@ -101,7 +101,6 @@ Deno.serve(async (req) => {
   let token = url.searchParams.get("token");
   let action = url.searchParams.get("action");
 
-  // For POST requests, token and action may come from body
   let body: Record<string, unknown> = {};
   if (req.method === "POST") {
     body = await req.json().catch(() => ({}));
@@ -154,25 +153,28 @@ Deno.serve(async (req) => {
         paymentsRes,
         messagesRes,
         monitoringRes,
-        integrationsRes
+        contractorRes
       ] = await Promise.all([
-        supabase.from("portal_activities").select("*").eq("job_id", jobId).eq("visible_to_homeowner", true).order("created_at", { ascending: false }).limit(20),
-        supabase.from("portal_photos").select("*").eq("job_id", jobId).eq("is_public", true).order("created_at", { ascending: false }),
+        supabase.from("portal_activities").select("*").eq("job_id", jobId).eq("visible_to_homeowner", true).order("created_at", { ascending: true }),
+        supabase.from("portal_photos").select("*").eq("job_id", jobId).eq("is_public", true).order("taken_at", { ascending: false }),
         supabase.from("insurance_claims").select("*").eq("job_id", jobId).maybeSingle(),
         supabase.from("supplement_tracker").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("portal_documents").select("*").eq("job_id", jobId).order("created_at", { ascending: false }),
         supabase.from("portal_payments").select("*").eq("job_id", jobId).order("due_date", { ascending: true }),
-        supabase.from("portal_messages").select("*").eq("job_id", jobId).order("created_at", { ascending: false }).limit(50),
+        supabase.from("portal_messages").select("*").eq("job_id", jobId).order("created_at", { ascending: true }).limit(50),
         supabase.from("roof_monitoring").select("*").eq("job_id", jobId).maybeSingle(),
-        supabase.from("contractor_integrations").select("integration_type, status, last_sync_at").eq("contractor_id", job.contractor_id).eq("status", "active")
+        supabase.from("contractor_accounts").select("company_name, logo_url, owner_phone, primary_color, plan").eq("id", job?.contractor_id as string).maybeSingle()
       ]);
 
       const progressMap: Record<string, number> = {
         lead: 5, assessment_scheduled: 10, assessed: 20, estimate_sent: 30,
         contracted: 40, insurance_submitted: 50, materials_ordered: 60,
-        scheduled: 70, in_progress: 80, complete: 95, paid: 100
+        scheduled: 70, in_progress: 80, inspection: 90, complete: 100, paid: 100
       };
       const progress = progressMap[job?.status as string] || 0;
+
+      const contractor = contractorRes.data;
+      const plan = contractor?.plan || "free";
 
       const address = job?.property_address as string;
       const googleKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
@@ -180,27 +182,27 @@ Deno.serve(async (req) => {
         ? `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=19&size=600x400&maptype=satellite&key=${googleKey}`
         : null;
 
-      const allActivities = activitiesRes.data || [];
-      const timeline = [...allActivities].reverse(); // chronological for timeline view
+      const activities = activitiesRes.data || [];
 
       return new Response(JSON.stringify({
         ok: true,
+        plan,
+        contractor,
         session: {
           homeowner_name: session.homeowner_name,
           language: session.preferred_language,
           notifications: session.notification_preferences
         },
         job: { ...job, progress, satellite_url: satelliteUrl },
-        activities: allActivities,
-        timeline,
+        activities,
+        timeline: activities,
         insurance_status_plain: insurancePlainEnglish(claimRes.data),
         claim: claimRes.data,
         supplements: supplementsRes.data || [],
         documents: documentsRes.data || [],
         payments: paymentsRes.data || [],
-        messages: (messagesRes.data || []).reverse(),
+        messages: messagesRes.data || [],
         monitoring: monitoringRes.data,
-        integration_sources: (integrationsRes.data || []).map((i: Record<string, unknown>) => i.integration_type)
       }), { headers: corsHeaders });
     }
 
@@ -264,9 +266,6 @@ Deno.serve(async (req) => {
         icon: "✍️"
       });
 
-      // MOVED_TO_DASHBOARD [date: 2026-05-17]: document signatures visible in Portal tab (portal_documents.status='signed')
-      // await sendTelegram(`✍️ *Document signed*\n${session.homeowner_name} signed: ${document_title || "document"}`);
-
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
     }
 
@@ -282,9 +281,6 @@ Deno.serve(async (req) => {
         referred_address: refAddress,
         referred_phone: refPhone
       });
-
-      // MOVED_TO_DASHBOARD [date: 2026-05-17]: homeowner referrals visible in Portal tab (portal_referrals table)
-      // await sendTelegram(`🎯 *New referral*\nFrom: ${session.homeowner_name}\nReferred: ${name} at ${refAddress}\nPhone: ${refPhone}`);
 
       return new Response(JSON.stringify({ ok: true, referral_code: referralCode }), { headers: corsHeaders });
     }
