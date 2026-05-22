@@ -41,6 +41,26 @@ Deno.serve(async (req) => {
 
   const { action } = body;
 
+  // GET CONTRACTOR — called by ContractorContext on dashboard load
+  if (action === 'get_contractor') {
+    const authHeader = req.headers.get('Authorization') || ''
+    const token = authHeader.replace('Bearer ', '').trim()
+    if (!token) return json({ ok: false, error: 'authorization required' }, { status: 401 })
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    if (userError || !user) return json({ ok: false, error: 'invalid token' }, { status: 401 })
+
+    const { data: contractor } = await supabase
+      .from('contractor_accounts')
+      .select('id, company_name, owner_name, owner_email, owner_phone, plan, status, trial_ends_at, subscription_status, onboarding_step, churn_risk_score')
+      .eq('owner_email', user.email)
+      .maybeSingle()
+
+    if (!contractor) return json({ ok: false, error: 'no contractor account found' }, { status: 404 })
+
+    return json({ ok: true, contractor })
+  }
+
   // SEND MAGIC LINK — phone-primary auth
   if (action === 'send_magic_link') {
     const { phone, contractor_id } = body;
