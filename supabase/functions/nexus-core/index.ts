@@ -1610,9 +1610,8 @@ Deno.serve(async (req) => {
         .in("status", ["queued", "pending"])
         .lte("fire_at", queueNow)
         .lt("attempt_count", maxAttempts)
-        .order("priority_score", { ascending: false })
         .order("fire_at", { ascending: true })
-        .limit(5);
+        .limit(20);
 
       let queueFired = 0;
       for (const queuedCall of readyToFire || []) {

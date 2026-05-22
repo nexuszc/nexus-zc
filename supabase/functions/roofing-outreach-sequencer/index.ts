@@ -295,8 +295,9 @@ Deno.serve(async (req) => {
 
         emailsSent++;
       } else {
-        // Clean up the pre-logged touch if send failed
+        // Send failed — clean up pre-logged touch and kill the sequence so we don't retry indefinitely
         if (logId) await supabase.from("roofing_outreach_log").delete().eq("id", logId);
+        await supabase.from("email_sequences").update({ status: "dead", tier: "dead" }).eq("id", seq.id).catch(() => {});
         errors++;
       }
 
