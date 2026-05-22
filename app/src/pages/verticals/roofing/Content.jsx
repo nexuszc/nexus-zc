@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const SB_URL = import.meta.env.VITE_SUPABASE_URL
@@ -13,15 +13,12 @@ function api(method, action, id) {
   }).then(r => r.json())
 }
 
-// Facebook post variants — rotating daily, groups as individual checkboxes
+const FB_GROUP_URL = 'https://facebook.com/groups/2266757270527259'
+
+// Rotating daily post for the 5 external groups
 const FB_VARIANTS = [
   {
     label: 'Variant A — CompanyCam angle',
-    groups: [
-      'Roofing Contractors Network',
-      'Roofers Coffee Shop',
-      'Contractor Talk',
-    ],
     body: `We built a free replacement for CompanyCam. Here's why.
 
 CompanyCam charges $79–199/month to store and share job photos. That's it.
@@ -40,11 +37,6 @@ Happy to answer questions in comments.`,
   },
   {
     label: 'Variant B — Homeowner calls angle',
-    groups: [
-      'Roofing Business Owners',
-      'Roofing Sales & Marketing',
-      'Roofing Contractor Mastermind',
-    ],
     body: `Quick question for contractors: how many calls/texts do you get from homeowners asking "what's the status of my roof?"
 
 We track this. Average contractor gets 4–6 status check calls per active job per week. That's 20–30 interruptions a week during storm season.
@@ -59,11 +51,6 @@ Demo of what the homeowner sees: roofingos.dev/portal/demo`,
   },
   {
     label: 'Variant C — Supplement AI angle',
-    groups: [
-      'Storm Restoration Professionals',
-      'Insurance Restoration Roofing',
-      'Roofing Contractor Pro Talk',
-    ],
     body: `Storm season question: what's your supplement approval rate with State Farm right now?
 
 Industry average is hovering around 58%. Best contractors I know are hitting 75–80% — and they're using AI to build the packets.
@@ -79,6 +66,57 @@ Package is $99/job. Full handling with Aria calling the adjuster is $329/job. In
 The portal your homeowners use is free: roofingos.dev/dashboard`,
   },
 ]
+
+// Separate daily post for our owned group — community-building tone
+const FB_OWNED_VARIANTS = [
+  {
+    body: `📸 Contractors: what does your homeowner communication look like right now?
+
+If your answer is "a lot of calls and texts" — you're in the right place.
+
+We built Roofing OS to give every homeowner a live portal for their job. Photos, insurance status, crew schedule, Aria AI chat. They stop calling because they don't need to.
+
+It's free. No credit card. First 5 jobs free to test.
+
+Drop a question in the comments or DM — happy to show you a live portal demo.
+
+→ roofingos.dev/portal/demo`,
+  },
+  {
+    body: `Storm season question for the group: how do you handle homeowner calls when you're running 10+ active jobs?
+
+The top contractors I know have one system: send the portal link before you leave the driveway.
+
+Homeowner gets real-time updates. They stop calling. Your crew stays on jobs instead of answering phones.
+
+If you haven't tried Roofing OS yet — it's free: roofingos.dev/dashboard
+
+What's your system? Drop it in the comments.`,
+  },
+  {
+    body: `Supplement question for the group:
+
+What's your approval rate with State Farm this season?
+
+Industry average is around 58%. Best contractors hitting 75–80% are using AI to build the packets. Photo analysis, missed line items, carrier-specific Xactimate codes — all automated.
+
+We built it into our free portal. $99/job. Aria handles the full adjuster follow-up for $329/job.
+
+Anyone working insurance restoration jobs? What's working on supplements?
+
+→ roofingos.dev`,
+  },
+]
+
+const EXTERNAL_GROUPS = [
+  'Roofing Contractors Network',
+  'Storm Restoration Contractors',
+  'Roofers Coffee Shop',
+  'Insurance Restoration Contractors',
+  'Roofing Business Owners USA',
+]
+
+const OWNED_GROUP = 'Roofing Contractors — AI Tools & Tips'
 
 function ago(ts) {
   if (!ts) return '—'
@@ -131,36 +169,53 @@ function CopyButton({ text, label = '📋 Copy', className = '' }) {
 
 // ── Facebook Daily Task ───────────────────────────────────────────────────────
 // No Graph API needed. AE copies post, checks each group, done in ~20 min.
+// State persists in localStorage within the day, resets at midnight.
 
 function FacebookDailyTask() {
+  const today = new Date().toISOString().slice(0, 10)
   const dayIndex = Math.floor(Date.now() / 86400000) % FB_VARIANTS.length
   const variant = FB_VARIANTS[dayIndex]
-  const [checked, setChecked] = useState({})
-  const [copied, setCopied] = useState(false)
+  const ownedVariant = FB_OWNED_VARIANTS[dayIndex]
 
-  const allDone = variant.groups.every(g => checked[g])
-  const doneCount = variant.groups.filter(g => checked[g]).length
-
-  const copyPost = async () => {
+  // Persist check state per day; auto-reset when date changes
+  const [checked, setChecked] = useState(() => {
     try {
-      await navigator.clipboard.writeText(variant.body)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast('Copy failed — check permissions', 'error')
-    }
-  }
+      const stored = JSON.parse(localStorage.getItem('fb_task') || '{}')
+      if (stored.date === today) return stored.checked || {}
+    } catch {}
+    return {}
+  })
+  const [copiedMain, setCopiedMain] = useState(false)
+  const [copiedOwned, setCopiedOwned] = useState(false)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fb_task', JSON.stringify({ date: today, checked }))
+    } catch {}
+  }, [checked, today])
+
+  const externalDone = EXTERNAL_GROUPS.filter(g => checked[g]).length
+  const allExternalDone = externalDone === EXTERNAL_GROUPS.length
+  const ownedDone = !!checked[OWNED_GROUP]
+  const allDone = allExternalDone && ownedDone
 
   const toggle = (group) => setChecked(prev => ({ ...prev, [group]: !prev[group] }))
 
+  const copyMain = async () => {
+    try { await navigator.clipboard.writeText(variant.body); setCopiedMain(true); setTimeout(() => setCopiedMain(false), 2000) }
+    catch { toast('Copy failed', 'error') }
+  }
+  const copyOwned = async () => {
+    try { await navigator.clipboard.writeText(ownedVariant.body); setCopiedOwned(true); setTimeout(() => setCopiedOwned(false), 2000) }
+    catch { toast('Copy failed', 'error') }
+  }
+
   return (
     <div className={`border rounded-xl p-5 mb-5 transition-colors ${
-      allDone
-        ? 'bg-green-950/30 border-green-500/30'
-        : 'bg-[#1a1a2e] border-blue-500/30'
+      allDone ? 'bg-green-950/30 border-green-500/30' : 'bg-[#1a1a2e] border-blue-500/30'
     }`}>
       {/* Header */}
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-3">
         <span className="text-lg">🔵</span>
         <div className="flex-1">
           <div className={`text-sm font-bold ${allDone ? 'text-green-400' : 'text-blue-400'}`}>
@@ -169,36 +224,40 @@ function FacebookDailyTask() {
           <div className="text-[10px] text-gray-600">{variant.label} · AE daily task · ~20 min</div>
         </div>
         {allDone ? (
-          <span className="text-xs text-green-400 bg-green-500/15 px-3 py-1 rounded-full font-bold">✓ All posted</span>
-        ) : doneCount > 0 ? (
-          <span className="text-xs text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full font-semibold">{doneCount}/{variant.groups.length} done</span>
-        ) : null}
+          <span className="text-xs text-green-400 bg-green-500/15 px-3 py-1 rounded-full font-bold">✓ All done</span>
+        ) : (
+          <span className="text-xs text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full font-semibold">
+            {externalDone + (ownedDone ? 1 : 0)}/{EXTERNAL_GROUPS.length + 1} done
+          </span>
+        )}
       </div>
 
-      {/* Post body — scrollable preview */}
-      <pre className="mt-3 text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-4 border border-[#1e1e2e] leading-relaxed max-h-44 overflow-y-auto mb-4">
-        {variant.body}
-      </pre>
-
-      {/* Big copy button */}
-      <button
-        onClick={copyPost}
-        className={`w-full py-3 rounded-xl font-bold text-sm transition-all mb-5 ${
-          copied
-            ? 'bg-green-600 text-white'
-            : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-900/30'
-        }`}
-      >
-        {copied ? '✓ Copied to clipboard!' : '📋 Copy post'}
-      </button>
-
-      {/* Group checklist */}
-      <div>
-        <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">
-          Post in these groups — check off as you go
+      {/* ── Section 1: External groups ── */}
+      <div className="mb-5">
+        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2">
+          Post in these 5 groups
         </div>
-        <div className="space-y-2">
-          {variant.groups.map(group => (
+
+        {/* Post body */}
+        <pre className="text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-4 border border-[#1e1e2e] leading-relaxed max-h-40 overflow-y-auto mb-3">
+          {variant.body}
+        </pre>
+
+        {/* Big copy button */}
+        <button
+          onClick={copyMain}
+          className={`w-full py-3 rounded-xl font-bold text-sm transition-all mb-4 ${
+            copiedMain
+              ? 'bg-green-600 text-white'
+              : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-lg shadow-blue-900/30'
+          }`}
+        >
+          {copiedMain ? '✓ Copied to clipboard!' : '📋 Copy post'}
+        </button>
+
+        {/* Group checklist */}
+        <div className="space-y-1">
+          {EXTERNAL_GROUPS.map(group => (
             <label
               key={group}
               className="flex items-center gap-3 cursor-pointer py-2 px-3 rounded-lg hover:bg-white/[0.03] transition-colors"
@@ -209,14 +268,60 @@ function FacebookDailyTask() {
                 onChange={() => toggle(group)}
                 className="w-4 h-4 rounded accent-blue-500 cursor-pointer shrink-0"
               />
-              <span className={`text-sm transition-colors ${
+              <span className={`text-sm flex-1 transition-colors ${
                 checked[group] ? 'text-green-400 line-through opacity-60' : 'text-gray-200'
               }`}>
                 {group}
               </span>
-              {checked[group] && <span className="text-green-400 text-xs ml-auto">✓ Posted</span>}
+              {checked[group] && <span className="text-green-400 text-xs">✓</span>}
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* ── Section 2: Our owned group ── */}
+      <div className={`border-t pt-4 ${allExternalDone ? 'border-green-500/20' : 'border-[#1e1e2e]'}`}>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold flex-1">
+            Our group — post separately
+          </div>
+          <a
+            href={FB_GROUP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] text-blue-400 hover:text-blue-300"
+          >
+            Open group ↗
+          </a>
+        </div>
+
+        <pre className="text-xs text-gray-300 whitespace-pre-wrap bg-[#0e0e18] rounded-lg p-4 border border-[#1e1e2e] leading-relaxed max-h-36 overflow-y-auto mb-3">
+          {ownedVariant.body}
+        </pre>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={copyOwned}
+            className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              copiedOwned
+                ? 'bg-green-600 text-white'
+                : 'bg-[#1e1e2e] hover:bg-blue-700 text-gray-300 hover:text-white'
+            }`}
+          >
+            {copiedOwned ? '✓ Copied!' : '📋 Copy group post'}
+          </button>
+
+          <label className="flex items-center gap-2 cursor-pointer py-2 px-3 rounded-lg hover:bg-white/[0.03] transition-colors shrink-0">
+            <input
+              type="checkbox"
+              checked={ownedDone}
+              onChange={() => toggle(OWNED_GROUP)}
+              className="w-4 h-4 rounded accent-blue-500 cursor-pointer"
+            />
+            <span className={`text-sm transition-colors ${ownedDone ? 'text-green-400' : 'text-gray-400'}`}>
+              {OWNED_GROUP}
+            </span>
+          </label>
         </div>
       </div>
 
@@ -315,9 +420,7 @@ function ContentCard({ item, onUpdate }) {
       } else {
         toast('Generation failed', 'error')
       }
-    } finally {
-      setGeneratingFb(false)
-    }
+    } finally { setGeneratingFb(false) }
   }
 
   const handleGenerateTt = async () => {
@@ -331,22 +434,11 @@ function ContentCard({ item, onUpdate }) {
       } else {
         toast('Generation failed', 'error')
       }
-    } finally {
-      setGeneratingTt(false)
-    }
+    } finally { setGeneratingTt(false) }
   }
 
-  const handleFbDone = async () => {
-    await api('POST', 'facebook-done', item.id)
-    toast('Facebook marked done ✓')
-    onUpdate()
-  }
-
-  const handleTtDone = async () => {
-    await api('POST', 'tiktok-done', item.id)
-    toast('TikTok marked done ✓')
-    onUpdate()
-  }
+  const handleFbDone  = async () => { await api('POST', 'facebook-done', item.id); toast('Facebook marked done ✓'); onUpdate() }
+  const handleTtDone  = async () => { await api('POST', 'tiktok-done',   item.id); toast('TikTok marked done ✓');   onUpdate() }
 
   const handleGenerateVo = async () => {
     setGeneratingVo(true)
@@ -377,7 +469,8 @@ function ContentCard({ item, onUpdate }) {
   }
 
   const channelBadge = (status, label) => {
-    if (status === 'posted' || status === 'done') return <span key={label} className="text-[9px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">✓ {label}</span>
+    if (status === 'posted' || status === 'done')
+      return <span key={label} className="text-[9px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">✓ {label}</span>
     return <span key={label} className="text-[9px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded-full">{label}</span>
   }
 
@@ -401,9 +494,7 @@ function ContentCard({ item, onUpdate }) {
         </div>
       </div>
 
-      {/* Channel rows */}
       <div className="mt-3">
-        {/* YouTube — voiceover → upload → published */}
         <div className={`flex items-center gap-2 py-1.5 border-t border-[#1e1e2e] ${item.published_url ? 'opacity-60' : ''}`}>
           <span className="text-sm w-5 text-center">▶</span>
           <span className="text-xs text-gray-500 w-16">YouTube</span>
@@ -426,44 +517,26 @@ function ContentCard({ item, onUpdate }) {
             </button>
           )}
         </div>
+        <ChannelRow icon="💼" label="LinkedIn" status={liStatus} />
         <ChannelRow
-          icon="💼"
-          label="LinkedIn"
-          status={liStatus}
+          icon="🔵" label="Facebook" status={fbStatus}
+          copyText={item.facebook_copy} onCopy={handleGenerateFb} onDone={handleFbDone} generating={generatingFb}
         />
         <ChannelRow
-          icon="🔵"
-          label="Facebook"
-          status={fbStatus}
-          copyText={item.facebook_copy}
-          onCopy={handleGenerateFb}
-          onDone={handleFbDone}
-          generating={generatingFb}
-        />
-        <ChannelRow
-          icon="🎵"
-          label="TikTok"
-          status={ttStatus}
+          icon="🎵" label="TikTok" status={ttStatus}
           copyText={item.tiktok_copy || (item.body ? item.body.slice(0, 280) : null)}
-          onCopy={handleGenerateTt}
-          onDone={handleTtDone}
-          generating={generatingTt}
+          onCopy={handleGenerateTt} onDone={handleTtDone} generating={generatingTt}
         />
       </div>
 
       {expanded && item.script && (
         <div className="mt-3 pt-3 border-t border-[#1e1e2e]">
-          {item.hook_text && (
-            <p className="text-xs text-amber-400 italic mb-2">"{item.hook_text}"</p>
-          )}
+          {item.hook_text && <p className="text-xs text-amber-400 italic mb-2">"{item.hook_text}"</p>}
           <p className="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">{item.script.slice(0, 600)}</p>
         </div>
       )}
 
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="mt-2 text-xs text-gray-700 hover:text-gray-500 transition-colors"
-      >
+      <button onClick={() => setExpanded(e => !e)} className="mt-2 text-xs text-gray-700 hover:text-gray-500 transition-colors">
         {expanded ? 'Hide ↑' : 'Script ↓'}
       </button>
     </div>
@@ -488,18 +561,14 @@ function CommunityCard({ post, onApprove, onSkip }) {
               post.status === 'approved' ? 'text-green-400 bg-green-500/10' :
               post.status === 'skipped'  ? 'text-gray-500 bg-gray-800' :
               'text-amber-400 bg-amber-500/10'
-            }`}>
-              {post.status}
-            </span>
+            }`}>{post.status}</span>
           </div>
           <div className="text-xs text-gray-500 mt-0.5 capitalize">
             {(post.platform || '').replace('_', ' ')} · {ago(post.created_at)}
           </div>
           {expanded && (
             <div className="mt-3 border-t border-[#1e1e2e] pt-3 space-y-3">
-              {post.thread_content && (
-                <p className="text-xs text-gray-500">{post.thread_content.slice(0, 400)}</p>
-              )}
+              {post.thread_content && <p className="text-xs text-gray-500">{post.thread_content.slice(0, 400)}</p>}
               {post.our_response && (
                 <div>
                   <div className="text-[9px] text-gray-600 uppercase tracking-widest mb-1">Our Response</div>
@@ -514,9 +583,7 @@ function CommunityCard({ post, onApprove, onSkip }) {
           )}
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
-          {post.our_response && (
-            <CopyButton text={post.our_response} label="📋 Copy" />
-          )}
+          {post.our_response && <CopyButton text={post.our_response} label="📋 Copy" />}
           {post.status === 'pending' && (
             <>
               <button onClick={() => act(onApprove, 'approve')} disabled={acting === 'approve'}
@@ -551,17 +618,11 @@ function PartnerRow({ partner, onSent }) {
 
   const handleSent = async () => {
     setActing(true)
-    try {
-      await api('POST', 'partner-sent', partner.id)
-      toast('Marked as sent ✓')
-      onSent()
-    } finally {
-      setActing(false)
-    }
+    try { await api('POST', 'partner-sent', partner.id); toast('Marked as sent ✓'); onSent() }
+    finally { setActing(false) }
   }
 
-  const emailBody = partner.body || ''
-  const mailtoHref = `mailto:${partner.email}?subject=${encodeURIComponent(partner.subject || '')}&body=${encodeURIComponent(emailBody)}`
+  const mailtoHref = `mailto:${partner.email}?subject=${encodeURIComponent(partner.subject || '')}&body=${encodeURIComponent(partner.body || '')}`
 
   return (
     <div className="py-3 border-b border-[#1e1e2e] last:border-0">
@@ -572,7 +633,9 @@ function PartnerRow({ partner, onSent }) {
             {isSent && <span className="text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Sent {daysSinceSent}d ago</span>}
             {needsFollowup && <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">No reply</span>}
           </div>
-          <div className="text-xs text-gray-600 mt-0.5 truncate">{partner.email !== 'facebook-dm' ? partner.email : 'Facebook DM'} · {(partner.subject || '').slice(0, 50)}</div>
+          <div className="text-xs text-gray-600 mt-0.5 truncate">
+            {partner.email !== 'facebook-dm' ? partner.email : 'Facebook DM'} · {(partner.subject || '').slice(0, 50)}
+          </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
           {needsFollowup ? (
@@ -606,15 +669,12 @@ export default function Content() {
   const [partners, setPartners]   = useState([])
   const [stats, setStats]         = useState(null)
   const [tab, setTab]             = useState('content')
-  const [loading, setLoading]         = useState(true)
-  const [generating, setGenerating]   = useState(false)
+  const [loading, setLoading]     = useState(true)
+  const [generating, setGenerating] = useState(false)
   const [communityFilter, setCommunityFilter] = useState('all')
-  const [toastState, setToastState]   = useState(null)
+  const [toastState, setToastState] = useState(null)
 
-  useEffect(() => {
-    _setToast = setToastState
-    return () => { _setToast = null }
-  }, [])
+  useEffect(() => { _setToast = setToastState; return () => { _setToast = null } }, [])
   useEffect(() => {
     if (!toastState) return
     const t = setTimeout(() => setToastState(null), 2500)
@@ -648,20 +708,15 @@ export default function Content() {
 
   const approvePost = (post) => async () => {
     const { error } = await supabase.from('roofing_community_posts')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
-      .eq('id', post.id)
+      .update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', post.id)
     if (error) { toast(`Approve failed: ${error.message}`, 'error'); return }
-    toast('Post approved ✓')
-    await load()
+    toast('Post approved ✓'); await load()
   }
 
   const skipPost = (post) => async () => {
-    const { error } = await supabase.from('roofing_community_posts')
-      .update({ status: 'skipped' })
-      .eq('id', post.id)
+    const { error } = await supabase.from('roofing_community_posts').update({ status: 'skipped' }).eq('id', post.id)
     if (error) { toast(`Skip failed: ${error.message}`, 'error'); return }
-    toast('Post skipped')
-    await load()
+    toast('Post skipped'); await load()
   }
 
   const generate = async () => {
@@ -674,9 +729,7 @@ export default function Content() {
       })
       await new Promise(r => setTimeout(r, 4000))
       await load()
-    } finally {
-      setGenerating(false)
-    }
+    } finally { setGenerating(false) }
   }
 
   const TABS = [
@@ -689,15 +742,13 @@ export default function Content() {
     <div className="max-w-3xl mx-auto px-4 py-6">
       <Toast toast={toastState} />
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-white">Content</h1>
           <p className="text-gray-500 text-sm mt-0.5">Multi-channel posting hub</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={load}
-            className="text-xs text-gray-500 hover:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors">
+          <button onClick={load} className="text-xs text-gray-500 hover:text-gray-300 px-3 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors">
             Refresh
           </button>
           <button onClick={generate} disabled={generating}
@@ -710,20 +761,15 @@ export default function Content() {
       <StatsBar stats={stats} />
       <FacebookDailyTask />
 
-      {/* Tabs */}
       <div className="flex gap-1.5 mb-5 flex-wrap">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-              tab === t.key
-                ? 'bg-indigo-600 text-white'
-                : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
+              tab === t.key ? 'bg-indigo-600 text-white' : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
             }`}>
             {t.label}
             {t.count > 0 && (
-              <span className="ml-1.5 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.5 rounded-full">
-                {t.count}
-              </span>
+              <span className="ml-1.5 text-[9px] font-black bg-amber-500 text-black px-1.5 py-0.5 rounded-full">{t.count}</span>
             )}
           </button>
         ))}
@@ -739,15 +785,12 @@ export default function Content() {
           {items.length === 0 ? (
             <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-10 text-center">
               <p className="text-gray-600 text-sm">No content yet.</p>
-              <button onClick={generate} disabled={generating}
-                className="mt-3 text-xs text-indigo-400 hover:text-indigo-300">
+              <button onClick={generate} disabled={generating} className="mt-3 text-xs text-indigo-400 hover:text-indigo-300">
                 {generating ? 'Generating…' : 'Generate first batch →'}
               </button>
             </div>
           ) : (
-            items.map(item => (
-              <ContentCard key={item.id} item={item} onUpdate={load} />
-            ))
+            items.map(item => <ContentCard key={item.id} item={item} onUpdate={load} />)
           )}
         </div>
 
@@ -756,22 +799,18 @@ export default function Content() {
           <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-3 mb-4 flex gap-5 flex-wrap">
             <span className="text-xs text-gray-500">This week: <span className="text-white font-semibold">{communityThisWeek}</span> posts</span>
             <span className="text-xs text-gray-500">Auto-posted: <span className="text-green-400 font-semibold">{communityAutoPosted}</span></span>
-            <span className="text-xs text-gray-500">Pending review: <span className="text-amber-400 font-semibold">{communityPending}</span></span>
+            <span className="text-xs text-gray-500">Pending: <span className="text-amber-400 font-semibold">{communityPending}</span></span>
             <span className="text-xs text-gray-500">Total: <span className="text-gray-300 font-semibold">{community.length}</span></span>
           </div>
           <div className="flex gap-1.5 mb-4 flex-wrap">
             {[
-              { key: 'all',         label: 'All' },
-              { key: 'pending',     label: 'Pending' },
-              { key: 'approved',    label: 'Approved' },
-              { key: 'auto-posted', label: 'Auto-posted' },
-              { key: 'skipped',     label: 'Skipped' },
+              { key: 'all', label: 'All' }, { key: 'pending', label: 'Pending' },
+              { key: 'approved', label: 'Approved' }, { key: 'auto-posted', label: 'Auto-posted' },
+              { key: 'skipped', label: 'Skipped' },
             ].map(f => (
               <button key={f.key} onClick={() => setCommunityFilter(f.key)}
                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  communityFilter === f.key
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
+                  communityFilter === f.key ? 'bg-indigo-600 text-white' : 'bg-[#12121a] text-gray-500 hover:text-gray-300 border border-[#1e1e2e]'
                 }`}>
                 {f.label}
                 {f.key === 'pending' && communityPending > 0 && (
@@ -787,12 +826,7 @@ export default function Content() {
           ) : (
             <div className="space-y-3">
               {communityFiltered.map(post => (
-                <CommunityCard
-                  key={post.id}
-                  post={post}
-                  onApprove={approvePost(post)}
-                  onSkip={skipPost(post)}
-                />
+                <CommunityCard key={post.id} post={post} onApprove={approvePost(post)} onSkip={skipPost(post)} />
               ))}
             </div>
           )}
@@ -804,10 +838,10 @@ export default function Content() {
             <div className="text-[10px] text-gray-600 uppercase tracking-widest font-bold mb-3">Partnership Pipeline</div>
             <div className="flex gap-5 flex-wrap">
               {[
-                { label: 'Pending',  value: partners.filter(p => !p.sent_at).length,                 color: 'text-gray-300' },
-                { label: 'Sent',     value: partners.filter(p => p.sent_at && !p.replied_at).length, color: 'text-amber-400' },
-                { label: 'Replied',  value: partners.filter(p => p.replied_at).length,               color: 'text-green-400' },
-                { label: 'Active',   value: partners.filter(p => p.status === 'active').length,      color: 'text-indigo-400' },
+                { label: 'Pending', value: partners.filter(p => !p.sent_at).length,                 color: 'text-gray-300' },
+                { label: 'Sent',    value: partners.filter(p => p.sent_at && !p.replied_at).length, color: 'text-amber-400' },
+                { label: 'Replied', value: partners.filter(p => p.replied_at).length,               color: 'text-green-400' },
+                { label: 'Active',  value: partners.filter(p => p.status === 'active').length,      color: 'text-indigo-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="text-center min-w-[60px]">
                   <div className={`text-xl font-black ${color}`}>{value}</div>
@@ -817,16 +851,12 @@ export default function Content() {
             </div>
             <p className="text-[10px] text-gray-600 mt-3">Estimated value of 1 partnership: 500+ signups</p>
           </div>
-          <p className="text-xs text-gray-500 mb-4">
-            Their audience is our customer. Copy email → send → mark sent. One yes = hundreds of signups.
-          </p>
+          <p className="text-xs text-gray-500 mb-4">Their audience is our customer. Copy email → send → mark sent. One yes = hundreds of signups.</p>
           <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
             {partners.length === 0 ? (
               <p className="text-gray-600 text-sm text-center py-6">No partnership targets yet.</p>
             ) : (
-              partners.map(p => (
-                <PartnerRow key={p.id} partner={p} onSent={load} />
-              ))
+              partners.map(p => <PartnerRow key={p.id} partner={p} onSent={load} />)
             )}
           </div>
           <p className="text-[10px] text-gray-700 mt-3">Full email templates: docs/partnership-outreach-emails.md</p>

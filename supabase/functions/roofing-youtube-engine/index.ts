@@ -1,334 +1,253 @@
-// roofing-youtube-engine v1
-// 8 content slots/week, Claude script generation, Telegram inline button approvals
+// roofing-youtube-engine v2
+// 3 YouTube shorts per run, Mon+Thu cadence, 8-category rotation,
+// 30-day title dedup, auto-approve → voiceover pipeline (no Telegram approval)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-const WEEKLY_SCHEDULE = [
+const CATEGORIES = [
   {
-    day: "monday",
+    topic: "supplement_tips",
+    title_formula: "The ${amount} Supplement Most Contractors Miss After Hail Damage",
+    angle: "Specific line items adjusters routinely omit and exactly how to recover them",
+  },
+  {
+    topic: "homeowner_communication",
+    title_formula: "The One Text That Stops 80% of Homeowner Anxiety Calls",
+    angle: "Exact scripts that prevent homeowners from feeling ignored during the claim",
+  },
+  {
+    topic: "storm_strategy",
+    title_formula: "The 72-Hour Storm Playbook: How to Win Market Share After Hail",
+    angle: "Minute-by-minute response protocol that doubles inspection bookings",
+  },
+  {
+    topic: "business_ops",
+    title_formula: "Why Roofing Contractors Go Broke During Their Busiest Month",
+    angle: "Cash flow timing trap and the 3-step fix that eliminates it",
+  },
+  {
+    topic: "lead_gen",
+    title_formula: "6 Doors, 20 Minutes, 1 Extra Job Per Week — The Neighbor Knock",
+    angle: "Highest-ROI prospecting strategy in residential roofing, fully scripted",
+  },
+  {
     topic: "carrier_intelligence",
-    title_formula: "What [CARRIER] Is Doing Right Now in [MARKET] — [MONTH] [YEAR] Update",
-    pain_angle: "Carriers are quietly changing their supplement approval patterns and contractors are leaving money on the table",
-    portal_bridge: "The homeowner portal generates documentation that matches exactly what this carrier demands — show proof, get paid"
+    title_formula: "State Farm vs. Allstate vs. USAA: Who Actually Pays and How to Get It",
+    angle: "Carrier-specific documentation strategies that change the approval rate",
   },
   {
-    day: "tuesday",
-    topic: "supplement_deep_dive",
-    title_formula: "The [AMOUNT] Supplement Most Contractors Miss After Hail Damage",
-    pain_angle: "Adjusters bank on contractors not knowing specific line items that are always owed",
-    portal_bridge: "Roofing OS auto-generates the supplement request with the exact Xactimate codes — contractors who use it capture 40% more"
+    topic: "code_compliance",
+    title_formula: "The IRC Calculation That Ends Every Ventilation Argument",
+    angle: "Step-by-step math that makes ventilation supplements unarguable",
   },
   {
-    day: "wednesday",
-    topic: "storm_analysis",
-    title_formula: "[CITY] Hail Storm Damage Guide — What Homeowners Need to Know",
-    pain_angle: "Homeowners don't know what hail damage looks like or what they're owed — contractors who educate them win the job",
-    portal_bridge: "The homeowner portal shows real-time job updates and storm damage documentation — homeowners who see it sign faster"
+    topic: "technology_tools",
+    title_formula: "The $300/Month Software Stack That Runs a Tight Roofing Operation",
+    angle: "Exact tools, costs, and break-even points for a modern roofing crew",
   },
-  {
-    day: "thursday",
-    topic: "homeowner_management",
-    title_formula: "How Top Roofing Contractors Keep Homeowners from Going with the Cheapest Bid",
-    pain_angle: "Price shopping kills margins — contractors who build trust and transparency before the estimate win on value not price",
-    portal_bridge: "The homeowner portal creates transparency that eliminates price objections — show them everything and they stop shopping"
-  },
-  {
-    day: "friday",
-    topic: "business_intelligence",
-    title_formula: "[MONTH] Roofing Market Report — What the Data Says About [MARKET]",
-    pain_angle: "Most contractors operate on gut feel — the ones running data-driven operations are pulling away from the field",
-    portal_bridge: "Roofing OS tracks every job metric automatically — contractors get a live dashboard instead of spreadsheets"
-  },
-  {
-    day: "saturday",
-    topic: "case_study",
-    title_formula: "How One [MARKET] Contractor Added $[AMOUNT]/Month in Supplement Revenue",
-    pain_angle: "Real contractors are getting real results — specific numbers, specific processes, specific timeline",
-    portal_bridge: "This is what Roofing OS made possible — the system did the supplement work automatically"
-  },
-  {
-    day: "sunday",
-    topic: "quick_tip",
-    title_formula: "60-Second Roofing Tip: [SPECIFIC_TIP]",
-    pain_angle: "One actionable thing a contractor can do Monday morning to make more money",
-    portal_bridge: "Roofing OS automates this entire process — what takes contractors 2 hours takes the system 2 minutes"
-  },
-  {
-    day: "bonus",
-    topic: "trending",
-    title_formula: "Breaking: [TRENDING_TOPIC] — What It Means for Roofing Contractors",
-    pain_angle: "Industry news that affects contractor revenue, explained simply with action steps",
-    portal_bridge: "Stay ahead with the intelligence Roofing OS surfaces automatically"
-  }
 ];
 
-async function claude(prompt: string, maxTokens = 3000): Promise<string> {
+async function claude(prompt: string, maxTokens = 1500): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-5",
       max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }]
-    })
+      messages: [{ role: "user", content: prompt }],
+    }),
   });
   const data = await res.json();
   return data.content?.[0]?.text || "";
 }
 
-async function sendTelegramApproval(contentId: string, title: string, preview: string): Promise<string | null> {
-  const text = `🎬 *New YouTube Script Ready*\n\n*${title}*\n\n${preview.slice(0, 300)}...\n\n_Approve to save. Skip to discard._`;
-  const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text,
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "✅ Approve", callback_data: `approve_content_${contentId}` },
-          { text: "✏️ Edit", callback_data: `edit_content_${contentId}` },
-          { text: "❌ Skip", callback_data: `skip_content_${contentId}` }
-        ]]
-      }
-    })
-  });
-  const data = await res.json();
-  return data.result?.message_id?.toString() || null;
-}
-
-async function tg(text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000), parse_mode: "Markdown" })
-  }).catch(() => {});
-}
-
-async function getRecentCarrierIntel(): Promise<{ carrier: string; insight: string } | null> {
+async function getRecentTitles(): Promise<string[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await supabase
-    .from("carrier_intelligence")
-    .select("carrier_type, tips, approval_rate_pct")
-    .order("last_updated", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!data) return null;
-  return { carrier: data.carrier_type, insight: (data.tips || [])[0] || "" };
+    .from("roofing_content")
+    .select("title, scheduled_topic")
+    .in("type", ["youtube_short", "youtube_long", "youtube_script"])
+    .gte("created_at", since);
+  return (data || []).map((r: any) => (r.title || "").toLowerCase());
 }
 
-async function getRecentStorm(): Promise<{ city: string; hail_size: number; state: string } | null> {
+async function getRecentCategories(): Promise<string[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data } = await supabase
-    .from("hail_events")
-    .select("city, hail_size_inches, state")
+    .from("roofing_content")
+    .select("scheduled_topic")
+    .in("type", ["youtube_short", "youtube_long"])
+    .gte("created_at", since)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!data) return null;
-  return { city: data.city, hail_size: data.hail_size_inches, state: data.state };
+    .limit(20);
+  return (data || []).map((r: any) => r.scheduled_topic).filter(Boolean);
 }
 
-async function generateScript(slot: typeof WEEKLY_SCHEDULE[0], context: Record<string, string>): Promise<{ title: string; script: string; tiktok: string; hook: string; thumbnail_text: string }> {
+function pickNextCategories(recentCategories: string[], count: number): typeof CATEGORIES {
+  // Weight categories that haven't appeared recently
+  const categoryCounts: Record<string, number> = {};
+  for (const cat of CATEGORIES) categoryCounts[cat.topic] = 0;
+  for (const recent of recentCategories) {
+    if (categoryCounts[recent] !== undefined) categoryCounts[recent]++;
+  }
+  const sorted = [...CATEGORIES].sort((a, b) => categoryCounts[a.topic] - categoryCounts[b.topic]);
+  return sorted.slice(0, count);
+}
+
+function isTitleDuplicate(title: string, recentTitles: string[]): boolean {
+  const normalized = title.toLowerCase();
+  return recentTitles.some(existing => {
+    const words = existing.split(" ").filter(w => w.length > 4);
+    const matches = words.filter(w => normalized.includes(w)).length;
+    return matches >= 4;
+  });
+}
+
+async function generateShort(category: typeof CATEGORIES[0], context: Record<string, string>): Promise<{ title: string; script: string; hook: string; thumbnail_text: string } | null> {
   const market = context.market || "Denver, CO";
   const month = new Date().toLocaleString("en-US", { month: "long" });
   const year = new Date().getFullYear();
 
-  let title = slot.title_formula
-    .replace("[MARKET]", market)
-    .replace("[MONTH]", month)
-    .replace("[YEAR]", String(year))
-    .replace("[CARRIER]", context.carrier || "State Farm")
-    .replace("[AMOUNT]", context.amount || "$3,500")
-    .replace("[CITY]", context.city || market.split(",")[0])
-    .replace("[SPECIFIC_TIP]", context.tip || "How to Pre-Qualify Leads in 60 Seconds")
-    .replace("[TRENDING_TOPIC]", context.trending || "New Hail Season Forecast");
+  let title = category.title_formula
+    .replace("${amount}", context.amount || "$2,400")
+    .replace("${carrier}", context.carrier || "State Farm")
+    .replace("${market}", market)
+    .replace("${month}", month)
+    .replace("${year}", String(year));
 
-  const scriptPrompt = `You are writing a YouTube script for a roofing contractor educator channel. The audience is roofing contractors who want to make more money on insurance claims and run better businesses.
+  const script = await claude(
+    `Write a 60-90 second YouTube Shorts script for roofing contractors.
 
-TOPIC: ${slot.topic}
+TOPIC: ${category.topic}
 TITLE: ${title}
-PAIN ANGLE: ${slot.pain_angle}
-PORTAL BRIDGE (weave in naturally, never pitch directly): ${slot.portal_bridge}
-MARKET CONTEXT: ${context.market || "Denver, CO"} ${context.extraContext || ""}
+CORE ANGLE: ${category.angle}
+MARKET: ${market}
 
-Write a complete YouTube script with:
-1. HOOK (0-30 seconds): Open with a specific dollar amount or shocking stat. Create instant credibility. No "hey guys" openers.
-2. PROBLEM (30-90 seconds): Explain the exact pain. Be specific. Name the carrier, the line item, the dollar amount contractors are missing.
-3. EDUCATION (90 seconds - 5 minutes): The real content. Step-by-step. Specific. Actionable Monday morning.
-4. BRIDGE (30 seconds): Mention naturally how contractors using modern systems automate this. Don't name Roofing OS directly — let them ask.
-5. CTA (30 seconds): Tell them exactly what to do next. Comment their market. Subscribe. Check the link.
+Format:
+[HOOK] — First 3 seconds. One shocking number or fact. No "hey guys."
+[POINT 1] — 15 seconds. First actionable insight.
+[POINT 2] — 15 seconds. Second actionable insight.
+[POINT 3] — 15 seconds. Third actionable insight.
+[CTA] — 5 seconds. One action. "Comment your market below" or "Link in bio."
 
-Format: [HOOK], [PROBLEM], [EDUCATION], [BRIDGE], [CTA] sections clearly labeled.
-Tone: Direct, no-fluff, experienced contractor who figured it out.
-Length: ~1500-2000 words.`;
+Rules:
+- Speak directly to a roofing contractor watching on their phone
+- Every sentence must be concrete (dollar amounts, Xactimate codes, IRC sections, timeframes)
+- No filler words, no corporate language
+- End with a question or CTA that drives comments
+- Total word count: 120-180 words
 
-  const script = await claude(scriptPrompt, 3000);
+Return ONLY the script with section labels.`,
+    600
+  );
 
-  const tiktokPrompt = `Take the core insight from this YouTube script and write a 60-second TikTok/Reels script:
+  if (!script) return null;
 
-ORIGINAL SCRIPT SUMMARY:
-Topic: ${slot.topic}
-Title: ${title}
-Pain: ${slot.pain_angle}
-
-Write:
-- Hook line (first 3 seconds — must stop the scroll)
-- 3 punchy points (10 seconds each)
-- CTA (5 seconds)
-
-Format: [HOOK] [POINT 1] [POINT 2] [POINT 3] [CTA]
-Tone: Fast, punchy, no wasted words.`;
-
-  const tiktok = await claude(tiktokPrompt, 600);
-
-  // Extract hook from script
-  const hookMatch = script.match(/\[HOOK\]([\s\S]*?)\[PROBLEM\]/);
+  const hookMatch = script.match(/\[HOOK\]([\s\S]*?)(\[POINT|\[CTA)/);
   const hook = hookMatch ? hookMatch[1].trim().slice(0, 200) : script.slice(0, 200);
+  const thumbnail_text = title.split(":")[0].split("—")[0].trim().slice(0, 50).toUpperCase();
 
-  const thumbnail_text = title.split("—")[0].trim().slice(0, 60).toUpperCase();
-
-  return { title, script, tiktok, hook, thumbnail_text };
+  return { title, script, hook, thumbnail_text };
 }
 
-async function generateForSlot(slot: typeof WEEKLY_SCHEDULE[0]): Promise<void> {
-  try {
-    let context: Record<string, string> = { market: "Denver, CO" };
+async function getStormContext(): Promise<{ city: string; state: string } | null> {
+  const { data } = await supabase
+    .from("hail_events")
+    .select("city, state")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? { city: data.city, state: data.state } : null;
+}
 
-    if (slot.topic === "carrier_intelligence") {
-      const intel = await getRecentCarrierIntel();
-      if (intel) {
-        context.carrier = intel.carrier;
-        context.extraContext = intel.insight;
-      }
-    } else if (slot.topic === "storm_analysis") {
-      const storm = await getRecentStorm();
-      if (storm) {
-        context.city = storm.city;
-        context.market = `${storm.city}, ${storm.state}`;
-        context.extraContext = `Recent hail: ${storm.hail_size}" diameter`;
-      }
-    }
-
-    const { title, script, tiktok, hook, thumbnail_text } = await generateScript(slot, context);
-
-    // Save youtube script
-    const { data: ytContent } = await supabase
-      .from("roofing_content")
-      .insert({
-        type: "youtube_script",
-        title,
-        body: script,
-        status: "pending",
-        channel: "youtube",
-        hook,
-        thumbnail_text,
-        estimated_length_seconds: 480,
-        source_type: slot.topic,
-        market: context.market,
-        carrier: context.carrier || null,
-        scheduled_topic: slot.topic,
-        scheduled_day: slot.day,
-        tags: [slot.topic, slot.day, "youtube", context.market]
-      })
-      .select("id")
-      .single();
-
-    // Save tiktok companion
-    if (ytContent?.id) {
-      await supabase.from("roofing_content").insert({
-        type: "tiktok_script",
-        title: `[TikTok] ${title}`,
-        body: tiktok,
-        status: "pending",
-        channel: "tiktok",
-        hook: hook.slice(0, 100),
-        estimated_length_seconds: 60,
-        source_type: slot.topic,
-        market: context.market,
-        scheduled_topic: slot.topic,
-        scheduled_day: slot.day,
-        tags: [slot.topic, "tiktok", "short_form", context.market]
-      });
-    }
-
-    // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube scripts pending approval visible in Content tab
-    // if (ytContent?.id) {
-    //   const msgId = await sendTelegramApproval(ytContent.id, title, hook);
-    //   if (msgId) {
-    //     await supabase.from("roofing_content")
-    //       .update({ telegram_message_id: msgId })
-    //       .eq("id", ytContent.id);
-    //   }
-    // }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // MOVED_TO_DASHBOARD [date: 2026-05-17]: errors visible in System tab
-    // await tg(`❌ YouTube engine error for ${slot.day}/${slot.topic}: ${msg}`);
-  }
+async function getCarrierContext(): Promise<string | null> {
+  const { data } = await supabase
+    .from("carrier_intelligence")
+    .select("carrier_type")
+    .order("last_updated", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.carrier_type || null;
 }
 
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-engine ready" });
-
-  // Handle Telegram callback_query (approve/skip)
-  if (body.callback_query) {
-    const { data: callbackData, message } = body.callback_query;
-    const contentId = callbackData.replace(/^(approve|edit|skip)_content_/, "");
-    const action = callbackData.split("_")[0];
-
-    if (action === "approve") {
-      await supabase.from("roofing_content")
-        .update({ status: "approved", approved_at: new Date().toISOString() })
-        .eq("id", contentId);
-      // MOVED_TO_DASHBOARD [date: 2026-05-17]: approval status visible in Content tab
-      // await tg(`✅ YouTube script approved and queued for recording.`);
-    } else if (action === "skip") {
-      await supabase.from("roofing_content")
-        .update({ status: "skipped" })
-        .eq("id", contentId);
-    }
-    return Response.json({ ok: true });
-  }
+  if (body.test) return Response.json({ ok: true, message: "roofing-youtube-engine v2 ready" });
 
   const startMs = Date.now();
+  const count = Math.min(body.count || 3, 6);
 
-  // Generate for a specific slot or all pending slots for today
-  if (body.slot) {
-    const slot = WEEKLY_SCHEDULE.find(s => s.day === body.slot || s.topic === body.slot);
-    if (!slot) return Response.json({ error: "unknown slot" }, { status: 400 });
-    await generateForSlot(slot);
-    return Response.json({ ok: true, generated: 1, duration_ms: Date.now() - startMs });
+  const [recentTitles, recentCategories] = await Promise.all([
+    getRecentTitles(),
+    getRecentCategories(),
+  ]);
+
+  const storm = await getStormContext();
+  const carrier = await getCarrierContext();
+
+  const selectedCategories = pickNextCategories(recentCategories, count);
+  let generated = 0;
+  const titles: string[] = [];
+
+  for (const category of selectedCategories) {
+    const context: Record<string, string> = {
+      market: storm ? `${storm.city}, ${storm.state}` : "Denver, CO",
+      carrier: carrier || "State Farm",
+    };
+
+    const result = await generateShort(category, context);
+    if (!result) continue;
+
+    if (isTitleDuplicate(result.title, recentTitles)) {
+      continue;
+    }
+
+    const { error } = await supabase.from("roofing_content").insert({
+      type: "youtube_short",
+      format: "video",
+      title: result.title,
+      body: result.script,
+      hook: result.hook,
+      thumbnail_text: result.thumbnail_text,
+      status: "approved",
+      channel: "youtube",
+      scheduled_topic: category.topic,
+      market: context.market,
+      carrier: context.carrier || null,
+      tags: [category.topic, "youtube_short", context.market],
+      youtube_upload_ready: false,
+    });
+
+    if (!error) {
+      generated++;
+      titles.push(result.title);
+      recentTitles.push(result.title.toLowerCase());
+    }
+
+    await new Promise(r => setTimeout(r, 800));
   }
 
-  // Default: generate all 8 slots (called once per week or on-demand "youtube now")
-  const results: string[] = [];
-  for (const slot of WEEKLY_SCHEDULE) {
-    await generateForSlot(slot);
-    results.push(slot.day);
-    await new Promise(r => setTimeout(r, 1000));
-  }
-
-  // MOVED_TO_DASHBOARD [date: 2026-05-17]: YouTube engine summary visible in Content tab
-  // await tg(`🎬 *YouTube Engine Complete*\n${results.length} scripts generated and sent for approval.`);
-
-  await fetch(`${SUPABASE_URL}/functions/v1/system-heartbeat`, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ function_name: "roofing-youtube-engine", status: "ok", response_ms: Date.now() - startMs })
+  await supabase.from("system_heartbeats").insert({
+    function_name: "roofing-youtube-engine",
+    status: "ok",
+    response_ms: Date.now() - startMs,
+    checked_at: new Date().toISOString(),
   }).catch(() => {});
 
-  return Response.json({ ok: true, generated: results.length, slots: results, duration_ms: Date.now() - startMs });
+  return Response.json({
+    ok: true,
+    generated,
+    titles,
+    duration_ms: Date.now() - startMs,
+  });
 });

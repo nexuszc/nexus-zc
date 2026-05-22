@@ -1,5 +1,7 @@
-// roofing-community-monitor v3
+// roofing-community-monitor v4
 // 20 targeted search queries, 8 subreddits, ?ref=reddit attribution, no Telegram
+// Owned community (r/RoofingOS): score>=95 auto-post, 80-94 dashboard queue
+// Max 3 posts/day to r/RoofingOS, max 1 post/week per external subreddit
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -15,6 +17,8 @@ const REDDIT_PASSWORD      = Deno.env.get("REDDIT_PASSWORD") || "";
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const RELEVANCE_THRESHOLD = 7;
+const OWNED_SUBREDDIT = "RoofingOS";
+const OWNED_SUBREDDIT_URL = "https://reddit.com/r/RoofingOS";
 
 const QUERIES = [
   "companycam alternative",
@@ -174,9 +178,86 @@ async function alreadyTracked(url: string): Promise<boolean> {
   return !!data;
 }
 
+async function postsToOwnedCommunityToday(): Promise<number> {
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  const { count } = await supabase
+    .from("roofing_community_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("owns_community", true)
+    .eq("auto_posted", true)
+    .gte("posted_at", since.toISOString());
+  return count || 0;
+}
+
+async function postsToSubredditThisWeek(subreddit: string): Promise<number> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from("roofing_community_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("platform", "reddit")
+    .eq("auto_posted", true)
+    .ilike("thread_url", `%/r/${subreddit}/%`)
+    .gte("posted_at", since);
+  return count || 0;
+}
+
+async function postOwnedCommunityContent(limit = 1): Promise<{ posted: number }> {
+  if (!hasRedditCreds()) return { posted: 0 };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: posts } = await supabase
+    .from("roofing_community_posts")
+    .select("id, our_response, thread_title")
+    .eq("platform", "reddit")
+    .eq("owns_community", true)
+    .eq("auto_posted", false)
+    .eq("status", "approved")
+    .eq("schedule_date", today)
+    .limit(limit);
+
+  // Fall back to any approved unposted owned post
+  const targets = posts && posts.length > 0 ? posts : await (async () => {
+    const { data } = await supabase
+      .from("roofing_community_posts")
+      .select("id, our_response, thread_title")
+      .eq("platform", "reddit")
+      .eq("owns_community", true)
+      .eq("auto_posted", false)
+      .eq("status", "approved")
+      .order("created_at", { ascending: true })
+      .limit(limit);
+    return data || [];
+  })();
+
+  let posted = 0;
+  for (const p of targets) {
+    if (!p.our_response) continue;
+    const success = await postToReddit(OWNED_SUBREDDIT_URL, p.our_response);
+    if (success) {
+      await supabase.from("roofing_community_posts")
+        .update({ auto_posted: true, posted_at: new Date().toISOString() })
+        .eq("id", p.id);
+      posted++;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return { posted };
+}
+
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-community-monitor v3 ready" });
+
+  // Daily owned-community post (r/RoofingOS) — called by cron at 16:00 UTC
+  if (body.post_owned_community) {
+    if (!hasRedditCreds()) return Response.json({ ok: false, error: "Reddit credentials not configured" }, { status: 400 });
+    const todayCount = await postsToOwnedCommunityToday();
+    if (todayCount >= 3) return Response.json({ ok: true, skipped: true, reason: "daily_limit_reached", count: todayCount });
+    const limit = Math.min(body.limit || 1, 3 - todayCount);
+    const result = await postOwnedCommunityContent(limit);
+    return Response.json({ ok: true, ...result });
+  }
 
   // Autonomous batch post — triggered by nexus-core when >10 approved posts are queued
   if (body.batch_post) {
@@ -264,6 +345,10 @@ Deno.serve(async (req) => {
       const { score, reason, portal_relevant } = await scoreRelevance(post.title, post.content);
       if (score < RELEVANCE_THRESHOLD) { skippedLowScore++; continue; }
 
+      const isOwnedCommunity = post.url.includes(`/r/${OWNED_SUBREDDIT}/`);
+      const subredditMatch = post.url.match(/\/r\/([^/]+)\//);
+      const subredditName = subredditMatch?.[1] || "";
+
       const response = await claude(
         `You're a knowledgeable roofing contractor on Reddit/social media. Write a genuine, helpful reply.
 
@@ -289,9 +374,21 @@ Return ONLY the response text.`
 
       try {
         const confidenceScore = Math.min(100, score * 10);
-        const autoPost = score >= 9;
 
+        // Auto-post logic with rate limiting:
+        // - Owned community (r/RoofingOS): score>=95 + max 3/day
+        // - External subreddits: score>=9 (90) + max 1/week per subreddit
+        let autoPost = false;
         let actuallyPosted = false;
+
+        if (isOwnedCommunity) {
+          const todayCount = await postsToOwnedCommunityToday();
+          autoPost = score >= 9.5 && todayCount < 3;
+        } else if (subredditName) {
+          const weekCount = await postsToSubredditThisWeek(subredditName);
+          autoPost = score >= 9 && weekCount < 1;
+        }
+
         if (autoPost && post.platform === "reddit" && hasRedditCreds()) {
           actuallyPosted = await postToReddit(post.url, response);
         }
@@ -302,9 +399,10 @@ Return ONLY the response text.`
           thread_title: post.title.slice(0, 200),
           thread_content: post.content.slice(0, 500),
           our_response: response,
-          status: autoPost ? "approved" : "pending",
+          status: autoPost ? "approved" : (score >= 8 ? "pending" : "low_score"),
           portal_mentioned: portal_relevant,
           confidence_score: confidenceScore,
+          owns_community: isOwnedCommunity,
           auto_posted: actuallyPosted,
           ...(actuallyPosted ? { posted_at: new Date().toISOString() } : {}),
         }).select().single();
