@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v8
+# Last updated: May 22, 2026 — v9
 
 ---
 
@@ -190,7 +190,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-referral-engine` | See function source for details | Internal |
 | `roofing-self-improve` | See function source for details | Internal |
 | `roofing-seo-publisher` | See function source for details | Internal |
-| `roofing-shotstack-webhook` | See function source for details | Internal |
+| `roofing-shotstack-webhook` | Receives Shotstack render callbacks → sets video_url → triggers roofing-youtube-uploader | Internal |
 | `roofing-social-poster` | See function source for details | Internal |
 | `roofing-storm-marketing` | See function source for details | Internal |
 | `roofing-supplement-analyzer` | See function source for details | Internal |
@@ -203,9 +203,9 @@ Then productized and sold to other multi-business operators.
 | `roofing-weekly-marketing-report` | See function source for details | Internal |
 | `roofing-weekly-report` | See function source for details | Internal |
 | `roofing-whale-alert` | See function source for details | Internal |
-| `roofing-youtube-engine` | See function source for details | Internal |
-| `roofing-youtube-publisher` | See function source for details | Internal |
-| `roofing-youtube-uploader` | See function source for details | Internal |
+| `roofing-youtube-engine` | Generates YouTube scripts (8 slots/week) via Claude, saves to roofing_content | Cron Mon+Thu 13:00 UTC |
+| `roofing-youtube-publisher` | Approved scripts → ElevenLabs voiceover → Supabase Storage → blog post | On demand |
+| `roofing-youtube-uploader` | v4: {force_upload:true} picks queue; mp3_url → Shotstack render → webhook → YouTube upload; sets youtube_posted_at | Daily cron 21:00 UTC |
 | `send-email` | Send email via Resend | Internal |
 | `send-partnership-emails` | See function source for details | Internal |
 | `smoke-test` | See function source for details | Internal |
@@ -410,9 +410,17 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 21, 2026)
+## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
-**DONE this session:**
+**YouTube pipeline fix (May 22, 2026):**
+- Backfilled `youtube_posted_at` for all rows with `youtube_video_id` set (was never populated — caused re-upload loop)
+- `roofing-youtube-uploader` rewritten v3→v4: GitHub Actions render eliminated; now uses Shotstack API
+- Upload chain: `force_upload:true` → Shotstack render (black bg + title text + roofingos.dev watermark) → `roofing-shotstack-webhook` → YouTube upload → `youtube_posted_at` set
+- 4 items with missing voiceovers backfilled via `roofing-voiceover-engine`
+- Deleted duplicate `roofing-youtube-upload` cron; daily cron now sends `{"force_upload":true,"limit":1}` at 21:00 UTC
+- 13 items in queue draining 1/day; confirmed end-to-end: QPhoh8MbR74 live on YouTube
+
+**DONE previous session:**
 - Deployed roofing-aria-inbound v2 (614-line Twilio TwiML state machine, live on 720-500-6668)
 - Built autonomous growth machine (7 phases, all deployed + cron jobs live):
   - roofing-partner-scout: Monday 9am MT, finds 10 partnership targets/run via Serper
