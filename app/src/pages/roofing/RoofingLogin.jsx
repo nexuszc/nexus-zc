@@ -14,7 +14,7 @@ export default function RoofingLogin() {
 
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/roofing` },
+      options: { emailRedirectTo: `${window.location.origin}/roofing/jobs` },
     })
 
     if (err) {
@@ -26,43 +26,61 @@ export default function RoofingLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Roofing OS</h1>
-          <p className="text-gray-400 text-sm mt-2">Contractor Portal</p>
+    <div style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ width: '100%', maxWidth: '360px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ width: '52px', height: '52px', background: '#4a9eff', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', margin: '0 auto 16px' }}>🏠</div>
+          <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#0f1923', margin: 0, letterSpacing: '-0.5px' }}>Roofing OS</h1>
+          <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>Contractor Dashboard</p>
         </div>
 
         {sent ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-            <p className="text-green-400 text-lg font-semibold mb-2">Check your email</p>
-            <p className="text-gray-400 text-sm">We sent a magic link to <strong className="text-white">{email}</strong></p>
-            <p className="text-gray-500 text-xs mt-3">Click the link to sign in. No password needed.</p>
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '28px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '36px', marginBottom: '14px' }}>📬</div>
+            <p style={{ color: '#22c55e', fontSize: '17px', fontWeight: '700', margin: '0 0 8px' }}>Check your email</p>
+            <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>We sent a magic link to <strong style={{ color: '#0f1923' }}>{email}</strong></p>
+            <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '12px' }}>Click the link to sign in. No password needed.</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Email address</label>
+          <form onSubmit={handleSubmit} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '24px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', color: '#374151', marginBottom: '6px', letterSpacing: '0.03em' }}>
+                Email address
+              </label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
+                autoFocus
                 placeholder="you@yourbusiness.com"
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: '#f9fafb', border: '1px solid #e5e7eb',
+                  borderRadius: '10px', padding: '12px 14px',
+                  fontSize: '15px', color: '#0f1923', outline: 'none',
+                }}
+                onFocus={e => { e.target.style.borderColor = '#4a9eff'; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.12)' }}
+                onBlur={e => { e.target.style.borderColor = '#e5e7eb'; e.target.style.boxShadow = 'none' }}
               />
             </div>
-            {error && <p className="text-red-400 text-xs">{error}</p>}
+            {error && <p style={{ color: '#ef4444', fontSize: '13px', marginBottom: '12px', margin: '0 0 12px' }}>{error}</p>}
             <button
               type="submit"
               disabled={loading || !email}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg px-4 py-2.5 font-medium text-sm transition-colors"
+              style={{
+                width: '100%', background: loading || !email ? '#93c5fd' : '#4a9eff',
+                color: '#fff', border: 'none', borderRadius: '10px',
+                padding: '13px', fontSize: '15px', fontWeight: '700',
+                cursor: loading || !email ? 'not-allowed' : 'pointer',
+                transition: 'background 0.15s',
+              }}
             >
-              {loading ? 'Sending...' : 'Send Magic Link'}
+              {loading ? 'Sending…' : 'Send Magic Link'}
             </button>
-            <p className="text-center text-xs text-gray-500">
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#9ca3af', marginTop: '16px', marginBottom: 0 }}>
               New here?{' '}
-              <a href="https://roofingos.dev" className="text-orange-400 hover:text-orange-300" target="_blank" rel="noopener">
+              <a href="https://roofingos.dev" style={{ color: '#4a9eff', textDecoration: 'none' }} target="_blank" rel="noopener">
                 Create your free account →
               </a>
             </p>

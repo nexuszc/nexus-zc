@@ -1,175 +1,207 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useContractor } from '../../context/ContractorContext'
 
-const STAGES = [
-  { key: 'lead',             label: 'Lead',        color: 'text-gray-400',   dot: 'bg-gray-500' },
-  { key: 'estimate_sent',    label: 'Estimate',    color: 'text-blue-400',   dot: 'bg-blue-500' },
-  { key: 'contract_signed',  label: 'Signed',      color: 'text-violet-400', dot: 'bg-violet-500' },
-  { key: 'materials_ordered',label: 'Materials',   color: 'text-amber-400',  dot: 'bg-amber-500' },
-  { key: 'scheduled',        label: 'Scheduled',   color: 'text-orange-400', dot: 'bg-orange-500' },
-  { key: 'in_progress',      label: 'Active',      color: 'text-green-400',  dot: 'bg-green-500' },
-  { key: 'inspection',       label: 'Inspect',     color: 'text-teal-400',   dot: 'bg-teal-500' },
-  { key: 'invoiced',         label: 'Invoiced',    color: 'text-pink-400',   dot: 'bg-pink-500' },
-  { key: 'complete',         label: 'Complete',    color: 'text-emerald-400',dot: 'bg-emerald-500' },
-  { key: 'paid',             label: 'Paid',        color: 'text-gray-400',   dot: 'bg-gray-600' },
-]
+const C = {
+  bg: '#f9fafb', card: '#ffffff', text: '#0f1923', muted: '#6b7280',
+  subtle: '#f3f4f6', border: '#e5e7eb', primary: '#4a9eff',
+  primaryLight: '#eff6ff', success: '#22c55e', successLight: '#f0fdf4',
+  warn: '#f59e0b', warnLight: '#fffbeb', error: '#ef4444',
+}
+
+const STAGE_META = {
+  lead:              { label: 'Lead',        bg: '#f3f4f6', fg: '#6b7280' },
+  estimate_sent:     { label: 'Estimate',    bg: '#eff6ff', fg: '#2563eb' },
+  contract_signed:   { label: 'Signed',      bg: '#f5f3ff', fg: '#7c3aed' },
+  materials_ordered: { label: 'Materials',   bg: '#fffbeb', fg: '#d97706' },
+  scheduled:         { label: 'Scheduled',   bg: '#fff7ed', fg: '#ea580c' },
+  in_progress:       { label: 'Active',      bg: '#f0fdf4', fg: '#16a34a' },
+  inspection:        { label: 'Inspection',  bg: '#f0fdfa', fg: '#0d9488' },
+  invoiced:          { label: 'Invoiced',    bg: '#fdf4ff', fg: '#a21caf' },
+  complete:          { label: 'Complete',    bg: '#ecfdf5', fg: '#059669' },
+  paid:              { label: 'Paid',        bg: '#f3f4f6', fg: '#374151' },
+}
 
 const ACTIVE_KEYS = new Set(['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection'])
 
-function stageMeta(key) {
-  return STAGES.find(s => s.key === key) || { label: key, color: 'text-gray-400', dot: 'bg-gray-500' }
+const KANBAN_COLS = [
+  { label: 'Estimating', keys: ['lead','estimate_sent'] },
+  { label: 'Pre-Install', keys: ['contract_signed','materials_ordered','scheduled'] },
+  { label: 'Active', keys: ['in_progress','inspection'] },
+  { label: 'Done', keys: ['complete','invoiced','paid'] },
+]
+
+function stageMeta(s) {
+  return STAGE_META[s] || { label: s, bg: '#f3f4f6', fg: '#6b7280' }
 }
 
-function KpiCard({ label, value, valueColor = 'text-white', sub }) {
+function daysAgo(dateStr) {
+  if (!dateStr) return null
+  const d = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
+  return d === 0 ? 'today' : d === 1 ? '1 day' : `${d} days`
+}
+
+function StatCard({ label, value, sub, accent }) {
   return (
-    <div className="bg-gray-900/80 border border-orange-900/30 rounded-xl p-4 card-accent-orange">
-      <p className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">{label}</p>
-      <p className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-600 mt-1">{sub}</p>}
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px 18px' }}>
+      <p style={{ fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 6px' }}>{label}</p>
+      <p style={{ fontSize: '28px', fontWeight: '800', color: accent || C.text, margin: '0', letterSpacing: '-1px', lineHeight: 1.1 }}>{value}</p>
+      {sub && <p style={{ fontSize: '11px', color: C.muted, margin: '4px 0 0' }}>{sub}</p>}
     </div>
   )
 }
 
-function Skeleton({ className = '' }) {
-  return <div className={`skeleton ${className}`} />
-}
-
-function UpgradeNudge({ jobs, plan }) {
-  const planStr = (plan || '').toLowerCase()
-  const hasAria = planStr.includes('aria') || planStr.includes('all')
-  const hasSupp = planStr.includes('supplement') || planStr.includes('supp') || planStr.includes('all')
-
-  const insuranceJobs = jobs.filter(j => j.insurance_claim || j.claim_number).length
-
-  if (jobs.length >= 5 && !hasAria) {
-    return (
-      <div className="mx-6 lg:mx-10 mt-4 bg-cyan-900/20 border border-cyan-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-cyan-300 text-sm font-semibold">You have {jobs.length} jobs — add Aria to handle homeowner questions 24/7</p>
-          <p className="text-gray-500 text-xs mt-0.5">Aria answers calls, texts homeowners updates, and follows up on every job automatically.</p>
-        </div>
-        <a href="https://roofingos.dev/upgrade?plan=aria" target="_blank" rel="noopener"
-          className="shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-          Add Aria — $249/mo →
-        </a>
-      </div>
-    )
-  }
-
-  if (insuranceJobs >= 3 && !hasSupp) {
-    return (
-      <div className="mx-6 lg:mx-10 mt-4 bg-violet-900/20 border border-violet-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-violet-300 text-sm font-semibold">{insuranceJobs} insurance jobs — Supplement AI finds missed line items automatically</p>
-          <p className="text-gray-500 text-xs mt-0.5">Average recovery: $4,200 per job. At $99/job you keep nearly everything we recover.</p>
-        </div>
-        <a href="https://roofingos.dev/upgrade?plan=supplement" target="_blank" rel="noopener"
-          className="shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-          Add Supplement AI — $99/job →
-        </a>
-      </div>
-    )
-  }
-
-  return null
-}
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-
-function SupportChat({ contractorId, contractorName }) {
-  const [open, setOpen] = useState(false)
-  const [question, setQuestion] = useState('')
-  const [messages, setMessages] = useState([
-    { role: 'aria', text: 'Hi! I\'m Aria. Ask me anything about getting started — adding jobs, the homeowner portal, integrations, or features.' }
-  ])
-  const [asking, setAsking] = useState(false)
-
-  async function ask(e) {
-    e.preventDefault()
-    if (!question.trim() || asking) return
-    const q = question.trim()
-    setMessages(m => [...m, { role: 'user', text: q }])
-    setQuestion('')
-    setAsking(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/contractor-support`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ question: q, contractor_id: contractorId, contractor_name: contractorName }),
-      })
-      const data = await res.json()
-      setMessages(m => [...m, { role: 'aria', text: data.answer || 'Something went wrong. Try again.' }])
-    } catch {
-      setMessages(m => [...m, { role: 'aria', text: 'Network error. Try again.' }])
-    }
-    setAsking(false)
-  }
+function JobCard({ job, onPortalClick }) {
+  const navigate = useNavigate()
+  const s = stageMeta(job.status)
+  const contract = job.contract_amount || 0
+  const days = daysAgo(job.actual_start_date || job.created_at)
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-orange-600 hover:bg-orange-500 text-white rounded-full shadow-xl shadow-orange-900/40 flex items-center justify-center text-xl transition-colors"
-        title="Ask Aria"
-      >
-        {open ? '✕' : '💬'}
-      </button>
-      {open && (
-        <div className="fixed bottom-20 right-6 z-50 w-80 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl flex flex-col" style={{ maxHeight: '420px' }}>
-          <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-            <span className="text-sm font-semibold text-white">Aria Support</span>
-            <span className="text-xs text-gray-500 ml-auto">Ask anything</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ minHeight: 0 }}>
-            {messages.map((m, i) => (
-              <div key={i} className={`text-xs rounded-xl px-3 py-2 max-w-[90%] ${m.role === 'aria' ? 'bg-gray-800 text-gray-300 self-start' : 'bg-orange-600/20 text-white ml-auto'}`}>
-                {m.text}
-              </div>
-            ))}
-            {asking && <div className="bg-gray-800 text-gray-500 text-xs rounded-xl px-3 py-2 animate-pulse">Aria is thinking…</div>}
-          </div>
-          <form onSubmit={ask} className="p-3 border-t border-gray-800 flex gap-2">
-            <input
-              type="text"
-              value={question}
-              onChange={e => setQuestion(e.target.value)}
-              placeholder="How do I add a job?"
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-xs placeholder-gray-600 focus:border-orange-500 focus:outline-none"
-            />
-            <button type="submit" disabled={asking || !question.trim()} className="bg-orange-600 hover:bg-orange-500 disabled:opacity-40 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors">→</button>
-          </form>
+    <div
+      onClick={() => navigate(`/roofing/jobs/${job.id}`)}
+      style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px',
+        padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = C.primary; e.currentTarget.style.boxShadow = '0 2px 12px rgba(74,158,255,0.08)' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none' }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontWeight: '700', color: C.text, margin: '0 0 2px', fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+          <p style={{ fontSize: '13px', color: C.muted, margin: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address}</p>
+          {days && <p style={{ fontSize: '11px', color: '#9ca3af', margin: '4px 0 0' }}>{days} active</p>}
         </div>
-      )}
-    </>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0 }}>
+          <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
+          {contract > 0 && <p style={{ fontSize: '13px', fontWeight: '700', color: C.success, margin: 0 }}>${contract.toLocaleString()}</p>}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px', marginTop: '12px' }} onClick={e => e.stopPropagation()}>
+        {[
+          { icon: '📸', label: 'Photos', tab: 'photos' },
+          { icon: '💬', label: 'Message', tab: 'messages' },
+          { icon: '🔗', label: 'Portal', tab: 'portal' },
+        ].map(({ icon, label, tab }) => (
+          <button
+            key={tab}
+            onClick={() => navigate(`/roofing/jobs/${job.id}?tab=${tab}`)}
+            style={{
+              background: C.subtle, border: 'none', borderRadius: '8px',
+              padding: '5px 10px', fontSize: '12px', color: C.muted,
+              cursor: 'pointer', fontWeight: '500', transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#e5e7eb'}
+            onMouseLeave={e => e.currentTarget.style.background = C.subtle}
+          >
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
-function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) {
+function KanbanView({ jobs }) {
   const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
+      {KANBAN_COLS.map(col => {
+        const colJobs = jobs.filter(j => col.keys.includes(j.status))
+        return (
+          <div key={col.label}>
+            <p style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+              {col.label} <span style={{ color: '#9ca3af', fontWeight: '400' }}>({colJobs.length})</span>
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minHeight: '80px' }}>
+              {colJobs.map(job => {
+                const s = stageMeta(job.status)
+                return (
+                  <div
+                    key={job.id}
+                    onClick={() => navigate(`/roofing/jobs/${job.id}`)}
+                    style={{
+                      background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px',
+                      padding: '10px 12px', cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{ fontSize: '13px', fontWeight: '600', color: C.text, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+                    <p style={{ fontSize: '11px', color: C.muted, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address?.split(',')[0]}</p>
+                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 6px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
+                    {job.contract_amount > 0 && (
+                      <p style={{ fontSize: '11px', color: C.success, fontWeight: '600', margin: '4px 0 0' }}>${job.contract_amount.toLocaleString()}</p>
+                    )}
+                  </div>
+                )
+              })}
+              {colJobs.length === 0 && (
+                <div style={{ background: C.subtle, border: `1px dashed ${C.border}`, borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '11px', color: '#9ca3af', margin: 0 }}>—</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function BottomNav() {
+  const navigate = useNavigate()
+  const path = window.location.pathname
+  const tabs = [
+    { icon: '🏠', label: 'Jobs', path: '/roofing/jobs' },
+    { icon: '＋', label: 'New Job', path: '/roofing/jobs/new' },
+    { icon: '👥', label: 'Crew', path: '/roofing/crew' },
+    { icon: '⚙️', label: 'Settings', path: '/roofing/onboarding' },
+  ]
+  return (
+    <nav style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: C.card, borderTop: `1px solid ${C.border}`,
+      display: 'grid', gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
+      paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+    }}>
+      {tabs.map(t => {
+        const active = path === t.path || (t.path === '/roofing/jobs' && path.startsWith('/roofing/jobs/'))
+        return (
+          <button
+            key={t.path}
+            onClick={() => navigate(t.path)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', padding: '9px 0', border: 'none',
+              background: 'none', cursor: 'pointer',
+              color: active ? C.primary : '#9ca3af',
+            }}
+          >
+            <span style={{ fontSize: '20px', lineHeight: 1 }}>{t.icon}</span>
+            <span style={{ fontSize: '10px', marginTop: '3px', fontWeight: active ? '700' : '500' }}>{t.label}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+function FirstJobExperience({ contractorId, contractorClientId }) {
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ name: '', address: '', email: '', phone: '' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   async function handleCreate(e) {
     e.preventDefault()
-    setError('')
-    if (!name.trim() || !address.trim()) { setError('Name and address are required.'); return }
+    if (!form.name.trim() || !form.address.trim()) { setError('Name and address are required.'); return }
     setSaving(true)
+    setError('')
     try {
-      // Check job limit before creating
-      const { data: acct } = await supabase
-        .from('contractor_accounts')
-        .select('plan, job_limit, jobs_used')
-        .eq('id', contractorId)
-        .single()
-
-      if (acct && acct.plan === 'free') {
+      const { data: acct } = await supabase.from('contractor_accounts').select('plan, job_limit, jobs_used').eq('id', contractorId).single()
+      if (acct?.plan === 'free') {
         const used = acct.jobs_used || 0
         const limit = acct.job_limit || 5
         if (used >= limit) {
@@ -179,414 +211,236 @@ function FirstJobExperience({ contractorId, contractorClientId, onJobCreated }) 
           return
         }
       }
-
-      const { data: job, error: err } = await supabase
-        .from('roofing_jobs')
-        .insert({
-          homeowner_name: name.trim(),
-          property_address: address.trim(),
-          homeowner_email: email.trim() || null,
-          homeowner_phone: phone.trim() || null,
-          contractor_id: contractorId,
-          client_id: contractorClientId || null,
-          status: 'lead',
-        })
-        .select()
-        .single()
+      const { data: job, error: err } = await supabase.from('roofing_jobs').insert({
+        homeowner_name: form.name.trim(), property_address: form.address.trim(),
+        homeowner_email: form.email.trim() || null, homeowner_phone: form.phone.trim() || null,
+        contractor_id: contractorId, client_id: contractorClientId || null, status: 'lead',
+      }).select().single()
       if (err) throw err
-
-      // Increment jobs_used
-      if (acct) {
-        await supabase.from('contractor_accounts')
-          .update({ jobs_used: (acct.jobs_used || 0) + 1, total_jobs: (acct.jobs_used || 0) + 1 })
-          .eq('id', contractorId)
-      }
-
+      if (acct) await supabase.from('contractor_accounts').update({ jobs_used: (acct.jobs_used || 0) + 1 }).eq('id', contractorId)
       navigate(`/roofing/jobs/${job.id}`)
-    } catch (e) {
+    } catch {
       setError('Could not create job. Try again.')
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 py-16 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-orange-600/20 border border-orange-600/30 flex items-center justify-center text-2xl mb-6">
-        🏠
-      </div>
-      <h2 className="text-white text-2xl font-black tracking-tight mb-2">Add your first job</h2>
-      <p className="text-gray-500 text-sm mb-8 max-w-sm">
-        Enter a homeowner and address. Your portal link generates instantly — share it and they can track their job in real time.
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '32px 24px', textAlign: 'center', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ fontSize: '40px', marginBottom: '16px' }}>🏠</div>
+      <h2 style={{ fontSize: '22px', fontWeight: '800', color: C.text, margin: '0 0 8px', letterSpacing: '-0.5px' }}>Add your first job</h2>
+      <p style={{ color: C.muted, fontSize: '14px', margin: '0 0 28px', maxWidth: '340px', lineHeight: 1.5 }}>
+        Enter a homeowner and address. Their portal link generates instantly — share it and they track their job in real time.
       </p>
-      <form onSubmit={handleCreate} className="w-full max-w-sm space-y-3 text-left">
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Name</label>
-          <input
-            autoFocus
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="Jane Smith"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Property Address</label>
-          <input
-            type="text"
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            placeholder="4821 Timberline Dr, Aurora CO 80016"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Email <span className="text-gray-600 normal-case font-normal">(portal link sent here)</span></label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="jane@gmail.com"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">Homeowner Phone <span className="text-gray-600 normal-case font-normal">(optional)</span></label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="(720) 555-0100"
-            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:border-orange-500 focus:outline-none"
-          />
-        </div>
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+      <form onSubmit={handleCreate} style={{ width: '100%', maxWidth: '380px', textAlign: 'left' }}>
+        {[
+          { key: 'name', label: 'Homeowner Name *', placeholder: 'Jane Smith', type: 'text' },
+          { key: 'address', label: 'Property Address *', placeholder: '4821 Timberline Dr, Aurora CO', type: 'text' },
+          { key: 'email', label: 'Email (portal link sent here)', placeholder: 'jane@gmail.com', type: 'email' },
+          { key: 'phone', label: 'Phone (optional)', placeholder: '(720) 555-0100', type: 'tel' },
+        ].map(f => (
+          <div key={f.key} style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>{f.label}</label>
+            <input
+              type={f.type} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+              placeholder={f.placeholder}
+              style={{ width: '100%', boxSizing: 'border-box', background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px', fontSize: '14px', color: C.text, outline: 'none' }}
+            />
+          </div>
+        ))}
+        {error && <p style={{ color: C.error, fontSize: '13px', margin: '0 0 12px' }}>{error}</p>}
         <button
-          type="submit"
-          disabled={saving}
-          className="w-full bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors text-sm mt-1"
+          type="submit" disabled={saving}
+          style={{ width: '100%', background: saving ? '#93c5fd' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: saving ? 'not-allowed' : 'pointer', marginTop: '4px' }}
         >
-          {saving ? 'Creating job…' : 'Create job & open portal →'}
+          {saving ? 'Creating…' : 'Create Job & Open Portal →'}
         </button>
       </form>
-      <p className="text-gray-600 text-xs mt-4">
-        The homeowner gets a magic link — no app download required.
-      </p>
     </div>
   )
 }
 
-function ReferralWidget({ contractorId, plan }) {
-  const [code, setCode] = useState(null)
-  const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (!contractorId) return
-    supabase.from('contractor_accounts').select('referral_code').eq('id', contractorId).single()
-      .then(({ data }) => { if (data?.referral_code) setCode(data.referral_code) })
-  }, [contractorId])
-
-  const planStr = (plan || '').toLowerCase()
-  const isFree = !planStr || planStr === 'free'
-  if (!isFree || !code) return null
-
-  const link = `https://roofingos.dev/r/${code}`
-
-  function copy() {
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  return (
-    <div className="mx-6 lg:mx-10 mt-4 bg-orange-900/10 border border-orange-600/20 rounded-xl p-4">
-      <p className="text-orange-300 text-sm font-semibold mb-0.5">Know a roofer?</p>
-      <p className="text-gray-500 text-xs mb-3">
-        Share your link — they get a free portal, you get 30 days of Portal Pro free.
-      </p>
-      <div className="flex items-center gap-2">
-        <code className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-orange-400 font-mono truncate">
-          roofingos.dev/r/{code}
-        </code>
-        <button
-          onClick={copy}
-          className="shrink-0 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-    </div>
-  )
-}
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 
 export default function RoofingDashboard() {
   const { contractorClientId, contractor } = useContractor()
-
-  if (contractor && contractor.clients && contractor.clients.onboarding_complete === false) {
-    return <Navigate to="/roofing/onboarding" replace />
-  }
-
   const [jobs, setJobs] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [stageFilter, setStageFilter] = useState('active')
-  const [onboardingProgress, setOnboardingProgress] = useState(null)
+  const [viewMode, setViewMode] = useState('list')
+  const [pendingMessages, setPendingMessages] = useState(0)
 
-  useEffect(() => {
-    if (contractorClientId === undefined) return
-    let query = supabase.from('roofing_jobs').select('*, clients(name, brand_name)').order('created_at', { ascending: false })
-    if (contractorClientId) query = query.eq('client_id', contractorClientId)
+  const load = useCallback(async () => {
+    if (contractor === undefined) return
+    const cid = contractor?.id
+    const ccid = contractorClientId
 
-    query.then(({ data }) => {
-      setJobs(data || [])
-      setStats({
-        total: data?.length || 0,
-        active: data?.filter(j => ACTIVE_KEYS.has(j.status)).length || 0,
-        revenue: data?.reduce((acc, j) => acc + (j.contract_amount || 0), 0) || 0,
-        collected: data?.reduce((acc, j) => acc + (j.amount_paid || 0), 0) || 0,
-      })
-      setLoading(false)
-      if (data && data.length > 0) {
-        const ids = data.map(j => j.id)
-        supabase.from('job_documents').select('*', { count: 'exact', head: true }).in('job_id', ids).then(({ count }) => {
-          setStats(prev => ({ ...prev, docsGenerated: count || 0 }))
-        })
-      }
-    })
-  }, [contractorClientId])
+    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id').order('created_at', { ascending: false })
+    if (cid) query = query.eq('contractor_id', cid)
+    else if (ccid) query = query.eq('client_id', ccid)
 
-  useEffect(() => {
-    if (!contractor?.clients) return
-    const c = contractor.clients
-    if (c.onboarding_complete === true) return
-    const steps = [
-      { label: 'Phone number', done: !!c.phone },
-      { label: 'Service area', done: !!c.service_area },
-      { label: 'Notification email', done: !!c.notification_email },
-      { label: 'Brand color / tagline', done: !!(c.company_tagline || c.primary_color) },
-      { label: 'Onboarding complete', done: !!c.onboarding_complete },
-    ]
-    setOnboardingProgress(steps)
-  }, [contractor])
+    const { data } = await query
+    const list = data || []
+    setJobs(list)
+
+    const active = list.filter(j => ACTIVE_KEYS.has(j.status)).length
+    const revenue = list.reduce((a, j) => a + (j.contract_amount || 0), 0)
+    const collected = list.reduce((a, j) => a + (j.amount_paid || 0), 0)
+    setStats({ total: list.length, active, revenue, collected })
+    setLoading(false)
+
+    if (list.length > 0) {
+      const ids = list.map(j => j.id)
+      const { count } = await supabase.from('portal_messages').select('*', { count: 'exact', head: true }).in('job_id', ids).eq('requires_response', true).neq('sender_type', 'contractor')
+      setPendingMessages(count || 0)
+    }
+  }, [contractor, contractorClientId])
+
+  useEffect(() => { load() }, [load])
 
   const stageCounts = jobs.reduce((acc, j) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc }, {})
+  const displayJobs = stageFilter === 'active' ? jobs.filter(j => ACTIVE_KEYS.has(j.status)) : stageFilter === 'all' ? jobs : jobs.filter(j => j.status === stageFilter)
 
-  const displayJobs = stageFilter === 'active'
-    ? jobs.filter(j => ACTIVE_KEYS.has(j.status))
-    : stageFilter === 'all'
-    ? jobs
-    : jobs.filter(j => j.status === stageFilter)
+  const font = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }
 
-  if (!loading && jobs.length === 0 && !onboardingProgress) {
+  if (loading) {
     return (
-      <div className="animate-fade-in">
-        <div className="px-6 lg:px-10 pt-8 pb-2">
-          <p className="text-[10px] font-bold text-orange-600/60 uppercase tracking-[0.2em] mb-1">Roofing OS · Operations</p>
-          <h1 className="text-[28px] font-black text-white tracking-tight leading-none">Job Pipeline</h1>
+      <div style={{ minHeight: '100vh', background: C.bg, ...font }}>
+        <div style={{ padding: '20px 20px 0', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px 18px', height: '72px', animation: 'pulse 1.5s infinite' }} />
+          ))}
         </div>
-        <FirstJobExperience
-          contractorId={contractor?.id}
-          contractorClientId={contractorClientId}
-        />
-        <ReferralWidget contractorId={contractor?.id} plan={contractor?.plan || contractor?.clients?.plan} />
-        <SupportChat contractorId={contractor?.id} contractorName={contractor?.clients?.name || contractor?.clients?.brand_name} />
+        <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }`}</style>
       </div>
     )
   }
 
+  if (!loading && jobs.length === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '70px' }}>
+        <FirstJobExperience contractorId={contractor?.id} contractorClientId={contractorClientId} />
+        <BottomNav />
+      </div>
+    )
+  }
+
+  const planStr = (contractor?.plan || '').toLowerCase()
+  const isFree = !planStr || planStr === 'free'
+  const hasAria = planStr.includes('aria') || planStr.includes('all') || planStr.includes('pro')
+  const insuranceJobs = jobs.filter(j => j.insurance_claim).length
+
   return (
-    <div className="animate-fade-in">
-      {onboardingProgress && (
-        <div className="mx-6 lg:mx-10 mt-6 bg-amber-900/20 border border-amber-600/30 rounded-xl p-4 flex items-center justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="text-amber-400 text-sm font-semibold mb-1.5">
-              Setup incomplete — {onboardingProgress.filter(s => s.done).length} of {onboardingProgress.length} steps done
+    <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '70px' }}>
+      {/* Header */}
+      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Roofing OS</p>
+          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: C.text, letterSpacing: '-0.3px' }}>{contractor?.company_name || 'Job Pipeline'}</h1>
+        </div>
+        <Link to="/roofing/jobs/new" style={{ background: C.primary, color: '#fff', textDecoration: 'none', borderRadius: '10px', padding: '9px 16px', fontSize: '14px', fontWeight: '700', flexShrink: 0 }}>
+          + New Job
+        </Link>
+      </div>
+
+      {/* Pending messages banner */}
+      {pendingMessages > 0 && (
+        <div style={{ margin: '12px 20px', background: C.primaryLight, border: `1px solid ${C.primary}33`, borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#1d4ed8' }}>💬 {pendingMessages} homeowner message{pendingMessages > 1 ? 's' : ''} need{pendingMessages === 1 ? 's' : ''} a reply</p>
+          <button onClick={() => setStageFilter('active')} style={{ fontSize: '12px', color: C.primary, background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>View Active →</button>
+        </div>
+      )}
+
+      {/* Upgrade nudge */}
+      {isFree && jobs.length >= 4 && !hasAria && (
+        <div style={{ margin: '12px 20px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#166534' }}>You have {jobs.length} jobs — unlock Pro for unlimited + homeowner portal</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#4ade80' }}>Portal Pro: branded portal, payment tracking, insurance status for homeowners.</p>
+          </div>
+          <a href="https://roofingos.dev/upgrade" target="_blank" rel="noopener" style={{ flexShrink: 0, background: C.success, color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Upgrade →
+          </a>
+        </div>
+      )}
+
+      {!hasAria && insuranceJobs >= 2 && (
+        <div style={{ margin: '12px 20px', background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <div>
+            <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#6b21a8' }}>You have {insuranceJobs} insurance jobs — Supplement AI finds missed line items</p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#a855f7' }}>Average recovery $4,200/job. Only $99/job.</p>
+          </div>
+          <a href="https://roofingos.dev/upgrade?plan=supplement" target="_blank" rel="noopener" style={{ flexShrink: 0, background: '#9333ea', color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Add Supplement AI →
+          </a>
+        </div>
+      )}
+
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '14px 20px 0' }}>
+        <StatCard label="Active Jobs" value={stats.active} />
+        <StatCard label="Total Revenue" value={`$${((stats.revenue || 0) / 1000).toFixed(0)}k`} accent={C.success} />
+        <StatCard label="Collected" value={`$${((stats.collected || 0) / 1000).toFixed(0)}k`} sub={stats.revenue > 0 ? `${Math.round((stats.collected / stats.revenue) * 100)}% of contract` : null} />
+        <StatCard label="Pending Msgs" value={pendingMessages} accent={pendingMessages > 0 ? C.warn : C.muted} />
+      </div>
+
+      {/* Filter + view toggle */}
+      <div style={{ padding: '14px 20px 0' }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '12px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <p style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Pipeline</p>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {['list', 'kanban'].map(v => (
+                <button key={v} onClick={() => setViewMode(v)}
+                  style={{ padding: '3px 10px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: '600', background: viewMode === v ? C.primary : C.subtle, color: viewMode === v ? '#fff' : C.muted }}>
+                  {v === 'list' ? '☰ List' : '⊞ Board'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <button onClick={() => setStageFilter('active')}
+              style={{ padding: '5px 12px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: stageFilter === 'active' ? C.primary : C.subtle, color: stageFilter === 'active' ? '#fff' : C.muted }}>
+              Active ({stats.active || 0})
+            </button>
+            {Object.entries(STAGE_META).map(([key, meta]) => {
+              const count = stageCounts[key] || 0
+              if (!count) return null
+              return (
+                <button key={key} onClick={() => setStageFilter(key)}
+                  style={{ padding: '5px 12px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: stageFilter === key ? meta.bg : C.subtle, color: stageFilter === key ? meta.fg : C.muted }}>
+                  {meta.label} · {count}
+                </button>
+              )
+            })}
+            <button onClick={() => setStageFilter('all')}
+              style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '500', background: stageFilter === 'all' ? C.subtle : 'none', color: C.muted }}>
+              All {jobs.length}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Job list / kanban */}
+      <div style={{ padding: '12px 20px 0' }}>
+        {viewMode === 'kanban' ? (
+          <KanbanView jobs={displayJobs} />
+        ) : displayJobs.length === 0 ? (
+          <div style={{ background: C.card, border: `1px dashed ${C.border}`, borderRadius: '12px', padding: '40px 24px', textAlign: 'center' }}>
+            <p style={{ color: C.muted, margin: '0 0 4px', fontWeight: '600' }}>No jobs here</p>
+            <p style={{ color: '#9ca3af', fontSize: '13px', margin: 0 }}>
+              {stageFilter === 'active' ? 'No active jobs right now.' : `No "${stageFilter.replace(/_/g,' ')}" jobs.`}
             </p>
-            <div className="flex gap-1.5 flex-wrap">
-              {onboardingProgress.map(s => (
-                <span key={s.label} className={`text-xs px-2 py-0.5 rounded-full ${s.done ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-500'}`}>
-                  {s.done ? '✓' : '○'} {s.label}
-                </span>
-              ))}
-            </div>
           </div>
-          <Link to="/roofing/onboarding"
-            className="shrink-0 bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-            Finish Setup →
-          </Link>
-        </div>
-      )}
-      {!loading && <UpgradeNudge jobs={jobs} plan={contractor?.plan || contractor?.clients?.plan} />}
-      {!loading && <ReferralWidget contractorId={contractor?.id} plan={contractor?.plan || contractor?.clients?.plan} />}
-
-      {/* Header — orange branded, full width */}
-      <div className="relative overflow-hidden border-b border-white/[0.06]">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-600/[0.06] via-transparent to-transparent pointer-events-none" />
-        <div className="absolute -top-12 -left-12 w-64 h-64 bg-orange-600/8 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative px-6 lg:px-10 pt-8 pb-8">
-          <div className="flex items-start justify-between gap-4 mb-8">
-            <div>
-              <p className="text-[10px] font-bold text-orange-600/60 uppercase tracking-[0.2em] mb-1.5">Roofing OS · Operations</p>
-              <h1 className="text-[28px] font-black text-white tracking-tight leading-none">Job Pipeline</h1>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Link to="/roofing/crew" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
-                Crew
-              </Link>
-              <Link to="/roofing/measurements" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
-                Measurements
-              </Link>
-              <Link to="/roofing/integrations" className="text-sm text-gray-500 hover:text-white px-3 py-2 rounded-xl border border-white/[0.06] hover:border-white/10 transition-all">
-                Integrations
-              </Link>
-              <Link to="/roofing/jobs/new"
-                className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl px-4 py-2 text-sm font-bold transition-all shadow-lg shadow-orange-900/30">
-                + New Job
-              </Link>
-            </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {displayJobs.map(job => <JobCard key={job.id} job={job} />)}
           </div>
-
-          {/* KPI row */}
-          {loading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
-              {[
-                { value: stats.total, label: 'Total Jobs', gradient: 'from-white to-orange-300' },
-                { value: stats.active, label: 'Active', gradient: 'from-white to-orange-200' },
-                { value: `$${(stats.revenue||0).toLocaleString()}`, label: 'Contract Value', gradient: 'from-white to-amber-300' },
-                { value: `$${(stats.collected||0).toLocaleString()}`, label: 'Collected', gradient: 'from-white to-emerald-300',
-                  sub: stats.revenue > 0 ? `${Math.round((stats.collected/stats.revenue)*100)}% of contract` : null },
-                { value: stats.docsGenerated ?? '—', label: 'Docs Generated', gradient: 'from-white to-blue-300' },
-              ].map((kpi, i) => (
-                <div key={i}>
-                  <div className={`text-[38px] font-black leading-none tracking-tight tabular-nums bg-gradient-to-br ${kpi.gradient} bg-clip-text text-transparent`}>
-                    {kpi.value}
-                  </div>
-                  <div className="text-[13px] font-semibold text-white/80 mt-2">{kpi.label}</div>
-                  {kpi.sub && <div className="text-xs text-gray-600 mt-0.5">{kpi.sub}</div>}
-                  <div className="mt-3 h-px bg-gradient-to-r from-orange-600/20 to-transparent" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      <div className="px-6 lg:px-10 py-6">
-
-      {/* Pipeline stage strip */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-5">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Pipeline</h3>
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            onClick={() => setStageFilter('active')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === 'active' ? 'bg-orange-600/20 text-orange-300 ring-1 ring-orange-600/40' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-            }`}
-          >
-            Active ({stats.active || 0})
-          </button>
-          {STAGES.map(s => {
-            const count = stageCounts[s.key] || 0
-            if (count === 0) return null
-            return (
-              <button
-                key={s.key}
-                onClick={() => setStageFilter(s.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  stageFilter === s.key ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                {s.label} · {count}
-              </button>
-            )
-          })}
-          <button
-            onClick={() => setStageFilter('all')}
-            className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              stageFilter === 'all' ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            All {jobs.length}
-          </button>
-        </div>
-      </div>
-
-      {/* Job list */}
-      {loading ? (
-        <div className="space-y-2">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-        </div>
-      ) : displayJobs.length === 0 ? (
-        <div className="bg-gray-900 border border-gray-800 border-dashed rounded-xl py-12 text-center">
-          <p className="text-gray-400 text-sm font-medium mb-1">No jobs here</p>
-          <p className="text-gray-600 text-xs mb-4">
-            {stageFilter === 'active' ? 'No active jobs in progress' : `No jobs with status "${stageFilter}"`}
-          </p>
-          <Link to="/roofing/jobs/new"
-            className="text-orange-400 hover:text-orange-300 text-sm font-medium transition-colors">
-            Create your first job →
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {displayJobs.map(job => {
-            const s = stageMeta(job.status)
-            const collected = job.amount_paid || 0
-            const contract = job.contract_amount || 0
-            const pct = contract > 0 ? Math.round((collected / contract) * 100) : 0
-
-            return (
-              <Link key={job.id} to={`/roofing/jobs/${job.id}`}
-                className="block bg-gray-900 border border-gray-800 hover:border-orange-900/50 rounded-xl p-4 transition-all group">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-1.5 h-1.5 rounded-full ${s.dot} shrink-0`} />
-                      <p className="text-white font-medium group-hover:text-orange-300 transition-colors truncate">{job.homeowner_name}</p>
-                    </div>
-                    <p className="text-gray-500 text-sm ml-3.5 truncate">{job.property_address}</p>
-                    <div className="flex items-center gap-2 mt-1.5 ml-3.5 flex-wrap">
-                      {job.job_type && (
-                        <span className="text-xs text-gray-600">{job.job_type.replace(/_/g, ' ')}</span>
-                      )}
-                      {job.clients?.brand_name || job.clients?.name ? (
-                        <span className="text-xs text-gray-700">· {job.clients?.brand_name || job.clients?.name}</span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className={`text-xs font-semibold ${s.color}`}>{s.label}</span>
-                    {contract > 0 && (
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-amber-400">${contract.toLocaleString()}</p>
-                        {collected > 0 && (
-                          <p className="text-xs text-gray-600">{pct}% collected</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Payment progress bar */}
-                {contract > 0 && collected > 0 && (
-                  <div className="mt-3 w-full bg-gray-800 rounded-full h-0.5">
-                    <div className="bg-emerald-500 h-0.5 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
-                  </div>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      )}
-      </div>
-      <SupportChat contractorId={contractor?.id} contractorName={contractor?.clients?.name || contractor?.clients?.brand_name} />
+      <BottomNav />
     </div>
   )
 }
