@@ -232,11 +232,14 @@ input::placeholder { color: #3a3a4a; }
 
   <!-- Success view -->
   <div class="success-view" id="success-view">
-    <div class="checkmark">📬</div>
-    <h2>Check your email</h2>
-    <p>We sent a magic link to<br><span class="email-highlight" id="success-email"></span></p>
-    <p style="margin-top:12px;color:var(--muted);font-size:13px;">Click it to access your dashboard — no password needed.</p>
-    <p class="sub-note">Didn't get it? Check spam or <a href="/signup" style="color:var(--muted)">try again</a>.</p>
+    <div class="checkmark">🎉</div>
+    <h2>Account created</h2>
+    <p>Welcome to Roofing OS,<br><span class="email-highlight" id="success-email"></span></p>
+    <p style="margin-top:12px;color:var(--muted);font-size:13px;">Check your email for a welcome message with next steps.</p>
+    <p style="margin-top:16px">
+      <a href="https://roofingos.dev/dashboard" style="display:inline-block;background:var(--orange);color:white;padding:12px 24px;border-radius:10px;font-weight:700;text-decoration:none;font-size:15px;">Go to Your Dashboard →</a>
+    </p>
+    <p class="sub-note">Questions? Reply to your welcome email anytime.</p>
   </div>
 
 </div>
@@ -289,39 +292,12 @@ form.addEventListener('submit', async (e) => {
     const signupData = await signupRes.json();
 
     if (!signupRes.ok || signupData.error) {
-      // Duplicate email is OK — still send the magic link
       const isDuplicate = (signupData.error || '').toLowerCase().includes('duplicate') ||
                           (signupData.error || '').toLowerCase().includes('unique');
       if (!isDuplicate) {
         showError(signupData.error || 'Something went wrong. Please try again.');
         return;
       }
-    }
-
-    // Step 2: Send magic link
-    submitBtn.textContent = 'Sending magic link…';
-    const otpRes = await fetch(SUPABASE_URL + '/auth/v1/otp', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON,
-        'Authorization': 'Bearer ' + SUPABASE_ANON,
-      },
-      body: JSON.stringify({
-        email: owner_email,
-        options: { emailRedirectTo: 'https://app.nexuszc.com/roofing/jobs' },
-      }),
-    });
-
-    if (!otpRes.ok) {
-      const otpData = await otpRes.json().catch(() => ({}));
-      const msg = (otpData.msg || otpData.error_description || otpData.message || '').toLowerCase();
-      const isRateLimit = otpRes.status === 429 || msg.includes('rate') || msg.includes('security');
-      if (isRateLimit) {
-        showError('Already sent a link — check your email (including spam). It\'s valid for 24 hours.');
-        return;
-      }
-      // Non-fatal for other errors — account was created, welcome email already sent
     }
 
     showSuccess(owner_email);

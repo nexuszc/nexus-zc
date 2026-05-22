@@ -59,9 +59,9 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
 <p class="sub" style="margin-top:0">Your account is active. Here's how to get started.</p>
 <hr>
 <h3>Step 1 — Log into your dashboard</h3>
-<p>Go to your contractor dashboard and enter your email to get a magic link — no password needed:</p>
-<p style="margin:16px 0"><a href="https://app.nexuszc.com/roofing/login" class="cta">Log Into Your Dashboard →</a></p>
-<p class="sub">Use this email: ${ownerEmail}<br>We'll send you a one-click login link. No password ever.</p>
+<p>Go to your contractor dashboard and log in with your phone number:</p>
+<p style="margin:16px 0"><a href="https://roofingos.dev/dashboard" class="cta">Open Your Dashboard →</a></p>
+<p class="sub">Enter the phone number you used to sign up. We'll text you a one-click login link.</p>
 <hr>
 <h3>Step 2 — Create your first job</h3>
 <p>Call or text <strong>${twilioNumber}</strong> to start a job with your voice. Say the homeowner's name, address, and insurance carrier. We handle the rest.</p>

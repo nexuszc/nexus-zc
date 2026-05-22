@@ -14,7 +14,7 @@ export default function RoofingLogin() {
 
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: 'https://app.nexuszc.com/roofing/jobs' },
+      options: { emailRedirectTo: 'https://roofingos.dev/dashboard' },
     })
 
     if (err) {

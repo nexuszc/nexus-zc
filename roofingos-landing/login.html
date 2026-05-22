@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In — Roofing OS</title>
+<meta name="description" content="Sign in to your Roofing OS contractor dashboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --card: #16161f;
+  --border: #1e1e2e;
+  --blue: #3b82f6;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --orange: #e85d26;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(10,10,15,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+}
+.logo { font-size: 18px; font-weight: 900; color: var(--text); text-decoration: none; letter-spacing: -0.03em; }
+.logo em { color: var(--orange); font-style: normal; }
+.nav-signup { font-size: 13px; color: var(--muted); text-decoration: none; }
+.nav-signup:hover { color: var(--text); }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 80px;
+}
+
+.card-header { text-align: center; margin-bottom: 32px; }
+.card-header h1 {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 10px;
+}
+.card-header p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.field { margin-bottom: 16px; }
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus { border-color: var(--orange); }
+input::placeholder { color: #3a3a4a; }
+
+.btn {
+  width: 100%;
+  background: var(--orange);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: background 0.15s, transform 0.1s;
+  margin-top: 8px;
+}
+.btn:hover:not(:disabled) { background: #d44f1e; transform: translateY(-1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.footer-note {
+  text-align: center;
+  font-size: 12px;
+  color: #3a3a4a;
+  margin-top: 16px;
+}
+.footer-note a { color: var(--muted); text-decoration: none; }
+.footer-note a:hover { color: var(--text); }
+
+.error-msg {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+
+.sent-view {
+  text-align: center;
+  display: none;
+}
+.sent-view .icon { font-size: 48px; margin-bottom: 20px; }
+.sent-view h2 {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+}
+.sent-view p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+.sent-view .email-hl { color: var(--text); font-weight: 600; }
+.sent-view .sub-note { font-size: 12px; color: #3a3a4a; margin-top: 20px; }
+
+@media (max-width: 480px) {
+  .card { padding: 28px 20px; }
+  .card-header h1 { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="logo">Roofing<em>OS</em></a>
+  <a href="/signup" class="nav-signup">New here? Create free account →</a>
+</nav>
+
+<div class="card">
+
+  <div id="form-view">
+    <div class="card-header">
+      <h1>Sign in to your dashboard</h1>
+      <p>Enter your phone number and we'll text you a login link.</p>
+    </div>
+
+    <div class="error-msg" id="error-msg"></div>
+
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="phone">Phone Number <span style="color:#ef4444">*</span></label>
+        <input type="tel" id="phone" name="phone" placeholder="+1 (720) 555-0100" required autocomplete="tel">
+      </div>
+
+      <button type="submit" class="btn" id="submit-btn">Send Login Link →</button>
+    </form>
+
+    <p class="footer-note">Don't have an account? <a href="/signup">Create one free →</a></p>
+  </div>
+
+  <div class="sent-view" id="sent-view">
+    <div class="icon">📱</div>
+    <h2>Check your texts</h2>
+    <p>We sent a login link to<br><span class="email-hl" id="sent-phone"></span></p>
+    <p style="margin-top:12px;color:var(--muted);font-size:13px;">Tap it to open your dashboard — no password needed.</p>
+    <p class="sub-note">Didn't get it? <a href="/login" style="color:var(--muted)">Try again</a>.</p>
+  </div>
+
+</div>
+
+<script>
+const API = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/contractor-auth';
+
+const form     = document.getElementById('login-form');
+const submitBtn = document.getElementById('submit-btn');
+const errorMsg  = document.getElementById('error-msg');
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Send Login Link →';
+}
+
+function showSent(phone) {
+  document.getElementById('form-view').style.display = 'none';
+  document.getElementById('sent-phone').textContent = phone;
+  document.getElementById('sent-view').style.display = 'block';
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorMsg.style.display = 'none';
+
+  const phone = document.getElementById('phone').value.trim();
+  if (!phone) { showError('Phone number is required.'); return; }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Sending…';
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send_magic_link', phone }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      showSent(phone);
+    } else {
+      showError(data.error || 'Phone number not found. Check your number or create a free account.');
+    }
+  } catch {
+    showError('Network error. Please check your connection and try again.');
+  }
+});
+</script>
+
+</body>
+</html>
