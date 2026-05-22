@@ -512,12 +512,12 @@ async function autonomousAct(): Promise<string[]> {
     }
   } catch { /* non-fatal */ }
 
-  // 5. Aria queue depth — auto-refill if fewer than 50 pending calls
+  // 5. Aria queue depth — auto-refill if fewer than 50 queued calls
   try {
     const { count: pendingQ } = await supabase
       .from("aria_call_queue")
       .select("*", { count: "exact", head: true })
-      .eq("status", "pending")
+      .eq("status", "queued")
       .gte("fire_at", new Date().toISOString());
 
     if ((pendingQ || 0) < 50) {
@@ -547,7 +547,7 @@ async function autonomousAct(): Promise<string[]> {
           contact_name: p.company_name,
           contact_type: "roofing_prospect",
           fire_at:      fireAt,
-          status:       "pending",
+          status:       "queued",
           attempt_count: 0,
           queue_reason: "auto_refill",
           metadata:     { state: p.state, city: p.city },

@@ -188,12 +188,12 @@ Deno.serve(async () => {
 
   // ── PHASE 7: SELF-HEALING PIPELINE ─────────────────────────────────────────
 
-  // 11. Aria queue < 100 pending → auto-refill from roofing_prospects
+  // 11. Aria queue < 100 queued → auto-refill from roofing_prospects
   try {
     const { count: ariaQ } = await supabase
       .from("aria_call_queue")
       .select("*", { count: "exact", head: true })
-      .eq("status", "pending")
+      .eq("status", "queued")
       .gte("fire_at", new Date().toISOString());
 
     if ((ariaQ || 0) < 100) {
@@ -220,7 +220,7 @@ Deno.serve(async () => {
         await supabase.from("aria_call_queue").insert({
           call_type: "cold_outreach", contact_phone: p.phone,
           contact_name: p.company_name, contact_type: "roofing_prospect",
-          fire_at: fireAt, status: "pending", attempt_count: 0,
+          fire_at: fireAt, status: "queued", attempt_count: 0,
           queue_reason: "health_monitor_refill",
           metadata: { state: p.state, city: p.city },
         }).catch(() => {});
@@ -400,7 +400,7 @@ Deno.serve(async () => {
           await supabase.from("aria_call_queue").insert({
             call_type: "cold_outreach", contact_phone: p.phone,
             contact_name: p.company_name, contact_type: "roofing_prospect",
-            fire_at: fireAt, status: "pending", attempt_count: 0,
+            fire_at: fireAt, status: "queued", attempt_count: 0,
             queue_reason: "zero_signup_scale",
             metadata: { state: p.state, city: p.city },
           }).catch(() => {});
