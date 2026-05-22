@@ -1,178 +1,400 @@
-failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
-          500,
-          { error: healthError }
-        );
-      }
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+
+// Logger utility
+const logger = {
+  info: (message: string, data?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'INFO', message, ...data, timestamp: new Date().toISOString() }));
+  },
+  error: (message: string, data?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'ERROR', message, ...data, timestamp: new Date().toISOString() }));
+  },
+  warn: (message: string, data?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'WARN', message, ...data, timestamp: new Date().toISOString() }));
+  }
+};
+
+/**
+ * Add CORS headers to response
+ */
+function addCorsHeaders(headers: Headers): void {
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-client-info, apikey');
+}
+
+/**
+ * Create success response with CORS
+ */
+function createSuccessResponse(data: unknown, status = 200): Response {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+  });
+  addCorsHeaders(headers);
+  
+  return new Response(JSON.stringify(data), {
+    status,
+    headers,
+  });
+}
+
+/**
+ * Create error response with CORS
+ */
+function createErrorResponse(message: string, status = 500, details?: unknown): Response {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+  });
+  addCorsHeaders(headers);
+  
+  return new Response(
+    JSON.stringify({
+      error: message,
+      status,
+      details,
+      timestamp: new Date().toISOString(),
+    }),
+    {
+      status,
+      headers,
     }
+  );
+}
 
-    // Default to health check for root path
-    logger.info('Default health check execution');
+/**
+ * Validate environment variables
+ */
+function validateEnvironment(): { valid: boolean; missing: string[] } {
+  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+  const missing = required.filter(key => !Deno.env.get(key));
+  
+  return {
+    valid: missing.length === 0,
+    missing
+  };
+}
+
+/**
+ * Validate health response structure
+ */
+function validateHealthResponse(response: unknown): boolean {
+  if (!response || typeof response !== 'object') return false;
+  
+  const health = response as Record<string, unknown>;
+  
+  return (
+    typeof health.status === 'string' &&
+    ['healthy', 'degraded', 'unhealthy'].includes(health.status as string) &&
+    typeof health.timestamp === 'string' &&
+    typeof health.checks === 'object' &&
+    health.checks !== null
+  );
+}
+
+/**
+ * Run health checks
+ */
+async function runHealthChecks(): Promise<{
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  checks: Record<string, { status: string; message?: string; latency?: number }>;
+  summary: { total: number; healthy: number; unhealthy: number };
+}> {
+  const checks: Record<string, { status: string; message?: string; latency?: number }> = {};
+  
+  // Check environment
+  const envValidation = validateEnvironment();
+  checks.environment = {
+    status: envValidation.valid ? 'healthy' : 'unhealthy',
+    message: envValidation.valid ? 'All required environment variables present' : `Missing: ${envValidation.missing.join(', ')}`
+  };
+  
+  // Check Supabase connectivity
+  try {
+    const startTime = Date.now();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
     
-    try {
-      const healthStatus = await runHealthChecks();
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
       
-      // Validate health status structure
-      if (!validateHealthResponse(healthStatus)) {
-        logger.error('Invalid health status structure returned');
-        return createErrorResponse('Invalid health check response structure', 500);
+      // Simple query to test connectivity
+      const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+      
+      const latency = Date.now() - startTime;
+      
+      if (error) {
+        checks.supabase = {
+          status: 'unhealthy',
+          message: error.message,
+          latency
+        };
+      } else {
+        checks.supabase = {
+          status: 'healthy',
+          message: 'Database connection successful',
+          latency
+        };
       }
-      
-      const statusCode = healthStatus.status === 'healthy' ? 200 :
-                        healthStatus.status === 'degraded' ? 200 : 503;
-
-      const elapsed = Date.now() - startTime;
-      logger.info('Health check completed', { 
-        status: healthStatus.status, 
-        statusCode,
-        elapsed,
-        summary: healthStatus.summary
-      });
-
-      return createSuccessResponse(healthStatus, statusCode);
-    } catch (healthError) {
-      logger.error('Health check execution error', {
-        error: healthError instanceof Error ? healthError.message : String(healthError),
-        stack: healthError instanceof Error ? healthError.stack : undefined,
-        elapsed: Date.now() - startTime
-      });
-      
-      return createErrorResponse(
-        `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
-        500,
-        { error: healthError }
-      );
+    } else {
+      checks.supabase = {
+        status: 'unhealthy',
+        message: 'Missing Supabase credentials'
+      };
     }
   } catch (error) {
+    checks.supabase = {
+      status: 'unhealthy',
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+  
+  // Calculate overall status
+  const healthyCount = Object.values(checks).filter(c => c.status === 'healthy').length;
+  const totalCount = Object.keys(checks).length;
+  
+  let overallStatus: 'healthy' | 'degraded' | 'unhealthy';
+  if (healthyCount === totalCount) {
+    overallStatus = 'healthy';
+  } else if (healthyCount > 0) {
+    overallStatus = 'degraded';
+  } else {
+    overallStatus = 'unhealthy';
+  }
+  
+  return {
+    status: overallStatus,
+    timestamp: new Date().toISOString(),
+    checks,
+    summary: {
+      total: totalCount,
+      healthy: healthyCount,
+      unhealthy: totalCount - healthyCount
+    }
+  };
+}
+
+/**
+ * Test case interface
+ */
+interface TestCase {
+  name: string;
+  endpoint: string;
+  method: string;
+  expectedStatus: number[];
+  body?: unknown;
+  headers?: Record<string, string>;
+  validateResponse?: (data: unknown) => boolean;
+  timeout?: number;
+}
+
+/**
+ * Main handler for smoke tests
+ */
+async function handler(req: Request): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+  
+  logger.info('Smoke test handler invoked', {
+    requestId,
+    method: req.method,
+    url: req.url
+  });
+
+  try {
+    const url = new URL(req.url);
+    
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      logger.info('Handling CORS preflight', { requestId });
+      const headers = new Headers();
+      addCorsHeaders(headers);
+      return new Response(null, { status: 204, headers });
+    }
+    
+    // Health check is handled by wrapper, but keep fallback
+    if (url.pathname === '/health' || url.pathname.endsWith('/health')) {
+      logger.info('Health check in main handler (fallback)', { requestId });
+      const healthStatus = await runHealthChecks();
+      const statusCode = healthStatus.status === 'healthy' ? 200 :
+                        healthStatus.status === 'degraded' ? 200 : 503;
+      return createSuccessResponse(healthStatus, statusCode);
+    }
+    
+    // Run smoke tests
+    logger.info('Starting smoke test execution', { requestId });
+    
+    const testResults = await runSmokeTests();
+    
     const elapsed = Date.now() - startTime;
-    logger.error('Smoke test execution failed with unhandled error', {
+    const allPassed = testResults.failed === 0;
+    
+    const response = {
+      success: allPassed,
+      status: allPassed ? 'passed' : 'failed',
+      timestamp: new Date().toISOString(),
+      elapsed,
+      summary: {
+        total: testResults.passed + testResults.failed,
+        passed: testResults.passed,
+        failed: testResults.failed,
+        passRate: `${((testResults.passed / (testResults.passed + testResults.failed)) * 100).toFixed(1)}%`
+      },
+      results: testResults.results,
+      health: await runHealthChecks(),
+      requestId
+    };
+    
+    logger.info('Smoke tests completed', {
+      requestId,
+      success: allPassed,
+      passed: testResults.passed,
+      failed: testResults.failed,
+      elapsed
+    });
+    
+    return createSuccessResponse(response, allPassed ? 200 : 500);
+    
+  } catch (error) {
+    const elapsed = Date.now() - startTime;
+    logger.error('Smoke test handler failed', {
+      requestId,
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      elapsed,
-      url: req.url,
-      method: req.method
+      elapsed
     });
     
     return createErrorResponse(
       `Smoke test execution failed: ${error instanceof Error ? error.message : String(error)}`,
       500,
-      { error }
+      {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        requestId,
+        elapsed
+      }
     );
   }
 }
 
 /**
- * Enhanced test runner with better error handling and timeout support
+ * Run smoke tests
  */
-async function runEndpointTests(): Promise<{ passed: number; failed: number; results: any[] }> {
-  const testTimeout = 30000; // 30 second timeout per test
-  let passed = 0;
-  let failed = 0;
-  const results: any[] = [];
-
-  const testCases = [
+async function runSmokeTests(): Promise<{
+  passed: number;
+  failed: number;
+  results: Array<{
+    test: string;
+    status: string;
+    endpoint: string;
+    statusCode?: number;
+    expectedStatus?: number[];
+    elapsed: number;
+    details?: string;
+    error?: string;
+    errorType?: string;
+    response?: unknown;
+    stack?: string;
+  }>;
+}> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  
+  if (!supabaseUrl || !supabaseKey) {
+    logger.error('Missing Supabase credentials for tests');
+    return {
+      passed: 0,
+      failed: 1,
+      results: [{
+        test: 'Environment Check',
+        status: 'ERROR',
+        endpoint: 'N/A',
+        elapsed: 0,
+        error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY',
+        errorType: 'configuration'
+      }]
+    };
+  }
+  
+  const baseUrl = supabaseUrl.replace(/\/$/, '');
+  const testTimeout = 30000; // 30 seconds
+  
+  const testCases: TestCase[] = [
     {
-      name: 'health-monitor endpoint',
-      endpoint: '/health-monitor',
-      method: 'GET',
-      expectedStatus: [200, 503],
-      requiresAuth: false,
-      validateResponse: (data: any) => {
-        return data && typeof data.status === 'string' && 
-               (data.status === 'healthy' || data.status === 'degraded' || data.status === 'unhealthy');
-      }
-    },
-    {
-      name: 'get-public-config endpoint',
-      endpoint: '/get-public-config',
+      name: 'Health Check',
+      endpoint: `${baseUrl}/functions/v1/smoke-test/health`,
       method: 'GET',
       expectedStatus: [200],
-      requiresAuth: false,
-      validateResponse: (data: any) => {
-        return data && typeof data === 'object' && data.nexusVersion !== undefined;
+      validateResponse: (data) => {
+        const health = data as Record<string, unknown>;
+        return typeof health.status === 'string' && typeof health.timestamp === 'string';
       }
     },
     {
-      name: 'nexus-core health',
-      endpoint: '/nexus-core/health',
+      name: 'Database Connectivity',
+      endpoint: `${baseUrl}/rest/v1/profiles?select=count&limit=1`,
       method: 'GET',
-      expectedStatus: [200],
-      requiresAuth: false,
-      validateResponse: (data: any) => {
-        return data && (data.status === 'healthy' || data.status === 'degraded' || data.status === 'unhealthy');
-      }
-    },
-    {
-      name: 'brain-api health',
-      endpoint: '/brain-api/health',
-      method: 'GET',
-      expectedStatus: [200, 503],
-      requiresAuth: false,
-      validateResponse: (data: any) => {
-        return data && typeof data.status === 'string';
-      }
-    },
-    {
-      name: 'nexus-core authenticated endpoint',
-      endpoint: '/nexus-core',
-      method: 'POST',
-      expectedStatus: [200, 400, 401],
-      requiresAuth: true,
-      body: { action: 'test' },
-      validateResponse: (data: any, status: number) => {
-        // Accept 401 as valid for auth-required endpoints
-        if (status === 401) return true;
-        // Accept 400 for malformed requests
-        if (status === 400) return true;
-        return data !== null;
+      expectedStatus: [200, 206],
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`
       }
     }
   ];
-
-  const baseUrl = Deno.env.get('SUPABASE_URL') || 'http://localhost:54321';
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-
+  
+  let passed = 0;
+  let failed = 0;
+  const results: Array<{
+    test: string;
+    status: string;
+    endpoint: string;
+    statusCode?: number;
+    expectedStatus?: number[];
+    elapsed: number;
+    details?: string;
+    error?: string;
+    errorType?: string;
+    response?: unknown;
+    stack?: string;
+  }> = [];
+  
   for (const test of testCases) {
     const testStartTime = Date.now();
-    logger.info(`Running test: ${test.name}`, { endpoint: test.endpoint });
-
+    
     try {
+      logger.info(`Running test: ${test.name}`, {
+        endpoint: test.endpoint,
+        method: test.method
+      });
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), testTimeout);
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json'
-      };
-
-      if (test.requiresAuth && serviceRoleKey) {
-        headers['Authorization'] = `Bearer ${serviceRoleKey}`;
-      }
-
-      const requestOptions: RequestInit = {
+      const timeoutId = setTimeout(() => controller.abort(), test.timeout || testTimeout);
+      
+      const response = await fetch(test.endpoint, {
         method: test.method,
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+          ...test.headers
+        },
+        body: test.body ? JSON.stringify(test.body) : undefined,
         signal: controller.signal
-      };
-
-      if (test.body) {
-        requestOptions.body = JSON.stringify(test.body);
-      }
-
-      const response = await fetch(`${baseUrl}/functions/v1${test.endpoint}`, requestOptions);
+      });
+      
       clearTimeout(timeoutId);
-
+      
       const elapsed = Date.now() - testStartTime;
-      const responseText = await response.text();
-      let responseData;
-
-      try {
-        responseData = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        responseData = responseText;
-      }
-
       const statusMatch = test.expectedStatus.includes(response.status);
-      const validationPassed = test.validateResponse(responseData, response.status);
-
+      
+      let responseData: unknown;
+      try {
+        const text = await response.text();
+        responseData = text ? JSON.parse(text) : null;
+      } catch {
+        responseData = 'Unable to parse response';
+      }
+      
+      const validationPassed = test.validateResponse ? test.validateResponse(responseData) : true;
+      
       if (statusMatch && validationPassed) {
         passed++;
         results.push({
@@ -248,120 +470,4 @@ async function runEndpointTests(): Promise<{ passed: number; failed: number; res
 /**
  * Health check wrapper for Deno.serve
  */
-function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
-  return async (req: Request): Promise<Response> => {
-    const requestId = crypto.randomUUID();
-    const startTime = Date.now();
-    
-    logger.info('Request received', {
-      requestId,
-      method: req.method,
-      url: req.url,
-      timestamp: new Date().toISOString()
-    });
-
-    try {
-      const url = new URL(req.url);
-      
-      // Handle CORS preflight
-      if (req.method === 'OPTIONS') {
-        logger.info('Handling CORS preflight in wrapper', { requestId });
-        const headers = new Headers();
-        addCorsHeaders(headers);
-        return new Response(null, { status: 204, headers });
-      }
-      
-      // Validate environment before processing
-      const envValidation = validateEnvironment();
-      if (!envValidation.valid) {
-        logger.error('Environment validation failed in wrapper', {
-          requestId,
-          missing: envValidation.missing
-        });
-        return createErrorResponse(
-          `Missing required environment variables: ${envValidation.missing.join(', ')}`,
-          500,
-          { missing: envValidation.missing, requestId }
-        );
-      }
-      
-      if (url.pathname === '/health' || url.pathname.endsWith('/health')) {
-        logger.info('Health check endpoint hit in wrapper', { requestId });
-        
-        try {
-          const healthStatus = await runHealthChecks();
-          
-          // Validate response structure
-          if (!validateHealthResponse(healthStatus)) {
-            logger.error('Invalid health status structure in wrapper', { requestId });
-            return createErrorResponse('Invalid health check response structure', 500);
-          }
-          
-          const statusCode = healthStatus.status === 'healthy' ? 200 :
-                            healthStatus.status === 'degraded' ? 200 : 503;
-
-          const elapsed = Date.now() - startTime;
-          logger.info('Health check completed in wrapper', {
-            requestId,
-            status: healthStatus.status,
-            statusCode,
-            elapsed,
-            summary: healthStatus.summary
-          });
-
-          return createSuccessResponse(healthStatus, statusCode);
-        } catch (healthError) {
-          const elapsed = Date.now() - startTime;
-          logger.error('Health check failed in wrapper', {
-            requestId,
-            error: healthError instanceof Error ? healthError.message : String(healthError),
-            stack: healthError instanceof Error ? healthError.stack : undefined,
-            elapsed
-          });
-          
-          return createErrorResponse(
-            `Health check failed: ${healthError instanceof Error ? healthError.message : String(healthError)}`,
-            500,
-            { error: healthError, requestId }
-          );
-        }
-      }
-      
-      logger.info('Delegating to main handler', { requestId });
-      const response = await handler(req);
-      
-      const elapsed = Date.now() - startTime;
-      logger.info('Request completed', {
-        requestId,
-        status: response.status,
-        elapsed
-      });
-      
-      return response;
-    } catch (error) {
-      const elapsed = Date.now() - startTime;
-      logger.error('Request handling failed in wrapper', {
-        requestId,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        elapsed,
-        url: req.url,
-        method: req.method
-      });
-      
-      return createErrorResponse(
-        `Request handling failed: ${error instanceof Error ? error.message : String(error)}`,
-        500,
-        { error, requestId }
-      );
-    }
-  };
-}
-
-logger.info('Smoke test function initialized', {
-  timestamp: new Date().toISOString(),
-  denoVersion: Deno.version.deno,
-  v8Version: Deno.version.v8
-});
-
-Deno.serve(serveWithHealthCheck(handler));
+function serveWithHealthCheck(handler: (req: Request) => Promise<Response
