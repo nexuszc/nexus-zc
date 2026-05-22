@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       const phone = normalizePhone(call.contact_phone);
       if (!phone) {
         await supabase.from("aria_call_queue")
-          .update({ status: "failed", last_attempt_at: new Date().toISOString() })
+          .update({ status: "skipped", last_attempt_at: new Date().toISOString() })
           .eq("id", call.id);
         skipped++;
         continue;
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
       function_name: "aria-queue-processor",
       status: errors > 0 ? "error" : "ok",
       response_ms: Date.now() - startMs,
-      error_message: errors > 0 ? `${errors} call errors, ${skipped} skipped (bad phone)` : null,
+      error_message: errors > 0 ? `${errors} call errors` : null,
       metadata: { fired, blocked, errors, skipped, total: readyToFire.length },
       recorded_at: new Date().toISOString(),
     });

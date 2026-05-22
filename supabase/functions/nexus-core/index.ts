@@ -14,7 +14,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 // ── UTILITIES ─────────────────────────────────────────────────────────────────
 
 async function ai(prompt: string, maxTokens = 1500): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const call = () => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
@@ -27,12 +27,18 @@ async function ai(prompt: string, maxTokens = 1500): Promise<string> {
       messages: [{ role: "user", content: prompt }]
     })
   });
+  let res = await call();
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 60_000));
+    res = await call();
+    if (res.status === 429) throw new Error("RateLimitError: still rate-limited after 60s backoff — skipping cycle");
+  }
   const data = await res.json();
   return data.content?.[0]?.text || "";
 }
 
 async function aiHaiku(prompt: string, maxTokens = 400): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const call = () => fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "x-api-key": ANTHROPIC_API_KEY,
@@ -45,6 +51,12 @@ async function aiHaiku(prompt: string, maxTokens = 400): Promise<string> {
       messages: [{ role: "user", content: prompt }]
     })
   });
+  let res = await call();
+  if (res.status === 429) {
+    await new Promise(r => setTimeout(r, 60_000));
+    res = await call();
+    if (res.status === 429) throw new Error("RateLimitError: still rate-limited after 60s backoff — skipping cycle");
+  }
   const data = await res.json();
   return data.content?.[0]?.text || "";
 }
