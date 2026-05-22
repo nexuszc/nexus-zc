@@ -1,255 +1,235 @@
 // supabase/functions/smoke-test-runner/index.ts
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-// CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
 
-// Simple logger utility
-const logger = {
+interface Logger {
+  log: (level: string, message: string, meta?: any) => void;
+}
+
+const logger: Logger = {
   log: (level: string, message: string, meta?: any) => {
     const timestamp = new Date().toISOString();
     console.log(JSON.stringify({ timestamp, level, message, ...meta }));
   }
 };
 
-// Perform comprehensive health checks
 async function performHealthCheck() {
-  const checks: any[] = [];
+  const checks = [];
   let allPassed = true;
 
-  try {
-    // 1. Environment variables check
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-      
-      if (!supabaseUrl || !supabaseAnonKey) {
-        throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
-      }
+  // Check environment variables
+  const envCheck = {
+    name: 'environment_variables',
+    status: 'ok' as 'ok' | 'error',
+    details: {} as any
+  };
 
-      checks.push({
-        name: 'environment_variables',
-        status: 'passed',
-        timestamp: new Date().toISOString(),
-        details: {
-          SUPABASE_URL: !!supabaseUrl,
-          SUPABASE_ANON_KEY: !!supabaseAnonKey
-        }
-      });
-    } catch (error) {
-      allPassed = false;
-      checks.push({
-        name: 'environment_variables',
-        status: 'failed',
-        error: error.message || String(error),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // 2. Database connectivity via Supabase client
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-      
-      if (supabaseUrl && supabaseAnonKey) {
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        const { error } = await supabase.from('_health_check').select('count').limit(1);
-        
-        // Consider it successful even if table doesn't exist (connection works)
-        if (!error || error.message.includes('does not exist')) {
-          checks.push({
-            name: 'database_connectivity',
-            status: 'passed',
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          throw error;
-        }
-      } else {
-        throw new Error('Cannot test database connectivity without credentials');
-      }
-    } catch (error) {
-      allPassed = false;
-      checks.push({
-        name: 'database_connectivity',
-        status: 'failed',
-        error: error.message || String(error),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // 3. Critical edge functions availability
-    const criticalFunctions = ['smoke-test', 'health-monitor', 'nexus-core'];
-    
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-      
-      if (supabaseUrl && supabaseAnonKey) {
-        for (const functionName of criticalFunctions) {
-          try {
-            const response = await fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${supabaseAnonKey}`,
-                'Content-Type': 'application/json',
-                'apikey': supabaseAnonKey
-              },
-              body: JSON.stringify({ healthCheck: true }),
-              signal: AbortSignal.timeout(5000) // 5s timeout per function
-            });
-
-            checks.push({
-              name: `edge_function_${functionName}`,
-              status: response.ok ? 'passed' : 'failed',
-              statusCode: response.status,
-              timestamp: new Date().toISOString()
-            });
-
-            if (!response.ok) {
-              allPassed = false;
-            }
-          } catch (error) {
-            allPassed = false;
-            checks.push({
-              name: `edge_function_${functionName}`,
-              status: 'failed',
-              error: error.message || String(error),
-              timestamp: new Date().toISOString()
-            });
-          }
-        }
-      } else {
-        throw new Error('Cannot test edge functions without credentials');
-      }
-    } catch (error) {
-      allPassed = false;
-      checks.push({
-        name: 'edge_functions_availability',
-        status: 'failed',
-        error: error.message || String(error),
-        timestamp: new Date().toISOString()
-      });
-    }
-
-  } catch (error) {
-    logger.log('error', 'Health check encountered unexpected error', { error: String(error) });
+  const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
+  
+  if (missingVars.length > 0) {
+    envCheck.status = 'error';
+    envCheck.details = { missing: missingVars };
     allPassed = false;
-    checks.push({
-      name: 'health_check_execution',
-      status: 'failed',
-      error: error.message || String(error),
-      timestamp: new Date().toISOString()
-    });
+  } else {
+    envCheck.details = { all_present: true };
   }
+  checks.push(envCheck);
+
+  // Check Supabase connection
+  const supabaseCheck = {
+    name: 'supabase_connection',
+    status: 'ok' as 'ok' | 'error',
+    details: {} as any
+  };
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data, error } = await supabase.from('profiles').select('count').limit(1).single();
+    
+    if (error && error.code !== 'PGRST116') {
+      supabaseCheck.status = 'error';
+      supabaseCheck.details = { error: error.message };
+      allPassed = false;
+    } else {
+      supabaseCheck.details = { connected: true };
+    }
+  } catch (error) {
+    supabaseCheck.status = 'error';
+    supabaseCheck.details = { error: String(error) };
+    allPassed = false;
+  }
+  checks.push(supabaseCheck);
 
   return {
     status: allPassed ? 'ok' : 'error',
     timestamp: new Date().toISOString(),
     function: 'smoke-test-runner',
-    checks,
-    summary: {
-      total: checks.length,
-      passed: checks.filter(c => c.status === 'passed').length,
-      failed: checks.filter(c => c.status === 'failed').length
-    }
+    checks
   };
 }
 
-// Run smoke tests by calling the smoke-test function
 async function runSmokeTests() {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing required environment variables');
+    throw new Error('Missing required environment variables for smoke tests');
   }
 
-  logger.log('info', 'Invoking smoke-test function');
+  const tests = [];
+  let allPassed = true;
+
+  // Test 1: Call smoke-test function
+  const smokeTestCheck = {
+    name: 'smoke_test_function',
+    status: 'ok' as 'ok' | 'error',
+    duration: 0,
+    details: {} as any
+  };
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
-
+    const startTime = Date.now();
     const response = await fetch(`${supabaseUrl}/functions/v1/smoke-test`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Content-Type': 'application/json',
-        'apikey': supabaseAnonKey
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ run: true }),
-      signal: controller.signal
+      body: JSON.stringify({ test: true })
     });
 
-    clearTimeout(timeoutId);
+    smokeTestCheck.duration = Date.now() - startTime;
 
-    const responseText = await response.text();
-    let result;
-    
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      result = { rawResponse: responseText };
+    if (!response.ok) {
+      smokeTestCheck.status = 'error';
+      smokeTestCheck.details = { 
+        status: response.status,
+        statusText: response.statusText,
+        body: await response.text()
+      };
+      allPassed = false;
+    } else {
+      const data = await response.json();
+      smokeTestCheck.details = { 
+        status: response.status,
+        response: data
+      };
     }
-
-    logger.log('info', 'Smoke test completed', { 
-      status: response.status,
-      ok: response.ok 
-    });
-
-    return {
-      status: response.ok ? 'success' : 'failed',
-      statusCode: response.status,
-      timestamp: new Date().toISOString(),
-      result
-    };
   } catch (error) {
-    logger.log('error', 'Smoke test invocation failed', { error: String(error) });
-    
-    if (error.name === 'AbortError') {
-      throw new Error('Smoke test timeout after 30 seconds');
-    }
-    
-    throw error;
+    smokeTestCheck.status = 'error';
+    smokeTestCheck.details = { error: String(error) };
+    allPassed = false;
   }
+  tests.push(smokeTestCheck);
+
+  // Test 2: Database connectivity
+  const dbCheck = {
+    name: 'database_connectivity',
+    status: 'ok' as 'ok' | 'error',
+    duration: 0,
+    details: {} as any
+  };
+
+  try {
+    const startTime = Date.now();
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data, error } = await supabase.from('profiles').select('count').limit(1);
+
+    dbCheck.duration = Date.now() - startTime;
+
+    if (error && error.code !== 'PGRST116') {
+      dbCheck.status = 'error';
+      dbCheck.details = { error: error.message, code: error.code };
+      allPassed = false;
+    } else {
+      dbCheck.details = { connected: true };
+    }
+  } catch (error) {
+    dbCheck.status = 'error';
+    dbCheck.details = { error: String(error) };
+    allPassed = false;
+  }
+  tests.push(dbCheck);
+
+  // Test 3: Auth service
+  const authCheck = {
+    name: 'auth_service',
+    status: 'ok' as 'ok' | 'error',
+    duration: 0,
+    details: {} as any
+  };
+
+  try {
+    const startTime = Date.now();
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data, error } = await supabase.auth.getSession();
+
+    authCheck.duration = Date.now() - startTime;
+
+    if (error) {
+      authCheck.status = 'error';
+      authCheck.details = { error: error.message };
+      allPassed = false;
+    } else {
+      authCheck.details = { available: true };
+    }
+  } catch (error) {
+    authCheck.status = 'error';
+    authCheck.details = { error: String(error) };
+    allPassed = false;
+  }
+  tests.push(authCheck);
+
+  return {
+    status: allPassed ? 'success' : 'error',
+    timestamp: new Date().toISOString(),
+    function: 'smoke-test-runner',
+    tests,
+    summary: {
+      total: tests.length,
+      passed: tests.filter(t => t.status === 'ok').length,
+      failed: tests.filter(t => t.status === 'error').length
+    }
+  };
 }
 
-// Deno.serve handler with proper Request/Response pattern
-serve(async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
-  
+  const url = new URL(req.url);
+
   try {
+    logger.log('info', 'Request received', { 
+      requestId, 
+      method: req.method, 
+      pathname: url.pathname 
+    });
+
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-      logger.log('info', 'Handling CORS preflight request', { requestId });
       return new Response(null, {
         status: 204,
         headers: corsHeaders
       });
     }
 
-    logger.log('info', 'Incoming request', { 
-      requestId, 
-      method: req.method, 
-      url: req.url 
-    });
-
-    const url = new URL(req.url);
-    
-    // Health check endpoint - comprehensive validation
-    if (url.pathname.endsWith('/health') || (req.method === 'GET' && url.pathname === '/')) {
+    // Health check endpoint
+    if ((url.pathname.endsWith('/health') || url.pathname === '/') && req.method === 'GET') {
       try {
         logger.log('info', 'Processing health check request', { requestId });
         
-        // Create timeout promise (30s max)
+        // Create timeout promise (10s max for health check)
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Health check timeout after 30s')), 30000);
+          setTimeout(() => reject(new Error('Health check timeout after 10s')), 10000);
         });
 
         // Race between health check and timeout
@@ -450,4 +430,15 @@ serve(async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({
         status: 'error',
-        timestamp: new Date().toISO
+        timestamp: new Date().toISOString(),
+        function: 'smoke-test-runner',
+        error: error.message || String(error),
+        requestId
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+});
