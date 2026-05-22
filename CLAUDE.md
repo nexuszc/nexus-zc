@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 22, 2026 — v9
+# Last updated: May 22, 2026 — v10
 
 ---
 
@@ -446,10 +446,34 @@ Then productized and sold to other multi-business operators.
 
 ---
 
+## ROOFING OS — CONTRACTOR AUTH FLOW (working as of May 22, 2026)
+
+| Step | URL | Notes |
+|------|-----|-------|
+| Signup | `roofingos.dev/signup` | Creates `contractor_accounts` row, sends welcome email/SMS |
+| Login | `app.nexuszc.com/roofing/login` | Email magic link via Supabase OTP |
+| Dashboard | `app.nexuszc.com/roofing/jobs` | React app, requires Supabase session |
+
+**Auth implementation details:**
+- `ContractorContext.jsx` calls `contractor-auth` with `action: get_contractor` on every load
+- `get_contractor` extracts email from JWT via `atob(token.split('.')[1])` — do NOT use `supabase.auth.getUser(token)` (service role client overrides auth header, always returns 401)
+- `contractor-auth` deployed `--no-verify-jwt` with full CORS headers
+- `roofingos.dev/dashboard` and `roofingos.dev/dashboard/*` redirect to `app.nexuszc.com/roofing/jobs` via `_redirects`
+- Sessions in `contractor_sessions` table use 7-day rolling expiry
+- Magic links can be generated manually by inserting into `contractor_sessions` with `contractor_id` (useful when owner has no phone on record)
+
+---
+
 ## CURRENT BUILD PRIORITIES (as of May 22, 2026)
 
 **DONE this session:**
-- (nothing yet this session)
+- Fixed contractor auth end to end (Genesis can now log in)
+- Fixed `ProtectedRoute` — non-admins sent to `/roofing/jobs`, not `roofingos.dev`
+- Fixed CORS on `contractor-auth` edge function
+- Fixed `get_contractor` JWT decode (atob vs supabase.auth.getUser)
+- Fixed `ContractorContext` spinner (setLoading in finally block)
+- Fixed dashboard syntax error (escaped apostrophe in onboarding label)
+- Redirected `roofingos.dev/dashboard` → `app.nexuszc.com/roofing/jobs`
 
 **NEXT:**
 1. Fix smoke_test_failed error
