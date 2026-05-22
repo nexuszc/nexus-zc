@@ -117,9 +117,9 @@ export default function Nav({ session }) {
               </NavLink>
               <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2">Roofing OS</div>
               {[
-                { to: '/roofing',          label: 'Dashboard', icon: '🏠', end: true },
-                { to: '/roofing/jobs',     label: 'Jobs',      icon: '🔨' },
-                { to: '/roofing/funnel',   label: 'Funnel',    icon: '🎯' },
+                { to: '/roofing',            label: 'Dashboard', icon: '🏠', end: true },
+                { to: '/roofing/admin/jobs', label: 'Jobs',      icon: '🔨' },
+                { to: '/roofing/funnel',     label: 'Funnel',    icon: '🎯' },
                 { to: '/roofing/content',  label: 'Content',   icon: '📋' },
                 { to: '/roofing/settings', label: 'Settings',  icon: '⚙️' },
               ].map(item => (
@@ -207,9 +207,9 @@ export default function Nav({ session }) {
           /* Roofing mode — 5 roofing tabs */
           <>
             {[
-              { to: '/roofing',          label: 'Dash',     icon: '🏠', end: true  },
-              { to: '/roofing/jobs',     label: 'Jobs',     icon: '🔨'             },
-              { to: '/roofing/funnel',   label: 'Funnel',   icon: '🎯'             },
+              { to: '/roofing',            label: 'Dash',     icon: '🏠', end: true  },
+              { to: '/roofing/admin/jobs', label: 'Jobs',     icon: '🔨'             },
+              { to: '/roofing/funnel',     label: 'Funnel',   icon: '🎯'             },
               { to: '/roofing/content',  label: 'Content',  icon: '📋'             },
               { to: '/roofing/settings', label: 'Settings', icon: '⚙️'             },
             ].map(item => (

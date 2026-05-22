@@ -88,6 +88,7 @@ export default function App() {
             {/* Roofing OS vertical — all sub-tabs handled inside RoofingOS */}
             {/* Roofing OS — 5 tabs: Dashboard / Jobs / Funnel / Content / Settings */}
             <Route path="/roofing"             element={<RoofingOS />} />
+            <Route path="/roofing/admin/jobs"  element={<RoofingOS />} />
             <Route path="/roofing/funnel"      element={<RoofingOS />} />
             <Route path="/roofing/content"     element={<RoofingOS />} />
             <Route path="/roofing/settings"    element={<RoofingOS />} />

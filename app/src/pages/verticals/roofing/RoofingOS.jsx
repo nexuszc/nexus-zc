@@ -1,6 +1,6 @@
-import { useEffect }    from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import RoofingOverview from './RoofingOverview'
+import AdminJobs       from './AdminJobs'
 import Funnel          from './Funnel'
 import Content         from './Content'
 import System          from './System'
@@ -9,7 +9,7 @@ import System          from './System'
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', path: '/roofing'          },
-  { key: 'jobs',      label: 'Jobs',      path: '/roofing/jobs'     },
+  { key: 'jobs',      label: 'Jobs',      path: '/roofing/admin/jobs' },
   { key: 'funnel',    label: '🎯 Funnel',  path: '/roofing/funnel'   },
   { key: 'content',   label: 'Content',   path: '/roofing/content'  },
   { key: 'settings',  label: 'Settings',  path: '/roofing/settings' },
@@ -19,6 +19,7 @@ function activeTab(pathname) {
   if (pathname === '/roofing'
     || pathname.startsWith('/roofing/contractors')
     || pathname.startsWith('/roofing/exposure'))       return 'dashboard'
+  if (pathname.startsWith('/roofing/admin/jobs'))      return 'jobs'
   if (pathname.startsWith('/roofing/funnel')
     || pathname.startsWith('/roofing/outbound')
     || pathname.startsWith('/roofing/calls')
@@ -27,13 +28,6 @@ function activeTab(pathname) {
   if (pathname.startsWith('/roofing/settings')
     || pathname.startsWith('/roofing/system'))         return 'settings'
   return 'dashboard'
-}
-
-// Jobs lives at /roofing/jobs inside ContractorProvider — navigate there directly
-function JobsRedirect() {
-  const navigate = useNavigate()
-  useEffect(() => { navigate('/roofing/jobs', { replace: true }) }, [navigate])
-  return <div className="flex items-center justify-center h-48 text-gray-600 text-sm">Loading…</div>
 }
 
 export default function RoofingOS() {
@@ -70,7 +64,7 @@ export default function RoofingOS() {
 
       {/* Tab content */}
       {tab === 'dashboard' && <RoofingOverview />}
-      {tab === 'jobs'      && <JobsRedirect />}
+      {tab === 'jobs'      && <AdminJobs />}
       {tab === 'funnel'    && <Funnel />}
       {tab === 'content'   && <Content />}
       {tab === 'settings'  && <System />}
