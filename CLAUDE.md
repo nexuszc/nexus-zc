@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 21, 2026 — v10
+# Last updated: May 21, 2026 — v8
 
 ---
 
@@ -93,6 +93,8 @@ Then productized and sold to other multi-business operators.
 
 | Function | Purpose | Trigger |
 |----------|---------|---------|
+| `ae-login` | See function source for details | Internal |
+| `ae-tasks` | See function source for details | Internal |
 | `aria-call-gate` | See function source for details | Internal |
 | `aria-queue-daily` | See function source for details | Internal |
 | `assess-project` | Run AI assessment on a project | On demand |
@@ -121,7 +123,7 @@ Then productized and sold to other multi-business operators.
 | `nexus-admin-api` | See function source for details | Internal |
 | `nexus-build` | Consolidated builder: manifest → build → test → stage → notify | On demand (telegram, nexus-core, VPS) |
 | `nexus-coo` | COO intelligence: focus, stale_check, momentum_check, health_score | Called by chat + health-monitor |
-| `nexus-core` | Consolidated brain: observe, think, act, reflect — 3x/day | Cron (0 1,13,19 * * *) + VPS + manual |
+| `nexus-core` | Consolidated brain: observe, think, act, reflect — every 30 min | Cron (every 30 min) + VPS + manual |
 | `nexus-diagnostic` | See function source for details | Internal |
 | `nexus-follow-up` | See function source for details | Internal |
 | `nexus-intake` | See function source for details | Internal |
@@ -179,6 +181,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-nudge-email` | See function source for details | Internal |
 | `roofing-outreach` | See function source for details | Internal |
 | `roofing-outreach-sequencer` | See function source for details | Internal |
+| `roofing-page-visit` | See function source for details | Internal |
 | `roofing-payments` | Stripe payment intent creation + payment confirmation | Internal |
 | `roofing-permit-tracker` | See function source for details | Internal |
 | `roofing-product-monitor` | See function source for details | Internal |
@@ -204,6 +207,7 @@ Then productized and sold to other multi-business operators.
 | `roofing-youtube-publisher` | See function source for details | Internal |
 | `roofing-youtube-uploader` | See function source for details | Internal |
 | `send-email` | Send email via Resend | Internal |
+| `send-partnership-emails` | See function source for details | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `smoke-test-runner` | See function source for details | Internal |
 | `stripe-setup` | See function source for details | Internal |
@@ -409,32 +413,17 @@ Then productized and sold to other multi-business operators.
 ## CURRENT BUILD PRIORITIES (as of May 21, 2026)
 
 **DONE this session:**
-- AE task system: magic link login, daily task generation, escalation to Zach, weekly performance report
-- Master system fix: briefing (test mode + AE try/catch), content-api (view grants), page-visit (create missing function)
-- Stale $49/month pricing fixed in terms.html and Pipeline.jsx email template
-- Duplicate community monitor cron deleted (was running 2x intended)
-- nexus_improvements backlog: archived 158 proposals >7 days, 73 remain
-- Community posts: competitor-recommending posts moved to pending; posts missing roofingos.dev URL updated
-- CLAUDE.md: nexus-core cron corrected (3x/day, not every 30 min)
-- 356 Aria calls queued for tomorrow 8am local across CO/TX/FL/GA/OH/IL — TCPA compliant
-- 301 prospects enrolled in cold email sequence with 4h offset after Aria call
-- Aria + email wired permanently — aria-queue-daily v2 auto-enrolls every future prospect in email_sequences at queue time; no manual step ever needed again
-- roofing-outreach-sequencer v18 — cold cadence: Day 1 Aria call → Day 1 +4h Email 1 → Day 3 Email 2 → Day 7 Email 3
+- (nothing yet this session)
 
-**PENDING — needs Zach manually:**
-1. Reddit OAuth app: reddit.com/prefs/apps → create script app → 4 credentials → add to Supabase secrets
-2. LinkedIn access token → add to Supabase secrets (LINKEDIN_ACCESS_TOKEN)
-3. Facebook Page access token → add to Supabase secrets (FACEBOOK_PAGE_ACCESS_TOKEN)
-4. Twilio — verify active; Aria made 10 calls (5 no_answer, 0 errors) so it works, just no new leads
-5. Stripe secret key — verify STRIPE_SECRET_KEY is current (rotate if key was changed)
-6. YOUTUBE_API_KEY — needed for YouTube auto-upload cron
-
-**NEXT (technical):**
-1. Add Self-Learning Pattern Recognition
-2. Add memory consolidation ability
-3. Add Conversation Context Memory
-4. Draft operating agreement for Nexus ZC LLC
-5. Improve client health scores (Brian: 65, Denver Pro Roofing: 50)
+**NEXT:**
+1. Fix smoke_test_failed error
+2. Fix Recurring Smoke Test Failures
+3. Add Self-Learning Pattern Recognition
+4. Add memory consolidation ability
+5. Add Conversation Context Memory
+6. Draft operating agreement for Nexus ZC LLC
+7. Build Roofing OS go-to-market system and landing page
+8. Stabilize client health scores (Brian: 65, Denver Pro Roofing: 50)
 
 ---
 
