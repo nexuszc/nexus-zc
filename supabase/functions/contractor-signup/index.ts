@@ -5,6 +5,9 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'zach@roofingos.dev';
+const FROM_NAME  = Deno.env.get('RESEND_FROM_NAME')  || 'Zach @ Roofing OS';
+
 async function sendTelegram(msg: string) {
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
   const chatId = Deno.env.get('TELEGRAM_CHAT_ID')!;
@@ -23,8 +26,6 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   const plan = (contractor.plan as string || 'free').toLowerCase();
   const isFree = !plan || plan === 'free';
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
-const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
-const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
 
   const referralUrl = `https://roofingos.dev/r/${referralCode}`;
 
@@ -217,32 +218,32 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Failed to create account' }, { status: 500 });
   }
 
-  // Log signup source to roofing_captures
-  await supabase.from('roofing_captures').insert({
+  // Log signup source to roofing_captures (fire and forget)
+  void supabase.from('roofing_captures').insert({
     email: owner_email,
     name: owner_name || '',
     company: company_name,
     phone: owner_phone || '',
     ref_source: signupSource,
     utm_campaign: utm_campaign || null,
-  }).catch(() => {});
+  });
 
   // Link from audit lead
   if (audit_lead_id) {
-    await supabase.from('supplement_audit_leads')
+    void supabase.from('supplement_audit_leads')
       .update({ converted_to_contractor: true, contractor_account_id: contractor.id })
       .eq('id', audit_lead_id);
   }
 
   // Track referral
   if (referredBy && referral_code) {
-    await supabase.from('contractor_referrals').insert({
+    void supabase.from('contractor_referrals').insert({
       referring_contractor_id: referredBy,
       referred_email: owner_email,
       referred_contractor_id: contractor.id,
       referral_code,
       status: 'signed_up'
-    }).catch(() => {});
+    });
   }
 
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
@@ -297,12 +298,12 @@ Deno.serve(async (req) => {
     })() : Promise.resolve(),
   ]);
 
-  // Schedule onboarding reminder
-  await supabase.from('reminders').insert({
+  // Schedule onboarding reminder (fire and forget)
+  void supabase.from('reminders').insert({
     chat_id: Deno.env.get('TELEGRAM_CHAT_ID'),
     message: `🎉 New contractor signed up: ${company_name} (${owner_email})\nCall to onboard: ${owner_phone || 'no phone'}\nPlan: ${plan}`,
     fire_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-  }).catch(() => {});
+  });
 
   await sendTelegram(
     `🎉 *New Contractor Signed Up*\n` +
