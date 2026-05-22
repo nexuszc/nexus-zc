@@ -105,8 +105,23 @@ export default function Nav({ session }) {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {/* Post Today — featured first */}
+          <NavLink
+            to="/roofing/content"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                isActive
+                  ? 'bg-indigo-500/10 text-indigo-400'
+                  : 'text-gray-500 hover:text-gray-200 hover:bg-white/[0.04]'
+              }`
+            }
+          >
+            <span className="text-base leading-none shrink-0">📋</span>
+            Post Today
+          </NavLink>
+
           {/* NEXUS section */}
-          <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2">Nexus</div>
+          <div className="text-[10px] text-gray-700 font-bold uppercase tracking-widest px-3 pb-2 pt-3">Nexus</div>
           <NavItem to="/" icon="home" label="Home" end />
           <NavItem to="/brain" icon="brain" label="Brain" />
 
@@ -167,6 +182,13 @@ export default function Nav({ session }) {
 
       {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0c0c14] border-t border-[#1e1e2e] flex items-stretch h-16 safe-bottom">
+        <NavLink to="/roofing/content" className={({ isActive }) =>
+          `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
+        }>
+          <span className="text-xl leading-none">📋</span>
+          Post
+        </NavLink>
+
         <NavLink to="/" end className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${isActive ? 'text-indigo-400' : 'text-gray-600'}`
         }>
