@@ -1,4 +1,4 @@
-// aria-queue-processor v1
+// aria-queue-processor v2
 // Reads aria_call_queue WHERE status IN ('queued','pending') AND fire_at <= NOW()
 // For each: checks aria-call-gate → if allowed, fires roofing-aria-engine → updates status.
 // Runs every 2h during business hours via pg_cron (14:00–21:00 UTC = 8am–3pm MT).
@@ -13,8 +13,9 @@ const MAX_PER_RUN  = 25;
 const MAX_ATTEMPTS = 3;
 
 Deno.serve(async (req) => {
+  try {
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "aria-queue-processor v1 ready" });
+  if (body.test) return Response.json({ ok: true, message: "aria-queue-processor v2 ready" });
 
   const startMs = Date.now();
   const now = new Date().toISOString();
@@ -47,7 +48,8 @@ Deno.serve(async (req) => {
         method: "POST",
         headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ contact_phone: call.contact_phone, call_type: call.call_type }),
-      });
+      }).catch(() => null);
+      if (!gateRes) { blocked++; continue; }
       const gate = await gateRes.json().catch(() => ({ allowed: true }));
 
       if (!gate.allowed) {
@@ -97,14 +99,16 @@ Deno.serve(async (req) => {
     }
   }
 
-  await supabase.from("system_heartbeats").insert({
-    function_name: "aria-queue-processor",
-    status: errors > 0 ? "error" : "ok",
-    response_ms: Date.now() - startMs,
-    error_message: errors > 0 ? `${errors} call errors` : null,
-    metadata: { fired, blocked, errors, total: readyToFire.length },
-    recorded_at: new Date().toISOString(),
-  }).catch(() => {});
+  try {
+    await supabase.from("system_heartbeats").insert({
+      function_name: "aria-queue-processor",
+      status: errors > 0 ? "error" : "ok",
+      response_ms: Date.now() - startMs,
+      error_message: errors > 0 ? `${errors} call errors` : null,
+      metadata: { fired, blocked, errors, total: readyToFire.length },
+      recorded_at: new Date().toISOString(),
+    });
+  } catch { /* non-fatal */ }
 
   return Response.json({
     ok: true,
@@ -114,4 +118,9 @@ Deno.serve(async (req) => {
     total: readyToFire.length,
     duration_ms: Date.now() - startMs,
   });
+
+  } catch (fatal) {
+    console.error("aria-queue-processor fatal:", fatal);
+    return Response.json({ ok: false, error: String(fatal) }, { status: 500 });
+  }
 });
