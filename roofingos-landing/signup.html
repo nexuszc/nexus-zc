@@ -300,7 +300,12 @@ form.addEventListener('submit', async (e) => {
       }
     }
 
-    showSuccess(owner_email);
+    if (signupData.action_link) {
+      submitBtn.textContent = 'Taking you to your dashboard…';
+      window.location.href = signupData.action_link;
+    } else {
+      showSuccess(owner_email);
+    }
   } catch (err) {
     showError('Network error. Please check your connection and try again.');
   }

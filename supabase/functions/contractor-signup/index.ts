@@ -26,8 +26,6 @@ async function sendTelegram(msg: string) {
 
 function generateWelcomeEmail(contractor: Record<string, unknown>): string {
   const companyName = contractor.company_name as string || '';
-  const ownerPhone = contractor.owner_phone as string || '';
-  const ownerEmail = contractor.owner_email as string || '';
   const referralCode = contractor.referral_code as string || '';
   const plan = (contractor.plan as string || 'free').toLowerCase();
   const isFree = !plan || plan === 'free';
@@ -59,9 +57,9 @@ function generateWelcomeEmail(contractor: Record<string, unknown>): string {
 <p class="sub" style="margin-top:0">Your account is active. Here's how to get started.</p>
 <hr>
 <h3>Step 1 — Log into your dashboard</h3>
-<p>Go to your contractor dashboard and log in with your phone number:</p>
-<p style="margin:16px 0"><a href="https://roofingos.dev/dashboard" class="cta">Open Your Dashboard →</a></p>
-<p class="sub">Enter the phone number you used to sign up. We'll text you a one-click login link.</p>
+<p>Enter your email address to get a magic link — no password needed:</p>
+<p style="margin:16px 0"><a href="https://app.nexuszc.com/roofing/login" class="cta">Log In to Your Dashboard →</a></p>
+<p class="sub">Use the email address you signed up with. We'll send you a one-click login link.</p>
 <hr>
 <h3>Step 2 — Create your first job</h3>
 <p>Call or text <strong>${twilioNumber}</strong> to start a job with your voice. Say the homeowner's name, address, and insurance carrier. We handle the rest.</p>
@@ -302,7 +300,7 @@ Deno.serve(async (req) => {
         body: new URLSearchParams({
           To: owner_phone,
           From: twilioNumber,
-          Body: `Hey ${firstName} — welcome to Roofing OS. Your dashboard: roofingos.dev/dashboard\nLog in with your phone number — we'll text you a one-click link.`
+          Body: `Hey ${firstName} — welcome to Roofing OS.\n\nLog in anytime at app.nexuszc.com/roofing/login — enter your email and we'll send you a magic link.`
         }).toString()
       }).catch(() => {});
     })() : Promise.resolve(),
@@ -327,12 +325,29 @@ Deno.serve(async (req) => {
     `Trial ends: ${new Date(trialEndsAt).toLocaleDateString()}`
   );
 
+  // Create Supabase auth user (email confirmed, no confirmation email sent)
+  // and generate an instant-access magic link so signup leads directly to dashboard
+  await supabase.auth.admin.createUser({
+    email: owner_email,
+    email_confirm: true,
+  }).catch(() => {}); // ignore if already exists
+
+  let action_link: string | null = null;
+  try {
+    const { data: linkData } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: owner_email,
+      options: { redirectTo: 'https://app.nexuszc.com/roofing/jobs' },
+    });
+    action_link = linkData?.properties?.action_link || null;
+  } catch { /* non-fatal — signup still succeeded */ }
+
   return Response.json({
     ok: true,
     contractor_id: contractor.id,
     subdomain,
     referral_code: referralCode,
     trial_ends_at: trialEndsAt,
-    dashboard_url: `https://roofingos.dev/dashboard`
+    action_link,
   }, { headers: corsHeaders });
 });
