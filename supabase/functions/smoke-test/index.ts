@@ -1,112 +1,118 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 /**
- * Comprehensive Smoke Test Suite for Nexus System
- * 
- * Tests:
- * - Environment variable validation
- * - Database connectivity
- * - Critical table access
- * - Supabase client functionality
+ * Logger utility for structured logging
  */
-
-interface Logger {
-  info: (message: string, meta?: Record<string, unknown>) => void;
-  error: (message: string, meta?: Record<string, unknown>) => void;
-  warn: (message: string, meta?: Record<string, unknown>) => void;
-}
-
-const logger: Logger = {
-  info: (message: string, meta?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
+const logger = {
+  info: (message: string, data?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
   },
-  error: (message: string, meta?: Record<string, unknown>) => {
-    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
+  error: (message: string, data?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, ...data, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, meta?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
+  warn: (message: string, data?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
   }
 };
 
 /**
- * Run a function with a timeout
+ * Timeout wrapper for async operations
  */
 async function runWithTimeout<T>(
-  fn: () => Promise<T>,
+  operation: () => Promise<T>,
   timeoutMs: number
 ): Promise<{ success: boolean; result?: T; error?: string; duration: number }> {
   const startTime = Date.now();
   
   try {
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
-    );
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
     
-    const result = await Promise.race([fn(), timeoutPromise]);
+    const result = await Promise.race([operation(), timeoutPromise]);
+    const duration = Date.now() - startTime;
     
-    return {
-      success: true,
-      result,
-      duration: Date.now() - startTime
-    };
+    return { success: true, result, duration };
   } catch (error) {
+    const duration = Date.now() - startTime;
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
-      duration: Date.now() - startTime
+      duration
     };
   }
 }
 
 /**
- * Validate required environment variables
+ * Check environment variables
  */
-function validateEnvironment(): { valid: boolean; missing: string[]; errors: string[] } {
-  const required = [
+async function checkEnvironment(): Promise<{
+  valid: boolean;
+  variables: Record<string, boolean>;
+  errors: string[];
+}> {
+  const requiredVars = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY'
   ];
   
-  const missing: string[] = [];
+  const variables: Record<string, boolean> = {};
   const errors: string[] = [];
   
-  for (const varName of required) {
+  for (const varName of requiredVars) {
     const value = Deno.env.get(varName);
+    variables[varName] = !!value;
     if (!value) {
-      missing.push(varName);
-      errors.push(`Missing required environment variable: ${varName}`);
+      errors.push(`Missing environment variable: ${varName}`);
     }
   }
   
   return {
-    valid: missing.length === 0,
-    missing,
+    valid: errors.length === 0,
+    variables,
     errors
   };
 }
 
 /**
- * Test database connectivity
+ * Test database connection
  */
-async function testDatabaseConnection(): Promise<{ healthy: boolean; error?: string; latency?: number }> {
+async function testDatabaseConnection(): Promise<{
+  healthy: boolean;
+  latency?: number;
+  error?: string;
+}> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl || !serviceKey) {
+    return {
+      healthy: false,
+      error: 'Missing Supabase credentials'
+    };
+  }
+  
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
+    const supabase = createClient(supabaseUrl, serviceKey);
     const startTime = Date.now();
+    
     const { error } = await supabase.from('users').select('count').limit(1);
+    
     const latency = Date.now() - startTime;
     
-    if (error) throw error;
+    if (error) {
+      return {
+        healthy: false,
+        latency,
+        error: error.message
+      };
+    }
     
-    return { healthy: true, latency };
+    return {
+      healthy: true,
+      latency
+    };
   } catch (error) {
     return {
       healthy: false,
@@ -116,133 +122,163 @@ async function testDatabaseConnection(): Promise<{ healthy: boolean; error?: str
 }
 
 /**
- * Test access to critical tables
+ * Test table access
  */
 async function testTableAccess(): Promise<{
   healthy: boolean;
   tables: Record<string, { accessible: boolean; error?: string }>;
+  error?: string;
 }> {
-  const tables = ['users', 'sessions', 'conversations', 'messages'];
-  const results: Record<string, { accessible: boolean; error?: string }> = {};
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl || !serviceKey) {
+    return {
+      healthy: false,
+      tables: {},
+      error: 'Missing Supabase credentials'
+    };
+  }
+  
+  const tablesToTest = ['users', 'sessions', 'conversations', 'messages'];
+  const tables: Record<string, { accessible: boolean; error?: string }> = {};
   
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabase = createClient(supabaseUrl, serviceKey);
     
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    for (const table of tables) {
+    for (const table of tablesToTest) {
       try {
         const { error } = await supabase.from(table).select('count').limit(1);
         
-        if (error) throw error;
-        
-        results[table] = { accessible: true };
+        if (error) {
+          tables[table] = { accessible: false, error: error.message };
+        } else {
+          tables[table] = { accessible: true };
+        }
       } catch (error) {
-        results[table] = {
+        tables[table] = {
           accessible: false,
           error: error instanceof Error ? error.message : String(error)
         };
       }
     }
     
-    const allAccessible = Object.values(results).every(r => r.accessible);
+    const allAccessible = Object.values(tables).every(t => t.accessible);
     
     return {
       healthy: allAccessible,
-      tables: results
+      tables
     };
   } catch (error) {
     return {
       healthy: false,
-      tables: Object.fromEntries(
-        tables.map(t => [t, { accessible: false, error: error instanceof Error ? error.message : String(error) }])
-      )
+      tables,
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
 /**
- * Perform comprehensive health check
+ * Test edge functions
  */
-async function performComprehensiveHealthCheck() {
+async function testEdgeFunctions(): Promise<{
+  healthy: boolean;
+  functions: Record<string, { available: boolean; error?: string }>;
+  error?: string;
+}> {
+  const functions: Record<string, { available: boolean; error?: string }> = {};
+  
+  // For now, just check if the function itself is running
+  functions['smoke-test'] = { available: true };
+  
+  return {
+    healthy: true,
+    functions
+  };
+}
+
+/**
+ * Comprehensive health check
+ */
+async function performComprehensiveHealthCheck(): Promise<{
+  overall: boolean;
+  timestamp: string;
+  checks: {
+    environment: Awaited<ReturnType<typeof checkEnvironment>>;
+    database: Awaited<ReturnType<typeof testDatabaseConnection>>;
+    tables: Awaited<ReturnType<typeof testTableAccess>>;
+    edgeFunctions: Awaited<ReturnType<typeof testEdgeFunctions>>;
+  };
+}> {
   logger.info('Starting comprehensive health check');
   
-  const startTime = Date.now();
+  const [environment, database, tables, edgeFunctions] = await Promise.all([
+    checkEnvironment(),
+    testDatabaseConnection(),
+    testTableAccess(),
+    testEdgeFunctions()
+  ]);
   
-  // Check 1: Environment variables
-  logger.info('Checking environment variables');
-  const envCheck = validateEnvironment();
-  
-  // Check 2: Database connectivity
-  logger.info('Testing database connection');
-  const dbCheck = await testDatabaseConnection();
-  
-  // Check 3: Table access
-  logger.info('Testing table access');
-  const tableCheck = await testTableAccess();
-  
-  // Check 4: Edge function status (self-check)
-  const edgeFunctionCheck = {
-    healthy: true,
-    functions: {
-      'smoke-test': { accessible: true, status: 'running' }
-    }
-  };
-  
-  const duration = Date.now() - startTime;
-  
-  const overall = envCheck.valid && dbCheck.healthy && tableCheck.healthy && edgeFunctionCheck.healthy;
-  
-  const result = {
-    overall,
-    timestamp: new Date().toISOString(),
-    duration,
-    checks: {
-      environment: envCheck,
-      database: dbCheck,
-      tables: tableCheck,
-      edgeFunctions: edgeFunctionCheck
-    }
-  };
+  const overall = environment.valid && database.healthy && tables.healthy && edgeFunctions.healthy;
   
   logger.info('Health check completed', {
     overall,
-    duration,
-    environment_valid: envCheck.valid,
-    database_healthy: dbCheck.healthy,
-    tables_healthy: tableCheck.healthy
+    environment: environment.valid,
+    database: database.healthy,
+    tables: tables.healthy,
+    edgeFunctions: edgeFunctions.healthy
   });
   
-  return result;
+  return {
+    overall,
+    timestamp: new Date().toISOString(),
+    checks: {
+      environment,
+      database,
+      tables,
+      edgeFunctions
+    }
+  };
 }
 
 /**
  * Run comprehensive smoke tests
  */
-async function runSmokeTests() {
+async function runSmokeTests(): Promise<{
+  status: 'passed' | 'failed';
+  tests_run: number;
+  tests_passed: number;
+  tests_failed: number;
+  timestamp: string;
+  duration: number;
+  tests: Record<string, {
+    passed: boolean;
+    duration: number;
+    error?: string;
+    details?: unknown;
+  }>;
+  errors: string[];
+}> {
   logger.info('Starting comprehensive smoke test suite');
   
   const startTime = Date.now();
   let testsRun = 0;
   let testsPassed = 0;
   let testsFailed = 0;
-  const tests: Record<string, unknown> = {};
+  const tests: Record<string, {
+    passed: boolean;
+    duration: number;
+    error?: string;
+    details?: unknown;
+  }> = {};
   const errors: string[] = [];
-
-  // Test 1: Environment validation
+  
+  // Test 1: Environment variables
   testsRun++;
-  logger.info('Running environment validation test');
-  const envTest = await runWithTimeout(
-    async () => validateEnvironment(),
-    5000
-  );
+  logger.info('Running environment check');
+  const envTest = await runWithTimeout(checkEnvironment, 5000);
   tests.environment = {
-    passed: envTest.success && envTest.result?.valid,
+    passed: envTest.success && envTest.result?.valid === true,
     duration: envTest.duration,
     error: envTest.error,
     details: envTest.result
@@ -250,18 +286,15 @@ async function runSmokeTests() {
   if (envTest.success && envTest.result?.valid) testsPassed++;
   else {
     testsFailed++;
-    errors.push(`Environment validation failed: ${envTest.error || envTest.result?.errors.join(', ')}`);
+    errors.push(`Environment test failed: ${envTest.error || envTest.result?.errors.join(', ')}`);
   }
-
-  // Test 2: Database connectivity
+  
+  // Test 2: Database connection
   testsRun++;
-  logger.info('Running database connectivity test');
-  const dbTest = await runWithTimeout(
-    async () => testDatabaseConnection(),
-    10000
-  );
+  logger.info('Running database connection test');
+  const dbTest = await runWithTimeout(testDatabaseConnection, 10000);
   tests.database = {
-    passed: dbTest.success && dbTest.result?.healthy,
+    passed: dbTest.success && dbTest.result?.healthy === true,
     duration: dbTest.duration,
     error: dbTest.error,
     details: dbTest.result
@@ -269,14 +302,14 @@ async function runSmokeTests() {
   if (dbTest.success && dbTest.result?.healthy) testsPassed++;
   else {
     testsFailed++;
-    errors.push(`Database connectivity test failed: ${dbTest.error || dbTest.result?.error}`);
+    errors.push(`Database test failed: ${dbTest.error || dbTest.result?.error}`);
   }
-
+  
   // Test 3: Table access
   testsRun++;
   logger.info('Running table access test');
   const tableTest = await runWithTimeout(
-    async () => testTableAccess(),
+    testTableAccess,
     15000
   );
   tests.table_access = {
@@ -384,7 +417,10 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (re
               status: statusCode,
               headers: {
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
               }
             }
           );
@@ -410,7 +446,10 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (re
               status: 503,
               headers: {
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
               }
             }
           );
@@ -435,44 +474,6 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (re
         {
           status: 500,
           headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
-  };
-}
-
-/**
- * Main handler - smoke test endpoints
- */
-async function handleRequest(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  
-  logger.info('Smoke test request received', {
-    path: url.pathname,
-    method: req.method
-  });
-  
-  // Test endpoint: comprehensive smoke test suite
-  if (url.pathname === '/test/run' || url.pathname === '/test/smoke') {
-    logger.info('Comprehensive smoke test endpoint called');
-    
-    try {
-      const results = await runSmokeTests();
-      
-      const statusCode = results.status === 'passed' ? 200 : 500;
-      
-      return new Response(
-        JSON.stringify(results, null, 2),
-        {
-          status: statusCode,
-          headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        }
-      );
-    } catch (error) {
-      logger.error('Smoke test suite failed with exception', {
-        error: error instanceof Error ? error.message
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
