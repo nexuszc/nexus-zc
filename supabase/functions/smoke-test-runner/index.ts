@@ -1,253 +1,4 @@
-// supabase/functions/smoke-test-runner/index.ts
-
-interface Logger {
-  log: (level: string, message: string, meta?: any) => void;
-}
-
-const logger: Logger = {
-  log: (level: string, message: string, meta?: any) => {
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...meta
-    }));
-  }
-};
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
-};
-
-interface ValidationPatterns {
-  hasDenoServe: boolean;
-  hasHandlerFunction: boolean;
-  hasResponseReturn: boolean;
-  hasCorsHeaders: boolean;
-  hasErrorHandling: boolean;
-  hasSupabaseImport: boolean;
-  handlerSignatureValid: boolean;
-  importsDetected: string[];
-  corsConfigured: boolean;
-  errorHandlingPresent: boolean;
-}
-
-interface ValidationResult {
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-  patterns: ValidationPatterns;
-}
-
-interface FunctionValidationReport {
-  function_name: string;
-  has_deno_serve: boolean;
-  handler_signature_valid: boolean;
-  imports_detected: string[];
-  cors_configured: boolean;
-  error_handling_present: boolean;
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-  timestamp: string;
-}
-
-// Main request handler
-async function handleRequest(req: Request): Promise<Response> {
-  try {
-    const { method } = req;
-
-    // Handle CORS preflight
-    if (method === 'OPTIONS') {
-      return new Response(null, { status: 200, headers: corsHeaders });
-    }
-
-    // Parse request parameters
-    let test_suite = 'full';
-    
-    if (method === 'POST') {
-      try {
-        const contentType = req.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
-          const body = await req.json();
-          test_suite = body.test_suite || 'full';
-        }
-      } catch (jsonError) {
-        logger.log('warn', 'Failed to parse JSON body, using defaults', {
-          error: String(jsonError)
-        });
-      }
-    }
-
-    logger.log('info', 'Starting static analysis smoke tests', {
-      test_suite,
-      method
-    });
-
-    // Run static analysis validation (no execution)
-    const testResults = await runSmokeTestsWithValidation();
-
-    return new Response(
-      JSON.stringify({
-        success: testResults.status !== 'error',
-        status: testResults.status,
-        test_suite,
-        timestamp: new Date().toISOString(),
-        function: 'smoke-test-runner',
-        ...testResults
-      }),
-      {
-        status: testResults.status === 'error' ? 500 : 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      }
-    );
-
-  } catch (error) {
-    logger.log('error', 'Request handler error', {
-      error: String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        function: 'smoke-test-runner',
-        error: error instanceof Error ? error.message : String(error)
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      }
-    );
-  }
-}
-
-// Extract imports from function code using regex
-function extractImports(code: string): string[] {
-  const imports: string[] = [];
-  
-  // Match import statements
-  const importRegex = /import\s+(?:(?:{[^}]+})|(?:\*\s+as\s+\w+)|(?:\w+))\s+from\s+['"]([@\w\-\/\.]+)['"]/g;
-  let match;
-  
-  while ((match = importRegex.exec(code)) !== null) {
-    if (match[1]) {
-      imports.push(match[1]);
-    }
-  }
-  
-  return imports;
-}
-
-// Validate Deno.serve handler signature
-function validateHandlerSignature(code: string): boolean {
-  // Look for Deno.serve with async function or arrow function
-  // Valid patterns:
-  // Deno.serve(async (req: Request) => { ... })
-  // Deno.serve(async (req) => { ... })
-  // Deno.serve(async function(req: Request) { ... })
-  // Deno.serve((req: Request): Response => { ... })
-  
-  const patterns = [
-    /Deno\.serve\s*\(\s*async\s*\(\s*req\s*:\s*Request\s*\)\s*=>/,
-    /Deno\.serve\s*\(\s*async\s*\(\s*req\s*\)\s*=>/,
-    /Deno\.serve\s*\(\s*async\s+function\s*\(\s*req\s*:\s*Request\s*\)/,
-    /Deno\.serve\s*\(\s*\(\s*req\s*:\s*Request\s*\)\s*:\s*(?:Response|Promise<Response>)\s*=>/,
-    /Deno\.serve\s*\(\s*\(\s*req\s*:\s*Request\s*\)\s*=>/
-  ];
-  
-  return patterns.some(pattern => pattern.test(code));
-}
-
-// Detect CORS configuration
-function detectCorsConfiguration(code: string): boolean {
-  // Check for CORS headers in various forms
-  const corsPatterns = [
-    /['"]Access-Control-Allow-Origin['"]/i,
-    /corsHeaders/i,
-    /cors\s*:\s*true/i,
-    /Access-Control-Allow/i
-  ];
-  
-  return corsPatterns.some(pattern => pattern.test(code));
-}
-
-// Detect error handling patterns
-function detectErrorHandling(code: string): boolean {
-  // Check for try-catch blocks and error handling
-  const errorPatterns = [
-    /try\s*{[\s\S]*?}\s*catch/,
-    /catch\s*\(\s*\w+\s*(?::\s*Error)?\s*\)/,
-    /\.catch\s*\(/,
-    /throw\s+new\s+Error/,
-    /if\s*\(.*error/i
-  ];
-  
-  return errorPatterns.some(pattern => pattern.test(code));
-}
-
-// Detect Response return patterns
-function detectResponseReturn(code: string): boolean {
-  const responsePatterns = [
-    /return\s+new\s+Response\s*\(/,
-    /:\s*Response\s*=>/,
-    /:\s*Promise<Response>/,
-    /Response\.json\s*\(/,
-    /new\s+Response\s*\(/
-  ];
-  
-  return responsePatterns.some(pattern => pattern.test(code));
-}
-
-// Static analysis validation of Edge Function structure
-async function validateEdgeFunctionStructure(filePath: string): Promise<ValidationResult> {
-  const issues: string[] = [];
-  const warnings: string[] = [];
-  const patterns: ValidationPatterns = {
-    hasDenoServe: false,
-    hasHandlerFunction: false,
-    hasResponseReturn: false,
-    hasCorsHeaders: false,
-    hasErrorHandling: false,
-    hasSupabaseImport: false,
-    handlerSignatureValid: false,
-    importsDetected: [],
-    corsConfigured: false,
-    errorHandlingPresent: false
-  };
-
-  try {
-    // Read function code as text
-    const functionCode = await Deno.readTextFile(filePath);
-
-    // Extract imports
-    patterns.importsDetected = extractImports(functionCode);
-    
-    // Check for Supabase import
-    patterns.hasSupabaseImport = patterns.importsDetected.some(
-      imp => imp.includes('@supabase/supabase-js') || imp.includes('supabase')
-    );
-
-    // Check for Deno.serve
-    patterns.hasDenoServe = /Deno\.serve\s*\(/i.test(functionCode);
-    if (!patterns.hasDenoServe) {
-      issues.push('Missing Deno.serve() - Edge Functions must use Deno.serve()');
-    }
-
-    // Validate handler signature
-    patterns.handlerSignatureValid = validateHandlerSignature(functionCode);
-    if (patterns.hasDenoServe && !patterns.handlerSignatureValid) {
-      issues.push('Invalid handler signature - should be async (req: Request) => Response or Promise<Response>');
-    }
-    patterns.hasHandlerFunction = patterns.handlerSignatureValid;
-
-    // Check for Response return
-    patterns.hasResponseReturn = detectResponseReturn(functionCode);
-    if (!patterns.hasResponseReturn && patterns.hasDenoServe) {
+tterns.hasDenoServe) {
       warnings.push('No Response object construction detected');
     }
 
@@ -332,19 +83,328 @@ async function validateEdgeFunctionStructure(filePath: string): Promise<Validati
   }
 }
 
-// Enhanced smoke test runner with static analysis only (no execution)
-async function runSmokeTestsWithValidation() {
-  const results: FunctionValidationReport[] = [];
-  const functionsDir = './supabase/functions';
+// Retry configuration for transient failures
+interface RetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+  timeoutMs: number;
+}
 
-  try {
-    // Get list of Edge Functions
-    const functionDirs: string[] = [];
-    for await (const entry of Deno.readDir(functionsDir)) {
-      if (entry.isDirectory && !entry.name.startsWith('.') && !entry.name.startsWith('_')) {
-        functionDirs.push(entry.name);
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+  timeoutMs: 30000
+};
+
+// Sleep utility for retry delays
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Calculate exponential backoff delay
+function calculateBackoffDelay(attemptNumber: number, config: RetryConfig): number {
+  const delay = config.initialDelayMs * Math.pow(config.backoffMultiplier, attemptNumber - 1);
+  return Math.min(delay, config.maxDelayMs);
+}
+
+// Enhanced error logging with stack traces
+function logErrorWithStack(functionName: string, error: unknown, context?: Record<string, unknown>): void {
+  const errorDetails = {
+    function: functionName,
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    name: error instanceof Error ? error.name : 'UnknownError',
+    context: context || {},
+    timestamp: new Date().toISOString()
+  };
+
+  logger.log('error', `Detailed error for ${functionName}`, errorDetails);
+}
+
+// Retry wrapper with exponential backoff
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  config: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<T> {
+  let lastError: unknown;
+  
+  for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
+    try {
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Operation timed out after ${config.timeoutMs}ms`)), config.timeoutMs);
+      });
+
+      // Race between operation and timeout
+      const result = await Promise.race([
+        operation(),
+        timeoutPromise
+      ]);
+
+      if (attempt > 1) {
+        logger.log('info', `${operationName} succeeded after retry`, {
+          attempt,
+          totalAttempts: config.maxRetries
+        });
+      }
+
+      return result;
+
+    } catch (error) {
+      lastError = error;
+      
+      logErrorWithStack(operationName, error, {
+        attempt,
+        maxRetries: config.maxRetries,
+        willRetry: attempt < config.maxRetries
+      });
+
+      if (attempt < config.maxRetries) {
+        const delayMs = calculateBackoffDelay(attempt, config);
+        logger.log('warn', `Retrying ${operationName} after delay`, {
+          attempt,
+          nextAttempt: attempt + 1,
+          delayMs
+        });
+        await sleep(delayMs);
       }
     }
+  }
+
+  throw lastError;
+}
+
+// Pre-flight checks before running smoke tests
+async function runPreflightChecks(): Promise<{ passed: boolean; issues: string[] }> {
+  const issues: string[] = [];
+
+  try {
+    // Check if functions directory exists
+    const functionsDir = './supabase/functions';
+    try {
+      const dirStat = await Deno.stat(functionsDir);
+      if (!dirStat.isDirectory) {
+        issues.push(`${functionsDir} exists but is not a directory`);
+      }
+    } catch {
+      issues.push(`Functions directory not found: ${functionsDir}`);
+      return { passed: false, issues };
+    }
+
+    // Check read permissions
+    try {
+      const testRead = Deno.readDir(functionsDir);
+      for await (const _ of testRead) {
+        break; // Just test we can read
+      }
+    } catch (error) {
+      issues.push(`Cannot read functions directory: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Check for at least one function
+    let functionCount = 0;
+    for await (const entry of Deno.readDir(functionsDir)) {
+      if (entry.isDirectory && !entry.name.startsWith('.') && !entry.name.startsWith('_')) {
+        functionCount++;
+      }
+    }
+
+    if (functionCount === 0) {
+      issues.push('No Edge Functions found in functions directory');
+    }
+
+    logger.log('info', 'Pre-flight checks completed', {
+      passed: issues.length === 0,
+      functionCount,
+      issues
+    });
+
+  } catch (error) {
+    issues.push(`Pre-flight check failed: ${error instanceof Error ? error.message : String(error)}`);
+    logErrorWithStack('Pre-flight checks', error);
+  }
+
+  return {
+    passed: issues.length === 0,
+    issues
+  };
+}
+
+// Test result cache to avoid repeated failures
+interface CachedTestResult {
+  result: FunctionValidationReport;
+  timestamp: number;
+  hash: string;
+}
+
+const testResultCache = new Map<string, CachedTestResult>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Simple hash function for file content
+async function hashFileContent(filePath: string): Promise<string> {
+  try {
+    const content = await Deno.readTextFile(filePath);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return '';
+  }
+}
+
+// Check if cached result is still valid
+function getCachedResult(functionName: string, fileHash: string): FunctionValidationReport | null {
+  const cached = testResultCache.get(functionName);
+  if (!cached) {
+    return null;
+  }
+
+  const now = Date.now();
+  const age = now - cached.timestamp;
+
+  if (age > CACHE_TTL_MS) {
+    testResultCache.delete(functionName);
+    return null;
+  }
+
+  if (cached.hash !== fileHash) {
+    testResultCache.delete(functionName);
+    return null;
+  }
+
+  logger.log('info', `Using cached result for ${functionName}`, {
+    age: `${Math.round(age / 1000)}s`,
+    hash: fileHash.substring(0, 8)
+  });
+
+  return cached.result;
+}
+
+// Cache test result
+function cacheTestResult(functionName: string, fileHash: string, result: FunctionValidationReport): void {
+  testResultCache.set(functionName, {
+    result,
+    timestamp: Date.now(),
+    hash: fileHash
+  });
+}
+
+// Structured response format
+interface DetailedTestResponse {
+  status: 'success' | 'partial_success' | 'failure';
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    criticalFailures: number;
+    nonCriticalFailures: number;
+  };
+  results: FunctionValidationReport[];
+  preflightChecks: {
+    passed: boolean;
+    issues: string[];
+  };
+  metadata: {
+    timestamp: string;
+    duration_ms: number;
+    cached_results: number;
+    retried_operations: number;
+  };
+  criticalIssues: Array<{
+    function: string;
+    issue: string;
+    severity: 'critical' | 'warning';
+  }>;
+}
+
+// Classify issue severity
+function classifyIssueSeverity(issue: string): 'critical' | 'warning' {
+  const criticalPatterns = [
+    /no deno\.serve/i,
+    /file not found/i,
+    /cannot read/i,
+    /invalid handler/i,
+    /syntax error/i,
+    /await keyword without async/i
+  ];
+
+  for (const pattern of criticalPatterns) {
+    if (pattern.test(issue)) {
+      return 'critical';
+    }
+  }
+
+  return 'warning';
+}
+
+// Enhanced smoke test runner with all improvements
+async function runSmokeTestsWithValidation() {
+  const startTime = Date.now();
+  const results: FunctionValidationReport[] = [];
+  const functionsDir = './supabase/functions';
+  let cachedResultCount = 0;
+  let retriedOperationCount = 0;
+
+  try {
+    // Run pre-flight checks first
+    const preflightChecks = await runPreflightChecks();
+    
+    if (!preflightChecks.passed) {
+      logger.log('error', 'Pre-flight checks failed', {
+        issues: preflightChecks.issues
+      });
+
+      const duration = Date.now() - startTime;
+      const response: DetailedTestResponse = {
+        status: 'failure',
+        summary: {
+          total: 0,
+          passed: 0,
+          failed: 0,
+          criticalFailures: preflightChecks.issues.length,
+          nonCriticalFailures: 0
+        },
+        results: [],
+        preflightChecks,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          duration_ms: duration,
+          cached_results: 0,
+          retried_operations: 0
+        },
+        criticalIssues: preflightChecks.issues.map(issue => ({
+          function: 'system',
+          issue,
+          severity: 'critical' as const
+        }))
+      };
+
+      return response;
+    }
+
+    // Get list of Edge Functions with retry
+    const functionDirs = await retryWithBackoff(
+      async () => {
+        const dirs: string[] = [];
+        for await (const entry of Deno.readDir(functionsDir)) {
+          if (entry.isDirectory && !entry.name.startsWith('.') && !entry.name.startsWith('_')) {
+            dirs.push(entry.name);
+          }
+        }
+        return dirs;
+      },
+      'List Edge Functions',
+      DEFAULT_RETRY_CONFIG
+    );
+
+    retriedOperationCount++;
 
     logger.log('info', 'Starting Edge Function static analysis validation', { 
       functionCount: functionDirs.length,
@@ -356,11 +416,31 @@ async function runSmokeTestsWithValidation() {
       const indexPath = `${functionsDir}/${funcName}/index.ts`;
       
       try {
-        // Check if index.ts exists
-        await Deno.stat(indexPath);
+        // Check cache first
+        const fileHash = await hashFileContent(indexPath);
+        const cachedResult = getCachedResult(funcName, fileHash);
+        
+        if (cachedResult) {
+          results.push(cachedResult);
+          cachedResultCount++;
+          continue;
+        }
 
-        // Perform static analysis validation (no execution)
-        const validation = await validateEdgeFunctionStructure(indexPath);
+        // Check if index.ts exists with retry
+        await retryWithBackoff(
+          async () => await Deno.stat(indexPath),
+          `Check ${funcName} file`,
+          { ...DEFAULT_RETRY_CONFIG, maxRetries: 2 }
+        );
+        retriedOperationCount++;
+
+        // Perform static analysis validation (no execution) with retry
+        const validation = await retryWithBackoff(
+          async () => await validateEdgeFunctionStructure(indexPath),
+          `Validate ${funcName}`,
+          DEFAULT_RETRY_CONFIG
+        );
+        retriedOperationCount++;
 
         const report: FunctionValidationReport = {
           function_name: funcName,
@@ -376,39 +456,4 @@ async function runSmokeTestsWithValidation() {
         };
 
         results.push(report);
-
-        logger.log(validation.valid ? 'info' : 'warn', `Validated ${funcName} (static analysis)`, {
-          valid: validation.valid,
-          issueCount: validation.issues.length,
-          warningCount: validation.warnings.length,
-          hasDenoServe: validation.patterns.hasDenoServe,
-          handlerSignatureValid: validation.patterns.handlerSignatureValid
-        });
-
-      } catch (statError) {
-        const report: FunctionValidationReport = {
-          function_name: funcName,
-          has_deno_serve: false,
-          handler_signature_valid: false,
-          imports_detected: [],
-          cors_configured: false,
-          error_handling_present: false,
-          valid: false,
-          issues: [`File not found or inaccessible: ${statError instanceof Error ? statError.message : String(statError)}`],
-          warnings: [],
-          timestamp: new Date().toISOString()
-        };
-
-        results.push(report);
-
-        logger.log('error', `Failed to access ${funcName}`, {
-          error: String(statError)
-        });
-      }
-    }
-
-    const validCount = results.filter(r => r.valid).length;
-    const totalCount = results.length;
-
-    return {
-      status: validCount === totalCount ?
+        cacheTestResult(funcName
