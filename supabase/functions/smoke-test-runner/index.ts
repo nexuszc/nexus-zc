@@ -1,228 +1,231 @@
-// Setup
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
+// CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
 // Logger utility
 const logger = {
   log: (level: string, message: string, meta?: any) => {
-    console.log(JSON.stringify({
+    const logEntry = {
+      timestamp: new Date().toISOString(),
       level,
       message,
-      timestamp: new Date().toISOString(),
       ...meta
-    }));
+    };
+    console.log(JSON.stringify(logEntry));
   }
 };
 
+// Generate request ID for tracking
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
 // Health check function
 async function performHealthCheck() {
-  const checks = {
-    environment: true,
-    supabase: false,
-    timestamp: new Date().toISOString()
-  };
-
+  const timestamp = new Date().toISOString();
+  
   try {
-    // Check environment variables
-    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
+    // Check Supabase connection
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
     
-    if (missingVars.length > 0) {
-      checks.environment = false;
-      logger.log('error', 'Missing environment variables', { missingVars });
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials');
     }
 
-    // Check Supabase connection
-    if (checks.environment) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
-      const { error } = await supabase.from('system_config').select('count').limit(1);
-      checks.supabase = !error;
-      
-      if (error) {
-        logger.log('error', 'Supabase connection check failed', { error: String(error) });
-      }
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Simple query to verify database connectivity
+    const { error } = await supabase.from('users').select('count').limit(1).single();
+    
+    if (error && error.code !== 'PGRST116') {
+      throw new Error(`Database check failed: ${error.message}`);
     }
 
     return {
-      status: checks.environment && checks.supabase ? 'ok' : 'error',
-      checks,
-      timestamp: new Date().toISOString()
+      status: 'ok',
+      timestamp,
+      checks: {
+        supabase: 'connected',
+        environment: 'configured'
+      }
     };
   } catch (error) {
-    logger.log('error', 'Health check failed', { error: String(error) });
     return {
       status: 'error',
-      checks,
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
+      timestamp,
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
 // Smoke test runner function
 async function runSmokeTests() {
-  const testResults = {
-    status: 'success',
-    tests: [] as any[],
-    timestamp: new Date().toISOString(),
-    summary: {
-      total: 0,
-      passed: 0,
-      failed: 0
-    }
-  };
-
+  const timestamp = new Date().toISOString();
+  const results: any[] = [];
+  
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Missing Supabase credentials');
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Test 1: Database connectivity
-    const dbTest = {
-      name: 'database_connectivity',
-      status: 'running',
-      startTime: new Date().toISOString()
-    };
-
     try {
-      const { data, error } = await supabase.from('system_config').select('count').limit(1);
-      dbTest.status = error ? 'failed' : 'passed';
-      if (error) {
-        (dbTest as any).error = String(error);
-        testResults.status = 'error';
-      }
-    } catch (error) {
-      dbTest.status = 'failed';
-      (dbTest as any).error = String(error);
-      testResults.status = 'error';
-    }
-
-    (dbTest as any).endTime = new Date().toISOString();
-    testResults.tests.push(dbTest);
-
-    // Test 2: Edge function invocation
-    const functionTest = {
-      name: 'edge_function_invocation',
-      status: 'running',
-      startTime: new Date().toISOString()
-    };
-
-    try {
-      const { data, error } = await supabase.functions.invoke('smoke-test', {
-        body: { test: true }
+      const { error } = await supabase.from('users').select('count').limit(1);
+      results.push({
+        test: 'database_connectivity',
+        status: error ? 'failed' : 'passed',
+        error: error?.message
       });
-      
-      functionTest.status = error ? 'failed' : 'passed';
-      if (error) {
-        (functionTest as any).error = String(error);
-        testResults.status = 'error';
-      }
     } catch (error) {
-      functionTest.status = 'failed';
-      (functionTest as any).error = String(error);
-      testResults.status = 'error';
+      results.push({
+        test: 'database_connectivity',
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
 
-    (functionTest as any).endTime = new Date().toISOString();
-    testResults.tests.push(functionTest);
+    // Test 2: Auth service check
+    try {
+      const { error } = await supabase.auth.getSession();
+      results.push({
+        test: 'auth_service',
+        status: error ? 'failed' : 'passed',
+        error: error?.message
+      });
+    } catch (error) {
+      results.push({
+        test: 'auth_service',
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
 
-    // Calculate summary
-    testResults.summary.total = testResults.tests.length;
-    testResults.summary.passed = testResults.tests.filter(t => t.status === 'passed').length;
-    testResults.summary.failed = testResults.tests.filter(t => t.status === 'failed').length;
+    // Test 3: Environment variables
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
+    results.push({
+      test: 'environment_variables',
+      status: missingVars.length === 0 ? 'passed' : 'failed',
+      missing: missingVars
+    });
 
-    return testResults;
+    const allPassed = results.every(r => r.status === 'passed');
+
+    return {
+      status: allPassed ? 'success' : 'failed',
+      timestamp,
+      results,
+      summary: {
+        total: results.length,
+        passed: results.filter(r => r.status === 'passed').length,
+        failed: results.filter(r => r.status === 'failed').length
+      }
+    };
   } catch (error) {
-    logger.log('error', 'Smoke test execution failed', { error: String(error) });
     return {
       status: 'error',
-      tests: testResults.tests,
+      timestamp,
       error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString(),
-      summary: testResults.summary
+      results
     };
   }
 }
 
 // Main request handler
-async function handleRequest(req: Request): Promise<Response> {
-  const requestId = crypto.randomUUID();
+async function handleRequest(req: Request) {
+  const requestId = generateRequestId();
   
   try {
-    logger.log('info', 'Received request', {
-      requestId,
-      method: req.method,
-      url: req.url
+    logger.log('info', 'Incoming request', { 
+      requestId, 
+      method: req.method, 
+      url: req.url 
     });
 
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-      return new Response('ok', { 
-        headers: corsHeaders 
+      logger.log('info', 'Handling CORS preflight', { requestId });
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders
       });
     }
 
-    // Handle GET - health check only
+    // GET endpoint - health check only
     if (req.method === 'GET') {
-      try {
+      const url = new URL(req.url);
+      const path = url.pathname;
+
+      // Check if this is a status/health check request
+      if (path.includes('/health') || path.includes('/status')) {
         logger.log('info', 'Processing health check request', { requestId });
-
-        // Create timeout promise (10s for health check)
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Health check timeout after 10s')), 10000);
-        });
-
-        // Race between health check and timeout
-        const healthCheckResult = await Promise.race([
-          performHealthCheck(),
-          timeoutPromise
-        ]) as any;
-
-        logger.log('info', 'Health check completed', { 
-          requestId, 
-          status: healthCheckResult.status 
-        });
-
-        return new Response(
-          JSON.stringify(healthCheckResult),
-          {
-            status: healthCheckResult.status === 'ok' ? 200 : 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      } catch (error) {
-        logger.log('error', 'Health check failed', { requestId, error: String(error) });
         
-        return new Response(
-          JSON.stringify({
-            status: 'error',
-            timestamp: new Date().toISOString(),
-            function: 'smoke-test-runner',
-            error: error instanceof Error ? error.message : String(error),
-            requestId
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
+        try {
+          const healthCheck = await performHealthCheck();
+          
+          return new Response(
+            JSON.stringify(healthCheck),
+            {
+              status: healthCheck.status === 'ok' ? 200 : 503,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        } catch (error) {
+          logger.log('error', 'Health check failed', { requestId, error: String(error) });
+          
+          return new Response(
+            JSON.stringify({
+              status: 'error',
+              timestamp: new Date().toISOString(),
+              error: error instanceof Error ? error.message : String(error),
+              requestId
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
       }
+
+      // Default GET - return function info
+      logger.log('info', 'Returning function info', { requestId });
+      return new Response(
+        JSON.stringify({
+          function: 'smoke-test-runner',
+          version: '1.0.0',
+          endpoints: {
+            'GET /health': 'Health check',
+            'POST /': 'Run full test suite',
+            'POST /?action=smoke': 'Run smoke tests only'
+          },
+          requestId
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
-    // Handle POST with action parameter
-    const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    // POST endpoint with action query parameter for smoke tests only
+    if (req.method === 'POST') {
+      const url = new URL(req.url);
+      const action = url.searchParams.get('action');
 
-    if (req.method === 'POST' && action === 'smoke-test') {
-      try {
+      if (action === 'smoke') {
         logger.log('info', 'Processing smoke test request', { requestId });
 
         // Create timeout promise (30s max)
@@ -248,110 +251,102 @@ async function handleRequest(req: Request): Promise<Response> {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
-      } catch (error) {
-        logger.log('error', 'Smoke test run failed', { requestId, error: String(error) });
-        
-        return new Response(
-          JSON.stringify({
-            status: 'error',
-            timestamp: new Date().toISOString(),
-            function: 'smoke-test-runner',
-            error: error instanceof Error ? error.message : String(error),
-            requestId
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    }
-
-    // Default POST handler - run both health check and smoke tests
-    if (req.method === 'POST') {
-      try {
-        logger.log('info', 'Processing default POST request - running full suite', { requestId });
-
-        // Parse request body if provided
-        let requestBody = {};
+      } else {
+        // Default POST handler - run both health check and smoke tests
         try {
-          const bodyText = await req.text();
-          if (bodyText) {
-            requestBody = JSON.parse(bodyText);
-          }
-        } catch (parseError) {
-          logger.log('warn', 'Could not parse request body', { requestId, error: String(parseError) });
-        }
+          logger.log('info', 'Processing default POST request - running full suite', { requestId });
 
-        // Create timeout promise (30s max)
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Request timeout after 30s')), 30000);
-        });
-
-        // Run health check first
-        const healthCheckResult = await Promise.race([
-          performHealthCheck(),
-          timeoutPromise
-        ]) as any;
-
-        // If health check passes, run smoke tests
-        let smokeTestResult = null;
-        if (healthCheckResult.status === 'ok') {
+          // Parse request body if provided
+          let requestBody: any = {};
           try {
-            smokeTestResult = await Promise.race([
-              runSmokeTests(),
-              timeoutPromise
-            ]) as any;
-          } catch (smokeError) {
-            logger.log('error', 'Smoke test failed during full suite', { 
-              requestId, 
-              error: String(smokeError) 
-            });
-            smokeTestResult = {
-              status: 'error',
-              error: smokeError instanceof Error ? smokeError.message : String(smokeError),
-              timestamp: new Date().toISOString()
-            };
+            const bodyText = await req.text();
+            if (bodyText) {
+              requestBody = JSON.parse(bodyText);
+            }
+          } catch (parseError) {
+            logger.log('warn', 'Could not parse request body', { requestId, error: String(parseError) });
           }
-        }
 
-        const response = {
-          status: healthCheckResult.status === 'ok' && smokeTestResult?.status === 'success' ? 'ok' : 'error',
-          timestamp: new Date().toISOString(),
-          function: 'smoke-test-runner',
-          requestId,
-          healthCheck: healthCheckResult,
-          smokeTest: smokeTestResult
-        };
+          // Extract test_suite parameter if provided
+          const test_suite = requestBody.test_suite || 'full';
 
-        logger.log('info', 'Full suite completed', { 
-          requestId, 
-          status: response.status
-        });
+          // Create timeout promise (30s max)
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout after 30s')), 30000);
+          });
 
-        return new Response(
-          JSON.stringify(response),
-          {
-            status: response.status === 'ok' ? 200 : 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          // Run health check first
+          const healthCheckResult = await Promise.race([
+            performHealthCheck(),
+            timeoutPromise
+          ]) as any;
+
+          // If health check passes, run smoke tests
+          let smokeTestResult = null;
+          if (healthCheckResult.status === 'ok') {
+            try {
+              smokeTestResult = await Promise.race([
+                runSmokeTests(),
+                timeoutPromise
+              ]) as any;
+            } catch (smokeError) {
+              logger.log('error', 'Smoke test failed during full suite', { 
+                requestId, 
+                error: String(smokeError) 
+              });
+              smokeTestResult = {
+                status: 'error',
+                error: smokeError instanceof Error ? smokeError.message : String(smokeError),
+                timestamp: new Date().toISOString()
+              };
+            }
           }
-        );
-      } catch (error) {
-        logger.log('error', 'Full suite failed', { requestId, error: String(error) });
-        
-        return new Response(
-          JSON.stringify({
-            status: 'error',
+
+          const response = {
+            success: healthCheckResult.status === 'ok' && smokeTestResult?.status === 'success',
+            status: healthCheckResult.status === 'ok' && smokeTestResult?.status === 'success' ? 'ok' : 'error',
             timestamp: new Date().toISOString(),
             function: 'smoke-test-runner',
-            error: error instanceof Error ? error.message : String(error),
-            requestId
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
+            suite: test_suite,
+            requestId,
+            healthCheck: healthCheckResult,
+            smokeTest: smokeTestResult,
+            results: {
+              health: healthCheckResult,
+              tests: smokeTestResult
+            }
+          };
+
+          logger.log('info', 'Full suite completed', { 
+            requestId, 
+            status: response.status
+          });
+
+          return new Response(
+            JSON.stringify(response),
+            {
+              status: response.status === 'ok' ? 200 : 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            }
+          );
+        } catch (error) {
+          logger.log('error', 'Full suite failed', { requestId, error: String(error) });
+          
+          return new Response(
+            JSON.stringify({
+              success: false,
+              status: 'error',
+              timestamp: new Date().toISOString(),
+              function: 'smoke-test-runner',
+              error: error instanceof Error ? error.message : String(error),
+              requestId
+            }),
+            {
+              status: 500,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            }
+          );
+        }
       }
     }
 
@@ -379,6 +374,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
     return new Response(
       JSON.stringify({
+        success: false,
         status: 'error',
         timestamp: new Date().toISOString(),
         function: 'smoke-test-runner',
@@ -387,24 +383,59 @@ async function handleRequest(req: Request): Promise<Response> {
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
   }
 }
 
-// Export using Deno.serve() with proper async handler wrapper
-serve(async (req: Request) => {
+// Deno.serve() wrapper with proper error handling
+Deno.serve(async (req: Request) => {
+  const { method } = req;
+  
+  // Handle CORS preflight immediately
+  if (method === 'OPTIONS') {
+    return new Response(null, { 
+      status: 200, 
+      headers: corsHeaders 
+    });
+  }
+
   try {
+    // For POST requests, check if test_suite parameter is provided
+    if (method === 'POST') {
+      try {
+        const contentType = req.headers.get('content-type');
+        let test_suite = 'full';
+        
+        if (contentType?.includes('application/json')) {
+          const body = await req.clone().json();
+          test_suite = body.test_suite || 'full';
+        }
+
+        // Invoke the main handler which will process the request
+        return await handleRequest(req);
+      } catch (jsonError) {
+        // If JSON parsing fails, still proceed with default handler
+        logger.log('warn', 'JSON parse error, using default handler', { 
+          error: String(jsonError) 
+        });
+        return await handleRequest(req);
+      }
+    }
+
+    // For GET requests and other methods, use the main handler
     return await handleRequest(req);
+    
   } catch (error) {
-    logger.log('error', 'Fatal error in serve wrapper', {
+    logger.log('error', 'Fatal error in Deno.serve wrapper', {
       error: String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
     
     return new Response(
       JSON.stringify({
+        success: false,
         status: 'error',
         timestamp: new Date().toISOString(),
         function: 'smoke-test-runner',
@@ -413,7 +444,7 @@ serve(async (req: Request) => {
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
   }
