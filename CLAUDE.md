@@ -477,7 +477,7 @@ Then productized and sold to other multi-business operators.
 5. Add Conversation Context Memory
 6. Draft operating agreement for Nexus ZC LLC
 7. Build Roofing OS go-to-market system and landing page
-8. Improve Brian client health from 65 to 80+
+8. Complete homeowner portal fixes and documentation
 
 ---
 
