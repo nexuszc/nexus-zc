@@ -1,258 +1,4 @@
-or as Error).message}`);
-  }
-
-  return {
-    valid: issues.length === 0,
-    issues,
-    warnings,
-    patterns
-  };
-}
-
-// Hash function for file content
-async function hashFileContent(filePath: string): Promise<string> {
-  try {
-    const content = await Deno.readTextFile(filePath);
-    const encoder = new TextEncoder();
-    const data = encoder.encode(content);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  } catch {
-    return '';
-  }
-}
-
-// Check if cached result is still valid
-function getCachedResult(functionName: string, fileHash: string): FunctionValidationReport | null {
-  const cached = testResultCache.get(functionName);
-  if (!cached) {
-    return null;
-  }
-
-  const now = Date.now();
-  const age = now - cached.timestamp;
-
-  if (age > CACHE_TTL_MS) {
-    testResultCache.delete(functionName);
-    return null;
-  }
-
-  if (cached.hash !== fileHash) {
-    testResultCache.delete(functionName);
-    return null;
-  }
-
-  logger.log('info', `Using cached result for ${functionName}`, {
-    age: `${Math.round(age / 1000)}s`,
-    hash: fileHash.substring(0, 8)
-  });
-
-  return cached.result;
-}
-
-// Cache test result
-function cacheTestResult(functionName: string, fileHash: string, result: FunctionValidationReport): void {
-  testResultCache.set(functionName, {
-    result,
-    timestamp: Date.now(),
-    hash: fileHash
-  });
-}
-
-// Health check pre-validation
-async function performHealthCheck(): Promise<{ passed: boolean; issues: string[] }> {
-  const issues: string[] = [];
-  
-  try {
-    // Check file system access
-    try {
-      await Deno.stat('./supabase/functions');
-    } catch {
-      issues.push('Cannot access supabase/functions directory');
-    }
-
-    // Check memory availability
-    if (Deno.systemMemoryInfo) {
-      const memInfo = Deno.systemMemoryInfo();
-      if (memInfo.available < 50 * 1024 * 1024) { // Less than 50MB
-        issues.push('Low system memory available');
-      }
-    }
-
-    // Check Deno runtime version
-    const version = Deno.version.deno;
-    if (!version) {
-      issues.push('Unable to detect Deno version');
-    }
-
-    // Verify permissions
-    const requiredPermissions = ['read', 'env', 'net'];
-    for (const perm of requiredPermissions) {
-      try {
-        const status = await Deno.permissions.query({ name: perm as Deno.PermissionName });
-        if (status.state !== 'granted') {
-          issues.push(`Missing ${perm} permission`);
-        }
-      } catch {
-        issues.push(`Unable to verify ${perm} permission`);
-      }
-    }
-
-  } catch (error) {
-    issues.push(`Health check failed: ${(error as Error).message}`);
-  }
-
-  return {
-    passed: issues.length === 0,
-    issues
-  };
-}
-
-// Post-test cleanup
-async function performPostTestCleanup(results: FunctionValidationReport[]): Promise<void> {
-  try {
-    // Clear old cache entries
-    const now = Date.now();
-    for (const [key, value] of testResultCache.entries()) {
-      if (now - value.timestamp > CACHE_TTL_MS) {
-        testResultCache.delete(key);
-      }
-    }
-
-    // Log cleanup statistics
-    logger.log('info', 'Post-test cleanup completed', {
-      cacheSize: testResultCache.size,
-      resultsProcessed: results.length
-    });
-
-  } catch (error) {
-    logger.log('error', 'Post-test cleanup failed', { error: (error as Error).message });
-  }
-}
-
-// Retry logic with exponential backoff
-async function retryWithBackoff<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000,
-  context: string = 'operation'
-): Promise<{ result: T | null; retries: number; error: Error | null }> {
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await operation();
-      if (attempt > 0) {
-        logger.log('info', `${context} succeeded after ${attempt} retries`);
-      }
-      return { result, retries: attempt, error: null };
-    } catch (error) {
-      lastError = error as Error;
-      
-      if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt);
-        logger.log('warn', `${context} failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
-          error: lastError.message
-        });
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  logger.log('error', `${context} failed after ${maxRetries} retries`, {
-    error: lastError?.message
-  });
-  
-  return { result: null, retries: maxRetries, error: lastError };
-}
-
-// Parallel test execution with Promise.allSettled
-async function executeTestsInParallel(
-  testFunctions: Array<{ name: string; test: () => Promise<FunctionValidationReport> }>,
-  maxConcurrency: number = 5
-): Promise<Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }>> {
-  const results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }> = [];
-  
-  // Process in batches to control concurrency
-  for (let i = 0; i < testFunctions.length; i += maxConcurrency) {
-    const batch = testFunctions.slice(i, i + maxConcurrency);
-    
-    const batchPromises = batch.map(async ({ name, test }) => {
-      try {
-        const result = await test();
-        return { name, result, error: null };
-      } catch (error) {
-        return { name, result: null, error: error as Error };
-      }
-    });
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    for (const settledResult of batchResults) {
-      if (settledResult.status === 'fulfilled') {
-        results.push(settledResult.value);
-      } else {
-        results.push({
-          name: 'unknown',
-          result: null,
-          error: settledResult.reason as Error
-        });
-      }
-    }
-  }
-  
-  return results;
-}
-
-// Individual test isolation wrapper
-async function executeIsolatedTest(
-  functionName: string,
-  testFunc: () => Promise<FunctionValidationReport>,
-  timeout: number = 30000
-): Promise<{ result: FunctionValidationReport | null; timedOut: boolean; error: Error | null; stackTrace: string | null }> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`Test timeout exceeded: ${timeout}ms for ${functionName}`));
-    }, timeout);
-  });
-
-  try {
-    const result = await Promise.race([testFunc(), timeoutPromise]);
-    return { 
-      result: result as FunctionValidationReport, 
-      timedOut: false, 
-      error: null,
-      stackTrace: null
-    };
-  } catch (error) {
-    const err = error as Error;
-    const isTimeout = err.message.includes('timeout');
-    
-    return { 
-      result: null, 
-      timedOut: isTimeout, 
-      error: err,
-      stackTrace: err.stack || null
-    };
-  }
-}
-
-// Aggregate test results with detailed metrics
-function aggregateTestResults(
-  results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }>
-): {
-  total: number;
-  passed: number;
-  failed: number;
-  criticalFailures: number;
-  nonCriticalFailures: number;
-  byCategory: { [key: string]: { passed: number; failed: number; total: number } };
-} {
-  const aggregated = {
-    total: results.length,
-    passed: 0,
-    failed: 0,
+failed: 0,
     criticalFailures: 0,
     nonCriticalFailures: 0,
     byCategory: {} as { [key: string]: { passed: number; failed: number; total: number } }
@@ -452,4 +198,231 @@ function createFailureDiagnostic(
   } else if (/timeout/i.test(errorMessage)) {
     suggestedRemediation = 'Reduce function complexity or optimize slow operations';
   } else if (/network/i.test(errorMessage)) {
-    suggestedRemediation
+    suggestedRemediation = 'Check network connectivity and API endpoints';
+  }
+
+  return {
+    check_name: checkName,
+    error_message: errorMessage,
+    affected_component: affectedComponent,
+    category,
+    suggested_remediation: suggestedRemediation,
+    error_code: errorCode,
+    stack_trace: stackTrace
+  };
+}
+
+// Test execution with retry mechanism
+async function executeTestWithRetry(
+  functionName: string,
+  testFunction: () => Promise<FunctionValidationReport>,
+  maxRetries: number = 2
+): Promise<{ name: string; result: FunctionValidationReport | null; error: Error | null; attempts: number }> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[${functionName}] Test attempt ${attempt + 1}/${maxRetries + 1} - Starting`);
+      const startTime = Date.now();
+      
+      const result = await testFunction();
+      
+      const duration = Date.now() - startTime;
+      console.log(`[${functionName}] Test completed in ${duration}ms - Status: ${result.validation_passed ? 'PASSED' : 'FAILED'}`);
+      
+      return { name: functionName, result, error: null, attempts: attempt + 1 };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[${functionName}] Test attempt ${attempt + 1} failed:`, lastError.message);
+      
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+        console.log(`[${functionName}] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  console.error(`[${functionName}] All ${maxRetries + 1} attempts failed`);
+  return { name: functionName, result: null, error: lastError, attempts: maxRetries + 1 };
+}
+
+// Enhanced orchestration with parallel execution and timeout
+async function orchestrateSmokeTests(
+  testTargets: string[],
+  timeout: number = 30000
+): Promise<{
+  results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null; attempts: number }>;
+  totalDuration: number;
+  retriedTests: number;
+}> {
+  console.log(`Starting orchestration for ${testTargets.length} tests with ${timeout}ms timeout`);
+  const startTime = Date.now();
+  
+  const testPromises = testTargets.map(async (functionName) => {
+    console.log(`[${functionName}] Queuing test execution`);
+    
+    const timeoutPromise = new Promise<{ name: string; result: null; error: Error; attempts: number }>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Test execution timeout after ${timeout}ms`));
+      }, timeout);
+    });
+    
+    const testExecution = executeTestWithRetry(
+      functionName,
+      async () => {
+        console.log(`[${functionName}] Invoking smoke-test function`);
+        
+        const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/smoke-test`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ function_name: functionName })
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Smoke test request failed: ${response.status} - ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log(`[${functionName}] Received response:`, JSON.stringify(result).substring(0, 200));
+        
+        return result as FunctionValidationReport;
+      }
+    );
+    
+    try {
+      return await Promise.race([testExecution, timeoutPromise]);
+    } catch (error) {
+      console.error(`[${functionName}] Test orchestration error:`, error);
+      return {
+        name: functionName,
+        result: null,
+        error: error instanceof Error ? error : new Error(String(error)),
+        attempts: 1
+      };
+    }
+  });
+  
+  console.log('Executing all tests in parallel...');
+  const settledResults = await Promise.allSettled(testPromises);
+  
+  const results = settledResults.map((settled, index) => {
+    const functionName = testTargets[index];
+    
+    if (settled.status === 'fulfilled') {
+      return settled.value;
+    } else {
+      console.error(`[${functionName}] Promise rejected:`, settled.reason);
+      return {
+        name: functionName,
+        result: null,
+        error: settled.reason instanceof Error ? settled.reason : new Error(String(settled.reason)),
+        attempts: 1
+      };
+    }
+  });
+  
+  const totalDuration = Date.now() - startTime;
+  const retriedTests = results.filter(r => r.attempts > 1).length;
+  
+  console.log(`Orchestration completed in ${totalDuration}ms. Retried tests: ${retriedTests}`);
+  
+  return { results, totalDuration, retriedTests };
+}
+
+// Enhanced result aggregation with detailed metrics
+function aggregateTestResults(
+  results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null; attempts: number }>
+): {
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    criticalFailures: number;
+    nonCriticalFailures: number;
+  };
+  byCategory: { [key: string]: { passed: number; failed: number; total: number; timeout_exceeded: boolean } };
+  individualResults: Array<{
+    functionName: string;
+    status: 'passed' | 'failed' | 'error';
+    attempts: number;
+    criticalIssues: number;
+    warnings: number;
+  }>;
+} {
+  const summary = {
+    total: results.length,
+    passed: 0,
+    failed: 0,
+    criticalFailures: 0,
+    nonCriticalFailures: 0
+  };
+  
+  const byCategory: { [key: string]: { passed: number; failed: number; total: number; timeout_exceeded: boolean } } = {};
+  const individualResults: Array<{
+    functionName: string;
+    status: 'passed' | 'failed' | 'error';
+    attempts: number;
+    criticalIssues: number;
+    warnings: number;
+  }> = [];
+  
+  for (const { name, result, error, attempts } of results) {
+    let status: 'passed' | 'failed' | 'error' = 'error';
+    let criticalIssues = 0;
+    let warnings = 0;
+    
+    if (error || !result) {
+      summary.failed++;
+      summary.criticalFailures++;
+      status = 'error';
+      criticalIssues = 1;
+    } else if (result.validation_passed) {
+      summary.passed++;
+      status = 'passed';
+    } else {
+      summary.failed++;
+      status = 'failed';
+      
+      const hasCritical = result.checks.some(check => !check.passed && check.severity === 'critical');
+      if (hasCritical) {
+        summary.criticalFailures++;
+        criticalIssues = result.checks.filter(check => !check.passed && check.severity === 'critical').length;
+      } else {
+        summary.nonCriticalFailures++;
+        warnings = result.checks.filter(check => !check.passed).length;
+      }
+      
+      // Categorize by check type
+      for (const check of result.checks) {
+        const category = check.check_name;
+        if (!byCategory[category]) {
+          byCategory[category] = { passed: 0, failed: 0, total: 0, timeout_exceeded: false };
+        }
+        byCategory[category].total++;
+        if (check.passed) {
+          byCategory[category].passed++;
+        } else {
+          byCategory[category].failed++;
+        }
+      }
+    }
+    
+    individualResults.push({
+      functionName: name,
+      status,
+      attempts,
+      criticalIssues,
+      warnings
+    });
+  }
+  
+  return { summary, byCategory, individualResults };
+}
+
+// Generate comprehensive status report
+function generateStatusReport(
