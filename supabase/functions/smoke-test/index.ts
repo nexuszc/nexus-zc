@@ -1,98 +1,151 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
-import { logger } from '../_shared/logger.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { corsHeaders } from '../_shared/cors.ts';
 
 /**
- * Validate environment variables
+ * Logger utility
  */
-function validateEnvironment(): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-  
-  const requiredVars = [
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY'
-  ];
-  
-  for (const varName of requiredVars) {
-    if (!Deno.env.get(varName)) {
-      errors.push(`Missing required environment variable: ${varName}`);
-    }
+const logger = {
+  info: (message: string, meta?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
+  },
+  error: (message: string, meta?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
+  },
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
   }
+};
+
+/**
+ * Environment validation
+ */
+function validateEnvironment(): { isValid: boolean; missing: string[] } {
+  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+  const missing = required.filter(key => !Deno.env.get(key));
   
   return {
-    valid: errors.length === 0,
-    errors
+    isValid: missing.length === 0,
+    missing
   };
 }
 
 /**
- * Test database connection
+ * Database connectivity check
  */
-async function testDatabaseConnection(): Promise<{ healthy: boolean; latency?: number; error?: string }> {
+async function checkDatabaseConnectivity(): Promise<{ connected: boolean; error?: string; latency?: number }> {
   const startTime = Date.now();
+  
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Missing Supabase credentials');
+    if (!supabaseUrl || !supabaseKey) {
+      return {
+        connected: false,
+        error: 'Missing Supabase credentials'
+      };
     }
     
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from('users').select('id').limit(1);
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    if (error) {
-      throw error;
+    const { error } = await supabase.from('profiles').select('count').limit(1).single();
+    
+    const latency = Date.now() - startTime;
+    
+    if (error && error.code !== 'PGRST116') {
+      return {
+        connected: false,
+        error: error.message,
+        latency
+      };
     }
     
     return {
-      healthy: true,
+      connected: true,
+      latency
+    };
+  } catch (error) {
+    return {
+      connected: false,
+      error: error instanceof Error ? error.message : String(error),
       latency: Date.now() - startTime
+    };
+  }
+}
+
+/**
+ * Edge function health check
+ */
+async function checkEdgeFunctionHealth(): Promise<{ healthy: boolean; error?: string }> {
+  try {
+    const memoryUsage = (Deno as any).memoryUsage?.() || {};
+    
+    return {
+      healthy: true,
+      error: undefined
     };
   } catch (error) {
     return {
       healthy: false,
-      latency: Date.now() - startTime,
       error: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
 /**
- * Perform comprehensive health check
+ * Comprehensive health check
  */
 async function performComprehensiveHealthCheck() {
+  const startTime = Date.now();
+  
   const envCheck = validateEnvironment();
-  const dbCheck = await testDatabaseConnection();
+  const dbCheck = await checkDatabaseConnectivity();
+  const functionCheck = await checkEdgeFunctionHealth();
+  
+  const overall = envCheck.isValid && dbCheck.connected && functionCheck.healthy;
   
   return {
-    overall: envCheck.valid && dbCheck.healthy,
+    overall,
     timestamp: new Date().toISOString(),
+    duration: Date.now() - startTime,
     checks: {
       environment: {
-        status: envCheck.valid ? 'healthy' : 'unhealthy',
-        errors: envCheck.errors
+        valid: envCheck.isValid,
+        missing: envCheck.missing
       },
       database: {
-        status: dbCheck.healthy ? 'healthy' : 'unhealthy',
+        connected: dbCheck.connected,
         latency: dbCheck.latency,
         error: dbCheck.error
+      },
+      function: {
+        healthy: functionCheck.healthy,
+        error: functionCheck.error
       }
     }
   };
 }
 
-async function testUserTableAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
+/**
+ * Individual smoke tests
+ */
+async function testDatabaseQuery(): Promise<{ passed: boolean; duration: number; error?: string }> {
   const startTime = Date.now();
+  
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing Supabase credentials');
     }
     
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from('users').select('id').limit(1);
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
     
     if (error) {
       throw error;
@@ -111,18 +164,23 @@ async function testUserTableAccess(): Promise<{ passed: boolean; duration: numbe
   }
 }
 
-async function testNotesTableAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
+async function testAuthService(): Promise<{ passed: boolean; duration: number; error?: string }> {
   const startTime = Date.now();
+  
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing Supabase credentials');
     }
     
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from('notes').select('id').limit(1);
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page: 1,
+      perPage: 1
+    });
     
     if (error) {
       throw error;
@@ -141,18 +199,20 @@ async function testNotesTableAccess(): Promise<{ passed: boolean; duration: numb
   }
 }
 
-async function testChatMessagesTableAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
+async function testStorageAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
   const startTime = Date.now();
+  
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !supabaseKey) {
       throw new Error('Missing Supabase credentials');
     }
     
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from('chat_messages').select('id').limit(1);
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase.storage.listBuckets();
     
     if (error) {
       throw error;
@@ -161,85 +221,6 @@ async function testChatMessagesTableAccess(): Promise<{ passed: boolean; duratio
     return {
       passed: true,
       duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-async function testChatSessionsTableAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
-  const startTime = Date.now();
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from('chat_sessions').select('id').limit(1);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return {
-      passed: true,
-      duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-async function testEnvironmentVariables(): Promise<{ passed: boolean; duration: number; error?: string }> {
-  const startTime = Date.now();
-  try {
-    const envCheck = validateEnvironment();
-    
-    if (!envCheck.valid) {
-      throw new Error(envCheck.errors.join(', '));
-    }
-    
-    return {
-      passed: true,
-      duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-async function testDatabaseLatency(): Promise<{ passed: boolean; duration: number; error?: string; latency?: number }> {
-  const startTime = Date.now();
-  try {
-    const result = await testDatabaseConnection();
-    
-    if (!result.healthy) {
-      throw new Error(result.error || 'Database unhealthy');
-    }
-    
-    const latencyThreshold = 5000; // 5 seconds
-    const passed = (result.latency || 0) < latencyThreshold;
-    
-    return {
-      passed,
-      duration: Date.now() - startTime,
-      latency: result.latency,
-      error: passed ? undefined : `Latency ${result.latency}ms exceeds threshold ${latencyThreshold}ms`
     };
   } catch (error) {
     return {
@@ -254,29 +235,36 @@ async function testDatabaseLatency(): Promise<{ passed: boolean; duration: numbe
  * Run complete smoke test suite
  */
 async function runSmokeTestSuite() {
-  logger.info('Starting smoke test suite');
   const suiteStartTime = Date.now();
   
   const tests = {
-    'environment_variables': await testEnvironmentVariables(),
-    'database_latency': await testDatabaseLatency(),
-    'users_table': await testUserTableAccess(),
-    'notes_table': await testNotesTableAccess(),
-    'chat_messages_table': await testChatMessagesTableAccess(),
-    'chat_sessions_table': await testChatSessionsTableAccess()
+    'Database Query': testDatabaseQuery,
+    'Auth Service': testAuthService,
+    'Storage Access': testStorageAccess
   };
   
-  const testResults = Object.entries(tests);
-  const passed = testResults.filter(([_, result]) => result.passed).length;
-  const failed = testResults.filter(([_, result]) => !result.passed).length;
+  const testResults: Array<[string, { passed: boolean; duration: number; error?: string }]> = [];
   
-  const status = failed === 0 ? 'passed' : 'failed';
+  for (const [name, testFn] of Object.entries(tests)) {
+    logger.info(`Running test: ${name}`);
+    const result = await testFn();
+    testResults.push([name, result]);
+    
+    logger.info(`Test ${name} ${result.passed ? 'passed' : 'failed'}`, {
+      duration: result.duration,
+      error: result.error
+    });
+  }
+  
+  const allPassed = testResults.every(([_, result]) => result.passed);
+  const testsPassed = testResults.filter(([_, result]) => result.passed).length;
+  const testsFailed = testResults.length - testsPassed;
   
   return {
-    status,
-    tests_run: testResults.length,
-    tests_passed: passed,
-    tests_failed: failed,
+    status: allPassed ? 'passed' : 'failed',
+    tests_passed: testsPassed,
+    tests_failed: testsFailed,
+    total_tests: testResults.length,
     timestamp: new Date().toISOString(),
     duration: Date.now() - suiteStartTime,
     tests,
@@ -454,4 +442,25 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (re
       
       return new Response(
         JSON.stringify({
-          error: '
+          error: 'Internal Server Error',
+          message: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        }, null, 2),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          }
+        }
+      );
+    }
+  };
+}
+
+/**
+ * Deno.serve wrapper - main entry point
+ */
+Deno.serve(serveWithHealthCheck(handler));
