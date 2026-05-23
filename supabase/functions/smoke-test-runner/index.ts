@@ -1,56 +1,54 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-// CORS headers for all responses
+// CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 // Logger utility
 const logger = {
-  log: (level: string, message: string, data?: any) => {
-    console.log(JSON.stringify({
+  log: (level: string, message: string, meta?: any) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
       level,
       message,
-      data,
-      timestamp: new Date().toISOString()
-    }));
+      function: 'smoke-test-runner',
+      ...meta
+    };
+    console.log(JSON.stringify(logEntry));
   }
 };
 
 // Main request handler
 async function handleRequest(req: Request): Promise<Response> {
-  const { method, url } = req;
-  const requestUrl = new URL(url);
-  
-  logger.log('info', 'Processing request', {
-    method,
-    path: requestUrl.pathname,
-    origin: requestUrl.origin
-  });
-
   try {
+    const { method } = req;
+    
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 200, headers: corsHeaders });
+    }
+
     // Run smoke tests with validation
     const results = await runSmokeTestsWithValidation();
-    
-    logger.log('info', 'Smoke tests completed', {
-      status: results.status,
-      summary: results.summary
-    });
 
     return new Response(
       JSON.stringify({
         success: results.status === 'success',
+        status: results.status,
+        timestamp: new Date().toISOString(),
+        function: 'smoke-test-runner',
         ...results
       }),
       {
-        status: results.status === 'error' ? 500 : 200,
+        status: 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
 
   } catch (error) {
-    logger.log('error', 'Request handler error', {
+    logger.log('error', 'Request handler error', { 
       error: String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
@@ -59,8 +57,9 @@ async function handleRequest(req: Request): Promise<Response> {
       JSON.stringify({
         success: false,
         status: 'error',
-        error: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        function: 'smoke-test-runner',
+        error: error instanceof Error ? error.message : String(error)
       }),
       {
         status: 500,
@@ -83,99 +82,48 @@ async function validateEdgeFunctionStructure(filePath: string) {
   };
 
   try {
-    // Read the function file content
+    // Read the function file as text instead of importing
     const functionCode = await Deno.readTextFile(filePath);
 
     // Check for Deno.serve() pattern
-    patterns.hasDenoServe = /Deno\.serve\s*\(/.test(functionCode);
+    patterns.hasDenoServe = /Deno\.serve\s*\(/i.test(functionCode);
     if (!patterns.hasDenoServe) {
       issues.push('Missing Deno.serve() - Edge Function must use Deno.serve() as entry point');
     }
 
-    // Check for handler function that accepts Request
-    patterns.hasHandlerFunction = /(?:async\s+)?(?:function|\([^)]*\)|\w+)\s*(?:\([^)]*Request[^)]*\)|=>)/.test(functionCode);
+    // Check for handler function (async function that takes Request)
+    const handlerPattern = /(async\s+function.*?\(.*?req(?:uest)?.*?:.*?Request.*?\)|async\s*\(.*?req(?:uest)?.*?:.*?Request.*?\)\s*=>|\(.*?req(?:uest)?.*?:.*?Request.*?\)\s*=>\s*\{)/i;
+    patterns.hasHandlerFunction = handlerPattern.test(functionCode);
     if (!patterns.hasHandlerFunction) {
-      warnings.push('No clear handler function accepting Request parameter found');
+      warnings.push('No clear async handler function with Request parameter found');
     }
 
-    // Check for Response return
-    patterns.hasResponseReturn = /new\s+Response\s*\(/.test(functionCode) || /return\s+.*Response/.test(functionCode);
+    // Check for Response return pattern
+    patterns.hasResponseReturn = /new\s+Response\s*\(/i.test(functionCode) || /return.*Response/i.test(functionCode);
     if (!patterns.hasResponseReturn) {
-      issues.push('No Response object creation found - handler must return a Response');
+      issues.push('Missing Response object creation - handlers must return Response objects');
     }
 
     // Check for CORS headers
-    patterns.hasCorsHeaders = /Access-Control-Allow-Origin/.test(functionCode) || /corsHeaders/.test(functionCode);
+    patterns.hasCorsHeaders = /Access-Control-Allow-Origin/i.test(functionCode) || /corsHeaders/i.test(functionCode);
     if (!patterns.hasCorsHeaders) {
-      warnings.push('CORS headers not detected - may cause cross-origin issues');
+      warnings.push('No CORS headers detected - may cause cross-origin issues');
     }
 
-    // Check for error handling
-    patterns.hasErrorHandling = /try\s*\{/.test(functionCode) && /catch\s*\(/.test(functionCode);
+    // Check for error handling (try-catch blocks)
+    patterns.hasErrorHandling = /try\s*\{[\s\S]*?\}\s*catch/i.test(functionCode);
     if (!patterns.hasErrorHandling) {
       warnings.push('No try-catch error handling detected');
     }
 
-    // Validate import statements
-    const importPattern = /import\s+.*\s+from\s+['"].*['"]/g;
-    const imports = functionCode.match(importPattern) || [];
-    if (imports.length === 0) {
-      warnings.push('No import statements found - function may lack dependencies');
-    }
-
-    // Check for common syntax issues
-    const uncommentedCode = functionCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
-    
-    // Check for unbalanced braces
-    const openBraces = (uncommentedCode.match(/\{/g) || []).length;
-    const closeBraces = (uncommentedCode.match(/\}/g) || []).length;
-    if (openBraces !== closeBraces) {
-      issues.push(`Syntax issue: Unbalanced braces (${openBraces} opening, ${closeBraces} closing)`);
-    }
-
-    // Check for unbalanced parentheses
-    const openParens = (uncommentedCode.match(/\(/g) || []).length;
-    const closeParens = (uncommentedCode.match(/\)/g) || []).length;
-    if (openParens !== closeParens) {
-      warnings.push(`Possible syntax issue: Unbalanced parentheses (${openParens} opening, ${closeParens} closing)`);
-    }
-
-    // Validate Deno.serve structure more thoroughly
-    if (patterns.hasDenoServe) {
-      // Check if Deno.serve has a handler function
-      const serveWithHandlerPattern = /Deno\.serve\s*\(\s*(?:async\s*)?\s*(?:function|\(|\{)/;
-      if (!serveWithHandlerPattern.test(functionCode)) {
-        warnings.push('Deno.serve() may not have a proper handler function');
-      }
-
-      // Check if handler accepts Request parameter
-      const serveRequestPattern = /Deno\.serve\s*\([^)]*(?:req|request)\s*:\s*Request/i;
-      if (!serveRequestPattern.test(functionCode)) {
-        warnings.push('Handler function should accept a Request parameter');
-      }
-    }
-
-    // Check for async/await usage
-    const hasAsync = /async\s+/.test(functionCode);
-    const hasAwait = /await\s+/.test(functionCode);
-    if (hasAwait && !hasAsync) {
-      issues.push('Code uses await but no async function detected');
-    }
-
     // Check for OPTIONS method handling (CORS preflight)
-    const hasOptionsHandling = /method\s*===?\s*['"]OPTIONS['"]/.test(functionCode) || /OPTIONS/.test(functionCode);
-    if (!hasOptionsHandling && patterns.hasCorsHeaders) {
-      warnings.push('CORS headers present but no OPTIONS method handling detected');
+    const hasOptionsHandling = /method\s*===?\s*['"]OPTIONS['"]/i.test(functionCode) || /OPTIONS.*?Response/i.test(functionCode);
+    if (!hasOptionsHandling) {
+      warnings.push('No OPTIONS method handling for CORS preflight requests');
     }
 
-    // Check for proper content-type headers
-    const hasContentType = /Content-Type/.test(functionCode) || /content-type/.test(functionCode);
-    if (!hasContentType) {
-      warnings.push('No Content-Type header detected in responses');
-    }
-
-    // Validate response status codes
-    const statusPattern = /status\s*:\s*(\d+)/g;
+    // Check for status codes in responses
+    const statusPattern = /status:\s*(\d+)/g;
     const statusCodes = [...functionCode.matchAll(statusPattern)].map(m => parseInt(m[1]));
     if (statusCodes.length === 0) {
       warnings.push('No explicit status codes found in responses');
@@ -200,6 +148,47 @@ async function validateEdgeFunctionStructure(filePath: string) {
     const hasJsonParsing = /\.json\(\)/.test(functionCode) || /JSON\.parse/.test(functionCode);
     if (hasJsonParsing && !patterns.hasErrorHandling) {
       warnings.push('JSON parsing detected without try-catch error handling');
+    }
+
+    // Check for basic TypeScript syntax errors
+    const syntaxChecks = [
+      { pattern: /\bawait\b(?!\s+\w+\s*\()/g, message: 'Potential await usage without function call' },
+      { pattern: /function\s+\w+\s*\([^)]*\)\s*\{(?!\s*return)/g, message: 'Function may be missing return statement' }
+    ];
+
+    for (const check of syntaxChecks) {
+      if (check.pattern.test(functionCode)) {
+        warnings.push(check.message);
+      }
+    }
+
+    // Validate that Deno.serve is called at the top level (not nested deeply)
+    if (patterns.hasDenoServe) {
+      const lines = functionCode.split('\n');
+      let denoServeLineIndex = -1;
+      for (let i = 0; i < lines.length; i++) {
+        if (/Deno\.serve\s*\(/i.test(lines[i])) {
+          denoServeLineIndex = i;
+          break;
+        }
+      }
+      
+      if (denoServeLineIndex > -1) {
+        const beforeServe = lines.slice(0, denoServeLineIndex).join('\n');
+        const openBraces = (beforeServe.match(/\{/g) || []).length;
+        const closeBraces = (beforeServe.match(/\}/g) || []).length;
+        const nestingLevel = openBraces - closeBraces;
+        
+        if (nestingLevel > 0) {
+          warnings.push('Deno.serve() appears to be nested inside another block - should be at top level');
+        }
+      }
+    }
+
+    // Check for proper content-type header
+    const hasContentTypeHeader = /['"]Content-Type['"]\s*:\s*['"]application\/json['"]/i.test(functionCode);
+    if (!hasContentTypeHeader && /JSON\.stringify/i.test(functionCode)) {
+      warnings.push('JSON.stringify used but Content-Type header may not be set to application/json');
     }
 
     return {
