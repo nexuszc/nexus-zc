@@ -1,235 +1,4 @@
-r instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      elapsed
-    });
-    
-    return createErrorResponse(
-      `Smoke test execution failed: ${error instanceof Error ? error.message : String(error)}`,
-      500,
-      {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        requestId,
-        elapsed
-      }
-    );
-  }
-}
-
-/**
- * Run smoke tests with comprehensive error handling and isolation
- */
-async function runSmokeTests(): Promise<{
-  passed: number;
-  failed: number;
-  results: Array<{
-    test: string;
-    status: string;
-    endpoint: string;
-    statusCode?: number;
-    expectedStatus?: number[];
-    elapsed: number;
-    details?: string;
-    error?: string;
-    errorType?: string;
-    response?: unknown;
-    stack?: string;
-  }>;
-}> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-  
-  if (!supabaseUrl || !supabaseKey) {
-    logger.error('Missing Supabase credentials for tests');
-    return {
-      passed: 0,
-      failed: 1,
-      results: [{
-        test: 'Environment Check',
-        status: 'ERROR',
-        endpoint: 'N/A',
-        elapsed: 0,
-        error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY',
-        errorType: 'configuration'
-      }]
-    };
-  }
-  
-  const baseUrl = supabaseUrl.replace(/\/$/, '');
-  const testTimeout = 30000; // 30 seconds
-  
-  const testCases: TestCase[] = [
-    {
-      name: 'Health Check',
-      endpoint: `${baseUrl}/functions/v1/smoke-test/health`,
-      method: 'GET',
-      expectedStatus: [200],
-      validateResponse: (data) => {
-        try {
-          const health = data as Record<string, unknown>;
-          return typeof health.status === 'string' && typeof health.timestamp === 'string';
-        } catch (error) {
-          logger.error('Health check validation failed', { error: error instanceof Error ? error.message : String(error) });
-          return false;
-        }
-      }
-    },
-    {
-      name: 'Database Connectivity',
-      endpoint: `${baseUrl}/rest/v1/profiles?select=count&limit=1`,
-      method: 'GET',
-      expectedStatus: [200, 206],
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
-      },
-      validateResponse: (data) => {
-        try {
-          // Database should return some response even if empty
-          return data !== null && data !== undefined;
-        } catch (error) {
-          logger.error('Database connectivity validation failed', { error: error instanceof Error ? error.message : String(error) });
-          return false;
-        }
-      }
-    },
-    {
-      name: 'Profiles Table Access',
-      endpoint: `${baseUrl}/rest/v1/profiles?select=id&limit=1`,
-      method: 'GET',
-      expectedStatus: [200, 206],
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
-      },
-      validateResponse: (data) => {
-        try {
-          // Should return array (empty or with data)
-          return Array.isArray(data);
-        } catch (error) {
-          logger.error('Profiles table validation failed', { error: error instanceof Error ? error.message : String(error) });
-          return false;
-        }
-      }
-    },
-    {
-      name: 'Edge Function Availability',
-      endpoint: `${baseUrl}/functions/v1/`,
-      method: 'GET',
-      expectedStatus: [200, 404], // Either success or not found is acceptable for availability check
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
-      }
-    },
-    {
-      name: 'Messages Table Access',
-      endpoint: `${baseUrl}/rest/v1/messages?select=count&limit=1`,
-      method: 'GET',
-      expectedStatus: [200, 206],
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
-      },
-      validateResponse: (data) => {
-        try {
-          return data !== null && data !== undefined;
-        } catch (error) {
-          logger.error('Messages table validation failed', { error: error instanceof Error ? error.message : String(error) });
-          return false;
-        }
-      }
-    },
-    {
-      name: 'Conversations Table Access',
-      endpoint: `${baseUrl}/rest/v1/conversations?select=count&limit=1`,
-      method: 'GET',
-      expectedStatus: [200, 206],
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
-      },
-      validateResponse: (data) => {
-        try {
-          return data !== null && data !== undefined;
-        } catch (error) {
-          logger.error('Conversations table validation failed', { error: error instanceof Error ? error.message : String(error) });
-          return false;
-        }
-      }
-    }
-  ];
-  
-  let passed = 0;
-  let failed = 0;
-  const results: Array<{
-    test: string;
-    status: string;
-    endpoint: string;
-    statusCode?: number;
-    expectedStatus?: number[];
-    elapsed: number;
-    details?: string;
-    error?: string;
-    errorType?: string;
-    response?: unknown;
-    stack?: string;
-  }> = [];
-  
-  for (const test of testCases) {
-    const testStartTime = Date.now();
-    let controller: AbortController | null = null;
-    let timeoutId: number | null = null;
-    
-    try {
-      logger.info(`Running test: ${test.name}`, {
-        endpoint: test.endpoint,
-        method: test.method
-      });
-      
-      controller = new AbortController();
-      timeoutId = setTimeout(() => {
-        logger.warn(`Test timeout triggered for: ${test.name}`);
-        controller?.abort();
-      }, test.timeout || testTimeout);
-      
-      let response: Response;
-      try {
-        response = await fetch(test.endpoint, {
-          method: test.method,
-          headers: {
-            'Content-Type': 'application/json',
-            ...test.headers
-          },
-          body: test.body ? JSON.stringify(test.body) : undefined,
-          signal: controller.signal
-        });
-      } catch (fetchError) {
-        throw new Error(`Fetch failed: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
-      }
-      
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      
-      const elapsed = Date.now() - testStartTime;
-      const statusMatch = test.expectedStatus.includes(response.status);
-      
-      let responseData: unknown;
-      let parseError = false;
-      try {
-        const text = await response.text();
-        responseData = text ? JSON.parse(text) : null;
-      } catch (parseErr) {
-        parseError = true;
-        responseData = 'Unable to parse response';
-        logger.warn(`Response parse error for ${test.name}`, { 
-          error: parseErr instanceof Error ? parseErr.message : String(parseErr) 
-        });
-      }
-      
-      let validationPassed = true;
+ationPassed = true;
       let validationError: string | undefined;
       
       if (test.validateResponse && !parseError) {
@@ -359,60 +128,304 @@ async function runSmokeTests(): Promise<{
 }
 
 /**
- * Health check wrapper for Deno.serve
+ * Validate environment variables and API keys
  */
-function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise<Response> => {
-    const url = new URL(req.url);
-    
-    // Handle health check endpoint
-    if (url.pathname.endsWith('/health') && req.method === 'GET') {
-      try {
-        const healthStatus = {
-          status: 'healthy',
-          timestamp: new Date().toISOString(),
-          service: 'smoke-test',
-          version: '1.0.0',
-          environment: {
-            supabaseUrl: !!Deno.env.get('SUPABASE_URL'),
-            supabaseKey: !!Deno.env.get('SUPABASE_ANON_KEY')
-          }
+function validateEnvironment(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl) {
+    errors.push('SUPABASE_URL environment variable is not set');
+  } else if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
+    errors.push('SUPABASE_URL must be a valid URL starting with http:// or https://');
+  }
+  
+  if (!supabaseKey) {
+    errors.push('SUPABASE_ANON_KEY environment variable is not set');
+  } else if (supabaseKey.length < 20) {
+    errors.push('SUPABASE_ANON_KEY appears to be invalid (too short)');
+  }
+  
+  if (supabaseServiceKey && supabaseServiceKey.length < 20) {
+    errors.push('SUPABASE_SERVICE_ROLE_KEY appears to be invalid (too short)');
+  }
+  
+  if (errors.length > 0) {
+    logger.error('Environment validation failed', { errors });
+  } else {
+    logger.info('Environment validation passed');
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+
+/**
+ * Check database connectivity with retry logic
+ */
+async function checkDatabaseConnectivity(retries = 3, delayMs = 1000): Promise<{ healthy: boolean; error?: string; attempts: number }> {
+  let lastError: string | undefined;
+  
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      logger.info(`Database connectivity check - attempt ${attempt}/${retries}`);
+      
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+      
+      if (!supabaseUrl || !supabaseKey) {
+        return { 
+          healthy: false, 
+          error: 'Missing database credentials', 
+          attempts: attempt 
         };
-        
-        logger.info('Health check requested', healthStatus);
-        
-        return new Response(JSON.stringify(healthStatus), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate'
-          }
-        });
-      } catch (error) {
-        logger.error('Health check failed', {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        });
-        
-        return new Response(JSON.stringify({
-          status: 'unhealthy',
-          timestamp: new Date().toISOString(),
-          error: error instanceof Error ? error.message : String(error)
-        }), {
-          status: 503,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
       }
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'HEAD',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok || response.status === 404) {
+        logger.info('Database connectivity check passed', { attempt, status: response.status });
+        return { healthy: true, attempts: attempt };
+      }
+      
+      lastError = `HTTP ${response.status}: ${response.statusText}`;
+      logger.warn('Database connectivity check failed', { attempt, status: response.status, error: lastError });
+      
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      logger.error('Database connectivity check error', { 
+        attempt, 
+        error: lastError,
+        stack: error instanceof Error ? error.stack : undefined
+      });
     }
     
-    // Delegate to main handler
-    return handler(req);
+    if (attempt < retries) {
+      logger.info(`Retrying database check in ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  
+  return { 
+    healthy: false, 
+    error: lastError || 'Database connectivity check failed after all retries', 
+    attempts: retries 
   };
+}
+
+/**
+ * Check critical table accessibility
+ */
+async function checkCriticalTables(): Promise<{ healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }> }> {
+  const criticalTables = ['profiles', 'conversations', 'messages'];
+  const results: Record<string, { accessible: boolean; error?: string }> = {};
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  
+  if (!supabaseUrl || !supabaseKey) {
+    logger.error('Cannot check tables: missing credentials');
+    return { healthy: false, tables: {} };
+  }
+  
+  for (const table of criticalTables) {
+    try {
+      logger.info(`Checking table accessibility: ${table}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=count&limit=1`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        results[table] = { accessible: true };
+        logger.info(`Table ${table} is accessible`);
+      } else {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        results[table] = { 
+          accessible: false, 
+          error: `HTTP ${response.status}: ${errorText}` 
+        };
+        logger.error(`Table ${table} is not accessible`, { 
+          status: response.status, 
+          error: errorText 
+        });
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      results[table] = { accessible: false, error: errorMessage };
+      logger.error(`Error checking table ${table}`, { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }
+  
+  const allAccessible = Object.values(results).every(r => r.accessible);
+  
+  return { 
+    healthy: allAccessible, 
+    tables: results 
+  };
+}
+
+/**
+ * Check edge function availability
+ */
+async function checkEdgeFunctions(): Promise<{ healthy: boolean; functions: Record<string, { available: boolean; error?: string }> }> {
+  const edgeFunctions = ['chat', 'health'];
+  const results: Record<string, { available: boolean; error?: string }> = {};
+  
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  
+  if (!supabaseUrl || !supabaseKey) {
+    logger.error('Cannot check edge functions: missing credentials');
+    return { healthy: false, functions: {} };
+  }
+  
+  for (const func of edgeFunctions) {
+    try {
+      logger.info(`Checking edge function availability: ${func}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const url = `${supabaseUrl}/functions/v1/${func}${func === 'health' ? '' : '/health'}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok || response.status === 404) {
+        results[func] = { available: true };
+        logger.info(`Edge function ${func} is available`, { status: response.status });
+      } else {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        results[func] = { 
+          available: false, 
+          error: `HTTP ${response.status}: ${errorText}` 
+        };
+        logger.error(`Edge function ${func} is not available`, { 
+          status: response.status, 
+          error: errorText 
+        });
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      results[func] = { available: false, error: errorMessage };
+      logger.error(`Error checking edge function ${func}`, { 
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  }
+  
+  const allAvailable = Object.values(results).every(r => r.available);
+  
+  return { 
+    healthy: allAvailable, 
+    functions: results 
+  };
+}
+
+/**
+ * Comprehensive health check with detailed reporting
+ */
+async function performComprehensiveHealthCheck(): Promise<{
+  overall: boolean;
+  timestamp: string;
+  checks: {
+    environment: { valid: boolean; errors?: string[] };
+    database: { healthy: boolean; error?: string; attempts?: number };
+    tables: { healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }> };
+    edgeFunctions: { healthy: boolean; functions: Record<string, { available: boolean; error?: string }> };
+  };
+}> {
+  logger.info('Starting comprehensive health check');
+  
+  const envCheck = validateEnvironment();
+  
+  let dbCheck = { healthy: false, error: 'Skipped due to environment validation failure' };
+  let tablesCheck = { healthy: false, tables: {} };
+  let functionsCheck = { healthy: false, functions: {} };
+  
+  if (envCheck.valid) {
+    dbCheck = await checkDatabaseConnectivity(3, 1000);
+    
+    if (dbCheck.healthy) {
+      [tablesCheck, functionsCheck] = await Promise.all([
+        checkCriticalTables(),
+        checkEdgeFunctions()
+      ]);
+    } else {
+      logger.error('Skipping table and function checks due to database connectivity failure');
+    }
+  } else {
+    logger.error('Skipping all checks due to environment validation failure');
+  }
+  
+  const overall = envCheck.valid && dbCheck.healthy && tablesCheck.healthy && functionsCheck.healthy;
+  
+  const result = {
+    overall,
+    timestamp: new Date().toISOString(),
+    checks: {
+      environment: envCheck.valid ? { valid: true } : { valid: false, errors: envCheck.errors },
+      database: dbCheck,
+      tables: tablesCheck,
+      edgeFunctions: functionsCheck
+    }
+  };
+  
+  logger.info('Comprehensive health check completed', {
+    overall,
+    environmentValid: envCheck.valid,
+    databaseHealthy: dbCheck.healthy,
+    tablesHealthy: tablesCheck.healthy,
+    functionsHealthy: functionsCheck.healthy
+  });
+  
+  return result;
 }
 
 /**
  * Health check wrapper for Deno.serve
  */
-function serveWithHealthCheck(handler: (req: Request) => Promise<Response
+function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
+  return async (req: Request): Promise
