@@ -1,35 +1,35 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 /**
- * Logger utility for structured logging
+ * Comprehensive logging utility
  */
 const logger = {
-  info: (message: string, data?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
+  info: (message: string, data?: unknown) => {
+    console.log(JSON.stringify({ level: 'info', message, data, timestamp: new Date().toISOString() }));
   },
-  error: (message: string, data?: Record<string, unknown>) => {
-    console.error(JSON.stringify({ level: 'error', message, ...data, timestamp: new Date().toISOString() }));
+  error: (message: string, data?: unknown) => {
+    console.error(JSON.stringify({ level: 'error', message, data, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, data?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
+  warn: (message: string, data?: unknown) => {
+    console.warn(JSON.stringify({ level: 'warn', message, data, timestamp: new Date().toISOString() }));
   }
 };
 
 /**
- * Timeout wrapper for async operations
+ * Timeout wrapper for test functions
  */
 async function runWithTimeout<T>(
-  operation: () => Promise<T>,
+  fn: () => Promise<T>,
   timeoutMs: number
 ): Promise<{ success: boolean; result?: T; error?: string; duration: number }> {
   const startTime = Date.now();
   
   try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
-    });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+    );
     
-    const result = await Promise.race([operation(), timeoutPromise]);
+    const result = await Promise.race([fn(), timeoutPromise]);
     const duration = Date.now() - startTime;
     
     return { success: true, result, duration };
@@ -44,239 +44,202 @@ async function runWithTimeout<T>(
 }
 
 /**
- * Check environment variables
+ * Test environment variables
  */
-async function checkEnvironment(): Promise<{
-  valid: boolean;
-  variables: Record<string, boolean>;
-  errors: string[];
-}> {
-  const requiredVars = [
+async function testEnvironmentVariables(): Promise<{ valid: boolean; missing?: string[]; errors?: string[] }> {
+  const required = [
     'SUPABASE_URL',
     'SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY'
   ];
   
-  const variables: Record<string, boolean> = {};
-  const errors: string[] = [];
+  const missing = required.filter(key => !Deno.env.get(key));
   
-  for (const varName of requiredVars) {
-    const value = Deno.env.get(varName);
-    variables[varName] = !!value;
-    if (!value) {
-      errors.push(`Missing environment variable: ${varName}`);
-    }
+  if (missing.length > 0) {
+    return { valid: false, missing };
   }
   
-  return {
-    valid: errors.length === 0,
-    variables,
-    errors
-  };
+  return { valid: true };
 }
 
 /**
  * Test database connection
  */
-async function testDatabaseConnection(): Promise<{
-  healthy: boolean;
-  latency?: number;
-  error?: string;
-}> {
+async function testDatabaseConnection(): Promise<{ healthy: boolean; error?: string; connectionTime?: number }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
-  if (!supabaseUrl || !serviceKey) {
-    return {
-      healthy: false,
-      error: 'Missing Supabase credentials'
-    };
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { healthy: false, error: 'Missing Supabase credentials' };
   }
   
-  try {
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const startTime = Date.now();
-    
-    const { error } = await supabase.from('users').select('count').limit(1);
-    
-    const latency = Date.now() - startTime;
-    
-    if (error) {
-      return {
-        healthy: false,
-        latency,
-        error: error.message
-      };
-    }
-    
-    return {
-      healthy: true,
-      latency
-    };
-  } catch (error) {
-    return {
-      healthy: false,
-      error: error instanceof Error ? error.message : String(error)
-    };
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  
+  const startTime = Date.now();
+  const { error } = await supabase.from('users').select('count').limit(1);
+  const connectionTime = Date.now() - startTime;
+  
+  if (error) {
+    return { healthy: false, error: error.message, connectionTime };
   }
+  
+  return { healthy: true, connectionTime };
 }
 
 /**
  * Test table access
  */
-async function testTableAccess(): Promise<{
-  healthy: boolean;
-  tables: Record<string, { accessible: boolean; error?: string }>;
-  error?: string;
-}> {
+async function testTableAccess(): Promise<{ healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }>; error?: string }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
-  if (!supabaseUrl || !serviceKey) {
-    return {
-      healthy: false,
-      tables: {},
-      error: 'Missing Supabase credentials'
-    };
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { healthy: false, tables: {}, error: 'Missing Supabase credentials' };
   }
   
-  const tablesToTest = ['users', 'sessions', 'conversations', 'messages'];
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  
+  const tablesToTest = [
+    'users',
+    'conversations',
+    'messages',
+    'agent_knowledge',
+    'function_calls'
+  ];
+  
   const tables: Record<string, { accessible: boolean; error?: string }> = {};
+  let allAccessible = true;
   
-  try {
-    const supabase = createClient(supabaseUrl, serviceKey);
-    
-    for (const table of tablesToTest) {
-      try {
-        const { error } = await supabase.from(table).select('count').limit(1);
-        
-        if (error) {
-          tables[table] = { accessible: false, error: error.message };
-        } else {
-          tables[table] = { accessible: true };
-        }
-      } catch (error) {
-        tables[table] = {
-          accessible: false,
-          error: error instanceof Error ? error.message : String(error)
-        };
+  for (const table of tablesToTest) {
+    try {
+      const { error } = await supabase.from(table).select('count').limit(1);
+      
+      if (error) {
+        tables[table] = { accessible: false, error: error.message };
+        allAccessible = false;
+      } else {
+        tables[table] = { accessible: true };
       }
+    } catch (error) {
+      tables[table] = {
+        accessible: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+      allAccessible = false;
     }
-    
-    const allAccessible = Object.values(tables).every(t => t.accessible);
-    
-    return {
-      healthy: allAccessible,
-      tables
-    };
-  } catch (error) {
-    return {
-      healthy: false,
-      tables,
-      error: error instanceof Error ? error.message : String(error)
-    };
   }
+  
+  return { healthy: allAccessible, tables };
 }
 
 /**
- * Test edge functions
+ * Test edge functions availability
  */
-async function testEdgeFunctions(): Promise<{
-  healthy: boolean;
-  functions: Record<string, { available: boolean; error?: string }>;
-  error?: string;
-}> {
+async function testEdgeFunctions(): Promise<{ healthy: boolean; functions: Record<string, { available: boolean; error?: string }> }> {
+  const functionsToTest = [
+    'chat',
+    'smoke-test'
+  ];
+  
   const functions: Record<string, { available: boolean; error?: string }> = {};
+  let allAvailable = true;
   
-  // For now, just check if the function itself is running
-  functions['smoke-test'] = { available: true };
+  for (const func of functionsToTest) {
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      if (!supabaseUrl) {
+        functions[func] = { available: false, error: 'SUPABASE_URL not set' };
+        allAvailable = false;
+        continue;
+      }
+      
+      const functionUrl = `${supabaseUrl}/functions/v1/${func}/health`;
+      const response = await fetch(functionUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        functions[func] = { available: true };
+      } else {
+        functions[func] = { available: false, error: `HTTP ${response.status}` };
+        allAvailable = false;
+      }
+    } catch (error) {
+      functions[func] = {
+        available: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+      allAvailable = false;
+    }
+  }
   
-  return {
-    healthy: true,
-    functions
-  };
+  return { healthy: allAvailable, functions };
 }
 
 /**
- * Comprehensive health check
+ * Perform comprehensive health check
  */
 async function performComprehensiveHealthCheck(): Promise<{
   overall: boolean;
   timestamp: string;
   checks: {
-    environment: Awaited<ReturnType<typeof checkEnvironment>>;
-    database: Awaited<ReturnType<typeof testDatabaseConnection>>;
-    tables: Awaited<ReturnType<typeof testTableAccess>>;
-    edgeFunctions: Awaited<ReturnType<typeof testEdgeFunctions>>;
+    environment: { valid: boolean; missing?: string[]; errors?: string[] };
+    database: { healthy: boolean; error?: string; connectionTime?: number };
+    tables: { healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }>; error?: string };
+    edgeFunctions: { healthy: boolean; functions: Record<string, { available: boolean; error?: string }> };
   };
 }> {
   logger.info('Starting comprehensive health check');
   
-  const [environment, database, tables, edgeFunctions] = await Promise.all([
-    checkEnvironment(),
+  const [envCheck, dbCheck, tableCheck, funcCheck] = await Promise.all([
+    testEnvironmentVariables(),
     testDatabaseConnection(),
     testTableAccess(),
     testEdgeFunctions()
   ]);
   
-  const overall = environment.valid && database.healthy && tables.healthy && edgeFunctions.healthy;
+  const overall = envCheck.valid && dbCheck.healthy && tableCheck.healthy && funcCheck.healthy;
   
   logger.info('Health check completed', {
     overall,
-    environment: environment.valid,
-    database: database.healthy,
-    tables: tables.healthy,
-    edgeFunctions: edgeFunctions.healthy
+    environment: envCheck.valid,
+    database: dbCheck.healthy,
+    tables: tableCheck.healthy,
+    edgeFunctions: funcCheck.healthy
   });
   
   return {
     overall,
     timestamp: new Date().toISOString(),
     checks: {
-      environment,
-      database,
-      tables,
-      edgeFunctions
+      environment: envCheck,
+      database: dbCheck,
+      tables: tableCheck,
+      edgeFunctions: funcCheck
     }
   };
 }
 
 /**
- * Run comprehensive smoke tests
+ * Execute comprehensive smoke test suite
  */
-async function runSmokeTests(): Promise<{
-  status: 'passed' | 'failed';
-  tests_run: number;
-  tests_passed: number;
-  tests_failed: number;
-  timestamp: string;
-  duration: number;
-  tests: Record<string, {
-    passed: boolean;
-    duration: number;
-    error?: string;
-    details?: unknown;
-  }>;
-  errors: string[];
-}> {
-  logger.info('Starting comprehensive smoke test suite');
+async function executeSmokeTest() {
+  logger.info('Starting smoke test suite');
   
   const startTime = Date.now();
   let testsRun = 0;
   let testsPassed = 0;
   let testsFailed = 0;
-  const tests: Record<string, {
-    passed: boolean;
-    duration: number;
-    error?: string;
-    details?: unknown;
-  }> = {};
   const errors: string[] = [];
+  const tests: Record<string, { passed: boolean; duration: number; error?: string; details?: unknown }> = {};
   
   // Test 1: Environment variables
   testsRun++;
-  logger.info('Running environment check');
-  const envTest = await runWithTimeout(checkEnvironment, 5000);
+  logger.info('Running environment test');
+  const envTest = await runWithTimeout(testEnvironmentVariables, 5000);
   tests.environment = {
     passed: envTest.success && envTest.result?.valid === true,
     duration: envTest.duration,
@@ -286,7 +249,7 @@ async function runSmokeTests(): Promise<{
   if (envTest.success && envTest.result?.valid) testsPassed++;
   else {
     testsFailed++;
-    errors.push(`Environment test failed: ${envTest.error || envTest.result?.errors.join(', ')}`);
+    errors.push(`Environment test failed: ${envTest.error || (envTest.result?.missing ? `Missing: ${envTest.result.missing.join(', ')}` : 'Unknown error')}`);
   }
   
   // Test 2: Database connection
@@ -476,4 +439,4 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (re
           headers: {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            '
