@@ -4,23 +4,24 @@ import { supabase } from '../../lib/supabase'
 import { useContractor } from '../../context/ContractorContext'
 
 const C = {
-  bg: '#f9fafb', card: '#ffffff', text: '#0f1923', muted: '#6b7280',
-  subtle: '#f3f4f6', border: '#e5e7eb', primary: '#4a9eff',
-  primaryLight: '#eff6ff', success: '#22c55e', successLight: '#f0fdf4',
-  warn: '#f59e0b', error: '#ef4444',
+  bg: '#0f1923', surface: '#1a2535', surface2: '#243044',
+  text: '#ffffff', muted: '#8896a8',
+  border: 'rgba(255,255,255,0.08)',
+  primary: '#4a9eff', success: '#22c55e',
+  warning: '#f59e0b', danger: '#ef4444',
 }
 
 const STAGE_META = {
-  lead: { label: 'Lead', bg: '#f3f4f6', fg: '#6b7280' },
-  estimate_sent: { label: 'Estimate', bg: '#eff6ff', fg: '#2563eb' },
-  contract_signed: { label: 'Signed', bg: '#f5f3ff', fg: '#7c3aed' },
-  materials_ordered: { label: 'Materials', bg: '#fffbeb', fg: '#d97706' },
-  scheduled: { label: 'Scheduled', bg: '#fff7ed', fg: '#ea580c' },
-  in_progress: { label: 'Active', bg: '#f0fdf4', fg: '#16a34a' },
-  inspection: { label: 'Inspection', bg: '#f0fdfa', fg: '#0d9488' },
-  invoiced: { label: 'Invoiced', bg: '#fdf4ff', fg: '#a21caf' },
-  complete: { label: 'Complete', bg: '#ecfdf5', fg: '#059669' },
-  paid: { label: 'Paid', bg: '#f3f4f6', fg: '#374151' },
+  lead:              { label: 'Lead',        bg: 'rgba(136,150,168,0.15)', fg: '#8896a8' },
+  estimate_sent:     { label: 'Estimate',    bg: 'rgba(74,158,255,0.15)',  fg: '#4a9eff' },
+  contract_signed:   { label: 'Signed',      bg: 'rgba(124,58,237,0.15)', fg: '#a78bfa' },
+  materials_ordered: { label: 'Materials',   bg: 'rgba(245,158,11,0.15)', fg: '#f59e0b' },
+  scheduled:         { label: 'Scheduled',   bg: 'rgba(234,88,12,0.15)',  fg: '#fb923c' },
+  in_progress:       { label: 'Active',      bg: 'rgba(34,197,94,0.15)',  fg: '#22c55e' },
+  inspection:        { label: 'Inspection',  bg: 'rgba(20,184,166,0.15)', fg: '#2dd4bf' },
+  invoiced:          { label: 'Invoiced',    bg: 'rgba(168,85,247,0.15)', fg: '#c084fc' },
+  complete:          { label: 'Complete',    bg: 'rgba(34,197,94,0.2)',   fg: '#4ade80' },
+  paid:              { label: 'Paid',        bg: 'rgba(136,150,168,0.1)', fg: '#6b7280' },
 }
 const STATUS_FLOW = ['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection','invoiced','complete','paid']
 const PHASE_LABELS = { pre_installation: 'Before', during_tearoff: 'Tearoff', during_installation: 'Install', post_installation: 'After', damage: 'Damage', material: 'Material' }
@@ -30,7 +31,7 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const font = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }
 
 function Pill({ status }) {
-  const s = STAGE_META[status] || { label: status, bg: '#f3f4f6', fg: '#6b7280' }
+  const s = STAGE_META[status] || { label: status, bg: 'rgba(136,150,168,0.15)', fg: '#8896a8' }
   return <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 10px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
 }
 
@@ -231,11 +232,18 @@ export default function RoofingJobDetail() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '80px' }}>
       {/* Header */}
-      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: '14px 20px', position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{
+        background: 'rgba(15,25,35,0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: `1px solid ${C.border}`,
+        padding: '14px 20px',
+        position: 'sticky', top: 0, zIndex: 50,
+      }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <button onClick={() => navigate('/roofing/jobs')} style={{ fontSize: '12px', color: C.muted, background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 6px', display: 'block' }}>← Back</button>
-            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: C.text, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</h1>
+            <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</h1>
             <p style={{ margin: '2px 0 0', fontSize: '13px', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address}</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginTop: '20px' }}>
@@ -246,15 +254,17 @@ export default function RoofingJobDetail() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: '2px', marginTop: '12px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', gap: '0', marginTop: '12px', overflowX: 'auto', scrollbarWidth: 'none', borderBottom: `1px solid ${C.border}` }}>
           {tabs.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{
-                padding: '7px 13px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                padding: '10px 16px', border: 'none', cursor: 'pointer',
                 fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0,
-                background: activeTab === t.id ? C.primaryLight : 'none',
+                background: 'none',
                 color: activeTab === t.id ? C.primary : C.muted,
+                borderBottom: activeTab === t.id ? `2px solid ${C.primary}` : '2px solid transparent',
+                transition: 'color 0.15s',
               }}>
               {t.label}
             </button>
@@ -268,23 +278,92 @@ export default function RoofingJobDetail() {
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Status stepper */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
-              <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Job Status</p>
-              <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-                {STATUS_FLOW.map(s => {
-                  const meta = STAGE_META[s] || { label: s, bg: '#f3f4f6', fg: '#6b7280' }
-                  const active = job.status === s
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
+              <p style={{ margin: '0 0 16px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Job Status</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0', marginBottom: '16px' }}>
+                {STATUS_FLOW.map((s, i) => {
+                  const currentIdx = STATUS_FLOW.indexOf(job.status)
+                  const isPast = i < currentIdx
+                  const isCurrent = i === currentIdx
+                  const meta = STAGE_META[s] || { label: s, fg: C.muted }
                   return (
-                    <button key={s} onClick={() => updateStatus(s)}
-                      style={{
-                        padding: '5px 12px', borderRadius: '20px', border: active ? `1.5px solid ${meta.fg}` : `1px solid ${C.border}`,
-                        cursor: 'pointer', fontSize: '12px', fontWeight: active ? '700' : '500',
-                        background: active ? meta.bg : 'none', color: active ? meta.fg : C.muted,
-                      }}>
-                      {meta.label}
-                    </button>
+                    <div key={s} style={{ display: 'flex', alignItems: 'center', flex: i < STATUS_FLOW.length - 1 ? '1' : '0' }}>
+                      <div
+                        onClick={() => updateStatus(s)}
+                        title={meta.label}
+                        style={{
+                          width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                          background: isCurrent ? C.primary : isPast ? 'rgba(74,158,255,0.3)' : 'rgba(255,255,255,0.08)',
+                          border: isCurrent ? `2px solid ${C.primary}` : isPast ? '2px solid rgba(74,158,255,0.3)' : `2px solid ${C.border}`,
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: isCurrent ? '0 0 12px rgba(74,158,255,0.5)' : 'none',
+                          transition: 'all 0.15s',
+                          fontSize: '10px', color: isCurrent ? '#fff' : isPast ? 'rgba(74,158,255,0.8)' : C.muted,
+                          fontWeight: '700',
+                        }}
+                      >
+                        {isPast ? '✓' : i + 1}
+                      </div>
+                      {i < STATUS_FLOW.length - 1 && (
+                        <div style={{ flex: 1, height: '2px', background: i < STATUS_FLOW.indexOf(job.status) ? 'rgba(74,158,255,0.4)' : 'rgba(255,255,255,0.06)' }} />
+                      )}
+                    </div>
                   )
                 })}
+              </div>
+              <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: C.text }}>
+                {STAGE_META[job.status]?.label || job.status}
+                <span style={{ fontWeight: '400', color: C.muted, fontSize: '13px' }}> — tap a step to advance</span>
+              </p>
+            </div>
+
+            {/* Action cards grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {[
+                { icon: '📐', title: 'Measurements', price: '$25', action: () => orderMeasurements(), loading: orderingMeasure, done: measureOrdered, show: true },
+                { icon: '🤖', title: 'Supplement AI', price: '$99', action: () => runSupplementAI('basic'), loading: suppLoading === 'basic', done: suppSuccess === 'basic', show: !!(claim || job.insurance_claim) },
+                { icon: '📋', title: 'Full AI Handling', price: '$329', action: () => runSupplementAI('full'), loading: suppLoading === 'full', done: suppSuccess === 'full', show: !!(claim || job.insurance_claim) },
+                { icon: '🔗', title: 'Copy Portal Link', price: null, action: () => copyPortalLink(), done: copiedLink, show: true },
+              ].filter(c => c.show !== false).map((card, i) => (
+                <div key={i}
+                  onClick={card.done ? undefined : card.action}
+                  style={{
+                    background: C.surface, border: `1px solid ${C.border}`,
+                    borderRadius: '14px', padding: '16px', cursor: card.done ? 'default' : 'pointer',
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => !card.done && (e.currentTarget.style.borderColor = 'rgba(74,158,255,0.4)')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+                >
+                  <span style={{ fontSize: '24px' }}>{card.icon}</span>
+                  <p style={{ margin: '8px 0 2px', fontSize: '14px', fontWeight: '600', color: C.text }}>
+                    {card.loading ? 'Working…' : card.done ? '✓ Done' : card.title}
+                  </p>
+                  {card.price && <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>{card.price}</p>}
+                </div>
+              ))}
+            </div>
+
+            {/* Generate Documents */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Generate Documents</p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {[
+                  { action: 'generate_estimate', label: '📋 Estimate' },
+                  { action: 'generate_contract', label: '📄 Contract' },
+                  { action: 'generate_invoice', label: '🧾 Invoice' },
+                ].map(({ action, label }) => (
+                  <button key={action} onClick={() => generateDoc(action)} disabled={!!generating}
+                    style={{
+                      background: generating === action ? 'rgba(74,158,255,0.12)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 14px',
+                      fontSize: '13px', cursor: generating ? 'default' : 'pointer', fontWeight: '500',
+                      color: generating === action ? C.primary : C.text, transition: 'background 0.15s',
+                    }}>
+                    {generating === action ? 'Generating…' : label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -298,71 +377,24 @@ export default function RoofingJobDetail() {
                 { label: 'Start', value: job.actual_start_date || job.estimated_start_date },
                 { label: 'End', value: job.scheduled_end || null },
               ].map(f => (
-                <div key={f.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px' }}>
+                <div key={f.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px' }}>
                   <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted, fontWeight: '500' }}>{f.label}</p>
-                  <p style={{ margin: 0, fontSize: '13px', color: f.value ? C.text : '#9ca3af', fontWeight: '500' }}>{f.value || '—'}</p>
+                  <p style={{ margin: 0, fontSize: '13px', color: f.value ? C.text : 'rgba(136,150,168,0.5)', fontWeight: '500' }}>{f.value || '—'}</p>
                 </div>
               ))}
             </div>
 
-            {/* Documents */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
-              <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Generate Documents</p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {[
-                  { action: 'generate_estimate', label: '📋 Estimate' },
-                  { action: 'generate_contract', label: '📄 Contract' },
-                  { action: 'generate_invoice', label: '🧾 Invoice' },
-                ].map(({ action, label }) => (
-                  <button key={action} onClick={() => generateDoc(action)} disabled={!!generating}
-                    style={{ background: generating === action ? C.primaryLight : C.subtle, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: generating ? 'default' : 'pointer', fontWeight: '500', color: generating === action ? C.primary : C.text }}>
-                    {generating === action ? 'Generating…' : label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Measurements order */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                <div>
-                  <p style={{ margin: '0 0 3px', fontSize: '14px', fontWeight: '700', color: C.text }}>📐 Aerial Measurements</p>
-                  <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>Accurate roof measurements via satellite — 24hr delivery</p>
-                </div>
-                {measureOrdered ? (
-                  <span style={{ fontSize: '13px', color: C.success, fontWeight: '600', flexShrink: 0 }}>✓ Ordered!</span>
-                ) : (
-                  <button onClick={orderMeasurements} disabled={orderingMeasure}
-                    style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: orderingMeasure ? 'default' : 'pointer', flexShrink: 0 }}>
-                    {orderingMeasure ? 'Ordering…' : 'Order — $25'}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Supplement AI */}
-            {(claim || job.insurance_claim) && (
-              <div style={{ background: '#faf5ff', border: '1px solid #d8b4fe', borderRadius: '14px', padding: '16px' }}>
-                <p style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: '700', color: '#6b21a8' }}>🤖 Supplement AI</p>
-                <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#a855f7' }}>AI finds missed line items and generates a supplement request. Average recovery: $4,200/job.</p>
-                {suppSuccess && <p style={{ margin: '0 0 10px', fontSize: '13px', color: C.success, fontWeight: '600' }}>✓ Supplement request generated — check Documents tab.</p>}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button onClick={() => runSupplementAI('basic')} disabled={!!suppLoading}
-                    style={{ background: '#9333ea', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: suppLoading ? 'default' : 'pointer', opacity: suppLoading === 'basic' ? 0.7 : 1 }}>
-                    {suppLoading === 'basic' ? 'Analyzing…' : 'Basic Analysis — $99'}
-                  </button>
-                  <button onClick={() => runSupplementAI('full')} disabled={!!suppLoading}
-                    style={{ background: '#6b21a8', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: suppLoading ? 'default' : 'pointer', opacity: suppLoading === 'full' ? 0.7 : 1 }}>
-                    {suppLoading === 'full' ? 'Analyzing…' : 'Full Package — $329'}
-                  </button>
-                </div>
+            {/* Supplement AI — if insurance job and not in action cards already */}
+            {(claim || job.insurance_claim) && suppSuccess && (
+              <div style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '14px', padding: '14px' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#a78bfa', fontWeight: '600' }}>✓ Supplement request generated — check Documents tab.</p>
               </div>
             )}
 
             {/* Insurance claim info */}
             {claim && (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
-                <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏛️ Insurance Claim</p>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏛️ Insurance Claim</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {[
                     { label: 'Claim #', value: claim.claim_number },
@@ -371,7 +403,7 @@ export default function RoofingJobDetail() {
                     { label: 'Status', value: claim.status?.replace(/_/g,' ') },
                     { label: 'Estimate', value: claim.original_estimate ? `$${(claim.original_estimate/100).toLocaleString()}` : null },
                   ].map(f => f.value ? (
-                    <div key={f.label} style={{ background: C.subtle, borderRadius: '8px', padding: '10px 12px' }}>
+                    <div key={f.label} style={{ background: C.surface2, borderRadius: '8px', padding: '10px 12px' }}>
                       <p style={{ margin: '0 0 2px', fontSize: '11px', color: C.muted }}>{f.label}</p>
                       <p style={{ margin: 0, fontSize: '13px', color: C.text, fontWeight: '500' }}>{f.value}</p>
                     </div>
@@ -385,26 +417,36 @@ export default function RoofingJobDetail() {
         {/* PORTAL */}
         {activeTab === 'portal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '20px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
               <p style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: '700', color: C.text }}>🔗 Homeowner Portal</p>
               <p style={{ margin: '0 0 16px', fontSize: '13px', color: C.muted }}>Share this link with {job.homeowner_name}. They can track their job, view photos, sign documents, and message you.</p>
 
               {portalSession?.magic_link_token || job.portal_token ? (
                 <>
-                  <div style={{ background: C.subtle, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <p style={{ margin: 0, fontSize: '12px', color: C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{portalUrl}</p>
                     <button onClick={copyPortalLink}
-                      style={{ background: copiedLink ? C.successLight : C.primaryLight, border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', color: copiedLink ? C.success : C.primary, flexShrink: 0 }}>
+                      style={{
+                        background: copiedLink ? 'rgba(34,197,94,0.15)' : 'rgba(74,158,255,0.15)',
+                        border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: '600',
+                        cursor: 'pointer', color: copiedLink ? C.success : C.primary, flexShrink: 0,
+                      }}>
                       {copiedLink ? '✓ Copied!' : 'Copy'}
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={sendPortalLink}
-                      style={{ flex: 1, background: sentPortal ? C.successLight : C.primary, color: sentPortal ? C.success : '#fff', border: 'none', borderRadius: '10px', padding: '11px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                      style={{
+                        flex: 1,
+                        background: sentPortal ? 'rgba(34,197,94,0.15)' : C.primary,
+                        color: sentPortal ? C.success : '#fff',
+                        border: 'none', borderRadius: '10px', padding: '11px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                        transition: 'background 0.15s',
+                      }}>
                       {sentPortal ? '✓ Sent via SMS & Email!' : '📨 Send to Homeowner'}
                     </button>
                     <a href={portalUrl} target="_blank" rel="noopener"
-                      style={{ background: C.subtle, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 16px', fontSize: '14px', textDecoration: 'none', color: C.text, fontWeight: '600' }}>
+                      style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 16px', fontSize: '14px', textDecoration: 'none', color: C.text, fontWeight: '600' }}>
                       Preview ↗
                     </a>
                   </div>
@@ -421,15 +463,15 @@ export default function RoofingJobDetail() {
             </div>
 
             {portalSession && (
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
-                <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Portal Activity</p>
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Portal Activity</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <div style={{ background: C.subtle, borderRadius: '10px', padding: '12px' }}>
-                    <p style={{ margin: '0 0 2px', fontSize: '11px', color: C.muted }}>Total Views</p>
-                    <p style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: C.text }}>{portalSession.access_count || 0}</p>
+                  <div style={{ background: C.surface2, borderRadius: '10px', padding: '14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Total Views</p>
+                    <p style={{ margin: 0, fontSize: '26px', fontWeight: '700', color: C.text }}>{portalSession.access_count || 0}</p>
                   </div>
-                  <div style={{ background: C.subtle, borderRadius: '10px', padding: '12px' }}>
-                    <p style={{ margin: '0 0 2px', fontSize: '11px', color: C.muted }}>Last Viewed</p>
+                  <div style={{ background: C.surface2, borderRadius: '10px', padding: '14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Last Viewed</p>
                     <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: C.text }}>
                       {portalSession.last_accessed_at
                         ? new Date(portalSession.last_accessed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -445,27 +487,31 @@ export default function RoofingJobDetail() {
         {/* PHOTOS */}
         {activeTab === 'photos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
               <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Upload Photos</p>
               <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 {Object.entries(PHASE_LABELS).map(([key, label]) => (
                   <button key={key} onClick={() => setUploadPhase(key)}
-                    style={{ padding: '4px 11px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPhase === key ? C.primary : C.subtle, color: uploadPhase === key ? '#fff' : C.muted }}>
+                    style={{ padding: '4px 11px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPhase === key ? C.primary : 'rgba(255,255,255,0.06)', color: uploadPhase === key ? '#fff' : C.muted, transition: 'all 0.15s' }}>
                     {label}
                   </button>
                 ))}
                 <button onClick={() => setUploadPublic(v => !v)}
-                  style={{ padding: '4px 11px', borderRadius: '20px', border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPublic ? C.successLight : C.subtle, color: uploadPublic ? C.success : C.muted }}>
+                  style={{ padding: '4px 11px', borderRadius: '20px', border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPublic ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)', color: uploadPublic ? C.success : C.muted, transition: 'all 0.15s' }}>
                   {uploadPublic ? '👁 Homeowner visible' : '🔒 Internal only'}
                 </button>
               </div>
               <label style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                border: `2px dashed ${C.border}`, borderRadius: '10px', padding: '20px',
+                border: '2px dashed rgba(255,255,255,0.12)', borderRadius: '12px', padding: '24px',
                 cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1,
-              }}>
+                background: 'rgba(255,255,255,0.02)', transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={e => !uploading && (e.currentTarget.style.borderColor = 'rgba(74,158,255,0.3)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
+              >
                 <input type="file" accept="image/*" multiple onChange={uploadPhotos} disabled={uploading} style={{ display: 'none' }} />
-                <span style={{ fontSize: '13px', color: C.muted }}>{uploading ? '⏳ Uploading…' : `📷 Click to upload as "${PHASE_LABELS[uploadPhase]}"`}</span>
+                <span style={{ fontSize: '13px', color: C.muted }}>{uploading ? '⏳ Uploading…' : `📷 Tap to upload as "${PHASE_LABELS[uploadPhase]}"`}</span>
               </label>
             </div>
 
@@ -477,10 +523,10 @@ export default function RoofingJobDetail() {
                   <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label} ({phasePhotos.length})</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                     {phasePhotos.map(p => (
-                      <div key={p.id} style={{ aspectRatio: '1', borderRadius: '10px', overflow: 'hidden', background: C.subtle, position: 'relative' }}>
+                      <div key={p.id} style={{ aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', background: C.surface2, position: 'relative' }}>
                         <img src={p.url} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         {!p.is_public && (
-                          <div style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>🔒</div>
+                          <div style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>🔒</div>
                         )}
                       </div>
                     ))}
@@ -490,7 +536,7 @@ export default function RoofingJobDetail() {
             })}
 
             {!photos.length && !uploading && (
-              <p style={{ textAlign: 'center', color: C.muted, padding: '40px 0' }}>No photos yet. Upload some above.</p>
+              <p style={{ textAlign: 'center', color: C.muted, padding: '40px 0', fontSize: '14px' }}>No photos yet. Upload some above.</p>
             )}
           </div>
         )}
@@ -498,7 +544,7 @@ export default function RoofingJobDetail() {
         {/* MESSAGES */}
         {activeTab === 'messages' && (
           <div>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px', marginBottom: '12px', maxHeight: '420px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px', marginBottom: '12px', maxHeight: '420px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {messages.length === 0 && (
                 <p style={{ textAlign: 'center', color: C.muted, fontSize: '13px', padding: '24px 0' }}>No messages yet.</p>
               )}
@@ -508,10 +554,11 @@ export default function RoofingJobDetail() {
                 return (
                   <div key={m.id} style={{ display: 'flex', justifyContent: isContractor ? 'flex-end' : 'flex-start' }}>
                     <div style={{
-                      maxWidth: '75%', padding: '10px 13px', borderRadius: isContractor ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                      background: isContractor ? C.primary : isAria ? C.subtle : '#fff',
+                      maxWidth: '75%', padding: '10px 13px',
+                      borderRadius: isContractor ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                      background: isContractor ? C.primary : isAria ? C.surface2 : C.surface2,
                       border: isContractor ? 'none' : `1px solid ${C.border}`,
-                      color: isContractor ? '#fff' : C.text,
+                      color: C.text,
                     }}>
                       <p style={{ margin: '0 0 4px', fontSize: '10px', fontWeight: '600', opacity: 0.7 }}>
                         {isAria ? '🤖 Aria' : isContractor ? 'You' : job.homeowner_name}
@@ -530,10 +577,12 @@ export default function RoofingJobDetail() {
                 onChange={e => setNewMessage(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                 placeholder={`Message ${job.homeowner_name}…`}
-                style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px', fontSize: '14px', color: C.text, outline: 'none' }}
+                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '12px 14px', fontSize: '14px', color: C.text, outline: 'none', transition: 'border-color 0.15s' }}
+                onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
+                onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
               />
               <button onClick={sendMessage} disabled={sending || !newMessage.trim()}
-                style={{ background: sending || !newMessage.trim() ? '#93c5fd' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 18px', fontSize: '14px', fontWeight: '700', cursor: sending ? 'default' : 'pointer' }}>
+                style={{ background: sending || !newMessage.trim() ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: '700', cursor: sending ? 'default' : 'pointer' }}>
                 →
               </button>
             </div>
@@ -544,12 +593,12 @@ export default function RoofingJobDetail() {
         {activeTab === 'documents' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {docs.map(d => (
-              <div key={d.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px' }}>
+              <div key={d.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: C.text }}>{d.title}</p>
                   <span style={{
                     fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '20px',
-                    background: d.status === 'signed' ? C.successLight : C.subtle,
+                    background: d.status === 'signed' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)',
                     color: d.status === 'signed' ? C.success : C.muted,
                   }}>
                     {d.status === 'signed' ? '✓ Signed' : (d.doc_type || d.status || 'Pending')}
@@ -572,17 +621,19 @@ export default function RoofingJobDetail() {
         {/* NOTES */}
         {activeTab === 'notes' && (
           <div>
-            <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Internal Notes</p>
-            <p style={{ margin: '0 0 12px', fontSize: '12px', color: '#9ca3af' }}>These notes are not visible to the homeowner.</p>
+            <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Internal Notes</p>
+            <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(136,150,168,0.6)' }}>These notes are not visible to the homeowner.</p>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
               rows={8}
               placeholder="Add internal notes about this job — adjuster contact, crew notes, material delivery, etc."
-              style={{ width: '100%', boxSizing: 'border-box', background: C.card, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '13px', fontSize: '14px', color: C.text, resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
+              style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '13px 14px', fontSize: '14px', color: C.text, resize: 'vertical', outline: 'none', lineHeight: 1.5, transition: 'border-color 0.15s' }}
+              onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
+              onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
             />
             <button onClick={saveNote} disabled={savingNote}
-              style={{ marginTop: '10px', background: savingNote ? '#93c5fd' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 20px', fontSize: '14px', fontWeight: '700', cursor: savingNote ? 'default' : 'pointer' }}>
+              style={{ marginTop: '10px', background: savingNote ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 20px', fontSize: '14px', fontWeight: '700', cursor: savingNote ? 'default' : 'pointer', transition: 'background 0.15s' }}>
               {savingNote ? 'Saving…' : 'Save Notes'}
             </button>
           </div>

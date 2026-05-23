@@ -14,6 +14,7 @@ import RoofingJobDetail from './pages/roofing/RoofingJobDetail'
 import RoofingNewJob from './pages/roofing/RoofingNewJob'
 import RoofingPortal from './pages/roofing/RoofingPortal'
 import RoofingLogin from './pages/roofing/RoofingLogin'
+import RoofingSettings from './pages/roofing/RoofingSettings'
 import RoofingCrew from './pages/roofing/RoofingCrew'
 import RoofingOnboarding from './pages/roofing/RoofingOnboarding'
 import RoofingMeasurements from './pages/roofing/RoofingMeasurements'
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
             <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
             <Route path="/roofing/crew" element={<RoofingCrew />} />
+            <Route path="/roofing/settings" element={<RoofingSettings />} />
             <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
             <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
             <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
