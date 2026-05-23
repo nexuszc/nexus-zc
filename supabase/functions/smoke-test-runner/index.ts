@@ -1,6 +1,11 @@
+// Setup
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { corsHeaders } from '../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 // Logger utility
 const logger = {
@@ -14,200 +19,182 @@ const logger = {
   }
 };
 
-// Generate request ID
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// Perform health check
+// Health check function
 async function performHealthCheck() {
-  const healthData = {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    function: 'smoke-test-runner',
-    environment: {
-      denoVersion: Deno.version.deno,
-      v8Version: Deno.version.v8,
-      hasSupabaseUrl: !!Deno.env.get('SUPABASE_URL'),
-      hasSupabaseKey: !!Deno.env.get('SUPABASE_ANON_KEY')
-    }
+  const checks = {
+    environment: true,
+    supabase: false,
+    timestamp: new Date().toISOString()
   };
 
-  return healthData;
+  try {
+    // Check environment variables
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
+    
+    if (missingVars.length > 0) {
+      checks.environment = false;
+      logger.log('error', 'Missing environment variables', { missingVars });
+    }
+
+    // Check Supabase connection
+    if (checks.environment) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { error } = await supabase.from('system_config').select('count').limit(1);
+      checks.supabase = !error;
+      
+      if (error) {
+        logger.log('error', 'Supabase connection check failed', { error: String(error) });
+      }
+    }
+
+    return {
+      status: checks.environment && checks.supabase ? 'ok' : 'error',
+      checks,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    logger.log('error', 'Health check failed', { error: String(error) });
+    return {
+      status: 'error',
+      checks,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
-// Run smoke tests
+// Smoke test runner function
 async function runSmokeTests() {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  const results = [];
-  let allPassed = true;
-
-  // Test 1: Database connection
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .limit(1);
-
-    if (error) {
-      results.push({
-        test: 'database_connection',
-        status: 'failed',
-        error: error.message
-      });
-      allPassed = false;
-    } else {
-      results.push({
-        test: 'database_connection',
-        status: 'passed'
-      });
-    }
-  } catch (error) {
-    results.push({
-      test: 'database_connection',
-      status: 'failed',
-      error: String(error)
-    });
-    allPassed = false;
-  }
-
-  // Test 2: Auth check
-  try {
-    const { data, error } = await supabase.auth.getSession();
-    
-    results.push({
-      test: 'auth_service',
-      status: 'passed',
-      note: 'Auth service is accessible'
-    });
-  } catch (error) {
-    results.push({
-      test: 'auth_service',
-      status: 'failed',
-      error: String(error)
-    });
-    allPassed = false;
-  }
-
-  // Test 3: Storage check
-  try {
-    const { data: buckets, error } = await supabase.storage.listBuckets();
-    
-    if (error) {
-      results.push({
-        test: 'storage_service',
-        status: 'failed',
-        error: error.message
-      });
-      allPassed = false;
-    } else {
-      results.push({
-        test: 'storage_service',
-        status: 'passed',
-        bucketCount: buckets?.length || 0
-      });
-    }
-  } catch (error) {
-    results.push({
-      test: 'storage_service',
-      status: 'failed',
-      error: String(error)
-    });
-    allPassed = false;
-  }
-
-  return {
-    status: allPassed ? 'success' : 'failed',
+  const testResults = {
+    status: 'success',
+    tests: [] as any[],
     timestamp: new Date().toISOString(),
-    totalTests: results.length,
-    passedTests: results.filter(r => r.status === 'passed').length,
-    failedTests: results.filter(r => r.status === 'failed').length,
-    results
+    summary: {
+      total: 0,
+      passed: 0,
+      failed: 0
+    }
   };
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Test 1: Database connectivity
+    const dbTest = {
+      name: 'database_connectivity',
+      status: 'running',
+      startTime: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase.from('system_config').select('count').limit(1);
+      dbTest.status = error ? 'failed' : 'passed';
+      if (error) {
+        (dbTest as any).error = String(error);
+        testResults.status = 'error';
+      }
+    } catch (error) {
+      dbTest.status = 'failed';
+      (dbTest as any).error = String(error);
+      testResults.status = 'error';
+    }
+
+    (dbTest as any).endTime = new Date().toISOString();
+    testResults.tests.push(dbTest);
+
+    // Test 2: Edge function invocation
+    const functionTest = {
+      name: 'edge_function_invocation',
+      status: 'running',
+      startTime: new Date().toISOString()
+    };
+
+    try {
+      const { data, error } = await supabase.functions.invoke('smoke-test', {
+        body: { test: true }
+      });
+      
+      functionTest.status = error ? 'failed' : 'passed';
+      if (error) {
+        (functionTest as any).error = String(error);
+        testResults.status = 'error';
+      }
+    } catch (error) {
+      functionTest.status = 'failed';
+      (functionTest as any).error = String(error);
+      testResults.status = 'error';
+    }
+
+    (functionTest as any).endTime = new Date().toISOString();
+    testResults.tests.push(functionTest);
+
+    // Calculate summary
+    testResults.summary.total = testResults.tests.length;
+    testResults.summary.passed = testResults.tests.filter(t => t.status === 'passed').length;
+    testResults.summary.failed = testResults.tests.filter(t => t.status === 'failed').length;
+
+    return testResults;
+  } catch (error) {
+    logger.log('error', 'Smoke test execution failed', { error: String(error) });
+    return {
+      status: 'error',
+      tests: testResults.tests,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+      summary: testResults.summary
+    };
+  }
 }
 
-// Main handler function
+// Main request handler
 async function handleRequest(req: Request): Promise<Response> {
-  const requestId = generateRequestId();
+  const requestId = crypto.randomUUID();
   
   try {
-    const url = new URL(req.url);
-    
-    logger.log('info', 'Incoming request', {
+    logger.log('info', 'Received request', {
       requestId,
       method: req.method,
-      path: url.pathname
+      url: req.url
     });
 
     // Handle CORS preflight
     if (req.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
+      return new Response('ok', { 
+        headers: corsHeaders 
       });
     }
 
-    // Health check endpoint
-    if (url.pathname.endsWith('/health') && req.method === 'GET') {
-      try {
-        logger.log('info', 'Processing health check request', { requestId });
-        
-        const healthData = await performHealthCheck();
-
-        logger.log('info', 'Health check completed', { 
-          requestId, 
-          status: healthData.status 
-        });
-
-        return new Response(
-          JSON.stringify(healthData),
-          {
-            status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      } catch (error) {
-        logger.log('error', 'Health check failed', { requestId, error: String(error) });
-        
-        return new Response(
-          JSON.stringify({
-            status: 'error',
-            timestamp: new Date().toISOString(),
-            function: 'smoke-test-runner',
-            error: error instanceof Error ? error.message : String(error),
-            requestId
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    }
-
-    // GET request - return health check
+    // Handle GET - health check only
     if (req.method === 'GET') {
       try {
-        logger.log('info', 'Processing GET request - health check', { requestId });
-        
-        const healthData = await performHealthCheck();
+        logger.log('info', 'Processing health check request', { requestId });
+
+        // Create timeout promise (10s for health check)
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Health check timeout after 10s')), 10000);
+        });
+
+        // Race between health check and timeout
+        const healthCheckResult = await Promise.race([
+          performHealthCheck(),
+          timeoutPromise
+        ]) as any;
 
         logger.log('info', 'Health check completed', { 
           requestId, 
-          status: healthData.status 
+          status: healthCheckResult.status 
         });
 
         return new Response(
-          JSON.stringify(healthData),
+          JSON.stringify(healthCheckResult),
           {
-            status: healthData.status === 'ok' ? 200 : 500,
+            status: healthCheckResult.status === 'ok' ? 200 : 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
@@ -230,11 +217,14 @@ async function handleRequest(req: Request): Promise<Response> {
       }
     }
 
-    // Smoke test runner endpoint
-    if (url.pathname.endsWith('/run') && req.method === 'POST') {
+    // Handle POST with action parameter
+    const url = new URL(req.url);
+    const action = url.searchParams.get('action');
+
+    if (req.method === 'POST' && action === 'smoke-test') {
       try {
-        logger.log('info', 'Processing smoke test run request', { requestId });
-        
+        logger.log('info', 'Processing smoke test request', { requestId });
+
         // Create timeout promise (30s max)
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error('Smoke test run timeout after 30s')), 30000);
