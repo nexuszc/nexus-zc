@@ -1,260 +1,4 @@
-// Deno Edge Function: Smoke Test Runner with Enhanced Validation and Retries
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { corsHeaders } from '../_shared/cors.ts';
-
-const logger = {
-  log: (level: string, message: string, data?: any) => {
-    console.log(JSON.stringify({ level, message, ...data, timestamp: new Date().toISOString() }));
-  }
-};
-
-// Types
-interface EdgeFunctionValidation {
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-  patterns: {
-    hasDenoServe: boolean;
-    handlerSignatureValid: boolean;
-    importsDetected: boolean;
-    corsConfigured: boolean;
-    errorHandlingPresent: boolean;
-  };
-}
-
-interface FunctionValidationReport {
-  function_name: string;
-  has_deno_serve: boolean;
-  handler_signature_valid: boolean;
-  imports_detected: boolean;
-  cors_configured: boolean;
-  error_handling_present: boolean;
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-  timestamp: string;
-  test_category?: 'critical' | 'non-critical';
-  failure_diagnostics?: FailureDiagnostic[];
-}
-
-interface FailureDiagnostic {
-  check_name: string;
-  check_category: 'critical' | 'non-critical';
-  failed_at: string;
-  error_message: string;
-  error_code?: string;
-  suggested_remediation: string;
-  stack_trace?: string;
-  affected_component: string;
-}
-
-interface PreflightCheck {
-  passed: boolean;
-  issues: string[];
-}
-
-interface RetryConfig {
-  maxRetries: number;
-  initialDelayMs: number;
-  maxDelayMs: number;
-  backoffMultiplier: number;
-}
-
-interface CachedTestResult {
-  result: FunctionValidationReport;
-  timestamp: number;
-  hash: string;
-}
-
-interface TestCategory {
-  name: string;
-  priority: 'critical' | 'non-critical';
-  timeout_ms: number;
-  tests: string[];
-}
-
-interface TestIsolationContext {
-  category: string;
-  function_name: string;
-  start_time: number;
-  timeout_ms: number;
-  errors: FailureDiagnostic[];
-}
-
-// Cache for test results (in-memory)
-const testResultCache = new Map<string, CachedTestResult>();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-// Retry configuration
-const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: 3,
-  initialDelayMs: 100,
-  maxDelayMs: 2000,
-  backoffMultiplier: 2
-};
-
-// Test categories with priority levels and timeouts
-const TEST_CATEGORIES: TestCategory[] = [
-  {
-    name: 'critical_structure',
-    priority: 'critical',
-    timeout_ms: 5000,
-    tests: ['has_deno_serve', 'handler_signature_valid', 'file_exists']
-  },
-  {
-    name: 'critical_functionality',
-    priority: 'critical',
-    timeout_ms: 10000,
-    tests: ['imports_detected', 'error_handling_present']
-  },
-  {
-    name: 'non_critical_features',
-    priority: 'non-critical',
-    timeout_ms: 8000,
-    tests: ['cors_configured']
-  }
-];
-
-// Retry with exponential backoff
-async function retryWithBackoff<T>(
-  operation: () => Promise<T>,
-  operationName: string,
-  config: RetryConfig = DEFAULT_RETRY_CONFIG
-): Promise<T> {
-  let lastError: Error | undefined;
-  let delay = config.initialDelayMs;
-
-  for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error as Error;
-      
-      if (attempt === config.maxRetries) {
-        logger.log('error', `Operation failed after ${config.maxRetries} retries: ${operationName}`, {
-          error: lastError.message
-        });
-        throw lastError;
-      }
-
-      logger.log('warn', `Retry attempt ${attempt + 1}/${config.maxRetries} for ${operationName}`, {
-        delay_ms: delay,
-        error: lastError.message
-      });
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay = Math.min(delay * config.backoffMultiplier, config.maxDelayMs);
-    }
-  }
-
-  throw lastError || new Error('Operation failed with unknown error');
-}
-
-// Pre-flight checks
-async function runPreflightChecks(): Promise<PreflightCheck> {
-  const issues: string[] = [];
-
-  try {
-    // Check if functions directory exists
-    const functionsDir = './supabase/functions';
-    try {
-      await Deno.stat(functionsDir);
-    } catch {
-      issues.push('Functions directory not found');
-      return { passed: false, issues };
-    }
-
-    // Check read permissions
-    try {
-      for await (const _entry of Deno.readDir(functionsDir)) {
-        break; // Just need to verify we can read
-      }
-    } catch (error) {
-      issues.push(`Cannot read functions directory: ${(error as Error).message}`);
-      return { passed: false, issues };
-    }
-
-    // Check if Deno is available and has required permissions
-    try {
-      const denoVersion = Deno.version;
-      if (!denoVersion || !denoVersion.deno) {
-        issues.push('Deno runtime not properly initialized');
-      }
-    } catch (error) {
-      issues.push(`Deno runtime check failed: ${(error as Error).message}`);
-    }
-
-  } catch (error) {
-    issues.push(`Pre-flight check error: ${(error as Error).message}`);
-  }
-
-  return {
-    passed: issues.length === 0,
-    issues
-  };
-}
-
-// Static validation of Edge Function structure
-async function validateEdgeFunctionStructure(filePath: string): Promise<EdgeFunctionValidation> {
-  const issues: string[] = [];
-  const warnings: string[] = [];
-  const patterns = {
-    hasDenoServe: false,
-    handlerSignatureValid: false,
-    importsDetected: false,
-    corsConfigured: false,
-    errorHandlingPresent: false
-  };
-
-  try {
-    const content = await Deno.readTextFile(filePath);
-
-    // Check for Deno.serve call (required)
-    if (/Deno\.serve\s*\(/i.test(content)) {
-      patterns.hasDenoServe = true;
-    } else {
-      issues.push('No Deno.serve call found - Edge Function must use Deno.serve');
-    }
-
-    // Check for proper handler signature
-    if (/\(\s*(?:req|request)\s*:?\s*Request/i.test(content) || 
-        /\(\s*\{\s*request\s*\}/i.test(content)) {
-      patterns.handlerSignatureValid = true;
-    } else if (patterns.hasDenoServe) {
-      warnings.push('Handler signature may not match expected pattern (req: Request)');
-    }
-
-    // Check for imports
-    if (/^import\s+/m.test(content)) {
-      patterns.importsDetected = true;
-    }
-
-    // Check for CORS configuration
-    if (/cors/i.test(content) || /Access-Control-Allow/i.test(content)) {
-      patterns.corsConfigured = true;
-    } else {
-      warnings.push('No CORS configuration detected - may cause browser issues');
-    }
-
-    // Check for error handling
-    if (/try\s*\{[\s\S]*catch/i.test(content) || /\.catch\(/i.test(content)) {
-      patterns.errorHandlingPresent = true;
-    } else {
-      warnings.push('No explicit error handling detected');
-    }
-
-    // Additional validation checks
-    if (content.trim().length === 0) {
-      issues.push('File is empty');
-    }
-
-    // Check for common async/await issues
-    if (/\bawait\b/.test(content) && !/\basync\b/.test(content)) {
-      issues.push('Found await keyword but function may not be marked as async');
-    }
-
-  } catch (error) {
-    issues.push(`Failed to read or parse file: ${(error as Error).message}`);
+or as Error).message}`);
   }
 
   return {
@@ -314,6 +58,310 @@ function cacheTestResult(functionName: string, fileHash: string, result: Functio
     timestamp: Date.now(),
     hash: fileHash
   });
+}
+
+// Health check pre-validation
+async function performHealthCheck(): Promise<{ passed: boolean; issues: string[] }> {
+  const issues: string[] = [];
+  
+  try {
+    // Check file system access
+    try {
+      await Deno.stat('./supabase/functions');
+    } catch {
+      issues.push('Cannot access supabase/functions directory');
+    }
+
+    // Check memory availability
+    if (Deno.systemMemoryInfo) {
+      const memInfo = Deno.systemMemoryInfo();
+      if (memInfo.available < 50 * 1024 * 1024) { // Less than 50MB
+        issues.push('Low system memory available');
+      }
+    }
+
+    // Check Deno runtime version
+    const version = Deno.version.deno;
+    if (!version) {
+      issues.push('Unable to detect Deno version');
+    }
+
+    // Verify permissions
+    const requiredPermissions = ['read', 'env', 'net'];
+    for (const perm of requiredPermissions) {
+      try {
+        const status = await Deno.permissions.query({ name: perm as Deno.PermissionName });
+        if (status.state !== 'granted') {
+          issues.push(`Missing ${perm} permission`);
+        }
+      } catch {
+        issues.push(`Unable to verify ${perm} permission`);
+      }
+    }
+
+  } catch (error) {
+    issues.push(`Health check failed: ${(error as Error).message}`);
+  }
+
+  return {
+    passed: issues.length === 0,
+    issues
+  };
+}
+
+// Post-test cleanup
+async function performPostTestCleanup(results: FunctionValidationReport[]): Promise<void> {
+  try {
+    // Clear old cache entries
+    const now = Date.now();
+    for (const [key, value] of testResultCache.entries()) {
+      if (now - value.timestamp > CACHE_TTL_MS) {
+        testResultCache.delete(key);
+      }
+    }
+
+    // Log cleanup statistics
+    logger.log('info', 'Post-test cleanup completed', {
+      cacheSize: testResultCache.size,
+      resultsProcessed: results.length
+    });
+
+  } catch (error) {
+    logger.log('error', 'Post-test cleanup failed', { error: (error as Error).message });
+  }
+}
+
+// Retry logic with exponential backoff
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000,
+  context: string = 'operation'
+): Promise<{ result: T | null; retries: number; error: Error | null }> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await operation();
+      if (attempt > 0) {
+        logger.log('info', `${context} succeeded after ${attempt} retries`);
+      }
+      return { result, retries: attempt, error: null };
+    } catch (error) {
+      lastError = error as Error;
+      
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        logger.log('warn', `${context} failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`, {
+          error: lastError.message
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  logger.log('error', `${context} failed after ${maxRetries} retries`, {
+    error: lastError?.message
+  });
+  
+  return { result: null, retries: maxRetries, error: lastError };
+}
+
+// Parallel test execution with Promise.allSettled
+async function executeTestsInParallel(
+  testFunctions: Array<{ name: string; test: () => Promise<FunctionValidationReport> }>,
+  maxConcurrency: number = 5
+): Promise<Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }>> {
+  const results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }> = [];
+  
+  // Process in batches to control concurrency
+  for (let i = 0; i < testFunctions.length; i += maxConcurrency) {
+    const batch = testFunctions.slice(i, i + maxConcurrency);
+    
+    const batchPromises = batch.map(async ({ name, test }) => {
+      try {
+        const result = await test();
+        return { name, result, error: null };
+      } catch (error) {
+        return { name, result: null, error: error as Error };
+      }
+    });
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    for (const settledResult of batchResults) {
+      if (settledResult.status === 'fulfilled') {
+        results.push(settledResult.value);
+      } else {
+        results.push({
+          name: 'unknown',
+          result: null,
+          error: settledResult.reason as Error
+        });
+      }
+    }
+  }
+  
+  return results;
+}
+
+// Individual test isolation wrapper
+async function executeIsolatedTest(
+  functionName: string,
+  testFunc: () => Promise<FunctionValidationReport>,
+  timeout: number = 30000
+): Promise<{ result: FunctionValidationReport | null; timedOut: boolean; error: Error | null; stackTrace: string | null }> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Test timeout exceeded: ${timeout}ms for ${functionName}`));
+    }, timeout);
+  });
+
+  try {
+    const result = await Promise.race([testFunc(), timeoutPromise]);
+    return { 
+      result: result as FunctionValidationReport, 
+      timedOut: false, 
+      error: null,
+      stackTrace: null
+    };
+  } catch (error) {
+    const err = error as Error;
+    const isTimeout = err.message.includes('timeout');
+    
+    return { 
+      result: null, 
+      timedOut: isTimeout, 
+      error: err,
+      stackTrace: err.stack || null
+    };
+  }
+}
+
+// Aggregate test results with detailed metrics
+function aggregateTestResults(
+  results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }>
+): {
+  total: number;
+  passed: number;
+  failed: number;
+  criticalFailures: number;
+  nonCriticalFailures: number;
+  byCategory: { [key: string]: { passed: number; failed: number; total: number } };
+} {
+  const aggregated = {
+    total: results.length,
+    passed: 0,
+    failed: 0,
+    criticalFailures: 0,
+    nonCriticalFailures: 0,
+    byCategory: {} as { [key: string]: { passed: number; failed: number; total: number } }
+  };
+
+  for (const { result, error } of results) {
+    if (error || !result) {
+      aggregated.failed++;
+      aggregated.criticalFailures++;
+      continue;
+    }
+
+    if (result.validation_passed) {
+      aggregated.passed++;
+    } else {
+      aggregated.failed++;
+      
+      const hasCritical = result.checks.some(check => !check.passed && check.severity === 'critical');
+      if (hasCritical) {
+        aggregated.criticalFailures++;
+      } else {
+        aggregated.nonCriticalFailures++;
+      }
+    }
+
+    // Categorize by check type
+    for (const check of result.checks) {
+      const category = check.check_name;
+      if (!aggregated.byCategory[category]) {
+        aggregated.byCategory[category] = { passed: 0, failed: 0, total: 0 };
+      }
+      aggregated.byCategory[category].total++;
+      if (check.passed) {
+        aggregated.byCategory[category].passed++;
+      } else {
+        aggregated.byCategory[category].failed++;
+      }
+    }
+  }
+
+  return aggregated;
+}
+
+// Detailed failure reporting with stack traces
+function generateDetailedFailureReport(
+  results: Array<{ name: string; result: FunctionValidationReport | null; error: Error | null }>,
+  diagnostics: FailureDiagnostic[]
+): Array<{
+  functionName: string;
+  failedChecks: Array<{
+    checkName: string;
+    severity: string;
+    message: string;
+    stackTrace?: string;
+  }>;
+  errorMessage?: string;
+  stackTrace?: string;
+  remediation: string[];
+}> {
+  const failureReports: Array<{
+    functionName: string;
+    failedChecks: Array<{
+      checkName: string;
+      severity: string;
+      message: string;
+      stackTrace?: string;
+    }>;
+    errorMessage?: string;
+    stackTrace?: string;
+    remediation: string[];
+  }> = [];
+
+  for (const { name, result, error } of results) {
+    if (error) {
+      failureReports.push({
+        functionName: name,
+        failedChecks: [],
+        errorMessage: error.message,
+        stackTrace: error.stack,
+        remediation: ['Review stack trace and fix underlying error', 'Check function implementation']
+      });
+      continue;
+    }
+
+    if (result && !result.validation_passed) {
+      const failedChecks = result.checks
+        .filter(check => !check.passed)
+        .map(check => ({
+          checkName: check.check_name,
+          severity: check.severity || 'unknown',
+          message: check.message || 'Check failed',
+          stackTrace: check.details?.stack_trace
+        }));
+
+      const relatedDiagnostics = diagnostics.filter(d => 
+        d.affected_component === name
+      );
+
+      const remediation = relatedDiagnostics.map(d => d.suggested_remediation);
+
+      failureReports.push({
+        functionName: name,
+        failedChecks,
+        remediation: remediation.length > 0 ? remediation : ['Review failed checks and implement fixes']
+      });
+    }
+  }
+
+  return failureReports;
 }
 
 // Structured response format
@@ -404,57 +452,4 @@ function createFailureDiagnostic(
   } else if (/timeout/i.test(errorMessage)) {
     suggestedRemediation = 'Reduce function complexity or optimize slow operations';
   } else if (/network/i.test(errorMessage)) {
-    suggestedRemediation = 'Check network connectivity and external service availability';
-  }
-
-  return {
-    check_name: checkName,
-    check_category: category,
-    failed_at: new Date().toISOString(),
-    error_message: errorMessage,
-    error_code: errorCode,
-    suggested_remediation: suggestedRemediation,
-    stack_trace: stackTrace,
-    affected_component: affectedComponent
-  };
-}
-
-// Run test with isolation and timeout control
-async function runTestWithIsolation<T>(
-  testFunc: () => Promise<T>,
-  context: TestIsolationContext
-): Promise<{ result: T | null; error: FailureDiagnostic | null; timedOut: boolean }> {
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(`Test timeout exceeded: ${context.timeout_ms}ms`));
-    }, context.timeout_ms);
-  });
-
-  try {
-    const result = await Promise.race([testFunc(), timeoutPromise]);
-    return { result: result as T, error: null, timedOut: false };
-  } catch (error) {
-    const err = error as Error;
-    const isTimeout = err.message.includes('timeout');
-    
-    const diagnostic = createFailureDiagnostic(
-      context.category,
-      err.message,
-      context.function_name,
-      'critical',
-      isTimeout ? 'TIMEOUT' : 'TEST_FAILURE',
-      err.stack
-    );
-
-    context.errors.push(diagnostic);
-
-    return { 
-      result: null, 
-      error: diagnostic, 
-      timedOut: isTimeout 
-    };
-  }
-}
-
-// Aggregate errors by category and priority
-function aggregateErrorsByCategory(results: FunctionValidationReport[]): {
+    suggestedRemediation
