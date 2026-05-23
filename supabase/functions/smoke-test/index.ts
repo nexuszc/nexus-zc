@@ -1,251 +1,4 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
-
-/**
- * Logger utility with structured logging
- */
-const logger = {
-  info: (message: string, meta?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
-  },
-  error: (message: string, meta?: Record<string, unknown>) => {
-    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
-  },
-  warn: (message: string, meta?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
-  }
-};
-
-/**
- * Validate environment variables
- */
-function validateEnvironment(): { valid: boolean; errors: string[] } {
-  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const errors: string[] = [];
-  
-  for (const key of required) {
-    const value = Deno.env.get(key);
-    if (!value) {
-      errors.push(`Missing required environment variable: ${key}`);
-    } else if (value.trim() === '') {
-      errors.push(`Environment variable ${key} is empty`);
-    }
-  }
-  
-  if (errors.length > 0) {
-    logger.error('Environment validation failed', { errors });
-    return { valid: false, errors };
-  }
-  
-  logger.info('Environment validation passed');
-  return { valid: true, errors: [] };
-}
-
-/**
- * Check database connectivity with retries
- */
-async function checkDatabaseConnectivity(maxRetries = 3, retryDelay = 1000): Promise<{ healthy: boolean; error?: string; attempts: number }> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  if (!supabaseUrl || !supabaseKey) {
-    logger.error('Cannot check database: missing credentials');
-    return { healthy: false, error: 'Missing Supabase credentials', attempts: 0 };
-  }
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      logger.info(`Database connectivity check attempt ${attempt}/${maxRetries}`);
-      
-      const supabase = createClient(supabaseUrl, supabaseKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false
-        }
-      });
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('count')
-        .limit(1)
-        .abortSignal(controller.signal);
-      
-      clearTimeout(timeoutId);
-      
-      if (error) {
-        logger.error(`Database check attempt ${attempt} failed`, { 
-          error: error.message,
-          code: error.code,
-          details: error.details
-        });
-        
-        if (attempt < maxRetries) {
-          logger.info(`Retrying in ${retryDelay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          continue;
-        }
-        
-        return { 
-          healthy: false, 
-          error: `${error.message} (code: ${error.code})`,
-          attempts: attempt
-        };
-      }
-      
-      logger.info(`Database connectivity check passed on attempt ${attempt}`);
-      return { healthy: true, attempts: attempt };
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Database check attempt ${attempt} threw exception`, { 
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      if (attempt < maxRetries) {
-        logger.info(`Retrying in ${retryDelay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-        continue;
-      }
-      
-      return { 
-        healthy: false, 
-        error: errorMessage,
-        attempts: attempt
-      };
-    }
-  }
-  
-  return { 
-    healthy: false, 
-    error: 'Max retries exceeded',
-    attempts: maxRetries
-  };
-}
-
-/**
- * Check critical tables accessibility
- */
-async function checkCriticalTables(): Promise<{ healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }> }> {
-  const criticalTables = ['profiles', 'conversations', 'messages', 'embeddings'];
-  const results: Record<string, { accessible: boolean; error?: string }> = {};
-  
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  if (!supabaseUrl || !supabaseKey) {
-    logger.error('Cannot check tables: missing credentials');
-    return { healthy: false, tables: {} };
-  }
-  
-  for (const table of criticalTables) {
-    try {
-      logger.info(`Checking table accessibility: ${table}`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(`${supabaseUrl}/rest/v1/${table}?select=count&limit=1`, {
-        method: 'GET',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok) {
-        results[table] = { accessible: true };
-        logger.info(`Table ${table} is accessible`);
-      } else {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        results[table] = { 
-          accessible: false, 
-          error: `HTTP ${response.status}: ${errorText}` 
-        };
-        logger.error(`Table ${table} is not accessible`, { 
-          status: response.status, 
-          error: errorText 
-        });
-      }
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      results[table] = { accessible: false, error: errorMessage };
-      logger.error(`Error checking table ${table}`, { 
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
-  }
-  
-  const allAccessible = Object.values(results).every(r => r.accessible);
-  
-  return { 
-    healthy: allAccessible, 
-    tables: results 
-  };
-}
-
-/**
- * Check edge function availability
- */
-async function checkEdgeFunctions(): Promise<{ healthy: boolean; functions: Record<string, { available: boolean; error?: string }> }> {
-  const edgeFunctions = ['chat', 'health'];
-  const results: Record<string, { available: boolean; error?: string }> = {};
-  
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-  
-  if (!supabaseUrl || !supabaseKey) {
-    logger.error('Cannot check edge functions: missing credentials');
-    return { healthy: false, functions: {} };
-  }
-  
-  for (const func of edgeFunctions) {
-    try {
-      logger.info(`Checking edge function availability: ${func}`);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const url = `${supabaseUrl}/functions/v1/${func}${func === 'health' ? '' : '/health'}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${supabaseKey}`
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok || response.status === 404) {
-        results[func] = { available: true };
-        logger.info(`Edge function ${func} is available`, { status: response.status });
-      } else {
-        const errorText = await response.text().catch(() => 'Unknown error');
-        results[func] = { 
-          available: false, 
-          error: `HTTP ${response.status}: ${errorText}` 
-        };
-        logger.error(`Edge function ${func} is not available`, { 
-          status: response.status, 
-          error: errorText 
-        });
-      }
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      results[func] = { available: false, error: errorMessage };
-      logger.error(`Error checking edge function ${func}`, { 
+error(`Error checking edge function ${func}`, { 
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
@@ -317,6 +70,254 @@ async function performComprehensiveHealthCheck(): Promise<{
     functionsHealthy: functionsCheck.healthy
   });
   
+  return result;
+}
+
+/**
+ * Test execution with timeout management
+ */
+async function executeTestWithTimeout<T>(
+  testName: string,
+  testFn: () => Promise<T>,
+  timeoutMs: number = 10000
+): Promise<{ success: boolean; result?: T; error?: string; duration: number }> {
+  const startTime = Date.now();
+  
+  try {
+    logger.info(`Executing test: ${testName}`);
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Test timeout after ${timeoutMs}ms`)), timeoutMs);
+    });
+    
+    const result = await Promise.race([
+      testFn(),
+      timeoutPromise
+    ]);
+    
+    const duration = Date.now() - startTime;
+    logger.info(`Test completed: ${testName}`, { duration });
+    
+    return {
+      success: true,
+      result,
+      duration
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    logger.error(`Test failed: ${testName}`, {
+      error: errorMessage,
+      duration,
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    
+    return {
+      success: false,
+      error: errorMessage,
+      duration
+    };
+  }
+}
+
+/**
+ * Comprehensive smoke test suite
+ */
+async function runSmokeTests(): Promise<{
+  status: 'passed' | 'failed';
+  tests_run: number;
+  tests_passed: number;
+  tests_failed: number;
+  timestamp: string;
+  duration: number;
+  tests: Record<string, {
+    passed: boolean;
+    duration: number;
+    error?: string;
+    details?: any;
+  }>;
+  errors: string[];
+}> {
+  const startTime = Date.now();
+  const tests: Record<string, any> = {};
+  const errors: string[] = [];
+  let testsRun = 0;
+  let testsPassed = 0;
+  let testsFailed = 0;
+
+  logger.info('Starting comprehensive smoke test suite');
+
+  // Test 1: Environment validation
+  testsRun++;
+  const envTest = await executeTestWithTimeout(
+    'environment_validation',
+    async () => {
+      const envCheck = validateEnvironment();
+      if (!envCheck.valid) {
+        throw new Error(`Environment validation failed: ${envCheck.errors?.join(', ')}`);
+      }
+      return envCheck;
+    },
+    5000
+  );
+  tests.environment_validation = {
+    passed: envTest.success,
+    duration: envTest.duration,
+    error: envTest.error,
+    details: envTest.result
+  };
+  if (envTest.success) testsPassed++;
+  else {
+    testsFailed++;
+    errors.push(`Environment validation failed: ${envTest.error}`);
+  }
+
+  // Test 2: Database connectivity
+  testsRun++;
+  const dbTest = await executeTestWithTimeout(
+    'database_connectivity',
+    async () => {
+      const dbCheck = await checkDatabaseConnectivity(3, 1000);
+      if (!dbCheck.healthy) {
+        throw new Error(dbCheck.error || 'Database connectivity check failed');
+      }
+      return dbCheck;
+    },
+    15000
+  );
+  tests.database_connectivity = {
+    passed: dbTest.success,
+    duration: dbTest.duration,
+    error: dbTest.error,
+    details: dbTest.result
+  };
+  if (dbTest.success) testsPassed++;
+  else {
+    testsFailed++;
+    errors.push(`Database connectivity failed: ${dbTest.error}`);
+  }
+
+  // Test 3: Critical tables accessibility
+  if (dbTest.success) {
+    testsRun++;
+    const tablesTest = await executeTestWithTimeout(
+      'critical_tables',
+      async () => {
+        const tablesCheck = await checkCriticalTables();
+        if (!tablesCheck.healthy) {
+          const failedTables = Object.entries(tablesCheck.tables)
+            .filter(([_, t]) => !t.accessible)
+            .map(([name, t]) => `${name}: ${t.error}`);
+          throw new Error(`Table checks failed: ${failedTables.join(', ')}`);
+        }
+        return tablesCheck;
+      },
+      15000
+    );
+    tests.critical_tables = {
+      passed: tablesTest.success,
+      duration: tablesTest.duration,
+      error: tablesTest.error,
+      details: tablesTest.result
+    };
+    if (tablesTest.success) testsPassed++;
+    else {
+      testsFailed++;
+      errors.push(`Critical tables check failed: ${tablesTest.error}`);
+    }
+  } else {
+    tests.critical_tables = {
+      passed: false,
+      duration: 0,
+      error: 'Skipped due to database connectivity failure'
+    };
+  }
+
+  // Test 4: Edge functions availability
+  testsRun++;
+  const functionsTest = await executeTestWithTimeout(
+    'edge_functions',
+    async () => {
+      const functionsCheck = await checkEdgeFunctions();
+      if (!functionsCheck.healthy) {
+        const unavailableFunctions = Object.entries(functionsCheck.functions)
+          .filter(([_, f]) => !f.available)
+          .map(([name, f]) => `${name}: ${f.error}`);
+        throw new Error(`Function checks failed: ${unavailableFunctions.join(', ')}`);
+      }
+      return functionsCheck;
+    },
+    20000
+  );
+  tests.edge_functions = {
+    passed: functionsTest.success,
+    duration: functionsTest.duration,
+    error: functionsTest.error,
+    details: functionsTest.result
+  };
+  if (functionsTest.success) testsPassed++;
+  else {
+    testsFailed++;
+    errors.push(`Edge functions check failed: ${functionsTest.error}`);
+  }
+
+  // Test 5: Supabase client initialization
+  testsRun++;
+  const clientTest = await executeTestWithTimeout(
+    'supabase_client',
+    async () => {
+      try {
+        const testClient = createClient(
+          Deno.env.get('SUPABASE_URL') || '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        );
+        
+        // Test a simple query
+        const { error } = await testClient.from('profiles').select('id').limit(1);
+        if (error) throw error;
+        
+        return { initialized: true };
+      } catch (error) {
+        throw new Error(`Client initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+    10000
+  );
+  tests.supabase_client = {
+    passed: clientTest.success,
+    duration: clientTest.duration,
+    error: clientTest.error,
+    details: clientTest.result
+  };
+  if (clientTest.success) testsPassed++;
+  else {
+    testsFailed++;
+    errors.push(`Supabase client test failed: ${clientTest.error}`);
+  }
+
+  const duration = Date.now() - startTime;
+  const status = testsFailed === 0 ? 'passed' : 'failed';
+
+  const result = {
+    status,
+    tests_run: testsRun,
+    tests_passed: testsPassed,
+    tests_failed: testsFailed,
+    timestamp: new Date().toISOString(),
+    duration,
+    tests,
+    errors
+  };
+
+  logger.info('Smoke test suite completed', {
+    status,
+    tests_run: testsRun,
+    tests_passed: testsPassed,
+    tests_failed: testsFailed,
+    duration
+  });
+
   return result;
 }
 
@@ -416,6 +417,53 @@ async function handleRequest(req: Request): Promise<Response> {
     method: req.method
   });
   
+  // Test endpoint: comprehensive smoke test suite
+  if (url.pathname === '/test/run' || url.pathname === '/test/smoke') {
+    logger.info('Comprehensive smoke test endpoint called');
+    
+    try {
+      const results = await runSmokeTests();
+      
+      const statusCode = results.status === 'passed' ? 200 : 500;
+      
+      return new Response(
+        JSON.stringify(results, null, 2),
+        {
+          status: statusCode,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+    } catch (error) {
+      logger.error('Smoke test suite failed with exception', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      return new Response(
+        JSON.stringify({
+          status: 'failed',
+          tests_run: 0,
+          tests_passed: 0,
+          tests_failed: 0,
+          timestamp: new Date().toISOString(),
+          duration: 0,
+          tests: {},
+          errors: [error instanceof Error ? error.message : String(error)]
+        }, null, 2),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        }
+      );
+    }
+  }
+  
   // Test endpoint: basic ping
   if (url.pathname === '/test/ping') {
     logger.info('Ping test endpoint called');
@@ -443,4 +491,5 @@ async function handleRequest(req: Request): Promise<Response> {
         timestamp: new Date().toISOString()
       }),
       {
-        status: envCheck.valid ? 200
+        status: envCheck.valid ? 200 : 500,
+        headers:
