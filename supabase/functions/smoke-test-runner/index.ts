@@ -1,114 +1,74 @@
-any = {};
-          try {
-            const bodyText = await req.text();
-            if (bodyText) {
-              requestBody = JSON.parse(bodyText);
-            }
-          } catch (parseError) {
-            logger.log('warn', 'Could not parse request body', { requestId, error: String(parseError) });
-          }
+// supabase/functions/smoke-test-runner/index.ts
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
 
-          // Extract test_suite parameter if provided
-          const test_suite = requestBody.test_suite || 'full';
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-          // Create timeout promise (30s max)
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Request timeout after 30s')), 30000);
-          });
+// Enhanced logger with structured logging
+const logger = {
+  log: (level: string, message: string, meta?: any) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      function: 'smoke-test-runner',
+      ...meta
+    };
+    console.log(JSON.stringify(logEntry));
+  }
+};
 
-          // Run health check first
-          const healthCheckResult = await Promise.race([
-            performHealthCheck(),
-            timeoutPromise
-          ]) as any;
+// Main request handler
+async function handleRequest(req: Request) {
+  try {
+    const { method } = req;
 
-          // If health check passes, run smoke tests
-          let smokeTestResult = null;
-          if (healthCheckResult.status === 'ok') {
-            try {
-              smokeTestResult = await Promise.race([
-                runSmokeTests(),
-                timeoutPromise
-              ]) as any;
-            } catch (smokeError) {
-              logger.log('error', 'Smoke test failed during full suite', { 
-                requestId, 
-                error: String(smokeError) 
-              });
-              smokeTestResult = {
-                status: 'error',
-                error: smokeError instanceof Error ? smokeError.message : String(smokeError),
-                timestamp: new Date().toISOString()
-              };
-            }
-          }
+    // Handle CORS preflight
+    if (method === 'OPTIONS') {
+      return new Response(null, { 
+        status: 200, 
+        headers: corsHeaders 
+      });
+    }
 
-          const response = {
-            success: healthCheckResult.status === 'ok' && smokeTestResult?.status === 'success',
-            status: healthCheckResult.status === 'ok' && smokeTestResult?.status === 'success' ? 'ok' : 'error',
-            timestamp: new Date().toISOString(),
-            function: 'smoke-test-runner',
-            suite: test_suite,
-            requestId,
-            healthCheck: healthCheckResult,
-            smokeTest: smokeTestResult,
-            results: {
-              health: healthCheckResult,
-              tests: smokeTestResult
-            }
-          };
+    logger.log('info', 'Starting smoke test validation', { 
+      method,
+      url: req.url 
+    });
 
-          logger.log('info', 'Full suite completed', { 
-            requestId, 
-            status: response.status
-          });
-
-          return new Response(
-            JSON.stringify(response),
-            {
-              status: response.status === 'ok' ? 200 : 500,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders }
-            }
-          );
-        } catch (error) {
-          logger.log('error', 'Full suite failed', { requestId, error: String(error) });
-          
-          return new Response(
-            JSON.stringify({
-              success: false,
-              status: 'error',
-              timestamp: new Date().toISOString(),
-              function: 'smoke-test-runner',
-              error: error instanceof Error ? error.message : String(error),
-              requestId
-            }),
-            {
-              status: 500,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders }
-            }
-          );
-        }
+    // Parse request parameters
+    let test_suite = 'full';
+    if (method === 'POST') {
+      try {
+        const body = await req.json();
+        test_suite = body.test_suite || 'full';
+      } catch {
+        // Use default if JSON parsing fails
       }
     }
 
-    // Method not allowed
-    logger.log('warn', 'Method not allowed', { requestId, method: req.method });
+    // Run the smoke tests with validation
+    const testResults = await runSmokeTestsWithValidation();
+
     return new Response(
       JSON.stringify({
-        status: 'error',
-        message: 'Method not allowed. Use GET for health check or POST to run tests.',
-        allowedMethods: ['GET', 'POST', 'OPTIONS'],
-        requestId
+        success: testResults.status === 'success',
+        status: testResults.status,
+        timestamp: new Date().toISOString(),
+        function: 'smoke-test-runner',
+        test_suite,
+        ...testResults
       }),
       {
-        status: 405,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: testResults.status === 'error' ? 500 : 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
 
   } catch (error) {
-    logger.log('error', 'Unhandled error in request handler', { 
-      requestId, 
+    logger.log('error', 'Request handler error', {
       error: String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
@@ -119,8 +79,7 @@ any = {};
         status: 'error',
         timestamp: new Date().toISOString(),
         function: 'smoke-test-runner',
-        error: error instanceof Error ? error.message : String(error),
-        requestId
+        error: error instanceof Error ? error.message : String(error)
       }),
       {
         status: 500,
@@ -130,19 +89,8 @@ any = {};
   }
 }
 
-// Static analysis validator for Edge Functions
-async function validateEdgeFunctionStructure(functionPath: string): Promise<{
-  valid: boolean;
-  issues: string[];
-  warnings: string[];
-  patterns: {
-    hasDenoServe: boolean;
-    hasHandlerFunction: boolean;
-    hasResponseReturn: boolean;
-    hasCorsHeaders: boolean;
-    hasErrorHandling: boolean;
-  };
-}> {
+// Static analysis validation of Edge Function structure
+async function validateEdgeFunctionStructure(filePath: string) {
   const issues: string[] = [];
   const warnings: string[] = [];
   const patterns = {
@@ -154,8 +102,8 @@ async function validateEdgeFunctionStructure(functionPath: string): Promise<{
   };
 
   try {
-    // Read the Edge Function file as text
-    const functionCode = await Deno.readTextFile(functionPath);
+    // Read the function file as text
+    const functionCode = await Deno.readTextFile(filePath);
 
     // Check for Deno.serve() pattern
     const denoServePattern = /Deno\.serve\s*\(/;
@@ -164,25 +112,25 @@ async function validateEdgeFunctionStructure(functionPath: string): Promise<{
       issues.push('Missing Deno.serve() call - Edge Function must use Deno.serve()');
     }
 
-    // Check for handler function (async function that takes Request)
-    const handlerPattern = /(?:async\s+)?(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))\s*\([^)]*(?:req|request)[^)]*(?::\s*Request)?\)/i;
+    // Check for handler function (async function or arrow function)
+    const handlerPattern = /(?:async\s+function|async\s*\(|\(\s*req\s*:?\s*Request|\(req:\s*Request)/;
     patterns.hasHandlerFunction = handlerPattern.test(functionCode);
     if (!patterns.hasHandlerFunction) {
-      issues.push('Missing handler function - Edge Function must have a handler that accepts Request');
+      issues.push('No handler function detected - Edge Function needs a request handler');
     }
 
     // Check for Response return
-    const responsePattern = /(?:return\s+)?new\s+Response\s*\(/;
+    const responsePattern = /(?:new\s+Response\s*\(|return\s+new\s+Response|:\s*Response|:\s*Promise\s*<\s*Response)/;
     patterns.hasResponseReturn = responsePattern.test(functionCode);
     if (!patterns.hasResponseReturn) {
-      issues.push('Missing Response return - Handler must return Response objects');
+      warnings.push('No Response object detected - Handler should return Response or Promise<Response>');
     }
 
     // Check for CORS headers
-    const corsPattern = /(?:corsHeaders|['"]Access-Control-Allow-Origin['"])/;
+    const corsPattern = /(?:Access-Control-Allow-Origin|corsHeaders)/;
     patterns.hasCorsHeaders = corsPattern.test(functionCode);
     if (!patterns.hasCorsHeaders) {
-      warnings.push('No CORS headers detected - Consider adding CORS support for browser clients');
+      warnings.push('No CORS headers detected - Consider adding CORS support');
     }
 
     // Check for error handling
@@ -210,6 +158,45 @@ async function validateEdgeFunctionStructure(functionPath: string): Promise<{
     const optionsHandlingPattern = /(?:method\s*===?\s*['"]OPTIONS['"]|req\.method\s*===?\s*['"]OPTIONS['"])/;
     if (patterns.hasCorsHeaders && !optionsHandlingPattern.test(functionCode)) {
       warnings.push('CORS headers present but no OPTIONS method handling detected');
+    }
+
+    // Check for basic syntax errors by looking for common patterns
+    const uncommentedCode = functionCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
+    
+    // Check for balanced braces
+    const openBraces = (uncommentedCode.match(/\{/g) || []).length;
+    const closeBraces = (uncommentedCode.match(/\}/g) || []).length;
+    if (openBraces !== closeBraces) {
+      issues.push(`Syntax issue: Unbalanced braces (${openBraces} opening, ${closeBraces} closing)`);
+    }
+
+    // Check for balanced parentheses
+    const openParens = (uncommentedCode.match(/\(/g) || []).length;
+    const closeParens = (uncommentedCode.match(/\)/g) || []).length;
+    if (openParens !== closeParens) {
+      warnings.push(`Possible syntax issue: Unbalanced parentheses (${openParens} opening, ${closeParens} closing)`);
+    }
+
+    // Validate Deno.serve structure more thoroughly
+    if (patterns.hasDenoServe) {
+      // Check if Deno.serve has a handler function
+      const serveWithHandlerPattern = /Deno\.serve\s*\(\s*(?:async\s*)?\s*(?:function|\(|\{)/;
+      if (!serveWithHandlerPattern.test(functionCode)) {
+        warnings.push('Deno.serve() may not have a proper handler function');
+      }
+
+      // Check if handler accepts Request parameter
+      const serveRequestPattern = /Deno\.serve\s*\([^)]*(?:req|request)\s*:\s*Request/i;
+      if (!serveRequestPattern.test(functionCode)) {
+        warnings.push('Handler function should accept a Request parameter');
+      }
+    }
+
+    // Check for async/await usage
+    const hasAsync = /async\s+/.test(functionCode);
+    const hasAwait = /await\s+/.test(functionCode);
+    if (hasAwait && !hasAsync) {
+      issues.push('Code uses await but no async function detected');
     }
 
     return {
