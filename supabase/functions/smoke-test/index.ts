@@ -1,244 +1,140 @@
-ationPassed = true;
-      let validationError: string | undefined;
-      
-      if (test.validateResponse && !parseError) {
-        try {
-          validationPassed = test.validateResponse(responseData);
-          if (!validationPassed) {
-            validationError = 'Response validation returned false';
-          }
-        } catch (valErr) {
-          validationPassed = false;
-          validationError = `Validation threw error: ${valErr instanceof Error ? valErr.message : String(valErr)}`;
-          logger.error(`Validation error for ${test.name}`, { 
-            error: valErr instanceof Error ? valErr.message : String(valErr),
-            stack: valErr instanceof Error ? valErr.stack : undefined
-          });
-        }
-      }
-      
-      if (statusMatch && validationPassed) {
-        passed++;
-        results.push({
-          test: test.name,
-          status: 'PASS',
-          endpoint: test.endpoint,
-          statusCode: response.status,
-          elapsed,
-          details: 'Test passed successfully'
-        });
-        logger.info(`Test passed: ${test.name}`, { elapsed, statusCode: response.status });
-      } else {
-        failed++;
-        const failureDetails = [];
-        
-        if (!statusMatch) {
-          failureDetails.push(`Status code mismatch. Expected: ${test.expectedStatus.join(' or ')}, Got: ${response.status}`);
-        }
-        
-        if (!validationPassed) {
-          failureDetails.push(validationError || 'Response validation failed');
-        }
-        
-        results.push({
-          test: test.name,
-          status: 'FAIL',
-          endpoint: test.endpoint,
-          statusCode: response.status,
-          expectedStatus: test.expectedStatus,
-          elapsed,
-          details: failureDetails.join('; '),
-          response: responseData
-        });
-        
-        logger.error(`Test failed: ${test.name}`, {
-          elapsed,
-          statusCode: response.status,
-          expectedStatus: test.expectedStatus,
-          validationPassed,
-          validationError,
-          responsePreview: typeof responseData === 'string' 
-            ? responseData.substring(0, 200) 
-            : JSON.stringify(responseData).substring(0, 200)
-        });
-      }
-    } catch (error) {
-      // Clean up timeout if still active
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
-      
-      const elapsed = Date.now() - testStartTime;
-      failed++;
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isTimeout = errorMessage.includes('abort') || errorMessage.toLowerCase().includes('timeout');
-      const isNetworkError = errorMessage.toLowerCase().includes('network') || 
-                            errorMessage.toLowerCase().includes('fetch') ||
-                            errorMessage.toLowerCase().includes('connection');
-      
-      let errorType = 'exception';
-      if (isTimeout) {
-        errorType = 'timeout';
-      } else if (isNetworkError) {
-        errorType = 'network';
-      }
-      
-      let details = `Test threw exception: ${errorMessage}`;
-      if (isTimeout) {
-        details = `Test timed out after ${test.timeout || testTimeout}ms`;
-      } else if (isNetworkError) {
-        details = `Network error: ${errorMessage}`;
-      }
-      
-      results.push({
-        test: test.name,
-        status: 'ERROR',
-        endpoint: test.endpoint,
-        elapsed,
-        error: errorMessage,
-        errorType,
-        details,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      logger.error(`Test error: ${test.name}`, {
-        error: errorMessage,
-        elapsed,
-        errorType,
-        isTimeout,
-        isNetworkError,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
-  }
-
-  const totalTests = testCases.length;
-  const passRate = totalTests > 0 ? ((passed / totalTests) * 100).toFixed(1) : '0.0';
-
-  logger.info('All tests completed', { 
-    passed, 
-    failed, 
-    total: totalTests,
-    passRate: `${passRate}%`,
-    criticalFailures: results.filter(r => r.errorType === 'timeout' || r.errorType === 'network').length
-  });
-
-  return { passed, failed, results };
-}
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
 /**
- * Validate environment variables and API keys
+ * Logger utility with structured logging
+ */
+const logger = {
+  info: (message: string, meta?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
+  },
+  error: (message: string, meta?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
+  },
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
+  }
+};
+
+/**
+ * Validate environment variables
  */
 function validateEnvironment(): { valid: boolean; errors: string[] } {
+  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
   const errors: string[] = [];
   
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  if (!supabaseUrl) {
-    errors.push('SUPABASE_URL environment variable is not set');
-  } else if (!supabaseUrl.startsWith('http://') && !supabaseUrl.startsWith('https://')) {
-    errors.push('SUPABASE_URL must be a valid URL starting with http:// or https://');
-  }
-  
-  if (!supabaseKey) {
-    errors.push('SUPABASE_ANON_KEY environment variable is not set');
-  } else if (supabaseKey.length < 20) {
-    errors.push('SUPABASE_ANON_KEY appears to be invalid (too short)');
-  }
-  
-  if (supabaseServiceKey && supabaseServiceKey.length < 20) {
-    errors.push('SUPABASE_SERVICE_ROLE_KEY appears to be invalid (too short)');
+  for (const key of required) {
+    const value = Deno.env.get(key);
+    if (!value) {
+      errors.push(`Missing required environment variable: ${key}`);
+    } else if (value.trim() === '') {
+      errors.push(`Environment variable ${key} is empty`);
+    }
   }
   
   if (errors.length > 0) {
     logger.error('Environment validation failed', { errors });
-  } else {
-    logger.info('Environment validation passed');
+    return { valid: false, errors };
   }
   
-  return {
-    valid: errors.length === 0,
-    errors
-  };
+  logger.info('Environment validation passed');
+  return { valid: true, errors: [] };
 }
 
 /**
- * Check database connectivity with retry logic
+ * Check database connectivity with retries
  */
-async function checkDatabaseConnectivity(retries = 3, delayMs = 1000): Promise<{ healthy: boolean; error?: string; attempts: number }> {
-  let lastError: string | undefined;
+async function checkDatabaseConnectivity(maxRetries = 3, retryDelay = 1000): Promise<{ healthy: boolean; error?: string; attempts: number }> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  if (!supabaseUrl || !supabaseKey) {
+    logger.error('Cannot check database: missing credentials');
+    return { healthy: false, error: 'Missing Supabase credentials', attempts: 0 };
+  }
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      logger.info(`Database connectivity check - attempt ${attempt}/${retries}`);
+      logger.info(`Database connectivity check attempt ${attempt}/${maxRetries}`);
       
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-      
-      if (!supabaseUrl || !supabaseKey) {
-        return { 
-          healthy: false, 
-          error: 'Missing database credentials', 
-          attempts: attempt 
-        };
-      }
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const response = await fetch(`${supabaseUrl}/rest/v1/`, {
-        method: 'HEAD',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        },
-        signal: controller.signal
-      });
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('count')
+        .limit(1)
+        .abortSignal(controller.signal);
       
       clearTimeout(timeoutId);
       
-      if (response.ok || response.status === 404) {
-        logger.info('Database connectivity check passed', { attempt, status: response.status });
-        return { healthy: true, attempts: attempt };
+      if (error) {
+        logger.error(`Database check attempt ${attempt} failed`, { 
+          error: error.message,
+          code: error.code,
+          details: error.details
+        });
+        
+        if (attempt < maxRetries) {
+          logger.info(`Retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          continue;
+        }
+        
+        return { 
+          healthy: false, 
+          error: `${error.message} (code: ${error.code})`,
+          attempts: attempt
+        };
       }
       
-      lastError = `HTTP ${response.status}: ${response.statusText}`;
-      logger.warn('Database connectivity check failed', { attempt, status: response.status, error: lastError });
+      logger.info(`Database connectivity check passed on attempt ${attempt}`);
+      return { healthy: true, attempts: attempt };
       
     } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      logger.error('Database connectivity check error', { 
-        attempt, 
-        error: lastError,
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Database check attempt ${attempt} threw exception`, { 
+        error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
-    }
-    
-    if (attempt < retries) {
-      logger.info(`Retrying database check in ${delayMs}ms...`);
-      await new Promise(resolve => setTimeout(resolve, delayMs));
+      
+      if (attempt < maxRetries) {
+        logger.info(`Retrying in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        continue;
+      }
+      
+      return { 
+        healthy: false, 
+        error: errorMessage,
+        attempts: attempt
+      };
     }
   }
   
   return { 
     healthy: false, 
-    error: lastError || 'Database connectivity check failed after all retries', 
-    attempts: retries 
+    error: 'Max retries exceeded',
+    attempts: maxRetries
   };
 }
 
 /**
- * Check critical table accessibility
+ * Check critical tables accessibility
  */
 async function checkCriticalTables(): Promise<{ healthy: boolean; tables: Record<string, { accessible: boolean; error?: string }> }> {
-  const criticalTables = ['profiles', 'conversations', 'messages'];
+  const criticalTables = ['profiles', 'conversations', 'messages', 'embeddings'];
   const results: Record<string, { accessible: boolean; error?: string }> = {};
   
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
   if (!supabaseUrl || !supabaseKey) {
     logger.error('Cannot check tables: missing credentials');
@@ -428,4 +324,123 @@ async function performComprehensiveHealthCheck(): Promise<{
  * Health check wrapper for Deno.serve
  */
 function serveWithHealthCheck(handler: (req: Request) => Promise<Response>): (req: Request) => Promise<Response> {
-  return async (req: Request): Promise
+  return async (req: Request): Promise<Response> => {
+    try {
+      const url = new URL(req.url);
+      
+      // Health check endpoint
+      if (url.pathname === '/health' || url.pathname === '/') {
+        logger.info('Health check endpoint called', { 
+          path: url.pathname,
+          method: req.method 
+        });
+        
+        try {
+          const healthCheck = await performComprehensiveHealthCheck();
+          
+          const statusCode = healthCheck.overall ? 200 : 503;
+          
+          return new Response(
+            JSON.stringify(healthCheck, null, 2),
+            {
+              status: statusCode,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+              }
+            }
+          );
+        } catch (error) {
+          logger.error('Health check failed with exception', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
+          });
+          
+          return new Response(
+            JSON.stringify({
+              overall: false,
+              timestamp: new Date().toISOString(),
+              error: error instanceof Error ? error.message : String(error),
+              checks: {
+                environment: { valid: false, errors: ['Health check threw exception'] },
+                database: { healthy: false, error: 'Health check failed' },
+                tables: { healthy: false, tables: {} },
+                edgeFunctions: { healthy: false, functions: {} }
+              }
+            }, null, 2),
+            {
+              status: 503,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+              }
+            }
+          );
+        }
+      }
+      
+      // Delegate to actual handler for other paths
+      return await handler(req);
+      
+    } catch (error) {
+      logger.error('Request handler failed', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      
+      return new Response(
+        JSON.stringify({
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        }, null, 2),
+        {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
+  };
+}
+
+/**
+ * Main handler - smoke test endpoints
+ */
+async function handleRequest(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  
+  logger.info('Smoke test request received', {
+    path: url.pathname,
+    method: req.method
+  });
+  
+  // Test endpoint: basic ping
+  if (url.pathname === '/test/ping') {
+    logger.info('Ping test endpoint called');
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'pong',
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+  
+  // Test endpoint: environment check
+  if (url.pathname === '/test/env') {
+    logger.info('Environment test endpoint called');
+    const envCheck = validateEnvironment();
+    return new Response(
+      JSON.stringify({
+        success: envCheck.valid,
+        ...envCheck,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: envCheck.valid ? 200
