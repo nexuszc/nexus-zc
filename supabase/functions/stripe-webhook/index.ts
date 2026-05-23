@@ -80,6 +80,36 @@ Deno.serve(async (req) => {
   const eventType = event.type as string;
   const obj = (event.data as Record<string, unknown>)?.object as Record<string, unknown>;
 
+  // Payment Link checkout completed — update plan immediately
+  if (eventType === 'checkout.session.completed') {
+    const contractorId = obj?.client_reference_id as string;
+    const productName = ((obj?.metadata as Record<string, string>)?.product || '').toLowerCase();
+
+    const PLAN_MAP: Record<string, string> = {
+      portal_pro: 'portal_pro',
+      aria_internal: 'aria_internal',
+      crm: 'crm',
+      growth: 'growth',
+      all_in: 'all_in',
+    };
+
+    const newPlan = Object.keys(PLAN_MAP).find(k => productName.includes(k)) || 'portal_pro';
+
+    if (contractorId) {
+      await supabase
+        .from('contractor_accounts')
+        .update({
+          plan: newPlan,
+          subscription_status: 'active',
+          stripe_customer_id: obj?.customer as string || undefined,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', contractorId);
+
+      await sendTelegram(`💳 *New Purchase: ${newPlan}*\nContractor: ${contractorId}\nCustomer: ${obj?.customer || 'unknown'}`);
+    }
+  }
+
   // Subscription created or updated
   if (eventType === 'customer.subscription.updated' || eventType === 'customer.subscription.created') {
     const customerId = obj?.customer as string;

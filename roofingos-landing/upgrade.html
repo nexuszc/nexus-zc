@@ -488,5 +488,16 @@ body {
   ← Back to Roofing OS
 </a>
 
+<script>
+const contractorId = new URLSearchParams(window.location.search).get('contractor_id');
+if (contractorId) {
+  document.querySelectorAll('a.btn-primary[href^="https://buy.stripe.com/"]').forEach(link => {
+    const url = new URL(link.href);
+    url.searchParams.set('client_reference_id', contractorId);
+    link.href = url.toString();
+  });
+}
+</script>
+
 </body>
 </html>

@@ -207,7 +207,7 @@ function FirstJobExperience({ contractorId, contractorClientId }) {
         if (used >= limit) {
           setError(`You've used all ${limit} free jobs. Upgrade to Pro for unlimited jobs.`)
           setSaving(false)
-          window.open('https://roofingos.dev/upgrade', '_blank')
+          window.open(`https://roofingos.dev/upgrade?contractor_id=${contractorId}`, '_blank')
           return
         }
       }
@@ -359,7 +359,7 @@ export default function RoofingDashboard() {
             <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#166534' }}>You have {jobs.length} jobs — unlock Pro for unlimited + homeowner portal</p>
             <p style={{ margin: 0, fontSize: '12px', color: '#4ade80' }}>Portal Pro: branded portal, payment tracking, insurance status for homeowners.</p>
           </div>
-          <a href="https://roofingos.dev/upgrade" target="_blank" rel="noopener" style={{ flexShrink: 0, background: C.success, color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          <a href={`https://roofingos.dev/upgrade?contractor_id=${contractor?.id}`} target="_blank" rel="noopener" style={{ flexShrink: 0, background: C.success, color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
             Upgrade →
           </a>
         </div>
@@ -371,7 +371,7 @@ export default function RoofingDashboard() {
             <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: '#6b21a8' }}>You have {insuranceJobs} insurance jobs — Supplement AI finds missed line items</p>
             <p style={{ margin: 0, fontSize: '12px', color: '#a855f7' }}>Average recovery $4,200/job. Only $99/job.</p>
           </div>
-          <a href="https://roofingos.dev/upgrade?plan=supplement" target="_blank" rel="noopener" style={{ flexShrink: 0, background: '#9333ea', color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          <a href={`https://roofingos.dev/upgrade?plan=supplement&contractor_id=${contractor?.id}`} target="_blank" rel="noopener" style={{ flexShrink: 0, background: '#9333ea', color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
             Add Supplement AI →
           </a>
         </div>
