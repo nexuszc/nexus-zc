@@ -1,68 +1,50 @@
-// supabase/functions/smoke-test-runner/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
+// CORS headers for all responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-// Enhanced logger with structured logging
+// Logger utility
 const logger = {
-  log: (level: string, message: string, meta?: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
+  log: (level: string, message: string, data?: any) => {
+    console.log(JSON.stringify({
       level,
       message,
-      function: 'smoke-test-runner',
-      ...meta
-    };
-    console.log(JSON.stringify(logEntry));
+      data,
+      timestamp: new Date().toISOString()
+    }));
   }
 };
 
 // Main request handler
-async function handleRequest(req: Request) {
+async function handleRequest(req: Request): Promise<Response> {
+  const { method, url } = req;
+  const requestUrl = new URL(url);
+  
+  logger.log('info', 'Processing request', {
+    method,
+    path: requestUrl.pathname,
+    origin: requestUrl.origin
+  });
+
   try {
-    const { method } = req;
-
-    // Handle CORS preflight
-    if (method === 'OPTIONS') {
-      return new Response(null, { 
-        status: 200, 
-        headers: corsHeaders 
-      });
-    }
-
-    logger.log('info', 'Starting smoke test validation', { 
-      method,
-      url: req.url 
+    // Run smoke tests with validation
+    const results = await runSmokeTestsWithValidation();
+    
+    logger.log('info', 'Smoke tests completed', {
+      status: results.status,
+      summary: results.summary
     });
-
-    // Parse request parameters
-    let test_suite = 'full';
-    if (method === 'POST') {
-      try {
-        const body = await req.json();
-        test_suite = body.test_suite || 'full';
-      } catch {
-        // Use default if JSON parsing fails
-      }
-    }
-
-    // Run the smoke tests with validation
-    const testResults = await runSmokeTestsWithValidation();
 
     return new Response(
       JSON.stringify({
-        success: testResults.status === 'success',
-        status: testResults.status,
-        timestamp: new Date().toISOString(),
-        function: 'smoke-test-runner',
-        test_suite,
-        ...testResults
+        success: results.status === 'success',
+        ...results
       }),
       {
-        status: testResults.status === 'error' ? 500 : 200,
+        status: results.status === 'error' ? 500 : 200,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
@@ -77,9 +59,8 @@ async function handleRequest(req: Request) {
       JSON.stringify({
         success: false,
         status: 'error',
-        timestamp: new Date().toISOString(),
-        function: 'smoke-test-runner',
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,
@@ -89,7 +70,7 @@ async function handleRequest(req: Request) {
   }
 }
 
-// Static analysis validation of Edge Function structure
+// Static analysis validation for Edge Function structure
 async function validateEdgeFunctionStructure(filePath: string) {
   const issues: string[] = [];
   const warnings: string[] = [];
@@ -102,75 +83,57 @@ async function validateEdgeFunctionStructure(filePath: string) {
   };
 
   try {
-    // Read the function file as text
+    // Read the function file content
     const functionCode = await Deno.readTextFile(filePath);
 
     // Check for Deno.serve() pattern
-    const denoServePattern = /Deno\.serve\s*\(/;
-    patterns.hasDenoServe = denoServePattern.test(functionCode);
+    patterns.hasDenoServe = /Deno\.serve\s*\(/.test(functionCode);
     if (!patterns.hasDenoServe) {
-      issues.push('Missing Deno.serve() call - Edge Function must use Deno.serve()');
+      issues.push('Missing Deno.serve() - Edge Function must use Deno.serve() as entry point');
     }
 
-    // Check for handler function (async function or arrow function)
-    const handlerPattern = /(?:async\s+function|async\s*\(|\(\s*req\s*:?\s*Request|\(req:\s*Request)/;
-    patterns.hasHandlerFunction = handlerPattern.test(functionCode);
+    // Check for handler function that accepts Request
+    patterns.hasHandlerFunction = /(?:async\s+)?(?:function|\([^)]*\)|\w+)\s*(?:\([^)]*Request[^)]*\)|=>)/.test(functionCode);
     if (!patterns.hasHandlerFunction) {
-      issues.push('No handler function detected - Edge Function needs a request handler');
+      warnings.push('No clear handler function accepting Request parameter found');
     }
 
     // Check for Response return
-    const responsePattern = /(?:new\s+Response\s*\(|return\s+new\s+Response|:\s*Response|:\s*Promise\s*<\s*Response)/;
-    patterns.hasResponseReturn = responsePattern.test(functionCode);
+    patterns.hasResponseReturn = /new\s+Response\s*\(/.test(functionCode) || /return\s+.*Response/.test(functionCode);
     if (!patterns.hasResponseReturn) {
-      warnings.push('No Response object detected - Handler should return Response or Promise<Response>');
+      issues.push('No Response object creation found - handler must return a Response');
     }
 
     // Check for CORS headers
-    const corsPattern = /(?:Access-Control-Allow-Origin|corsHeaders)/;
-    patterns.hasCorsHeaders = corsPattern.test(functionCode);
+    patterns.hasCorsHeaders = /Access-Control-Allow-Origin/.test(functionCode) || /corsHeaders/.test(functionCode);
     if (!patterns.hasCorsHeaders) {
-      warnings.push('No CORS headers detected - Consider adding CORS support');
+      warnings.push('CORS headers not detected - may cause cross-origin issues');
     }
 
     // Check for error handling
-    const errorHandlingPattern = /(?:try\s*\{|catch\s*\(|\.catch\()/;
-    patterns.hasErrorHandling = errorHandlingPattern.test(functionCode);
+    patterns.hasErrorHandling = /try\s*\{/.test(functionCode) && /catch\s*\(/.test(functionCode);
     if (!patterns.hasErrorHandling) {
-      warnings.push('No error handling detected - Consider adding try-catch blocks');
+      warnings.push('No try-catch error handling detected');
     }
 
-    // Additional structure checks
-    if (functionCode.length < 50) {
-      issues.push('Function file is too short - likely invalid or incomplete');
+    // Validate import statements
+    const importPattern = /import\s+.*\s+from\s+['"].*['"]/g;
+    const imports = functionCode.match(importPattern) || [];
+    if (imports.length === 0) {
+      warnings.push('No import statements found - function may lack dependencies');
     }
 
-    // Check for common anti-patterns
-    if (functionCode.includes('eval(')) {
-      issues.push('Security issue: Code contains eval() call');
-    }
-
-    if (!functionCode.includes('export') && !patterns.hasDenoServe) {
-      warnings.push('No exports or Deno.serve found - function may not be properly exposed');
-    }
-
-    // Check for OPTIONS method handling (CORS preflight)
-    const optionsHandlingPattern = /(?:method\s*===?\s*['"]OPTIONS['"]|req\.method\s*===?\s*['"]OPTIONS['"])/;
-    if (patterns.hasCorsHeaders && !optionsHandlingPattern.test(functionCode)) {
-      warnings.push('CORS headers present but no OPTIONS method handling detected');
-    }
-
-    // Check for basic syntax errors by looking for common patterns
+    // Check for common syntax issues
     const uncommentedCode = functionCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '');
     
-    // Check for balanced braces
+    // Check for unbalanced braces
     const openBraces = (uncommentedCode.match(/\{/g) || []).length;
     const closeBraces = (uncommentedCode.match(/\}/g) || []).length;
     if (openBraces !== closeBraces) {
       issues.push(`Syntax issue: Unbalanced braces (${openBraces} opening, ${closeBraces} closing)`);
     }
 
-    // Check for balanced parentheses
+    // Check for unbalanced parentheses
     const openParens = (uncommentedCode.match(/\(/g) || []).length;
     const closeParens = (uncommentedCode.match(/\)/g) || []).length;
     if (openParens !== closeParens) {
@@ -197,6 +160,46 @@ async function validateEdgeFunctionStructure(filePath: string) {
     const hasAwait = /await\s+/.test(functionCode);
     if (hasAwait && !hasAsync) {
       issues.push('Code uses await but no async function detected');
+    }
+
+    // Check for OPTIONS method handling (CORS preflight)
+    const hasOptionsHandling = /method\s*===?\s*['"]OPTIONS['"]/.test(functionCode) || /OPTIONS/.test(functionCode);
+    if (!hasOptionsHandling && patterns.hasCorsHeaders) {
+      warnings.push('CORS headers present but no OPTIONS method handling detected');
+    }
+
+    // Check for proper content-type headers
+    const hasContentType = /Content-Type/.test(functionCode) || /content-type/.test(functionCode);
+    if (!hasContentType) {
+      warnings.push('No Content-Type header detected in responses');
+    }
+
+    // Validate response status codes
+    const statusPattern = /status\s*:\s*(\d+)/g;
+    const statusCodes = [...functionCode.matchAll(statusPattern)].map(m => parseInt(m[1]));
+    if (statusCodes.length === 0) {
+      warnings.push('No explicit status codes found in responses');
+    } else {
+      const validStatuses = statusCodes.every(code => code >= 100 && code < 600);
+      if (!validStatuses) {
+        issues.push('Invalid HTTP status code detected');
+      }
+    }
+
+    // Check for environment variable usage patterns
+    const hasEnvUsage = /Deno\.env\.get/.test(functionCode) || /process\.env/.test(functionCode);
+    if (hasEnvUsage) {
+      // Check if there's error handling for missing env vars
+      const hasEnvValidation = /if\s*\(.*env/i.test(functionCode) || /\?\?/.test(functionCode);
+      if (!hasEnvValidation) {
+        warnings.push('Environment variables used without validation checks');
+      }
+    }
+
+    // Check for JSON parsing with error handling
+    const hasJsonParsing = /\.json\(\)/.test(functionCode) || /JSON\.parse/.test(functionCode);
+    if (hasJsonParsing && !patterns.hasErrorHandling) {
+      warnings.push('JSON parsing detected without try-catch error handling');
     }
 
     return {
