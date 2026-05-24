@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
 
   const PLAN_LIMITS: Record<string, { jobs: number | null; team: number | null; supplements: boolean; permits: boolean; name: string }> = {
     free:    { jobs: 5,    team: 1,    supplements: false, permits: false, name: 'Free' },
+    trial:   { jobs: 5,    team: 1,    supplements: false, permits: false, name: 'Free' },
     starter: { jobs: null, team: null, supplements: true,  permits: true,  name: 'Starter' },
     pro:     { jobs: null, team: null, supplements: true,  permits: true,  name: 'Pro' },
     custom:  { jobs: null, team: null, supplements: true,  permits: true,  name: 'Custom' },
