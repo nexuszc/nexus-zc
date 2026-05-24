@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 24, 2026 — v8
+# Last updated: May 24, 2026 — v9
 
 ---
 
@@ -464,10 +464,60 @@ Then productized and sold to other multi-business operators.
 
 ---
 
-## CURRENT BUILD PRIORITIES (as of May 22, 2026)
+## VPS STACK (Hostinger — 31.220.60.77)
 
-**DONE this session:**
-- (nothing yet this session)
+- SSH key: `~/.ssh/hostinger_vps` — alias `hostinger-vps`
+- pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *)
+- Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`
+- Env: `/opt/roofing/.env`
+- nginx serves `/health` at port 80 → `{"ok":true,"service":"roofing-vps"}`
+- nexus-worker v3: 4-hour build dedup, smoke-test exclusion in reflection prompt
+- video-renderer: uses ffmpeg (not Creatomate — 402 no credits), outputs 1080x1920 MP4 to `roofing-content` bucket
+- lead-sniper: Playwright headless scrapes Google Maps for roofing contractors 3.8–4.6 stars, 10–100 reviews, inserts into `roofing_prospects`
+- hail-trigger: weather.gov alerts API, dedupes via `/opt/roofing/sniper/processed_alerts.json`, inserts into `hail_events`, sends Telegram alert
+
+## ARIA CALL GATE RULES
+
+- `aria-call-gate` blocks `cold_outbound_contractor` calls on weekends + federal holidays + outside 9am–5pm local time
+- If all calls show `blocked` on a Sunday — that is CORRECT BEHAVIOR, not a bug
+- Blocked calls are rescheduled to next Monday 9–10am local time in `aria_call_queue`
+- `aria_call_queue` schema has NO `prospect_id` column — use `contact_phone`, `contact_name`, `contact_type`
+
+## EMAIL TEMPLATE SUBJECTS (Hormozi-style, updated May 24 2026)
+
+- Touch 1: "Your roof just cost you $4,200 (you don't know it yet)"
+- Touch 2: "The adjuster didn't tell you this"
+- Touch 3: "Last email — here's what $4,200 looks like"
+- Subjects live in `email_templates` keyed by `touch_number`, NOT in `email_sequences`
+- `email_sequences` has `type` column (not `sequence_type`), no `subject` column
+
+## DEMO PORTAL (roofingos.dev/portal/DEMO2026ROOFINGOS)
+
+- Homeowner: Sarah Johnson, 4821 Maple Ave, Aurora CO 80016
+- Job ID: `a65e6ef8-1205-44d0-89ef-612393aea2f6`
+- Session ID: `751ddb4d-1435-4bd6-8c57-5890d5c6f9ae`
+- Column for token lookup: `homeowner_sessions.magic_link_token` (NOT `token`)
+- Status: completed, GAF Timberline HDZ Charcoal, 28 squares
+- 20 photos, $4,200 supplement approved, insurance claim fully paid ($18,400 total)
+- 6 messages (realistic conversation), 9 activities
+- Contractor: Apex Roofing (contractor_id: d2eabbb4-e221-4ca2-ad65-6bedfec6517d)
+
+## CURRENT BUILD PRIORITIES (as of May 24, 2026)
+
+**DONE (Hormozi mode — May 24):**
+- Aria calls: diagnosed as working correctly (Sunday = blocked by TCPA gate, fires Monday)
+- Portal gap (RoofingDashboard.jsx): already wired, no fix needed
+- Settings page: already fully built, no fix needed
+- measurement_orders table: created
+- Auto-approve on-brand content: 28 pieces approved
+- Landing page social proof: "Join 500+ roofing contractors" added below hero CTA
+- Landing page FREE plan urgency: "Free forever — upgrade when you're ready"
+- Landing page SMS bubble: floating bottom-right "Text us a question" → sms:+17205006668
+- Demo portal: upgraded (supplement approved $4,200, 20 photos, job completed, review request, realistic messages)
+- Email subjects: Hormozi-style touch 1/2/3 updated in email_templates
+- roofing-email-webhook v20: mirrors Resend events to email_log
+- roofing-youtube-engine v28: enforces Roofing OS-only content, 10 product categories
+- VPS stack: nexus-worker v3 (dedup), hail-trigger, lead-sniper, video-renderer, nginx /health
 
 **NEXT:**
 1. Fix smoke_test_failed error
