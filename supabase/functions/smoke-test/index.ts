@@ -1,290 +1,236 @@
+// Import required modules
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from '../_shared/cors.ts';
 
 /**
- * Logger utility
+ * Logger utility for structured logging
  */
 const logger = {
-  info: (message: string, meta?: Record<string, unknown>) => {
-    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
+  info: (message: string, data?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
   },
-  error: (message: string, meta?: Record<string, unknown>) => {
-    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
+  error: (message: string, data?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, ...data, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, meta?: Record<string, unknown>) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
+  warn: (message: string, data?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
   }
 };
 
 /**
- * Environment validation
+ * Get Supabase client for testing
  */
-function validateEnvironment(): { isValid: boolean; missing: string[] } {
-  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const missing = required.filter(key => !Deno.env.get(key));
+function getSupabaseClient() {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   
-  return {
-    isValid: missing.length === 0,
-    missing
-  };
-}
-
-/**
- * Database connectivity check
- */
-async function checkDatabaseConnectivity(): Promise<{ connected: boolean; error?: string; latency?: number }> {
-  const startTime = Date.now();
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase credentials');
+  }
   
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return {
-        connected: false,
-        error: 'Missing Supabase credentials'
-      };
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { error } = await supabase.from('profiles').select('count').limit(1).single();
-    
-    const latency = Date.now() - startTime;
-    
-    if (error && error.code !== 'PGRST116') {
-      return {
-        connected: false,
-        error: error.message,
-        latency
-      };
-    }
-    
-    return {
-      connected: true,
-      latency
-    };
-  } catch (error) {
-    return {
-      connected: false,
-      error: error instanceof Error ? error.message : String(error),
-      latency: Date.now() - startTime
-    };
-  }
+  return createClient(supabaseUrl, supabaseKey);
 }
 
 /**
- * Edge function health check
- */
-async function checkEdgeFunctionHealth(): Promise<{ healthy: boolean; error?: string }> {
-  try {
-    const memoryUsage = (Deno as any).memoryUsage?.() || {};
-    
-    return {
-      healthy: true,
-      error: undefined
-    };
-  } catch (error) {
-    return {
-      healthy: false,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-/**
- * Comprehensive health check
+ * Perform comprehensive health checks
  */
 async function performComprehensiveHealthCheck() {
-  const startTime = Date.now();
-  
-  const envCheck = validateEnvironment();
-  const dbCheck = await checkDatabaseConnectivity();
-  const functionCheck = await checkEdgeFunctionHealth();
-  
-  const overall = envCheck.isValid && dbCheck.connected && functionCheck.healthy;
-  
-  return {
-    overall,
+  const results = {
+    overall: true,
     timestamp: new Date().toISOString(),
-    duration: Date.now() - startTime,
-    checks: {
-      environment: {
-        valid: envCheck.isValid,
-        missing: envCheck.missing
-      },
-      database: {
-        connected: dbCheck.connected,
-        latency: dbCheck.latency,
-        error: dbCheck.error
-      },
-      function: {
-        healthy: functionCheck.healthy,
-        error: functionCheck.error
-      }
-    }
+    checks: {} as Record<string, { status: boolean; message?: string; duration_ms?: number }>
   };
+  
+  // Check 1: Environment variables
+  const startEnv = Date.now();
+  try {
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
+    
+    if (missingVars.length > 0) {
+      results.checks.environment = {
+        status: false,
+        message: `Missing environment variables: ${missingVars.join(', ')}`,
+        duration_ms: Date.now() - startEnv
+      };
+      results.overall = false;
+    } else {
+      results.checks.environment = {
+        status: true,
+        message: 'All required environment variables present',
+        duration_ms: Date.now() - startEnv
+      };
+    }
+  } catch (error) {
+    results.checks.environment = {
+      status: false,
+      message: error instanceof Error ? error.message : String(error),
+      duration_ms: Date.now() - startEnv
+    };
+    results.overall = false;
+  }
+  
+  // Check 2: Supabase connectivity
+  const startDb = Date.now();
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from('profiles').select('count').limit(1);
+    
+    if (error) {
+      results.checks.database = {
+        status: false,
+        message: `Database connection failed: ${error.message}`,
+        duration_ms: Date.now() - startDb
+      };
+      results.overall = false;
+    } else {
+      results.checks.database = {
+        status: true,
+        message: 'Database connection successful',
+        duration_ms: Date.now() - startDb
+      };
+    }
+  } catch (error) {
+    results.checks.database = {
+      status: false,
+      message: error instanceof Error ? error.message : String(error),
+      duration_ms: Date.now() - startDb
+    };
+    results.overall = false;
+  }
+  
+  return results;
 }
 
 /**
- * Individual smoke tests
- */
-async function testDatabaseQuery(): Promise<{ passed: boolean; duration: number; error?: string }> {
-  const startTime = Date.now();
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .limit(1);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return {
-      passed: true,
-      duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-async function testAuthService(): Promise<{ passed: boolean; duration: number; error?: string }> {
-  const startTime = Date.now();
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1
-    });
-    
-    if (error) {
-      throw error;
-    }
-    
-    return {
-      passed: true,
-      duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-async function testStorageAccess(): Promise<{ passed: boolean; duration: number; error?: string }> {
-  const startTime = Date.now();
-  
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Missing Supabase credentials');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase.storage.listBuckets();
-    
-    if (error) {
-      throw error;
-    }
-    
-    return {
-      passed: true,
-      duration: Date.now() - startTime
-    };
-  } catch (error) {
-    return {
-      passed: false,
-      duration: Date.now() - startTime,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-/**
- * Run complete smoke test suite
+ * Run smoke test suite
  */
 async function runSmokeTestSuite() {
-  const suiteStartTime = Date.now();
-  
-  const tests = {
-    'Database Query': testDatabaseQuery,
-    'Auth Service': testAuthService,
-    'Storage Access': testStorageAccess
+  const results = {
+    status: 'passed',
+    timestamp: new Date().toISOString(),
+    tests_passed: 0,
+    tests_failed: 0,
+    tests: [] as Array<{ name: string; status: string; message?: string; duration_ms?: number }>
   };
   
-  const testResults: Array<[string, { passed: boolean; duration: number; error?: string }]> = [];
-  
-  for (const [name, testFn] of Object.entries(tests)) {
-    logger.info(`Running test: ${name}`);
-    const result = await testFn();
-    testResults.push([name, result]);
+  // Test 1: Environment check
+  const startEnv = Date.now();
+  try {
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
+    const missingVars = requiredEnvVars.filter(v => !Deno.env.get(v));
     
-    logger.info(`Test ${name} ${result.passed ? 'passed' : 'failed'}`, {
-      duration: result.duration,
-      error: result.error
+    if (missingVars.length > 0) {
+      results.tests.push({
+        name: 'environment_variables',
+        status: 'failed',
+        message: `Missing: ${missingVars.join(', ')}`,
+        duration_ms: Date.now() - startEnv
+      });
+      results.tests_failed++;
+      results.status = 'failed';
+    } else {
+      results.tests.push({
+        name: 'environment_variables',
+        status: 'passed',
+        message: 'All required environment variables present',
+        duration_ms: Date.now() - startEnv
+      });
+      results.tests_passed++;
+    }
+  } catch (error) {
+    results.tests.push({
+      name: 'environment_variables',
+      status: 'failed',
+      message: error instanceof Error ? error.message : String(error),
+      duration_ms: Date.now() - startEnv
     });
+    results.tests_failed++;
+    results.status = 'failed';
   }
   
-  const allPassed = testResults.every(([_, result]) => result.passed);
-  const testsPassed = testResults.filter(([_, result]) => result.passed).length;
-  const testsFailed = testResults.length - testsPassed;
+  // Test 2: Database connectivity
+  const startDb = Date.now();
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from('profiles').select('count').limit(1);
+    
+    if (error) {
+      results.tests.push({
+        name: 'database_connectivity',
+        status: 'failed',
+        message: error.message,
+        duration_ms: Date.now() - startDb
+      });
+      results.tests_failed++;
+      results.status = 'failed';
+    } else {
+      results.tests.push({
+        name: 'database_connectivity',
+        status: 'passed',
+        message: 'Successfully connected to database',
+        duration_ms: Date.now() - startDb
+      });
+      results.tests_passed++;
+    }
+  } catch (error) {
+    results.tests.push({
+      name: 'database_connectivity',
+      status: 'failed',
+      message: error instanceof Error ? error.message : String(error),
+      duration_ms: Date.now() - startDb
+    });
+    results.tests_failed++;
+    results.status = 'failed';
+  }
   
-  return {
-    status: allPassed ? 'passed' : 'failed',
-    tests_passed: testsPassed,
-    tests_failed: testsFailed,
-    total_tests: testResults.length,
-    timestamp: new Date().toISOString(),
-    duration: Date.now() - suiteStartTime,
-    tests,
-    errors: testResults
-      .filter(([_, result]) => !result.passed)
-      .map(([name, result]) => `${name}: ${result.error || 'Unknown error'}`)
-  };
+  // Test 3: Profiles table access
+  const startProfiles = Date.now();
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.from('profiles').select('id').limit(1);
+    
+    if (error) {
+      results.tests.push({
+        name: 'profiles_table_access',
+        status: 'failed',
+        message: error.message,
+        duration_ms: Date.now() - startProfiles
+      });
+      results.tests_failed++;
+      results.status = 'failed';
+    } else {
+      results.tests.push({
+        name: 'profiles_table_access',
+        status: 'passed',
+        message: `Can access profiles table (found ${data?.length || 0} records)`,
+        duration_ms: Date.now() - startProfiles
+      });
+      results.tests_passed++;
+    }
+  } catch (error) {
+    results.tests.push({
+      name: 'profiles_table_access',
+      status: 'failed',
+      message: error instanceof Error ? error.message : String(error),
+      duration_ms: Date.now() - startProfiles
+    });
+    results.tests_failed++;
+    results.status = 'failed';
+  }
+  
+  return results;
 }
 
 /**
  * Main handler function
  */
 async function handler(req: Request): Promise<Response> {
-  logger.info('Default handler called - returning 404');
-  
   return new Response(
     JSON.stringify({
       error: 'Not Found',
-      message: 'Use /health for health checks or /test for smoke tests',
-      available_endpoints: ['/health', '/', '/test', '/smoke-test'],
+      message: 'This endpoint does not exist',
+      available_endpoints: ['/', '/health', '/test', '/smoke-test'],
       timestamp: new Date().toISOString()
     }, null, 2),
     {
