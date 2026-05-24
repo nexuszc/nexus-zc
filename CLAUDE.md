@@ -567,6 +567,31 @@ Then productized and sold to other multi-business operators.
 - `contractor_accounts.onboarding_complete` — set true after step 2 of onboarding-setup wizard
 - Job detail tabs: 5 tabs now. Old ?tab= values map: inspection→overview, notes→docs, payments/supplement/financials→money, portal/documents→docs
 
+**Nexus Dashboard v1 build (May 24, 2026 — session 4):**
+- NexusDashboard.jsx at / — replaces Home; revenue banner, verticals grid, brain stats
+- RoofingVertical.jsx at /roofing/dashboard — 6 stat cards, 6 section cards with nav
+- RoofingMarketing.jsx at /roofing/marketing — 4 tabs (Email/YouTube/Outreach/Content)
+- RoofingSales.jsx at /roofing/sales — hot leads table, funnel flow, Aria queue
+- RoofingFinance.jsx at /roofing/finance — MRR, CSS bar chart, billing table
+- RoofingCustomers.jsx at /roofing/customers — contractor table, magic link
+- PWA: nexus-sw.js, nexus-icon-192.png/512.png, manifest → Nexus ZC / #7c3aed
+- RoofingOS.jsx: updated to 6-tab nav pointing to standalone routes
+- App.jsx: new routes under ProtectedRoute without Layout shell; / → NexusDashboard
+- supabase.js storageKey: nexus-admin-session
+- briefing v5 deployed: email 24h (sent/opened/clicked/HOT openers), YouTube live count + views, funnel movement 24h
+
+## NEXUS ADMIN NAVIGATION (as of May 24, 2026)
+- `/` → NexusDashboard (Nexus admin home — portfolio view)
+- `/roofing/dashboard` → RoofingVertical (standalone, has own back nav to /)
+- `/roofing/marketing` → RoofingMarketing (standalone, 4 tabs)
+- `/roofing/sales` → RoofingSales (standalone)
+- `/roofing/finance` → RoofingFinance (standalone)
+- `/roofing/customers` → RoofingCustomers (standalone)
+- `/roofing` → RoofingOS (admin shell, now 6-tab nav pointing to standalone pages)
+- `/home` → legacy Home page (still exists, not primary)
+- Standalone pages have their own sticky headers with "← Nexus" back nav to /
+- All under ProtectedRoute (Supabase admin session), no Layout shell
+
 **NEXT:**
 1. Fix smoke_test_failed error
 2. Fix Recurring Smoke Test Failures
@@ -576,6 +601,7 @@ Then productized and sold to other multi-business operators.
 6. Draft operating agreement for Nexus ZC LLC
 7. Build Roofing OS go-to-market system and landing page
 8. Complete homeowner portal fixes and documentation
+9. Add /opt/roofing/.env YouTube/ElevenLabs keys to VPS (from Supabase vault — 6 keys)
 
 ---
 
