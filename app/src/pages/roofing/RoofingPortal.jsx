@@ -882,7 +882,31 @@ export default function RoofingPortal() {
     </div>
   )
 
-  return data.plan === 'free'
-    ? <FreePortal data={data} />
-    : <ProPortal data={data} token={token} />
+  const isDemo = token === 'DEMO2026ROOFINGOS'
+
+  return (
+    <>
+      {isDemo && (
+        <>
+          <style>{`
+            @media (max-width: 540px) {
+              .demo-banner { flex-direction: column !important; gap: 12px !important; height: auto !important; padding: 14px 16px !important; }
+              .demo-banner-btns { flex-direction: column !important; width: 100% !important; }
+              .demo-banner-btns a { text-align: center !important; }
+            }
+          `}</style>
+          <div className="demo-banner" style={{ background: '#4a9eff', width: '100%', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', gap: 16, boxSizing: 'border-box', fontFamily: "-apple-system,'Inter',system-ui,sans-serif" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>👋 This is what your homeowners see</span>
+            <div className="demo-banner-btns" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <a href="https://roofingos.dev/signup" style={{ background: '#fff', color: '#4a9eff', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Create free account →</a>
+              <a href="https://roofingos.dev" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', border: '1px solid rgba(255,255,255,0.35)' }}>Back to site</a>
+            </div>
+          </div>
+        </>
+      )}
+      {data.plan === 'free'
+        ? <FreePortal data={data} />
+        : <ProPortal data={data} token={token} />}
+    </>
+  )
 }
