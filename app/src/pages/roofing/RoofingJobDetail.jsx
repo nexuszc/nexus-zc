@@ -47,6 +47,15 @@ const PERMIT_STATUSES = [
   { value: 'expired', label: 'Expired ⚠️', color: C.danger },
 ]
 
+const SUPP_STATUSES = [
+  { value: 'not_started',    label: 'Not Started',     color: C.muted },
+  { value: 'submitted',      label: 'Submitted',       color: '#60a5fa' },
+  { value: 'pending_review', label: 'Pending Review',  color: C.warning },
+  { value: 'approved',       label: 'Approved ✅',     color: C.success },
+  { value: 'denied',         label: 'Denied ❌',       color: C.danger },
+  { value: 'rebuttal',       label: 'Rebuttal Sent',   color: '#a78bfa' },
+]
+
 const COMMON_LINE_ITEMS = [
   'Remove & dispose old roofing',
   'Install felt underlayment',
@@ -67,17 +76,56 @@ function Pill({ status }) {
   return <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 10px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
 }
 
-function UpgradeModal({ message, onClose }) {
+function UpgradeModal({ message, from, contractorId, onClose }) {
+  const upgradeUrl = `https://roofingos.dev/upgrade${contractorId ? `?contractor_id=${contractorId}&from=${from || 'limit'}` : ''}`
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '20px', padding: '28px', maxWidth: '360px', width: '100%', textAlign: 'center' }}>
         <div style={{ fontSize: '40px', marginBottom: '16px' }}>🚀</div>
         <p style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: '700', color: C.text }}>Upgrade to Starter</p>
-        <p style={{ margin: '0 0 24px', fontSize: '14px', color: C.muted, lineHeight: 1.5 }}>{message || 'You\'ve used all 3 free portals this month. Upgrade to Starter for unlimited portals.'}</p>
-        <a href="https://roofingos.dev/upgrade" style={{ display: 'block', background: C.primary, color: '#fff', borderRadius: '12px', padding: '12px', fontSize: '15px', fontWeight: '700', textDecoration: 'none', marginBottom: '10px' }}>
+        <p style={{ margin: '0 0 24px', fontSize: '14px', color: C.muted, lineHeight: 1.5 }}>{message || "You've hit a free plan limit. Upgrade to Starter for unlimited access."}</p>
+        <a href={upgradeUrl} style={{ display: 'block', background: C.primary, color: '#fff', borderRadius: '12px', padding: '12px', fontSize: '15px', fontWeight: '700', textDecoration: 'none', marginBottom: '10px' }}>
           Upgrade to Starter — $149/mo →
         </a>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: '14px' }}>Not now</button>
+      </div>
+    </div>
+  )
+}
+
+function CompletionModal({ job, payments, photos, onConfirm, onClose }) {
+  const afterPhotos = photos.filter(p => p.phase === 'post_installation')
+  const paidCount = payments.filter(p => p.status === 'paid').length
+  const allPaid = payments.length > 0 && paidCount === payments.length
+  const hasAfter = afterPhotos.length > 0
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '20px', padding: '24px', maxWidth: '360px', width: '100%' }}>
+        <p style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: '700', color: C.text }}>Complete Job?</p>
+        <p style={{ margin: '0 0 20px', fontSize: '13px', color: C.muted }}>Verify checklist before marking {job.homeowner_name}'s job complete.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '10px', background: hasAfter ? 'rgba(34,197,94,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${hasAfter ? 'rgba(34,197,94,0.2)' : 'rgba(245,158,11,0.2)'}` }}>
+            <span style={{ fontSize: '18px' }}>{hasAfter ? '✅' : '⚠️'}</span>
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: C.text }}>After photos</p>
+              <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>{hasAfter ? `${afterPhotos.length} photo${afterPhotos.length > 1 ? 's' : ''} uploaded` : 'No after photos yet'}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', borderRadius: '10px', background: allPaid ? 'rgba(34,197,94,0.08)' : payments.length === 0 ? 'rgba(136,150,168,0.08)' : 'rgba(245,158,11,0.08)', border: `1px solid ${allPaid ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)'}` }}>
+            <span style={{ fontSize: '18px' }}>{allPaid ? '✅' : payments.length === 0 ? '—' : '⚠️'}</span>
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: C.text }}>Payments</p>
+              <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>{payments.length === 0 ? 'No milestones set' : `${paidCount}/${payments.length} paid`}</p>
+            </div>
+          </div>
+        </div>
+        <button onClick={onConfirm} style={{ width: '100%', background: C.success, color: '#fff', border: 'none', borderRadius: '10px', padding: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginBottom: '8px' }}>
+          ✓ Confirm Job Complete
+        </button>
+        <button onClick={onClose} style={{ width: '100%', background: 'none', border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px', fontSize: '14px', color: C.muted, cursor: 'pointer' }}>
+          Cancel
+        </button>
       </div>
     </div>
   )
@@ -99,10 +147,13 @@ export default function RoofingJobDetail() {
   const [inspection, setInspection] = useState(null)
   const [permit, setPermit] = useState(null)
   const [scheduleData, setScheduleData] = useState(null)
+  const [payments, setPayments] = useState([])
+  const [suppStatus, setSuppStatus] = useState(null)
+  const [jobCosts, setJobCosts] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview')
 
-  // Form states
+  // form states
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -121,8 +172,9 @@ export default function RoofingJobDetail() {
   const [upgradeMsg, setUpgradeMsg] = useState('')
   const [sendingReview, setSendingReview] = useState(false)
   const [reviewSent, setReviewSent] = useState(false)
+  const [showCompletionModal, setShowCompletionModal] = useState(false)
 
-  // Inspection form
+  // inspection form
   const [inspectionItems, setInspectionItems] = useState(
     INSPECTION_ITEMS.map(i => ({ ...i, result: null, notes: '' }))
   )
@@ -131,11 +183,23 @@ export default function RoofingJobDetail() {
   const [inspectionNotes, setInspectionNotes] = useState('')
   const [savingInspection, setSavingInspection] = useState(false)
 
-  // Permit form
+  // permit form
   const [permitForm, setPermitForm] = useState({ status: 'not_required', municipality: '', permit_number: '', filed_date: '', approved_date: '', expiry_date: '', cost_cents: '', notes: '' })
   const [savingPermit, setSavingPermit] = useState(false)
   const [permitSaved, setPermitSaved] = useState(false)
   const [showPermitForm, setShowPermitForm] = useState(false)
+
+  // supplement form
+  const [suppForm, setSuppForm] = useState({ carrier: '', claim_number: '', adjuster_name: '', adjuster_phone: '', adjuster_email: '', status: 'not_started', notes: '' })
+  const [xactItems, setXactItems] = useState([])
+  const [newXactItem, setNewXactItem] = useState({ code: '', description: '', qty: '1', unit_price_cents: '' })
+  const [savingSupp, setSavingSupp] = useState(false)
+  const [suppSaved, setSuppSaved] = useState(false)
+
+  // financials form
+  const [costsForm, setCostsForm] = useState({ contract_value_cents: '', materials_cents: '', labor_cents: '', permits_cents: '', dump_cents: '', other_cents: '', notes: '' })
+  const [savingCosts, setSavingCosts] = useState(false)
+  const [costsSaved, setCostsSaved] = useState(false)
 
   const messagesEndRef = useRef(null)
 
@@ -151,6 +215,9 @@ export default function RoofingJobDetail() {
       { data: insp },
       { data: perm },
       { data: sched },
+      { data: pays },
+      { data: supp },
+      { data: costs },
     ] = await Promise.all([
       supabase.from('roofing_jobs').select('*').eq('id', id).single(),
       supabase.from('portal_messages').select('*').eq('job_id', id).order('created_at'),
@@ -162,6 +229,9 @@ export default function RoofingJobDetail() {
       supabase.from('job_inspections').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('job_permits').select('*').eq('job_id', id).maybeSingle(),
       supabase.from('job_schedule').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('job_payments').select('*').eq('job_id', id).order('created_at'),
+      supabase.from('supplement_status').select('*').eq('job_id', id).maybeSingle(),
+      supabase.from('job_costs').select('*').eq('job_id', id).maybeSingle(),
     ])
     setJob(j)
     setMessages(msgs || [])
@@ -172,6 +242,9 @@ export default function RoofingJobDetail() {
     setClaim(cl)
     setInspection(insp)
     setScheduleData(sched)
+    setPayments(pays || [])
+    setSuppStatus(supp)
+    setJobCosts(costs)
     if (j) setNote(j.notes || '')
     if (j) setReviewSent(j.review_requested || false)
     if (perm) {
@@ -195,6 +268,29 @@ export default function RoofingJobDetail() {
         setInspectionItems(insp.checklist)
       }
     }
+    if (supp) {
+      setSuppForm({
+        carrier: supp.carrier || '',
+        claim_number: supp.claim_number || '',
+        adjuster_name: supp.adjuster_name || '',
+        adjuster_phone: supp.adjuster_phone || '',
+        adjuster_email: supp.adjuster_email || '',
+        status: supp.status || 'not_started',
+        notes: supp.notes || '',
+      })
+      setXactItems(supp.xactimate_items || [])
+    }
+    if (costs) {
+      setCostsForm({
+        contract_value_cents: costs.contract_value_cents ? String(costs.contract_value_cents / 100) : '',
+        materials_cents: costs.materials_cents ? String(costs.materials_cents / 100) : '',
+        labor_cents: costs.labor_cents ? String(costs.labor_cents / 100) : '',
+        permits_cents: costs.permits_cents ? String(costs.permits_cents / 100) : '',
+        dump_cents: costs.dump_cents ? String(costs.dump_cents / 100) : '',
+        other_cents: costs.other_cents ? String(costs.other_cents / 100) : '',
+        notes: costs.notes || '',
+      })
+    }
     setLoading(false)
   }
 
@@ -202,13 +298,21 @@ export default function RoofingJobDetail() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const updateStatus = async (status) => {
+    // Phase 4: show completion flow modal before marking complete
+    if (status === 'complete') {
+      setShowCompletionModal(true)
+      return
+    }
+    await _applyStatus(status)
+  }
+
+  const _applyStatus = async (status) => {
     await supabase.from('roofing_jobs').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
     await fetch(`${SUPABASE_URL}/functions/v1/roofing-ai`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
       body: JSON.stringify({ action: 'generate_timeline', job_id: id }),
     }).catch(() => {})
-    // Trigger review request when job marked complete
     if (status === 'complete') {
       await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
         method: 'POST',
@@ -218,8 +322,29 @@ export default function RoofingJobDetail() {
       await supabase.from('roofing_jobs').update({ review_requested: true, review_requested_at: new Date().toISOString() }).eq('id', id)
       setReviewSent(true)
     }
+    // Phase 3: auto-create payment milestones on contract_signed
+    if (status === 'contract_signed' && payments.length === 0) {
+      const j = job
+      const amountCents = Math.round((j?.contract_amount || 0) * 100)
+      if (amountCents > 0) {
+        const d = Math.round(amountCents * 0.33)
+        const milestones = [
+          { label: 'Deposit (33%)', amount_cents: d },
+          { label: 'Progress (33%)', amount_cents: d },
+          { label: 'Final (34%)', amount_cents: amountCents - d * 2 },
+        ]
+        for (const m of milestones) {
+          await supabase.from('job_payments').insert({ job_id: id, contractor_id: contractor?.id, ...m })
+        }
+      }
+    }
     setJob(j => ({ ...j, status }))
     load()
+  }
+
+  const confirmComplete = async () => {
+    setShowCompletionModal(false)
+    await _applyStatus('complete')
   }
 
   const sendPortalLink = async () => {
@@ -263,10 +388,20 @@ export default function RoofingJobDetail() {
     load()
   }
 
+  const getGPS = () => new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null)
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000 }
+    )
+  })
+
   const uploadPhotos = async (e) => {
     const files = Array.from(e.target.files)
     if (!files.length) return
     setUploading(true)
+    const coords = await getGPS()
     for (const file of files) {
       const path = `${id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
       const { data: up, error } = await supabase.storage.from('job-photos').upload(path, file)
@@ -278,6 +413,9 @@ export default function RoofingJobDetail() {
           source: 'contractor_upload', file_size_bytes: file.size,
           is_before: uploadPhase === 'pre_installation',
           is_after: uploadPhase === 'post_installation',
+          taken_at: new Date().toISOString(),
+          gps_lat: coords?.lat || null,
+          gps_lng: coords?.lng || null,
         })
       }
     }
@@ -351,17 +489,6 @@ export default function RoofingJobDetail() {
     }
     if (!allPassed) {
       await supabase.from('roofing_jobs').update({ status: 'inspection' }).eq('id', id)
-      // Telegram alert for failed inspection
-      const tgToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN
-      const tgChat = import.meta.env.VITE_TELEGRAM_CHAT_ID
-      if (tgToken && tgChat) {
-        const failedItems = inspectionItems.filter(i => i.result === 'fail').map(i => i.label).join(', ')
-        await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: tgChat, text: `⚠️ Inspection failed — ${job?.property_address}\nFailed: ${failedItems}` }),
-        }).catch(() => {})
-      }
     }
     setSavingInspection(false)
     load()
@@ -406,6 +533,113 @@ export default function RoofingJobDetail() {
     load()
   }
 
+  const markPaymentPaid = async (paymentId) => {
+    await supabase.from('job_payments').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', paymentId)
+    const updated = payments.map(p => p.id === paymentId ? { ...p, status: 'paid', paid_at: new Date().toISOString() } : p)
+    setPayments(updated)
+    // Check if all paid → set financial_complete
+    if (updated.every(p => p.status === 'paid')) {
+      await supabase.from('roofing_jobs').update({ financial_complete: true, payment_dot: 'complete' }).eq('id', id)
+    } else {
+      await supabase.from('roofing_jobs').update({ payment_dot: 'partial' }).eq('id', id)
+    }
+  }
+
+  const createMilestones = async () => {
+    const amountCents = Math.round((job?.contract_amount || 0) * 100)
+    const d = Math.round(amountCents * 0.33)
+    const milestones = [
+      { label: 'Deposit (33%)', amount_cents: d },
+      { label: 'Progress (33%)', amount_cents: d },
+      { label: 'Final (34%)', amount_cents: amountCents - d * 2 },
+    ]
+    for (const m of milestones) {
+      await supabase.from('job_payments').insert({ job_id: id, contractor_id: contractor?.id, ...m })
+    }
+    load()
+  }
+
+  const saveSupplementStatus = async () => {
+    setSavingSupp(true)
+    const data = {
+      job_id: id,
+      contractor_id: contractor?.id,
+      carrier: suppForm.carrier || null,
+      claim_number: suppForm.claim_number || null,
+      adjuster_name: suppForm.adjuster_name || null,
+      adjuster_phone: suppForm.adjuster_phone || null,
+      adjuster_email: suppForm.adjuster_email || null,
+      status: suppForm.status,
+      notes: suppForm.notes || null,
+      xactimate_items: xactItems,
+      updated_at: new Date().toISOString(),
+    }
+    if (suppStatus?.id) {
+      await supabase.from('supplement_status').update(data).eq('id', suppStatus.id)
+    } else {
+      await supabase.from('supplement_status').insert(data)
+    }
+    // Update job flag
+    await supabase.from('roofing_jobs').update({ supplement_status_flag: suppForm.status }).eq('id', id)
+    setSavingSupp(false)
+    setSuppSaved(true)
+    setTimeout(() => setSuppSaved(false), 2000)
+    load()
+  }
+
+  const addXactItem = () => {
+    if (!newXactItem.description) return
+    setXactItems(prev => [...prev, {
+      code: newXactItem.code,
+      description: newXactItem.description,
+      qty: parseFloat(newXactItem.qty) || 1,
+      unit_price_cents: Math.round(parseFloat(newXactItem.unit_price_cents || 0) * 100),
+    }])
+    setNewXactItem({ code: '', description: '', qty: '1', unit_price_cents: '' })
+  }
+
+  const removeXactItem = (i) => setXactItems(prev => prev.filter((_, idx) => idx !== i))
+
+  const exportXactimateCsv = () => {
+    if (!xactItems.length) return
+    const rows = [['Code','Description','Qty','Unit Price','Total']]
+    xactItems.forEach(item => {
+      rows.push([item.code, item.description, item.qty, (item.unit_price_cents / 100).toFixed(2), ((item.qty * item.unit_price_cents) / 100).toFixed(2)])
+    })
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `xactimate-${job?.property_address?.replace(/[^a-z0-9]/gi, '-') || id}.csv`
+    a.click()
+  }
+
+  const saveJobCosts = async () => {
+    setSavingCosts(true)
+    const toCents = (v) => v ? Math.round(parseFloat(v) * 100) : 0
+    const data = {
+      job_id: id,
+      contractor_id: contractor?.id,
+      contract_value_cents: toCents(costsForm.contract_value_cents),
+      materials_cents: toCents(costsForm.materials_cents),
+      labor_cents: toCents(costsForm.labor_cents),
+      permits_cents: toCents(costsForm.permits_cents),
+      dump_cents: toCents(costsForm.dump_cents),
+      other_cents: toCents(costsForm.other_cents),
+      notes: costsForm.notes || null,
+      updated_at: new Date().toISOString(),
+    }
+    if (jobCosts?.id) {
+      await supabase.from('job_costs').update(data).eq('id', jobCosts.id)
+    } else {
+      await supabase.from('job_costs').insert(data)
+    }
+    setSavingCosts(false)
+    setCostsSaved(true)
+    setTimeout(() => setCostsSaved(false), 2000)
+    load()
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, ...font, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -425,9 +659,26 @@ export default function RoofingJobDetail() {
   const unreadCount = messages.filter(m => m.sender_type === 'homeowner' && !m.is_read).length
   const show10PhotoBanner = photos.length >= 10 && !job.portal_sent
 
+  // financials calc
+  const revenueCents = jobCosts?.contract_value_cents || Math.round((job.contract_amount || 0) * 100)
+  const totalCostsCents = (jobCosts?.materials_cents || 0) + (jobCosts?.labor_cents || 0) + (jobCosts?.permits_cents || 0) + (jobCosts?.dump_cents || 0) + (jobCosts?.other_cents || 0)
+  const grossProfitCents = revenueCents - totalCostsCents
+  const marginPct = revenueCents > 0 ? Math.round((grossProfitCents / revenueCents) * 100) : 0
+  const marginColor = marginPct >= 30 ? C.success : marginPct >= 15 ? C.warning : C.danger
+
+  const paidPayments = payments.filter(p => p.status === 'paid')
+  const totalPaidCents = paidPayments.reduce((s, p) => s + p.amount_cents, 0)
+  const totalMilestoneCents = payments.reduce((s, p) => s + p.amount_cents, 0)
+
+  const suppStatusMeta = SUPP_STATUSES.find(s => s.value === (suppStatus?.status || 'not_started')) || SUPP_STATUSES[0]
+  const xactTotal = xactItems.reduce((s, i) => s + (i.qty * i.unit_price_cents), 0)
+
   const tabs = [
     { id: 'overview',    label: 'Overview' },
     { id: 'inspection',  label: `Inspection${inspection?.passed === false ? ' ⚠️' : inspection ? ' ✓' : ''}` },
+    { id: 'payments',    label: `Payments${payments.length ? ` (${paidPayments.length}/${payments.length})` : ''}` },
+    { id: 'supplement',  label: `Supplement${suppStatus?.status && suppStatus.status !== 'not_started' ? ' •' : ''}` },
+    { id: 'financials',  label: 'Financials' },
     { id: 'portal',      label: 'Portal' },
     { id: 'photos',      label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
     { id: 'messages',    label: `Messages${unreadCount > 0 ? ` 🔴` : messages.length ? ` (${messages.length})` : ''}` },
@@ -439,7 +690,8 @@ export default function RoofingJobDetail() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '80px' }}>
-      {showUpgradeModal && <UpgradeModal message={upgradeMsg} onClose={() => setShowUpgradeModal(false)} />}
+      {showUpgradeModal && <UpgradeModal message={upgradeMsg} from="portal_limit" contractorId={contractor?.id} onClose={() => setShowUpgradeModal(false)} />}
+      {showCompletionModal && <CompletionModal job={job} payments={payments} photos={photos} onConfirm={confirmComplete} onClose={() => setShowCompletionModal(false)} />}
 
       {/* Header */}
       <div style={{
@@ -566,7 +818,7 @@ export default function RoofingJobDetail() {
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {PERMIT_STATUSES.map(s => (
                       <button key={s.value} onClick={() => setPermitForm(f => ({ ...f, status: s.value }))}
-                        style={{ padding: '5px 10px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: permitForm.status === s.value ? 'rgba(74,158,255,0.2)' : 'rgba(255,255,255,0.06)', color: permitForm.status === s.value ? C.primary : C.muted, transition: 'all 0.15s' }}>
+                        style={{ padding: '5px 10px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: permitForm.status === s.value ? 'rgba(74,158,255,0.2)' : 'rgba(255,255,255,0.06)', color: permitForm.status === s.value ? C.primary : C.muted }}>
                         {s.label}
                       </button>
                     ))}
@@ -598,8 +850,7 @@ export default function RoofingJobDetail() {
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                   <p style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>📅 Schedule</p>
-                  <button onClick={() => navigate(`/roofing/schedule`)}
-                    style={{ background: 'none', border: 'none', fontSize: '12px', color: C.primary, cursor: 'pointer' }}>View calendar →</button>
+                  <button onClick={() => navigate(`/roofing/schedule`)} style={{ background: 'none', border: 'none', fontSize: '12px', color: C.primary, cursor: 'pointer' }}>View calendar →</button>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                   {[
@@ -617,7 +868,7 @@ export default function RoofingJobDetail() {
               </div>
             )}
 
-            {/* Reviews card (when complete) */}
+            {/* Reviews card */}
             {(job.status === 'complete' || job.status === 'paid') && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
                 <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>⭐ Review Request</p>
@@ -625,7 +876,7 @@ export default function RoofingJobDetail() {
                   <p style={{ margin: 0, fontSize: '13px', color: C.success, fontWeight: '600' }}>✓ Review & referral request sent to {job.homeowner_name}</p>
                 ) : (
                   <>
-                    <p style={{ margin: '0 0 10px', fontSize: '13px', color: C.muted }}>Job marked complete. Send homeowner a Google review request + referral link.</p>
+                    <p style={{ margin: '0 0 10px', fontSize: '13px', color: C.muted }}>Send homeowner a Google review request + referral link.</p>
                     <button onClick={sendReviewRequest} disabled={sendingReview}
                       style={{ background: sendingReview ? 'rgba(74,158,255,0.3)' : C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
                       {sendingReview ? 'Sending…' : '⭐ Request Review + Referral'}
@@ -635,7 +886,7 @@ export default function RoofingJobDetail() {
               </div>
             )}
 
-            {/* Action cards grid */}
+            {/* Action grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               {[
                 { icon: '📐', title: 'Measurements', price: '$25', action: () => orderMeasurements(), loading: orderingMeasure, done: measureOrdered, show: true },
@@ -647,11 +898,7 @@ export default function RoofingJobDetail() {
               ].filter(c => c.show !== false).map((card, i) => (
                 <div key={i}
                   onClick={card.done ? undefined : card.action}
-                  style={{
-                    background: C.surface, border: `1px solid ${C.border}`,
-                    borderRadius: '14px', padding: '16px', cursor: card.done ? 'default' : 'pointer',
-                    transition: 'border-color 0.15s',
-                  }}
+                  style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px', cursor: card.done ? 'default' : 'pointer', transition: 'border-color 0.15s' }}
                   onMouseEnter={e => !card.done && (e.currentTarget.style.borderColor = 'rgba(74,158,255,0.4)')}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                 >
@@ -674,12 +921,7 @@ export default function RoofingJobDetail() {
                   { action: 'generate_invoice', label: '🧾 Invoice' },
                 ].map(({ action, label }) => (
                   <button key={action} onClick={() => generateDoc(action)} disabled={!!generating}
-                    style={{
-                      background: generating === action ? 'rgba(74,158,255,0.12)' : 'rgba(255,255,255,0.06)',
-                      border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 14px',
-                      fontSize: '13px', cursor: generating ? 'default' : 'pointer', fontWeight: '500',
-                      color: generating === action ? C.primary : C.text, transition: 'background 0.15s',
-                    }}>
+                    style={{ background: generating === action ? 'rgba(74,158,255,0.12)' : 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: generating ? 'default' : 'pointer', fontWeight: '500', color: generating === action ? C.primary : C.text }}>
                     {generating === action ? 'Generating…' : label}
                   </button>
                 ))}
@@ -703,7 +945,7 @@ export default function RoofingJobDetail() {
               ))}
             </div>
 
-            {/* Insurance claim info */}
+            {/* Insurance claim */}
             {claim && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
                 <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏛️ Insurance Claim</p>
@@ -726,7 +968,7 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── INSPECTION TAB ──────────────────────────────────────────── */}
+        {/* ── INSPECTION ──────────────────────────────────────────────── */}
         {activeTab === 'inspection' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
@@ -734,8 +976,7 @@ export default function RoofingJobDetail() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
                 <div>
                   <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Inspector Name</p>
-                  <input value={inspectorName} onChange={e => setInspectorName(e.target.value)}
-                    placeholder="Name"
+                  <input value={inspectorName} onChange={e => setInspectorName(e.target.value)} placeholder="Name"
                     style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: C.text, outline: 'none' }} />
                 </div>
                 <div>
@@ -747,7 +988,7 @@ export default function RoofingJobDetail() {
               {inspection && (
                 <div style={{ padding: '8px 12px', borderRadius: '8px', background: inspection.passed ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', marginBottom: '4px' }}>
                   <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: inspection.passed ? C.success : C.danger }}>
-                    {inspection.passed ? '✅ Last inspection passed' : '❌ Last inspection failed'} — {inspection.inspection_date ? new Date(inspection.inspection_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                    {inspection.passed ? '✅ Last inspection passed' : '❌ Last inspection failed'}
                   </p>
                 </div>
               )}
@@ -767,7 +1008,7 @@ export default function RoofingJobDetail() {
                       { val: 'na',   label: 'N/A', bg: 'rgba(255,255,255,0.06)', active: 'rgba(136,150,168,0.2)' },
                     ].map(btn => (
                       <button key={btn.val} onClick={() => setItemResult(idx, item.result === btn.val ? null : btn.val)}
-                        style={{ padding: '5px 9px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: item.result === btn.val ? btn.active : btn.bg, color: C.text, transition: 'all 0.15s' }}>
+                        style={{ padding: '5px 9px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: item.result === btn.val ? btn.active : btn.bg, color: C.text }}>
                         {btn.label}
                       </button>
                     ))}
@@ -786,14 +1027,251 @@ export default function RoofingJobDetail() {
             </div>
 
             <button onClick={saveInspection} disabled={savingInspection}
-              style={{ background: savingInspection ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.15s' }}>
+              style={{ background: savingInspection ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>
               {savingInspection ? 'Saving…' : '✓ Submit Inspection'}
             </button>
-
             <button onClick={() => window.print()}
               style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`, color: C.text, borderRadius: '12px', padding: '11px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
               🖨️ Print / PDF Report
             </button>
+          </div>
+        )}
+
+        {/* ── PAYMENTS ────────────────────────────────────────────────── */}
+        {activeTab === 'payments' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Summary */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>💰 Payment Summary</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                {[
+                  { label: 'Contract', value: `$${(revenueCents / 100).toLocaleString()}` },
+                  { label: 'Collected', value: `$${(totalPaidCents / 100).toLocaleString()}`, color: totalPaidCents > 0 ? C.success : C.muted },
+                  { label: 'Remaining', value: `$${((totalMilestoneCents - totalPaidCents) / 100).toLocaleString()}`, color: totalMilestoneCents > totalPaidCents ? C.warning : C.success },
+                ].map(f => (
+                  <div key={f.label} style={{ background: C.surface2, borderRadius: '10px', padding: '12px' }}>
+                    <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>{f.label}</p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: f.color || C.text }}>{f.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Milestones */}
+            {payments.length === 0 ? (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 4px', fontSize: '14px', fontWeight: '600', color: C.text }}>No payment milestones</p>
+                <p style={{ margin: '0 0 16px', fontSize: '13px', color: C.muted }}>
+                  {job.contract_amount > 0 ? `Auto-create 3 milestones for $${job.contract_amount.toLocaleString()}` : 'Set a contract amount first, then create milestones.'}
+                </p>
+                {job.contract_amount > 0 && (
+                  <button onClick={createMilestones} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                    Create 3 Milestones (33/33/34%)
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {payments.map((p, i) => (
+                  <div key={p.id} style={{ background: C.surface, border: `1px solid ${p.status === 'paid' ? 'rgba(34,197,94,0.3)' : C.border}`, borderRadius: '14px', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: '600', color: C.text }}>{p.label}</p>
+                      <p style={{ margin: 0, fontSize: '20px', fontWeight: '700', color: p.status === 'paid' ? C.success : C.text }}>${(p.amount_cents / 100).toLocaleString()}</p>
+                      {p.paid_at && <p style={{ margin: '2px 0 0', fontSize: '11px', color: C.muted }}>Paid {new Date(p.paid_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>}
+                    </div>
+                    {p.status === 'paid' ? (
+                      <span style={{ fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', background: 'rgba(34,197,94,0.15)', color: C.success }}>✓ Paid</span>
+                    ) : (
+                      <button onClick={() => markPaymentPaid(p.id)} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '8px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', flexShrink: 0 }}>
+                        Mark Paid
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SUPPLEMENT ──────────────────────────────────────────────── */}
+        {activeTab === 'supplement' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Status + adjuster */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>📋 Supplement Status</p>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {SUPP_STATUSES.map(s => (
+                  <button key={s.value} onClick={() => setSuppForm(f => ({ ...f, status: s.value }))}
+                    style={{ padding: '5px 11px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: suppForm.status === s.value ? 'rgba(74,158,255,0.2)' : 'rgba(255,255,255,0.06)', color: suppForm.status === s.value ? C.primary : C.muted }}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {[
+                  ['carrier', 'Carrier', 'State Farm, Allstate…'],
+                  ['claim_number', 'Claim #', ''],
+                  ['adjuster_name', 'Adjuster Name', ''],
+                  ['adjuster_phone', 'Adjuster Phone', ''],
+                ].map(([field, label, placeholder]) => (
+                  <div key={field}>
+                    <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>{label}</p>
+                    <input value={suppForm[field]} onChange={e => setSuppForm(f => ({ ...f, [field]: e.target.value }))}
+                      placeholder={placeholder}
+                      style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '8px' }}>
+                <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>Adjuster Email</p>
+                <input value={suppForm.adjuster_email} onChange={e => setSuppForm(f => ({ ...f, adjuster_email: e.target.value }))}
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', color: C.text, outline: 'none' }} />
+              </div>
+              <div style={{ marginTop: '8px' }}>
+                <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>Notes</p>
+                <textarea value={suppForm.notes} onChange={e => setSuppForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', color: C.text, outline: 'none', resize: 'vertical' }} />
+              </div>
+              <button onClick={saveSupplementStatus} disabled={savingSupp}
+                style={{ marginTop: '10px', background: suppSaved ? 'rgba(34,197,94,0.15)' : C.primary, color: suppSaved ? C.success : '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                {savingSupp ? 'Saving…' : suppSaved ? '✓ Saved' : 'Save Status'}
+              </button>
+            </div>
+
+            {/* Xactimate line items */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <p style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  📊 Xactimate Line Items {xactTotal > 0 && <span style={{ color: C.success }}>— Total: ${(xactTotal / 100).toLocaleString()}</span>}
+                </p>
+                {xactItems.length > 0 && (
+                  <button onClick={exportXactimateCsv} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', color: C.muted, cursor: 'pointer' }}>
+                    ⬇ CSV
+                  </button>
+                )}
+              </div>
+
+              {xactItems.length > 0 && (
+                <div style={{ marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {xactItems.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: C.surface2, borderRadius: '8px' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {item.code && <span style={{ fontSize: '11px', color: C.muted, marginRight: '6px' }}>{item.code}</span>}
+                        <span style={{ fontSize: '13px', color: C.text }}>{item.description}</span>
+                        <span style={{ fontSize: '12px', color: C.muted, marginLeft: '8px' }}>× {item.qty} @ ${(item.unit_price_cents / 100).toFixed(2)}</span>
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: C.success, flexShrink: 0 }}>${((item.qty * item.unit_price_cents) / 100).toFixed(2)}</span>
+                      <button onClick={() => removeXactItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.danger, fontSize: '14px', flexShrink: 0, padding: '0 2px' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add item form */}
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '6px', marginBottom: '6px' }}>
+                <input value={newXactItem.code} onChange={e => setNewXactItem(v => ({ ...v, code: e.target.value }))}
+                  placeholder="Code" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 9px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                <input value={newXactItem.description} onChange={e => setNewXactItem(v => ({ ...v, description: e.target.value }))}
+                  placeholder="Description" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 9px', fontSize: '13px', color: C.text, outline: 'none' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr auto', gap: '6px' }}>
+                <input type="number" value={newXactItem.qty} onChange={e => setNewXactItem(v => ({ ...v, qty: e.target.value }))}
+                  placeholder="Qty" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 9px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                <input type="number" value={newXactItem.unit_price_cents} onChange={e => setNewXactItem(v => ({ ...v, unit_price_cents: e.target.value }))}
+                  placeholder="Unit price ($)" style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 9px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                <button onClick={addXactItem} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>Add</button>
+              </div>
+
+              {xactItems.length > 0 && (
+                <button onClick={saveSupplementStatus} disabled={savingSupp}
+                  style={{ marginTop: '10px', width: '100%', background: C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '9px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                  Save Line Items
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── FINANCIALS ──────────────────────────────────────────────── */}
+        {activeTab === 'financials' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Margin summary */}
+            {revenueCents > 0 && totalCostsCents > 0 && (
+              <div style={{ background: C.surface, border: `1px solid ${marginColor === C.success ? 'rgba(34,197,94,0.3)' : marginColor === C.warning ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Gross Margin</p>
+                <p style={{ margin: 0, fontSize: '48px', fontWeight: '800', color: marginColor, lineHeight: 1 }}>{marginPct}%</p>
+                <p style={{ margin: '6px 0 0', fontSize: '14px', color: C.muted }}>
+                  ${(grossProfitCents / 100).toLocaleString()} profit on ${(revenueCents / 100).toLocaleString()} contract
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: marginPct >= 30 ? C.success : marginPct >= 15 ? C.warning : C.danger }}>
+                  {marginPct >= 30 ? '🟢 Healthy margin' : marginPct >= 15 ? '🟡 Watch this job' : '🔴 Below target — review costs'}
+                </p>
+              </div>
+            )}
+
+            {/* Cost inputs */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Job Costs</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  ['contract_value_cents', '💵 Contract Value'],
+                  ['materials_cents', '🏗️ Materials'],
+                  ['labor_cents', '👷 Labor'],
+                  ['permits_cents', '🏛️ Permits'],
+                  ['dump_cents', '🗑️ Dump / Haul'],
+                  ['other_cents', '📦 Other'],
+                ].map(([field, label]) => (
+                  <div key={field} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '8px', alignItems: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: C.muted }}>{label}</p>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '13px', color: C.muted }}>$</span>
+                      <input
+                        type="number"
+                        value={costsForm[field]}
+                        onChange={e => setCostsForm(f => ({ ...f, [field]: e.target.value }))}
+                        placeholder="0"
+                        style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px 8px 22px', fontSize: '13px', color: C.text, outline: 'none' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <textarea value={costsForm.notes} onChange={e => setCostsForm(f => ({ ...f, notes: e.target.value }))} rows={2} placeholder="Notes…"
+                style={{ marginTop: '8px', width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px', fontSize: '13px', color: C.text, outline: 'none', resize: 'vertical' }} />
+              <button onClick={saveJobCosts} disabled={savingCosts}
+                style={{ marginTop: '10px', width: '100%', background: costsSaved ? 'rgba(34,197,94,0.15)' : C.primary, color: costsSaved ? C.success : '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
+                {savingCosts ? 'Saving…' : costsSaved ? '✓ Saved' : 'Save Costs'}
+              </button>
+            </div>
+
+            {/* Cost breakdown */}
+            {totalCostsCents > 0 && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cost Breakdown</p>
+                {[
+                  ['Materials', jobCosts?.materials_cents || 0],
+                  ['Labor', jobCosts?.labor_cents || 0],
+                  ['Permits', jobCosts?.permits_cents || 0],
+                  ['Dump', jobCosts?.dump_cents || 0],
+                  ['Other', jobCosts?.other_cents || 0],
+                ].filter(([, v]) => v > 0).map(([label, v]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: '13px', color: C.muted }}>{label}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '80px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.round((v / totalCostsCents) * 100)}%`, background: C.primary, borderRadius: '2px' }} />
+                      </div>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: C.text, textAlign: 'right', minWidth: '60px' }}>${(v / 100).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0 0' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: C.text }}>Total Costs</span>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: C.text }}>${(totalCostsCents / 100).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -802,30 +1280,20 @@ export default function RoofingJobDetail() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
               <p style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: '700', color: C.text }}>🔗 Homeowner Portal</p>
-              <p style={{ margin: '0 0 16px', fontSize: '13px', color: C.muted }}>Share this link with {job.homeowner_name}. They can track their job, view photos, sign documents, and message you.</p>
+              <p style={{ margin: '0 0 16px', fontSize: '13px', color: C.muted }}>Share this link with {job.homeowner_name}.</p>
 
               {portalSession?.magic_link_token || job.portal_token ? (
                 <>
                   <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '11px 13px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <p style={{ margin: 0, fontSize: '12px', color: C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{portalUrl}</p>
                     <button onClick={copyPortalLink}
-                      style={{
-                        background: copiedLink ? 'rgba(34,197,94,0.15)' : 'rgba(74,158,255,0.15)',
-                        border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: '600',
-                        cursor: 'pointer', color: copiedLink ? C.success : C.primary, flexShrink: 0,
-                      }}>
+                      style={{ background: copiedLink ? 'rgba(34,197,94,0.15)' : 'rgba(74,158,255,0.15)', border: 'none', borderRadius: '6px', padding: '5px 10px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', color: copiedLink ? C.success : C.primary, flexShrink: 0 }}>
                       {copiedLink ? '✓ Copied!' : 'Copy'}
                     </button>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={sendPortalLink}
-                      style={{
-                        flex: 1,
-                        background: sentPortal ? 'rgba(34,197,94,0.15)' : C.primary,
-                        color: sentPortal ? C.success : '#fff',
-                        border: 'none', borderRadius: '10px', padding: '11px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-                        transition: 'background 0.15s',
-                      }}>
+                      style={{ flex: 1, background: sentPortal ? 'rgba(34,197,94,0.15)' : C.primary, color: sentPortal ? C.success : '#fff', border: 'none', borderRadius: '10px', padding: '11px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
                       {sentPortal ? '✓ Sent via SMS & Email!' : '📨 Send to Homeowner'}
                     </button>
                     <a href={portalUrl} target="_blank" rel="noopener"
@@ -839,7 +1307,7 @@ export default function RoofingJobDetail() {
                 </>
               ) : (
                 <div>
-                  <p style={{ fontSize: '13px', color: C.muted, marginBottom: '12px' }}>Portal link not sent yet. Click below to generate and send.</p>
+                  <p style={{ fontSize: '13px', color: C.muted, marginBottom: '12px' }}>Portal link not sent yet.</p>
                   <button onClick={sendPortalLink}
                     style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
                     {sentPortal ? '✓ Sent!' : '📨 Send Portal Link'}
@@ -859,9 +1327,7 @@ export default function RoofingJobDetail() {
                   <div style={{ background: C.surface2, borderRadius: '10px', padding: '14px' }}>
                     <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Last Viewed</p>
                     <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: C.text }}>
-                      {portalSession.last_accessed_at
-                        ? new Date(portalSession.last_accessed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                        : 'Not yet'}
+                      {portalSession.last_accessed_at ? new Date(portalSession.last_accessed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Not yet'}
                     </p>
                   </div>
                 </div>
@@ -878,12 +1344,12 @@ export default function RoofingJobDetail() {
               <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginBottom: '10px' }}>
                 {Object.entries(PHASE_LABELS).map(([key, label]) => (
                   <button key={key} onClick={() => setUploadPhase(key)}
-                    style={{ padding: '4px 11px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPhase === key ? C.primary : 'rgba(255,255,255,0.06)', color: uploadPhase === key ? '#fff' : C.muted, transition: 'all 0.15s' }}>
+                    style={{ padding: '4px 11px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPhase === key ? C.primary : 'rgba(255,255,255,0.06)', color: uploadPhase === key ? '#fff' : C.muted }}>
                     {label}
                   </button>
                 ))}
                 <button onClick={() => setUploadPublic(v => !v)}
-                  style={{ padding: '4px 11px', borderRadius: '20px', border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPublic ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)', color: uploadPublic ? C.success : C.muted, transition: 'all 0.15s' }}>
+                  style={{ padding: '4px 11px', borderRadius: '20px', border: `1px solid ${C.border}`, cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: uploadPublic ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)', color: uploadPublic ? C.success : C.muted }}>
                   {uploadPublic ? '👁 Homeowner visible' : '🔒 Internal only'}
                 </button>
               </div>
@@ -891,11 +1357,8 @@ export default function RoofingJobDetail() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 border: '2px dashed rgba(255,255,255,0.12)', borderRadius: '12px', padding: '24px',
                 cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.6 : 1,
-                background: 'rgba(255,255,255,0.02)', transition: 'border-color 0.15s',
-              }}
-              onMouseEnter={e => !uploading && (e.currentTarget.style.borderColor = 'rgba(74,158,255,0.3)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)')}
-              >
+                background: 'rgba(255,255,255,0.02)',
+              }}>
                 <input type="file" accept="image/*" multiple onChange={uploadPhotos} disabled={uploading} style={{ display: 'none' }} />
                 <span style={{ fontSize: '13px', color: C.muted }}>{uploading ? '⏳ Uploading…' : `📷 Tap to upload as "${PHASE_LABELS[uploadPhase]}"`}</span>
               </label>
@@ -911,6 +1374,9 @@ export default function RoofingJobDetail() {
                     {phasePhotos.map(p => (
                       <div key={p.id} style={{ aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', background: C.surface2, position: 'relative' }}>
                         <img src={p.url} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        {p.gps_lat && (
+                          <div style={{ position: 'absolute', bottom: '4px', left: '4px', background: 'rgba(0,0,0,0.7)', color: '#4ade80', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>📍</div>
+                        )}
                         {!p.is_public && (
                           <div style={{ position: 'absolute', top: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '4px' }}>🔒</div>
                         )}
@@ -939,13 +1405,7 @@ export default function RoofingJobDetail() {
                 const isAria = m.sender_type === 'aria'
                 return (
                   <div key={m.id} style={{ display: 'flex', justifyContent: isContractor ? 'flex-end' : 'flex-start' }}>
-                    <div style={{
-                      maxWidth: '75%', padding: '10px 13px',
-                      borderRadius: isContractor ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                      background: isContractor ? C.primary : C.surface2,
-                      border: isContractor ? 'none' : `1px solid ${C.border}`,
-                      color: C.text,
-                    }}>
+                    <div style={{ maxWidth: '75%', padding: '10px 13px', borderRadius: isContractor ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: isContractor ? C.primary : C.surface2, border: isContractor ? 'none' : `1px solid ${C.border}`, color: C.text }}>
                       <p style={{ margin: '0 0 4px', fontSize: '10px', fontWeight: '600', opacity: 0.7 }}>
                         {isAria ? '🤖 Aria' : isContractor ? 'You' : job.homeowner_name}
                       </p>
@@ -963,9 +1423,9 @@ export default function RoofingJobDetail() {
                 onChange={e => setNewMessage(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                 placeholder={`Message ${job.homeowner_name}…`}
-                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '12px 14px', fontSize: '14px', color: C.text, outline: 'none', transition: 'border-color 0.15s' }}
-                onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
-                onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
+                style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '12px 14px', fontSize: '14px', color: C.text, outline: 'none' }}
+                onFocus={e => { e.target.style.borderColor = C.primary }}
+                onBlur={e => { e.target.style.borderColor = C.border }}
               />
               <button onClick={sendMessage} disabled={sending || !newMessage.trim()}
                 style={{ background: sending || !newMessage.trim() ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 18px', fontSize: '14px', fontWeight: '700', cursor: sending ? 'default' : 'pointer' }}>
@@ -1004,18 +1464,18 @@ export default function RoofingJobDetail() {
         {activeTab === 'notes' && (
           <div>
             <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Internal Notes</p>
-            <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(136,150,168,0.6)' }}>These notes are not visible to the homeowner.</p>
+            <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(136,150,168,0.6)' }}>Not visible to the homeowner.</p>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
               rows={8}
-              placeholder="Add internal notes about this job — adjuster contact, crew notes, material delivery, etc."
-              style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '13px 14px', fontSize: '14px', color: C.text, resize: 'vertical', outline: 'none', lineHeight: 1.5, transition: 'border-color 0.15s' }}
-              onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
-              onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
+              placeholder="Adjuster contact, crew notes, material delivery, etc."
+              style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '13px 14px', fontSize: '14px', color: C.text, resize: 'vertical', outline: 'none', lineHeight: 1.5 }}
+              onFocus={e => { e.target.style.borderColor = C.primary }}
+              onBlur={e => { e.target.style.borderColor = C.border }}
             />
             <button onClick={saveNote} disabled={savingNote}
-              style={{ marginTop: '10px', background: savingNote ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 20px', fontSize: '14px', fontWeight: '700', cursor: savingNote ? 'default' : 'pointer', transition: 'background 0.15s' }}>
+              style={{ marginTop: '10px', background: savingNote ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '10px', padding: '11px 20px', fontSize: '14px', fontWeight: '700', cursor: savingNote ? 'default' : 'pointer' }}>
               {savingNote ? 'Saving…' : 'Save Notes'}
             </button>
           </div>

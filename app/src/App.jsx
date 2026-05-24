@@ -21,6 +21,8 @@ import RoofingMeasurements from './pages/roofing/RoofingMeasurements'
 import RoofingIntegrations from './pages/roofing/RoofingIntegrations'
 import RoofingSchedule from './pages/roofing/RoofingSchedule'
 import RoofingEstimate from './pages/roofing/RoofingEstimate'
+import RoofingCrewMobile from './pages/roofing/RoofingCrewMobile'
+import RoofingCanvass from './pages/roofing/RoofingCanvass'
 import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
@@ -73,6 +75,7 @@ export default function App() {
         {/* Public — token-based, no auth required */}
         <Route path="/portal/:token" element={<ClientPortal />} />
         <Route path="/roofing/portal/:token" element={<RoofingPortal />} />
+        <Route path="/roofing/crew/:token" element={<RoofingCrewMobile />} />
         <Route path="/roofing/login" element={<RoofingLogin />} />
         <Route path="/roofing/ae" element={<AEDashboard />} />
         <Route path="/roofing/ae/login" element={<AELogin />} />
@@ -90,6 +93,7 @@ export default function App() {
             <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
             <Route path="/roofing/schedule" element={<RoofingSchedule />} />
             <Route path="/roofing/estimate/:id" element={<RoofingEstimate />} />
+            <Route path="/roofing/canvass" element={<RoofingCanvass />} />
           </Route>
         </Route>
 

@@ -59,19 +59,30 @@ function StatCard({ label, value, sub, accent, icon }) {
   )
 }
 
+function leadScoreBadge(score) {
+  if (!score && score !== 0) return null
+  if (score >= 70) return { icon: '🔥', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' }
+  if (score >= 40) return { icon: '🟡', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' }
+  return { icon: '⚪', color: '#6b7280', bg: 'rgba(107,114,128,0.1)' }
+}
+
 function JobCard({ job }) {
   const navigate = useNavigate()
   const s = stageMeta(job.status)
   const contract = job.contract_amount || 0
   const days = daysAgo(job.actual_start_date || job.created_at)
   const accentColor = s.fg
+  const scoreBadge = leadScoreBadge(job.lead_score)
+  const suppFlag = job.supplement_status_flag && job.supplement_status_flag !== 'none' && job.supplement_status_flag !== null
+  const payDot = job.payment_dot
+  const weatherWarn = job.weather_warning
 
   return (
     <div
       onClick={() => navigate(`/roofing/jobs/${job.id}`)}
       style={{
         background: C.surface,
-        border: `1px solid ${C.border}`,
+        border: `1px solid ${weatherWarn ? 'rgba(239,68,68,0.3)' : C.border}`,
         borderRadius: '16px',
         padding: '0',
         cursor: 'pointer',
@@ -80,7 +91,7 @@ function JobCard({ job }) {
         display: 'flex',
       }}
       onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,158,255,0.4)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(74,158,255,0.1)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = weatherWarn ? 'rgba(239,68,68,0.3)' : C.border; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none' }}
     >
       {/* Left accent bar */}
       <div style={{ width: '4px', background: accentColor, flexShrink: 0 }} />
@@ -88,7 +99,10 @@ function JobCard({ job }) {
       <div style={{ flex: 1, padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: '700', color: C.text, margin: '0 0 3px', fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+              <p style={{ fontWeight: '700', color: C.text, margin: 0, fontSize: '16px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+              {weatherWarn && <span title="Weather warning today" style={{ fontSize: '14px', flexShrink: 0 }}>⛈️</span>}
+            </div>
             <p style={{ fontSize: '13px', color: C.muted, margin: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address}</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', flexShrink: 0 }}>
@@ -97,7 +111,30 @@ function JobCard({ job }) {
           </div>
         </div>
 
-        {days && <p style={{ fontSize: '11px', color: C.muted, margin: '8px 0 12px' }}>{days} active</p>}
+        {/* Badge row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '8px 0 10px', flexWrap: 'wrap' }}>
+          {days && <span style={{ fontSize: '11px', color: C.muted }}>{days} active</span>}
+          {scoreBadge && job.lead_score >= 40 && (
+            <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 7px', borderRadius: '20px', background: scoreBadge.bg, color: scoreBadge.color }}>
+              {scoreBadge.icon} {job.lead_score}
+            </span>
+          )}
+          {suppFlag && (
+            <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: 'rgba(124,58,237,0.15)', color: '#a78bfa' }}>
+              Supp {job.supplement_status_flag.replace(/_/g, ' ')}
+            </span>
+          )}
+          {payDot === 'complete' && (
+            <span title="Fully paid" style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}>
+              ● Paid
+            </span>
+          )}
+          {payDot === 'partial' && (
+            <span title="Partial payment received" style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+              ◐ Partial
+            </span>
+          )}
+        </div>
 
         <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
           {[
@@ -179,6 +216,7 @@ function BottomNav() {
   const tabs = [
     { icon: '🏠', label: 'Jobs', path: '/roofing/jobs' },
     { icon: '＋', label: 'New Job', path: '/roofing/jobs/new' },
+    { icon: '🚪', label: 'Canvass', path: '/roofing/canvass' },
     { icon: '👥', label: 'Crew', path: '/roofing/crew' },
     { icon: '⚙️', label: 'Settings', path: '/roofing/settings' },
   ]
@@ -187,7 +225,7 @@ function BottomNav() {
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
       background: C.surface,
       borderTop: `1px solid ${C.border}`,
-      display: 'grid', gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
+      display: 'grid', gridTemplateColumns: `repeat(5, 1fr)`,
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       height: '64px',
     }}>
@@ -338,13 +376,15 @@ export default function RoofingDashboard() {
   const [stageFilter, setStageFilter] = useState('active')
   const [viewMode, setViewMode] = useState('list')
   const [pendingMessages, setPendingMessages] = useState(0)
+  const [todayJobs, setTodayJobs] = useState([])
+  const [todayOpen, setTodayOpen] = useState(true)
 
   const load = useCallback(async () => {
     if (contractor === undefined) return
     const cid = contractor?.id
     const ccid = contractorClientId
 
-    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id').order('created_at', { ascending: false })
+    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id, lead_score, supplement_status_flag, payment_dot, weather_warning').order('created_at', { ascending: false })
     if (cid) query = query.eq('contractor_id', cid)
     else if (ccid) query = query.eq('client_id', ccid)
 
@@ -355,13 +395,22 @@ export default function RoofingDashboard() {
     const active = list.filter(j => ACTIVE_KEYS.has(j.status)).length
     const revenue = list.reduce((a, j) => a + (j.contract_amount || 0), 0)
     const collected = list.reduce((a, j) => a + (j.amount_paid || 0), 0)
-    setStats({ total: list.length, active, revenue, collected })
+    const hotLeads = list.filter(j => (j.lead_score || 0) >= 70 && ACTIVE_KEYS.has(j.status)).length
+    setStats({ total: list.length, active, revenue, collected, hotLeads })
     setLoading(false)
 
     if (list.length > 0) {
       const ids = list.map(j => j.id)
-      const { count } = await supabase.from('portal_messages').select('*', { count: 'exact', head: true }).in('job_id', ids).eq('requires_response', true).neq('sender_type', 'contractor')
+      const [{ count }, { data: schedules }] = await Promise.all([
+        supabase.from('portal_messages').select('*', { count: 'exact', head: true }).in('job_id', ids).eq('requires_response', true).neq('sender_type', 'contractor'),
+        supabase.from('job_schedule').select('job_id, arrival_window_start, work_description').eq('scheduled_date', new Date().toISOString().split('T')[0]).in('job_id', ids),
+      ])
       setPendingMessages(count || 0)
+      if (schedules?.length) {
+        const schedMap = {}
+        for (const s of schedules) schedMap[s.job_id] = s
+        setTodayJobs(list.filter(j => schedMap[j.id]).map(j => ({ ...j, _sched: schedMap[j.id] })))
+      }
     }
   }, [contractor, contractorClientId])
 
@@ -461,10 +510,43 @@ export default function RoofingDashboard() {
       {/* Stats row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', padding: '14px 20px 0' }}>
         <StatCard label="Active Jobs" value={stats.active} icon="🏗️" />
+        <StatCard label="Hot Leads" value={stats.hotLeads || 0} accent={stats.hotLeads > 0 ? '#ef4444' : C.muted} icon="🔥" sub="score ≥ 70" />
         <StatCard label="Total Revenue" value={`$${((stats.revenue || 0) / 1000).toFixed(0)}k`} accent={C.success} icon="💰" />
         <StatCard label="Collected" value={`$${((stats.collected || 0) / 1000).toFixed(0)}k`} sub={stats.revenue > 0 ? `${Math.round((stats.collected / stats.revenue) * 100)}% of contract` : null} icon="✅" />
-        <StatCard label="Pending Msgs" value={pendingMessages} accent={pendingMessages > 0 ? C.warning : C.muted} icon="💬" />
       </div>
+
+      {/* Today's scheduled jobs */}
+      {todayJobs.length > 0 && (
+        <div style={{ margin: '14px 20px 0', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '14px', overflow: 'hidden' }}>
+          <button
+            onClick={() => setTodayOpen(o => !o)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <span style={{ fontSize: '12px', fontWeight: '700', color: C.success, textTransform: 'uppercase', letterSpacing: '0.06em' }}>📅 Today — {todayJobs.length} job{todayJobs.length > 1 ? 's' : ''} scheduled</span>
+            <span style={{ color: C.success, fontSize: '14px' }}>{todayOpen ? '▲' : '▼'}</span>
+          </button>
+          {todayOpen && (
+            <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {todayJobs.map(job => {
+                const s = stageMeta(job.status)
+                return (
+                  <div
+                    key={job.id}
+                    onClick={() => window.location.href = `/roofing/jobs/${job.id}`}
+                    style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: '0 0 2px', fontWeight: '600', fontSize: '13px', color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+                      <p style={{ margin: 0, fontSize: '11px', color: C.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job._sched?.arrival_window_start ? `📍 ${job._sched.arrival_window_start}` : ''} {job.property_address?.split(',')[0]}</p>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: s.bg, color: s.fg, flexShrink: 0 }}>{s.label}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filter + view toggle */}
       <div style={{ padding: '14px 20px 0' }}>
