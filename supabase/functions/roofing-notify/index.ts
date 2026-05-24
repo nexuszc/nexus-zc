@@ -1,3 +1,4 @@
+// roofing-notify v47 — SMS + email dispatcher + portal limit enforcement + reviews
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -9,49 +10,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
 const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
 
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-async function sendSMS(to: string, body: string) {
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
-    console.warn("Twilio secrets not configured — SMS skipped");
-    return { skipped: true };
-  }
-  const credentials = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ To: to, From: TWILIO_PHONE_NUMBER, Body: body }),
-    }
-  );
-  return res.json();
-}
-
-async function sendEmail(to: string, subject: string, html: string) {
-  if (!RESEND_API_KEY) {
-    console.warn("RESEND_API_KEY not configured — email skipped");
-    return { skipped: true };
-  }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      to,
-      subject,
-      html,
-    }),
-  });
-  return res.json();
-}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -66,16 +25,45 @@ function json(data: unknown, status = 200) {
   });
 }
 
+async function sendSMS(to: string, body: string) {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER) {
+    console.warn("Twilio not configured — SMS skipped");
+    return { skipped: true };
+  }
+  const credentials = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`,
+    {
+      method: "POST",
+      headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ To: to, From: TWILIO_PHONE_NUMBER, Body: body }),
+    }
+  );
+  return res.json();
+}
+
+async function sendEmail(to: string, subject: string, html: string) {
+  if (!RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY not configured — email skipped");
+    return { skipped: true };
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to, subject, html }),
+  });
+  return res.json();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
 
   const body = await req.json().catch(() => ({}));
-  if (body.test) return json({ ok: true, message: "roofing-notify ready" });
+  if (body.test) return json({ ok: true, message: "roofing-notify v47 ready" });
 
   const { event, job_id, data } = body;
-
   if (!job_id) return json({ error: "job_id required" }, 400);
 
   const { data: job } = await supabase
@@ -90,18 +78,57 @@ Deno.serve(async (req) => {
   const portalUrl = `https://app.nexuszc.com/roofing/portal/${job.portal_token}`;
   const jobUrl = `https://app.nexuszc.com/roofing/jobs/${job_id}`;
 
+  // ── PORTAL LIMIT (free tier: 3 portals/month) ────────────────────────────
+  if (event === "portal_link") {
+    const { data: account } = await supabase
+      .from("contractor_accounts")
+      .select("plan, id")
+      .eq("id", job.contractor_id)
+      .maybeSingle();
+
+    if (account?.plan === "free") {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const { count: portalsThisMonth } = await supabase
+        .from("roofing_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("contractor_id", job.contractor_id)
+        .eq("portal_sent", true)
+        .gte("portal_sent_at", monthStart.toISOString());
+
+      if ((portalsThisMonth || 0) >= 3) {
+        await supabase.from("monetization_events").insert({
+          contractor_id: job.contractor_id,
+          event_type: "portal_limit_hit",
+          trigger_value: "3",
+          upgrade_to: "starter",
+          metadata: { portals_this_month: portalsThisMonth, job_id },
+        }).catch(() => {});
+
+        return json({
+          ok: false,
+          error: "portal_limit_reached",
+          message: "You have used your 3 free portals this month. Upgrade to Starter for unlimited portals.",
+          upgrade_url: "https://roofingos.dev/upgrade",
+        }, 402);
+      }
+    }
+  }
+
   const notifications: Promise<unknown>[] = [];
+
+  // ── EVENTS ───────────────────────────────────────────────────────────────
 
   if (event === "homeowner_message") {
     const msg = data?.message || "";
-
     if (contractor.notify_sms && contractor.phone) {
       notifications.push(sendSMS(
         contractor.phone,
         `New message from ${job.homeowner_name} (${job.property_address}):\n"${msg.slice(0, 120)}"\n\nReply at: ${jobUrl}`
       ));
     }
-
     if (contractor.notify_email && contractor.notification_email) {
       notifications.push(sendEmail(
         contractor.notification_email,
@@ -115,14 +142,12 @@ Deno.serve(async (req) => {
 
   if (event === "payment_received") {
     const amount = data?.amount || 0;
-
     if (contractor.notify_sms && contractor.phone) {
       notifications.push(sendSMS(
         contractor.phone,
         `💰 Payment received: $${amount} from ${job.homeowner_name} (${job.property_address}). Total paid: $${(job.amount_paid || 0) + amount}.`
       ));
     }
-
     if (contractor.notify_email && contractor.notification_email) {
       notifications.push(sendEmail(
         contractor.notification_email,
@@ -170,7 +195,6 @@ Deno.serve(async (req) => {
         </div>`
       ));
     }
-
     if (job.homeowner_phone) {
       notifications.push(sendSMS(
         job.homeowner_phone,
@@ -196,6 +220,43 @@ Deno.serve(async (req) => {
         `Your ${docType} from ${contractor.name} is ready. View it here: ${portalUrl}`
       ));
     }
+  }
+
+  if (event === "review_request") {
+    // Get contractor's google review link
+    const { data: contractorAccount } = await supabase
+      .from("contractor_accounts")
+      .select("google_review_link, id")
+      .eq("id", job.contractor_id)
+      .maybeSingle();
+
+    const reviewLink = contractorAccount?.google_review_link || "";
+    const refLink = `https://roofingos.dev?ref=${job.contractor_id}`;
+
+    if (job.homeowner_phone) {
+      const smsBody = `Hi ${job.homeowner_name} — your roof is complete! How did ${contractor.name} do?` +
+        (reviewLink ? `\nLeave them a quick Google review: ${reviewLink}` : "") +
+        `\n\nKnow someone who needs a roof? Share this link and ${contractor.name} will reach out: ${refLink}`;
+      notifications.push(sendSMS(job.homeowner_phone, smsBody));
+    }
+    if (job.homeowner_email) {
+      notifications.push(sendEmail(
+        job.homeowner_email,
+        `How did your roof turn out? — ${contractor.name}`,
+        `<div style="font-family:sans-serif;max-width:520px;line-height:1.6;color:#1a1a1a;padding:20px">
+          <p>Hi ${job.homeowner_name},</p>
+          <p>Your roof at ${job.property_address} is complete! We hope everything looks great.</p>
+          ${reviewLink ? `<p style="margin:24px 0"><a href="${reviewLink}" style="background:#f59e0b;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">⭐ Leave a Google Review</a></p>` : ""}
+          <p>Know someone who needs a new roof? Share your referral link:<br>
+          <a href="${refLink}" style="color:#3b82f6">${refLink}</a></p>
+          <p style="color:#64748b;font-size:13px">${contractor.name} · Powered by Roofing OS</p>
+        </div>`
+      ));
+    }
+
+    await supabase.from("roofing_jobs")
+      .update({ review_requested: true, review_requested_at: new Date().toISOString() })
+      .eq("id", job_id);
   }
 
   if (event === "portal_viewed") {

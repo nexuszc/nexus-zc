@@ -26,6 +26,38 @@ const STAGE_META = {
 const STATUS_FLOW = ['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection','invoiced','complete','paid']
 const PHASE_LABELS = { pre_installation: 'Before', during_tearoff: 'Tearoff', during_installation: 'Install', post_installation: 'After', damage: 'Damage', material: 'Material' }
 
+const INSPECTION_ITEMS = [
+  { id: 'decking',     label: 'Decking condition',          desc: 'Soft spots, rot, damage' },
+  { id: 'flashing',    label: 'Existing flashing',          desc: 'Condition, needs replace' },
+  { id: 'valleys',     label: 'Valleys',                    desc: 'Clean, no debris' },
+  { id: 'gutters',     label: 'Gutters',                    desc: 'Clear, properly attached' },
+  { id: 'ridge',       label: 'Ridge',                      desc: 'Straight, no sagging' },
+  { id: 'drip_edge',   label: 'Drip edge',                  desc: 'Present, properly installed' },
+  { id: 'ventilation', label: 'Ventilation',                desc: 'Ridge vent, soffit vents clear' },
+  { id: 'skylights',   label: 'Skylights / penetrations',   desc: 'Sealed, no cracks' },
+  { id: 'chimney',     label: 'Chimney',                    desc: 'Flashing intact, mortar condition' },
+  { id: 'overall',     label: 'Overall damage assessment',  desc: 'Photo required' },
+]
+
+const PERMIT_STATUSES = [
+  { value: 'not_required', label: 'Not Required', color: C.muted },
+  { value: 'need_to_file', label: 'Need to File', color: C.warning },
+  { value: 'filed_pending', label: 'Filed — Pending', color: '#60a5fa' },
+  { value: 'approved', label: 'Approved ✅', color: C.success },
+  { value: 'expired', label: 'Expired ⚠️', color: C.danger },
+]
+
+const COMMON_LINE_ITEMS = [
+  'Remove & dispose old roofing',
+  'Install felt underlayment',
+  'Install shingles (per square)',
+  'Ridge cap shingles',
+  'Drip edge (per LF)',
+  'Flashing',
+  'Dump fee',
+  'Permit fee',
+]
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const font = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }
@@ -33,6 +65,22 @@ const font = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-
 function Pill({ status }) {
   const s = STAGE_META[status] || { label: status, bg: 'rgba(136,150,168,0.15)', fg: '#8896a8' }
   return <span style={{ fontSize: '12px', fontWeight: '600', padding: '3px 10px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
+}
+
+function UpgradeModal({ message, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '20px', padding: '28px', maxWidth: '360px', width: '100%', textAlign: 'center' }}>
+        <div style={{ fontSize: '40px', marginBottom: '16px' }}>🚀</div>
+        <p style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: '700', color: C.text }}>Upgrade to Starter</p>
+        <p style={{ margin: '0 0 24px', fontSize: '14px', color: C.muted, lineHeight: 1.5 }}>{message || 'You\'ve used all 3 free portals this month. Upgrade to Starter for unlimited portals.'}</p>
+        <a href="https://roofingos.dev/upgrade" style={{ display: 'block', background: C.primary, color: '#fff', borderRadius: '12px', padding: '12px', fontSize: '15px', fontWeight: '700', textDecoration: 'none', marginBottom: '10px' }}>
+          Upgrade to Starter — $149/mo →
+        </a>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: '14px' }}>Not now</button>
+      </div>
+    </div>
+  )
 }
 
 export default function RoofingJobDetail() {
@@ -48,9 +96,13 @@ export default function RoofingJobDetail() {
   const [activities, setActivities] = useState([])
   const [portalSession, setPortalSession] = useState(null)
   const [claim, setClaim] = useState(null)
+  const [inspection, setInspection] = useState(null)
+  const [permit, setPermit] = useState(null)
+  const [scheduleData, setScheduleData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview')
 
+  // Form states
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -65,6 +117,26 @@ export default function RoofingJobDetail() {
   const [measureOrdered, setMeasureOrdered] = useState(false)
   const [suppLoading, setSuppLoading] = useState('')
   const [suppSuccess, setSuppSuccess] = useState('')
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [upgradeMsg, setUpgradeMsg] = useState('')
+  const [sendingReview, setSendingReview] = useState(false)
+  const [reviewSent, setReviewSent] = useState(false)
+
+  // Inspection form
+  const [inspectionItems, setInspectionItems] = useState(
+    INSPECTION_ITEMS.map(i => ({ ...i, result: null, notes: '' }))
+  )
+  const [inspectorName, setInspectorName] = useState('')
+  const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0])
+  const [inspectionNotes, setInspectionNotes] = useState('')
+  const [savingInspection, setSavingInspection] = useState(false)
+
+  // Permit form
+  const [permitForm, setPermitForm] = useState({ status: 'not_required', municipality: '', permit_number: '', filed_date: '', approved_date: '', expiry_date: '', cost_cents: '', notes: '' })
+  const [savingPermit, setSavingPermit] = useState(false)
+  const [permitSaved, setPermitSaved] = useState(false)
+  const [showPermitForm, setShowPermitForm] = useState(false)
+
   const messagesEndRef = useRef(null)
 
   const load = async () => {
@@ -76,6 +148,9 @@ export default function RoofingJobDetail() {
       { data: a },
       { data: ps },
       { data: cl },
+      { data: insp },
+      { data: perm },
+      { data: sched },
     ] = await Promise.all([
       supabase.from('roofing_jobs').select('*').eq('id', id).single(),
       supabase.from('portal_messages').select('*').eq('job_id', id).order('created_at'),
@@ -84,6 +159,9 @@ export default function RoofingJobDetail() {
       supabase.from('portal_activities').select('*').eq('job_id', id).order('created_at'),
       supabase.from('homeowner_sessions').select('magic_link_token, last_accessed_at, access_count').eq('job_id', id).maybeSingle(),
       supabase.from('insurance_claims').select('*').eq('job_id', id).maybeSingle(),
+      supabase.from('job_inspections').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('job_permits').select('*').eq('job_id', id).maybeSingle(),
+      supabase.from('job_schedule').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
     setJob(j)
     setMessages(msgs || [])
@@ -92,7 +170,31 @@ export default function RoofingJobDetail() {
     setActivities(a || [])
     setPortalSession(ps)
     setClaim(cl)
+    setInspection(insp)
+    setScheduleData(sched)
     if (j) setNote(j.notes || '')
+    if (j) setReviewSent(j.review_requested || false)
+    if (perm) {
+      setPermit(perm)
+      setPermitForm({
+        status: perm.status || 'not_required',
+        municipality: perm.municipality || '',
+        permit_number: perm.permit_number || '',
+        filed_date: perm.filed_date || '',
+        approved_date: perm.approved_date || '',
+        expiry_date: perm.expiry_date || '',
+        cost_cents: perm.cost_cents ? String(perm.cost_cents / 100) : '',
+        notes: perm.notes || '',
+      })
+    }
+    if (insp) {
+      setInspectorName(insp.inspector_name || '')
+      setInspectionDate(insp.inspection_date || new Date().toISOString().split('T')[0])
+      setInspectionNotes(insp.notes || '')
+      if (Array.isArray(insp.checklist) && insp.checklist.length) {
+        setInspectionItems(insp.checklist)
+      }
+    }
     setLoading(false)
   }
 
@@ -106,16 +208,36 @@ export default function RoofingJobDetail() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
       body: JSON.stringify({ action: 'generate_timeline', job_id: id }),
     }).catch(() => {})
+    // Trigger review request when job marked complete
+    if (status === 'complete') {
+      await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
+        body: JSON.stringify({ event: 'review_request', job_id: id }),
+      }).catch(() => {})
+      await supabase.from('roofing_jobs').update({ review_requested: true, review_requested_at: new Date().toISOString() }).eq('id', id)
+      setReviewSent(true)
+    }
     setJob(j => ({ ...j, status }))
     load()
   }
 
   const sendPortalLink = async () => {
-    await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
       body: JSON.stringify({ event: 'portal_link', job_id: id }),
-    }).catch(() => {})
+    }).catch(() => null)
+    if (res) {
+      const data = await res.json().catch(() => ({}))
+      if (data.error === 'portal_limit_reached') {
+        setUpgradeMsg(data.message || '')
+        setShowUpgradeModal(true)
+        return
+      }
+    }
+    await supabase.from('roofing_jobs').update({ portal_sent: true, portal_sent_at: new Date().toISOString() }).eq('id', id)
+    setJob(j => ({ ...j, portal_sent: true }))
     setSentPortal(true)
     setTimeout(() => { setSentPortal(false); load() }, 3000)
   }
@@ -203,6 +325,87 @@ export default function RoofingJobDetail() {
     setTimeout(() => setSuppSuccess(''), 4000)
   }
 
+  const setItemResult = (idx, result) => {
+    setInspectionItems(prev => prev.map((item, i) => i === idx ? { ...item, result } : item))
+  }
+  const setItemNotes = (idx, notes) => {
+    setInspectionItems(prev => prev.map((item, i) => i === idx ? { ...item, notes } : item))
+  }
+
+  const saveInspection = async () => {
+    setSavingInspection(true)
+    const allPassed = inspectionItems.every(i => i.result !== 'fail')
+    const payload = {
+      job_id: id,
+      contractor_id: contractor?.id,
+      checklist: inspectionItems,
+      inspector_name: inspectorName,
+      inspection_date: inspectionDate,
+      passed: allPassed,
+      notes: inspectionNotes,
+    }
+    if (inspection?.id) {
+      await supabase.from('job_inspections').update(payload).eq('id', inspection.id)
+    } else {
+      await supabase.from('job_inspections').insert(payload)
+    }
+    if (!allPassed) {
+      await supabase.from('roofing_jobs').update({ status: 'inspection' }).eq('id', id)
+      // Telegram alert for failed inspection
+      const tgToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN
+      const tgChat = import.meta.env.VITE_TELEGRAM_CHAT_ID
+      if (tgToken && tgChat) {
+        const failedItems = inspectionItems.filter(i => i.result === 'fail').map(i => i.label).join(', ')
+        await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: tgChat, text: `⚠️ Inspection failed — ${job?.property_address}\nFailed: ${failedItems}` }),
+        }).catch(() => {})
+      }
+    }
+    setSavingInspection(false)
+    load()
+  }
+
+  const savePermit = async () => {
+    setSavingPermit(true)
+    const data = {
+      job_id: id,
+      contractor_id: contractor?.id,
+      status: permitForm.status,
+      municipality: permitForm.municipality || null,
+      permit_number: permitForm.permit_number || null,
+      filed_date: permitForm.filed_date || null,
+      approved_date: permitForm.approved_date || null,
+      expiry_date: permitForm.expiry_date || null,
+      cost_cents: permitForm.cost_cents ? Math.round(parseFloat(permitForm.cost_cents) * 100) : null,
+      notes: permitForm.notes || null,
+    }
+    if (permit?.id) {
+      await supabase.from('job_permits').update(data).eq('id', permit.id)
+    } else {
+      await supabase.from('job_permits').insert(data)
+    }
+    setSavingPermit(false)
+    setPermitSaved(true)
+    setTimeout(() => setPermitSaved(false), 2000)
+    setShowPermitForm(false)
+    load()
+  }
+
+  const sendReviewRequest = async () => {
+    setSendingReview(true)
+    await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
+      body: JSON.stringify({ event: 'review_request', job_id: id }),
+    }).catch(() => {})
+    await supabase.from('roofing_jobs').update({ review_requested: true, review_requested_at: new Date().toISOString() }).eq('id', id)
+    setSendingReview(false)
+    setReviewSent(true)
+    load()
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, ...font, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -220,17 +423,24 @@ export default function RoofingJobDetail() {
 
   const portalUrl = `https://app.nexuszc.com/roofing/portal/${portalSession?.magic_link_token || job.portal_token || ''}`
   const unreadCount = messages.filter(m => m.sender_type === 'homeowner' && !m.is_read).length
+  const show10PhotoBanner = photos.length >= 10 && !job.portal_sent
+
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'portal', label: 'Portal' },
-    { id: 'photos', label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
-    { id: 'messages', label: `Messages${unreadCount > 0 ? ` 🔴` : messages.length ? ` (${messages.length})` : ''}` },
-    { id: 'documents', label: `Docs${docs.length ? ` (${docs.length})` : ''}` },
-    { id: 'notes', label: 'Notes' },
+    { id: 'overview',    label: 'Overview' },
+    { id: 'inspection',  label: `Inspection${inspection?.passed === false ? ' ⚠️' : inspection ? ' ✓' : ''}` },
+    { id: 'portal',      label: 'Portal' },
+    { id: 'photos',      label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
+    { id: 'messages',    label: `Messages${unreadCount > 0 ? ` 🔴` : messages.length ? ` (${messages.length})` : ''}` },
+    { id: 'documents',   label: `Docs${docs.length ? ` (${docs.length})` : ''}` },
+    { id: 'notes',       label: 'Notes' },
   ]
+
+  const permitStatusMeta = PERMIT_STATUSES.find(s => s.value === (permit?.status || permitForm.status)) || PERMIT_STATUSES[0]
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '80px' }}>
+      {showUpgradeModal && <UpgradeModal message={upgradeMsg} onClose={() => setShowUpgradeModal(false)} />}
+
       {/* Header */}
       <div style={{
         background: 'rgba(15,25,35,0.85)',
@@ -259,8 +469,8 @@ export default function RoofingJobDetail() {
           {tabs.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}
               style={{
-                padding: '10px 16px', border: 'none', cursor: 'pointer',
-                fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0,
+                padding: '10px 14px', border: 'none', cursor: 'pointer',
+                fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0,
                 background: 'none',
                 color: activeTab === t.id ? C.primary : C.muted,
                 borderBottom: activeTab === t.id ? `2px solid ${C.primary}` : '2px solid transparent',
@@ -272,9 +482,22 @@ export default function RoofingJobDetail() {
         </div>
       </div>
 
+      {/* 10-photo banner */}
+      {show10PhotoBanner && (
+        <div style={{ background: 'rgba(74,158,255,0.12)', borderBottom: '1px solid rgba(74,158,255,0.25)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: C.primary }}>
+            📸 10 photos taken — ready to send homeowner portal?
+          </p>
+          <button onClick={sendPortalLink}
+            style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', flexShrink: 0 }}>
+            {sentPortal ? '✓ Sent!' : 'Send Portal to Homeowner →'}
+          </button>
+        </div>
+      )}
+
       <div style={{ padding: '16px 20px' }}>
 
-        {/* OVERVIEW */}
+        {/* ── OVERVIEW ───────────────────────────────────────────────── */}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Status stepper */}
@@ -318,13 +541,109 @@ export default function RoofingJobDetail() {
               </p>
             </div>
 
+            {/* Permit card */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <p style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏛️ Permit</p>
+                <button onClick={() => setShowPermitForm(v => !v)}
+                  style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', color: C.muted, cursor: 'pointer' }}>
+                  {showPermitForm ? 'Cancel' : (permit ? 'Edit' : '+ Add')}
+                </button>
+              </div>
+              {!showPermitForm ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '22px' }}>
+                    {permit?.status === 'approved' ? '✅' : permit?.status === 'expired' ? '⚠️' : permit?.status === 'filed_pending' ? '⏳' : permit?.status === 'need_to_file' ? '📋' : '—'}
+                  </span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: C.text }}>{permitStatusMeta.label}</p>
+                    {permit?.permit_number && <p style={{ margin: '2px 0 0', fontSize: '12px', color: C.muted }}>#{permit.permit_number} — {permit.municipality}</p>}
+                    {permit?.expiry_date && <p style={{ margin: '2px 0 0', fontSize: '12px', color: C.warning }}>Expires {new Date(permit.expiry_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {PERMIT_STATUSES.map(s => (
+                      <button key={s.value} onClick={() => setPermitForm(f => ({ ...f, status: s.value }))}
+                        style={{ padding: '5px 10px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: permitForm.status === s.value ? 'rgba(74,158,255,0.2)' : 'rgba(255,255,255,0.06)', color: permitForm.status === s.value ? C.primary : C.muted, transition: 'all 0.15s' }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  {['municipality', 'permit_number'].map(field => (
+                    <input key={field} value={permitForm[field]} onChange={e => setPermitForm(f => ({ ...f, [field]: e.target.value }))}
+                      placeholder={field === 'municipality' ? 'Municipality / City' : 'Permit number'}
+                      style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                  ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {[['filed_date','Filed'],['approved_date','Approved'],['expiry_date','Expires'],['cost_cents','Cost ($)']].map(([field, label]) => (
+                      <div key={field}>
+                        <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>{label}</p>
+                        <input type={field === 'cost_cents' ? 'number' : 'date'} value={permitForm[field]} onChange={e => setPermitForm(f => ({ ...f, [field]: e.target.value }))}
+                          style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '7px 10px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={savePermit} disabled={savingPermit}
+                    style={{ background: permitSaved ? 'rgba(34,197,94,0.2)' : C.primary, color: permitSaved ? C.success : '#fff', border: 'none', borderRadius: '8px', padding: '9px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                    {savingPermit ? 'Saving…' : permitSaved ? '✓ Saved' : 'Save Permit'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Schedule */}
+            {scheduleData && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <p style={{ margin: 0, fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>📅 Schedule</p>
+                  <button onClick={() => navigate(`/roofing/schedule`)}
+                    style={{ background: 'none', border: 'none', fontSize: '12px', color: C.primary, cursor: 'pointer' }}>View calendar →</button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {[
+                    { label: 'Install Date', value: scheduleData.scheduled_date ? new Date(scheduleData.scheduled_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null },
+                    { label: 'Start Time', value: scheduleData.start_time },
+                    { label: 'Crew Lead', value: scheduleData.crew_lead },
+                    { label: 'Materials', value: scheduleData.material_delivery_date ? new Date(scheduleData.material_delivery_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null },
+                  ].map(f => (
+                    <div key={f.label} style={{ background: C.surface2, borderRadius: '8px', padding: '10px 12px' }}>
+                      <p style={{ margin: '0 0 2px', fontSize: '11px', color: C.muted }}>{f.label}</p>
+                      <p style={{ margin: 0, fontSize: '13px', color: f.value ? C.text : 'rgba(136,150,168,0.4)', fontWeight: '500' }}>{f.value || '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reviews card (when complete) */}
+            {(job.status === 'complete' || job.status === 'paid') && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+                <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>⭐ Review Request</p>
+                {reviewSent ? (
+                  <p style={{ margin: 0, fontSize: '13px', color: C.success, fontWeight: '600' }}>✓ Review & referral request sent to {job.homeowner_name}</p>
+                ) : (
+                  <>
+                    <p style={{ margin: '0 0 10px', fontSize: '13px', color: C.muted }}>Job marked complete. Send homeowner a Google review request + referral link.</p>
+                    <button onClick={sendReviewRequest} disabled={sendingReview}
+                      style={{ background: sendingReview ? 'rgba(74,158,255,0.3)' : C.primary, color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}>
+                      {sendingReview ? 'Sending…' : '⭐ Request Review + Referral'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Action cards grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               {[
                 { icon: '📐', title: 'Measurements', price: '$25', action: () => orderMeasurements(), loading: orderingMeasure, done: measureOrdered, show: true },
+                { icon: '💰', title: 'Estimate Builder', price: null, action: () => navigate(`/roofing/estimate/${id}`), loading: false, done: false, show: true },
                 { icon: '🤖', title: 'Supplement AI', price: '$99', action: () => runSupplementAI('basic'), loading: suppLoading === 'basic', done: suppSuccess === 'basic', show: !!(claim || job.insurance_claim) },
                 { icon: '📋', title: 'Full AI Handling', price: '$329', action: () => runSupplementAI('full'), loading: suppLoading === 'full', done: suppSuccess === 'full', show: !!(claim || job.insurance_claim) },
                 { icon: '🔗', title: 'Copy Portal Link', price: null, action: () => copyPortalLink(), done: copiedLink, show: true },
+                { icon: '📅', title: 'Schedule Job', price: null, action: () => navigate(`/roofing/schedule?job=${id}`), loading: false, done: false, show: true },
               ].filter(c => c.show !== false).map((card, i) => (
                 <div key={i}
                   onClick={card.done ? undefined : card.action}
@@ -384,13 +703,6 @@ export default function RoofingJobDetail() {
               ))}
             </div>
 
-            {/* Supplement AI — if insurance job and not in action cards already */}
-            {(claim || job.insurance_claim) && suppSuccess && (
-              <div style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '14px', padding: '14px' }}>
-                <p style={{ margin: 0, fontSize: '13px', color: '#a78bfa', fontWeight: '600' }}>✓ Supplement request generated — check Documents tab.</p>
-              </div>
-            )}
-
             {/* Insurance claim info */}
             {claim && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
@@ -414,7 +726,78 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* PORTAL */}
+        {/* ── INSPECTION TAB ──────────────────────────────────────────── */}
+        {activeTab === 'inspection' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
+              <p style={{ margin: '0 0 14px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Inspector Info</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Inspector Name</p>
+                  <input value={inspectorName} onChange={e => setInspectorName(e.target.value)}
+                    placeholder="Name"
+                    style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '11px', color: C.muted }}>Date</p>
+                  <input type="date" value={inspectionDate} onChange={e => setInspectionDate(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 11px', fontSize: '13px', color: C.text, outline: 'none' }} />
+                </div>
+              </div>
+              {inspection && (
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: inspection.passed ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', marginBottom: '4px' }}>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: inspection.passed ? C.success : C.danger }}>
+                    {inspection.passed ? '✅ Last inspection passed' : '❌ Last inspection failed'} — {inspection.inspection_date ? new Date(inspection.inspection_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {inspectionItems.map((item, idx) => (
+              <div key={item.id} style={{ background: C.surface, border: `1px solid ${item.result === 'fail' ? 'rgba(239,68,68,0.3)' : item.result === 'pass' ? 'rgba(34,197,94,0.25)' : C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: '600', color: C.text }}>{idx + 1}. {item.label}</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>{item.desc}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    {[
+                      { val: 'pass', label: '✅', bg: 'rgba(34,197,94,0.2)', active: 'rgba(34,197,94,0.35)' },
+                      { val: 'fail', label: '❌', bg: 'rgba(239,68,68,0.15)', active: 'rgba(239,68,68,0.3)' },
+                      { val: 'na',   label: 'N/A', bg: 'rgba(255,255,255,0.06)', active: 'rgba(136,150,168,0.2)' },
+                    ].map(btn => (
+                      <button key={btn.val} onClick={() => setItemResult(idx, item.result === btn.val ? null : btn.val)}
+                        style={{ padding: '5px 9px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '12px', fontWeight: '600', background: item.result === btn.val ? btn.active : btn.bg, color: C.text, transition: 'all 0.15s' }}>
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input value={item.notes || ''} onChange={e => setItemNotes(idx, e.target.value)}
+                  placeholder={item.result === 'fail' ? 'Notes (required for fail)' : 'Notes…'}
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${item.result === 'fail' && !item.notes ? 'rgba(239,68,68,0.4)' : C.border}`, borderRadius: '8px', padding: '7px 11px', fontSize: '13px', color: C.text, outline: 'none' }} />
+              </div>
+            ))}
+
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 6px', fontSize: '12px', color: C.muted, fontWeight: '500' }}>Additional Notes</p>
+              <textarea value={inspectionNotes} onChange={e => setInspectionNotes(e.target.value)} rows={3} placeholder="Overall inspection notes…"
+                style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '9px 11px', fontSize: '13px', color: C.text, resize: 'vertical', outline: 'none', lineHeight: 1.5 }} />
+            </div>
+
+            <button onClick={saveInspection} disabled={savingInspection}
+              style={{ background: savingInspection ? 'rgba(74,158,255,0.4)' : C.primary, color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'background 0.15s' }}>
+              {savingInspection ? 'Saving…' : '✓ Submit Inspection'}
+            </button>
+
+            <button onClick={() => window.print()}
+              style={{ background: 'rgba(255,255,255,0.06)', border: `1px solid ${C.border}`, color: C.text, borderRadius: '12px', padding: '11px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+              🖨️ Print / PDF Report
+            </button>
+          </div>
+        )}
+
+        {/* ── PORTAL ─────────────────────────────────────────────────── */}
         {activeTab === 'portal' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
@@ -450,6 +833,9 @@ export default function RoofingJobDetail() {
                       Preview ↗
                     </a>
                   </div>
+                  {job.portal_sent && (
+                    <p style={{ margin: '10px 0 0', fontSize: '12px', color: C.success }}>✓ Portal sent on {job.portal_sent_at ? new Date(job.portal_sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'file'}</p>
+                  )}
                 </>
               ) : (
                 <div>
@@ -484,7 +870,7 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* PHOTOS */}
+        {/* ── PHOTOS ─────────────────────────────────────────────────── */}
         {activeTab === 'photos' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
@@ -541,7 +927,7 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* MESSAGES */}
+        {/* ── MESSAGES ───────────────────────────────────────────────── */}
         {activeTab === 'messages' && (
           <div>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px', marginBottom: '12px', maxHeight: '420px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -556,7 +942,7 @@ export default function RoofingJobDetail() {
                     <div style={{
                       maxWidth: '75%', padding: '10px 13px',
                       borderRadius: isContractor ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                      background: isContractor ? C.primary : isAria ? C.surface2 : C.surface2,
+                      background: isContractor ? C.primary : C.surface2,
                       border: isContractor ? 'none' : `1px solid ${C.border}`,
                       color: C.text,
                     }}>
@@ -589,18 +975,14 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* DOCUMENTS */}
+        {/* ── DOCUMENTS ──────────────────────────────────────────────── */}
         {activeTab === 'documents' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {docs.map(d => (
               <div key={d.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <p style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: C.text }}>{d.title}</p>
-                  <span style={{
-                    fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '20px',
-                    background: d.status === 'signed' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)',
-                    color: d.status === 'signed' ? C.success : C.muted,
-                  }}>
+                  <span style={{ fontSize: '11px', fontWeight: '600', padding: '3px 8px', borderRadius: '20px', background: d.status === 'signed' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.06)', color: d.status === 'signed' ? C.success : C.muted }}>
                     {d.status === 'signed' ? '✓ Signed' : (d.doc_type || d.status || 'Pending')}
                   </span>
                 </div>
@@ -618,7 +1000,7 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* NOTES */}
+        {/* ── NOTES ──────────────────────────────────────────────────── */}
         {activeTab === 'notes' && (
           <div>
             <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Internal Notes</p>

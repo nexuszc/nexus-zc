@@ -507,6 +507,20 @@ Then productized and sold to other multi-business operators.
 **DONE this session:**
 - (nothing yet this session)
 
+**FREE + STARTER build (May 24):**
+- FREE FIX 1: 10-photo banner in RoofingJobDetail — triggers when photos >= 10, portal not yet sent
+- FREE FIX 2: 3 portal/month limit enforced in roofing-notify (portal_limit_reached → upgrade modal)
+- STARTER Feature 1: Inspector Checklist tab in RoofingJobDetail (10 items, pass/fail/na, print PDF)
+- STARTER Feature 2: Permit Tracker in Overview tab (status, municipality, expiry, cost)
+- STARTER Feature 3: Review + referral SMS/email on job complete (google_review_link on contractor_accounts)
+- STARTER Feature 4: Job Scheduler page at /roofing/schedule (weekly calendar, crew lead, material date)
+- STARTER Feature 5: Estimate Builder at /roofing/estimate/:id (line items, tax, signature pad)
+- STARTER Feature 6: Follow-up sequences (contractor-lead-followup v1, cron 0 15 * * *, day 3/7/14 SMS)
+- DB migrations: job_inspections, job_permits, job_schedule, job_estimates tables
+- DB columns: portal_sent, portal_sent_at, review_requested, review_requested_at, last_contacted_at, follow_up_opted_out, follow_up_complete on roofing_jobs; google_review_link on contractor_accounts
+- roofing-notify v47: portal limit + review_request event + full CORS
+- contractor-lead-followup v1: day 3/7/14 SMS sequences, marks follow_up_complete on day 14
+
 **NEXT:**
 1. Fix smoke_test_failed error
 2. Fix Recurring Smoke Test Failures

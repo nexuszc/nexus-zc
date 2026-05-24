@@ -19,6 +19,8 @@ import RoofingCrew from './pages/roofing/RoofingCrew'
 import RoofingOnboarding from './pages/roofing/RoofingOnboarding'
 import RoofingMeasurements from './pages/roofing/RoofingMeasurements'
 import RoofingIntegrations from './pages/roofing/RoofingIntegrations'
+import RoofingSchedule from './pages/roofing/RoofingSchedule'
+import RoofingEstimate from './pages/roofing/RoofingEstimate'
 import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
@@ -86,6 +88,8 @@ export default function App() {
             <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
             <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
             <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
+            <Route path="/roofing/schedule" element={<RoofingSchedule />} />
+            <Route path="/roofing/estimate/:id" element={<RoofingEstimate />} />
           </Route>
         </Route>
 
