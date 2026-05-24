@@ -28,6 +28,24 @@ async function findLog(emailId: string) {
   return data;
 }
 
+async function updateEmailLog(emailId: string, type: string, now: string) {
+  const { data: logRow } = await supabase
+    .from("email_log")
+    .select("id, opened_at, clicked_at")
+    .eq("resend_id", emailId)
+    .maybeSingle();
+  if (!logRow) return;
+  if (type === "email.opened" && !logRow.opened_at) {
+    await supabase.from("email_log").update({ opened_at: now, status: "opened" }).eq("id", logRow.id);
+  } else if (type === "email.clicked" && !logRow.clicked_at) {
+    await supabase.from("email_log").update({ clicked_at: now, opened_at: logRow.opened_at || now, status: "clicked" }).eq("id", logRow.id);
+  } else if (type === "email.bounced") {
+    await supabase.from("email_log").update({ status: "bounced" }).eq("id", logRow.id);
+  } else if (type === "email.delivered") {
+    await supabase.from("email_log").update({ status: "delivered" }).eq("id", logRow.id);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return Response.json({ ok: true });
 
@@ -165,6 +183,9 @@ Deno.serve(async (req) => {
         }
       }
     }
+
+    // Mirror status to email_log (nurture sequences)
+    await updateEmailLog(emailId, type, now);
   } catch (e) {
     console.error("webhook processing error:", e);
   }

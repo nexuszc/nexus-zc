@@ -10,72 +10,99 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+// ALL topics must be directly about a Roofing OS feature or product.
+// NEVER generate generic roofing tips, supplement tactics, or carrier advice.
 const CATEGORIES = [
-  { topic: "homeowner_communication",  angle: "homeowners calling contractors mid-job and portals that stop it" },
-  { topic: "supplement_recovery",      angle: "denied or underpaid supplements and AI that recovers the money" },
-  { topic: "companycam_replacement",   angle: "canceling CompanyCam and getting everything free with Roofing OS" },
-  { topic: "storm_leads",              angle: "hitting a hail market in the first 48 hours and winning more jobs" },
-  { topic: "carrier_tactics",          angle: "State Farm, Allstate, USAA tactics and carrier-specific documentation" },
-  { topic: "crew_management",          angle: "crew showing up without homeowners knowing and coordination failures" },
-  { topic: "reviews_closing",          angle: "getting 5-star reviews automatically and closing more jobs faster" },
-  { topic: "product_demo",             angle: "Roofing OS setup in 4 minutes and the first thing contractors notice" },
+  { topic: "homeowner_portal",       angle: "the homeowner portal — real-time photos and job updates on their phone, so they stop calling" },
+  { topic: "companycam_replacement", angle: "canceling CompanyCam and getting unlimited photo storage + homeowner portal free with Roofing OS" },
+  { topic: "supplement_ai",          angle: "the Roofing OS AI supplement tool — scan your job photos, AI finds missed line items automatically" },
+  { topic: "storm_leads",            angle: "the Roofing OS storm leads feature — get notified when hail hits your market, run to the jobs first" },
+  { topic: "contractor_dashboard",   angle: "the Roofing OS contractor dashboard — all your jobs, homeowners, and status in one screen" },
+  { topic: "crew_photo_upload",      angle: "crew photo upload via SMS — your crew texts photos, homeowner portal updates in real time" },
+  { topic: "review_request",         angle: "the Roofing OS review request flow — one tap sends homeowner a review link after job close" },
+  { topic: "referral_system",        angle: "the Roofing OS referral system — homeowners refer neighbors, contractors earn free job credits" },
+  { topic: "magic_link",             angle: "the Roofing OS magic link — one link sent to homeowner, they see their entire project live" },
+  { topic: "portal_pro_vs_free",     angle: "Roofing OS Free vs Starter — what 5 jobs free gets you and what $149/mo unlocks" },
 ];
 
-const SHORT_SYSTEM = `You write 30-second YouTube Shorts scripts for roofing contractors. Every script must follow this EXACT structure:
+const SHORT_SYSTEM = `You write 30-second YouTube Shorts scripts for roofing contractors about Roofing OS features.
 
-HOOK (0-3 seconds): ONE sentence. Painful, specific, relatable. Under 12 words. Specific number or scenario. Addresses the contractor directly (you/your). Never generic.
-Examples:
-"Your homeowner called 6 times today."
-"State Farm just cut your supplement by $4,200."
-"You lost a $22K job because you replied 4 hours late."
-"CompanyCam just charged you $49. Again."
+CRITICAL RULE: Every single script MUST be about a specific Roofing OS feature or product.
+NEVER write about: generic supplement tactics, State Farm tips, carrier advice, general business tips, or anything not directly tied to a Roofing OS feature.
+
+APPROVED TOPICS ONLY:
+- The homeowner portal (real-time photos, job updates, one link)
+- Replacing CompanyCam with Roofing OS for free
+- The AI supplement tool
+- Storm leads feature
+- The contractor dashboard
+- Crew photo upload via SMS
+- Automated review requests
+- The referral system
+- The magic link
+- Free vs Starter ($149/mo) comparison
+
+STRUCTURE (exact):
+HOOK (0-3 sec): ONE sentence. Under 12 words. Specific pain. Contractor-to-contractor voice.
+Examples that work:
+"Your homeowner called 6 times today. Roofing OS stops that."
+"CompanyCam just charged you $49. Again. We do it free."
 "Your crew showed up. Nobody told the homeowner."
 
-PROBLEM (3-8 seconds): 2 sentences max. Why this keeps happening. The real cost of this problem.
+PROBLEM (3-8 sec): 2 sentences. The daily pain this Roofing OS feature solves.
 
-SOLUTION (8-22 seconds): Roofing OS fixes it. Show the outcome, not the feature.
+SOLUTION (8-22 sec): Show the Roofing OS feature as an outcome, not a description.
 NEVER: "Roofing OS has a portal feature."
 ALWAYS: "Your homeowner sees every photo your crew takes in real time. They stop calling."
-Be specific about what the contractor and homeowner experience.
 
-CTA (22-30 seconds): Urgent and specific. Include "roofingos.dev" twice. Include "free forever, no credit card" once.
-
-RULES:
-- Total script: 90-110 words for 30 seconds
-- Use "you" and "your" not "we" and "our"
-- Include one specific dollar amount or number
-- Never use corporate language
-- Sound like a contractor talking to a contractor
-
-After the script, on a new line, provide these exact fields:
-hook_text: [the hook sentence only, under 12 words]
-thumbnail_text: [4 words max, all caps, most shocking part]
-topic_category: [exact topic key]
-target_keywords: [5 YouTube search terms, comma-separated]`;
-
-const LONG_FORM_SYSTEM = `You write 10-minute YouTube video scripts for roofing contractors. Format as follows:
-
-INTRO (0-60 sec): Hook the biggest pain point. Tell them exactly what they'll learn. Preview key outcomes.
-
-SECTION 1 — THE PROBLEM (60-180 sec): Deep dive. Specific scenarios, dollar amounts. Why existing solutions fail. Make the contractor feel seen.
-
-SECTION 2 — THE SOLUTION (180-360 sec): Walk through Roofing OS step by step. Describe what the contractor sees on screen. Show specific features as outcomes. Every feature tied to a dollar amount or time saved.
-
-SECTION 3 — REAL RESULTS (360-480 sec): Specific before/after scenarios. Dollar amounts recovered. Calls stopped. Time saved. Frame as "contractors using this see..."
-
-OUTRO (480-600 sec): roofingos.dev. How to get started. What happens in the first 4 minutes. What their homeowners will experience.
+CTA (22-30 sec): Include "roofingos.dev" twice. Include "free forever, no credit card" once.
 
 RULES:
-- 1,400-1,600 words total (approx 10 minutes at 150 wpm)
-- Mention roofingos.dev at least 4 times
-- Include at least 3 specific dollar amounts
-- Use "you/your" throughout
-- Sound like an expert contractor peer, not a salesperson
+- 90-110 words total
+- Always name the specific Roofing OS feature
+- Use "you/your" not "we/our"
+- Sound like a contractor, not a marketer
 
 After the script provide:
-hook_text: [first sentence of intro only]
-thumbnail_text: [4 words max, all caps]
-topic_category: [relevant topic]
+hook_text: [hook sentence, under 12 words]
+thumbnail_text: [4 words max, ALL CAPS]
+topic_category: [exact topic key from APPROVED TOPICS]
+target_keywords: [5 YouTube search terms, comma-separated]`;
+
+const LONG_FORM_SYSTEM = `You write 10-minute YouTube video scripts for roofing contractors about Roofing OS features.
+
+CRITICAL RULE: Every script MUST be about a specific Roofing OS product or feature.
+NEVER write generic roofing advice. Every section must tie back to Roofing OS.
+
+APPROVED LONG-FORM TOPICS:
+- How Roofing OS stops homeowner calls (homeowner portal walkthrough)
+- Cancel CompanyCam: Roofing OS full setup guide
+- Roofing OS AI supplement tool: step-by-step walkthrough
+- Roofing OS storm leads feature: how to use it
+- Free vs Starter: what you get at each Roofing OS tier
+
+STRUCTURE:
+INTRO (0-60 sec): The exact pain the Roofing OS feature solves. What they'll learn.
+
+PROBLEM (60-180 sec): What contractors experience without this feature. Specific scenarios, costs.
+
+FEATURE WALKTHROUGH (180-360 sec): Walk through the specific Roofing OS feature step by step. What the contractor does. What the homeowner sees. Be specific about every screen and action.
+
+RESULTS (360-480 sec): Specific before/after. Time saved, calls stopped, money recovered. Frame as outcomes from this feature.
+
+OUTRO (480-600 sec): roofingos.dev. What happens in first 4 minutes. Free forever, no credit card.
+
+RULES:
+- 1,400-1,600 words
+- Name "Roofing OS" at least 6 times
+- Mention roofingos.dev at least 4 times
+- Include at least 3 specific numbers (time saved, dollars, calls stopped)
+- Use "you/your" throughout
+
+After the script provide:
+hook_text: [first sentence only]
+thumbnail_text: [4 words max, ALL CAPS]
+topic_category: [one of the approved topic keys]
 target_keywords: [8 YouTube search terms]`;
 
 async function claude(system: string, prompt: string, maxTokens = 1200): Promise<string> {
@@ -236,10 +263,10 @@ async function generateLongForm(
   thumbnail_text: string; topic_category: string; target_keywords: string[];
 } | null> {
   const LONG_FORM_TOPICS: Record<string, string> = {
-    homeowner_calls: "Complete Guide to Stopping Homeowner Calls During Installations (2026)",
-    supplement_ai:   "How to Recover $3,000+ in Denied Supplements Using AI (Step by Step)",
-    cancel_companycam: "Cancel CompanyCam: Complete Roofing OS Setup Guide (Free Forever)",
-    storm_playbook:  "Storm Season Playbook: How Top Roofers Get Leads Before Anyone Else",
+    homeowner_portal:   "How Roofing OS Stops Homeowner Calls Completely (Full Portal Walkthrough)",
+    cancel_companycam:  "Cancel CompanyCam: Complete Roofing OS Setup Guide (Free Forever)",
+    supplement_ai:      "Roofing OS AI Supplement Tool: How It Finds Missed Line Items (Walkthrough)",
+    storm_leads:        "Roofing OS Storm Leads: How to Get Jobs Before Any Other Crew (Step by Step)",
   };
 
   const title = LONG_FORM_TOPICS[topic] || LONG_FORM_TOPICS.homeowner_calls;
