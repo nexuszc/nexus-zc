@@ -13,7 +13,7 @@ export default function RoofingLogin() {
     setError('')
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: 'https://roofingos.dev/dashboard' },
+      options: { emailRedirectTo: 'https://app.nexuszc.com/roofing/jobs' },
     })
     if (err) {
       const isRateLimit = err.message.toLowerCase().includes('rate') || err.message.toLowerCase().includes('security') || err.status === 429
@@ -105,7 +105,7 @@ export default function RoofingLogin() {
               <p style={{ color: '#22c55e', fontSize: '18px', fontWeight: '700', margin: '0 0 8px' }}>Check your email</p>
               <p style={{ color: '#8896a8', fontSize: '14px', margin: '0 0 4px' }}>We sent a magic link to</p>
               <p style={{ color: '#fff', fontSize: '14px', fontWeight: '600', margin: 0 }}>{email}</p>
-              <p style={{ color: '#8896a8', fontSize: '12px', marginTop: '16px' }}>Click the link to sign in. No password needed.</p>
+              <p style={{ color: '#8896a8', fontSize: '14px', marginTop: '16px', lineHeight: 1.5 }}>Tap the link in the email, then come back to this app.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ background: '#1a2535', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '28px' }}>
