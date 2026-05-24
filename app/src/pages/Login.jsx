@@ -17,7 +17,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-950 px-4">
+    <div className="flex items-center justify-center min-h-screen bg-gray-950 px-4 overflow-x-hidden w-full box-border">
       {/* Subtle background grid */}
       <div
         className="absolute inset-0 opacity-[0.03]"
