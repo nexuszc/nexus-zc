@@ -128,6 +128,23 @@ function emailHref(c) {
   return `mailto:${c.email}?subject=${subj}&body=${body}`
 }
 
+function isMobile() {
+  return window.innerWidth < 768 || /iPhone|iPad|Android/i.test(navigator.userAgent)
+}
+
+function handleCallClick(phone, onCallNow, campaign, setCopied) {
+  if (isMobile()) {
+    window.location.href = `tel:${phone}`
+  } else {
+    navigator.clipboard.writeText(phone).catch(() => {})
+    if (setCopied) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
+  }
+  onCallNow(campaign)
+}
+
 // ── DailyDigest ────────────────────────────────────────────────────────────────
 
 function DailyDigest({ campaigns, todayStats }) {
@@ -170,7 +187,9 @@ function DailyDigest({ campaigns, todayStats }) {
               <div key={c.id} className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
                 <span className="text-xs text-red-300 font-medium">{c.company_name}</span>
                 {c.phone && (
-                  <a href={`tel:${c.phone}`} className="text-[10px] text-red-400 hover:text-red-300 underline">Call now</a>
+                  isMobile()
+                    ? <a href={`tel:${c.phone}`} className="text-[10px] text-red-400 hover:text-red-300 underline">Call now</a>
+                    : <span className="text-[10px] text-red-400 font-mono">{c.phone}</span>
                 )}
               </div>
             ))}
@@ -188,6 +207,7 @@ function CampaignCard({ c, onSelect, onStatusChange, onCallNow }) {
   const next = getNextAction(c)
   const sortedTouches = [...(c.touches || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   const lastTouch = sortedTouches[0]
+  const [copied, setCopied] = useState(false)
 
   const heatBorderCls = {
     hot:  'border-l-2 border-l-red-500',
@@ -237,17 +257,21 @@ function CampaignCard({ c, onSelect, onStatusChange, onCallNow }) {
       <div className="text-[10px] text-gray-600 mb-1 truncate">{lastTouchDesc()}</div>
       <div className={`text-[10px] mb-2 ${next.cls}`}>{next.label}</div>
 
-      {/* Call Now + Text buttons */}
+      {/* Call + Text buttons */}
       <div className="flex gap-2 mt-1" onClick={e => e.stopPropagation()}>
         {c.phone ? (
           <>
-            <a
-              href={`tel:${c.phone}`}
-              onClick={() => onCallNow(c)}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 rounded-lg py-2 text-xs font-bold text-green-400 transition-colors"
-            >
-              📞 Call Now
-            </a>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <button
+                onClick={() => handleCallClick(c.phone, onCallNow, c, setCopied)}
+                className="flex items-center justify-center gap-1.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 rounded-lg py-2 text-xs font-bold text-green-400 transition-colors w-full"
+              >
+                {isMobile() ? '📞 Call' : (copied ? '✓ Copied!' : '📋 Copy Number')}
+              </button>
+              {!isMobile() && (
+                <div className="text-[9px] text-gray-700 text-center">Call from your phone</div>
+              )}
+            </div>
             <a
               href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`}
               className="flex items-center justify-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg px-3 py-2 text-xs font-bold text-blue-400 transition-colors"
@@ -299,6 +323,7 @@ function KanbanColumn({ col, campaigns, onSelect, onStatusChange, onCallNow }) {
 
 function TimelineView({ c, onClose, onLogTouch, onStatusChange, onCallNow }) {
   const sortedTouches = [...(c.touches || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  const [copied, setCopied] = useState(false)
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-end">
@@ -320,13 +345,17 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange, onCallNow }) {
           {/* Quick actions */}
           <div className="flex flex-wrap gap-2 mb-3">
             {c.phone && (
-              <a
-                href={`tel:${c.phone}`}
-                onClick={() => onCallNow(c)}
-                className="flex items-center gap-1.5 bg-green-500/15 border border-green-500/25 rounded-lg px-4 py-2 text-sm font-bold text-green-400 hover:bg-green-500/25 transition-colors"
-              >
-                📞 Call Now
-              </a>
+              <div className="flex flex-col gap-0.5">
+                <button
+                  onClick={() => handleCallClick(c.phone, onCallNow, c, setCopied)}
+                  className="flex items-center gap-1.5 bg-green-500/15 border border-green-500/25 rounded-lg px-4 py-2 text-sm font-bold text-green-400 hover:bg-green-500/25 transition-colors"
+                >
+                  {isMobile() ? '📞 Call Now' : (copied ? '✓ Copied!' : '📋 Copy Number')}
+                </button>
+                {!isMobile() && (
+                  <div className="text-[9px] text-gray-600 text-center">Call from your phone</div>
+                )}
+              </div>
             )}
             {c.phone && (
               <a href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`} className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-1.5 text-xs text-blue-400 hover:bg-blue-500/20 transition-colors">
@@ -810,7 +839,7 @@ export default function Funnel() {
   )
 
   return (
-    <div className="p-4 min-h-screen">
+    <div className="p-4 min-h-screen" style={{ overflowX: 'hidden', maxWidth: '100vw' }}>
       <DailyDigest campaigns={campaigns} todayStats={todayStats} />
 
       {/* Search + Filters + Sort */}
