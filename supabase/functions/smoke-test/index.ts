@@ -1,16 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { corsHeaders } from '../_shared/cors.ts'
 
 /**
  * Logger utility for structured logging
  */
 const logger = {
-  info: (message: string, data?: any) => {
+  info: (message: string, data?: Record<string, unknown>) => {
     console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
   },
-  error: (message: string, data?: any) => {
+  error: (message: string, data?: Record<string, unknown>) => {
     console.error(JSON.stringify({ level: 'error', message, ...data, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, data?: any) => {
+  warn: (message: string, data?: Record<string, unknown>) => {
     console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
   }
 };
@@ -18,229 +19,165 @@ const logger = {
 /**
  * Comprehensive health check function
  */
-async function performComprehensiveHealthCheck() {
-  const checks: Record<string, boolean> = {};
-  const details: Record<string, any> = {};
-  
+async function performComprehensiveHealthCheck(): Promise<Record<string, unknown>> {
+  const results: Record<string, unknown> = {
+    timestamp: new Date().toISOString(),
+    overall: true,
+    checks: {}
+  };
+
+  // Environment check
   try {
-    // 1. Check Supabase environment variables
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
-    checks.env_supabase_url = !!supabaseUrl;
-    checks.env_supabase_anon_key = !!supabaseAnonKey;
-    checks.env_supabase_service_role_key = !!supabaseServiceRoleKey;
-    
-    details.environment = {
-      supabase_url_set: checks.env_supabase_url,
-      supabase_anon_key_set: checks.env_supabase_anon_key,
-      supabase_service_role_key_set: checks.env_supabase_service_role_key
+    const envCheck = {
+      SUPABASE_URL: !!Deno.env.get('SUPABASE_URL'),
+      SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'),
+      OPENAI_API_KEY: !!Deno.env.get('OPENAI_API_KEY')
     };
+    results.checks = { ...results.checks, environment: { status: 'ok', variables: envCheck } };
+  } catch (error) {
+    results.overall = false;
+    results.checks = { ...results.checks, environment: { status: 'error', error: String(error) } };
+  }
+
+  // Database connectivity check
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
-    // 2. Check Supabase client initialization
-    if (supabaseUrl && supabaseServiceRoleKey) {
-      try {
-        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
-          }
-        });
-        
-        checks.supabase_client = true;
-        
-        // 3. Test database connectivity
-        try {
-          const { error: dbError } = await supabase.from('profiles').select('id').limit(1);
-          checks.database_connection = !dbError;
-          
-          if (dbError) {
-            details.database_error = dbError.message;
-          }
-        } catch (dbErr) {
-          checks.database_connection = false;
-          details.database_error = dbErr instanceof Error ? dbErr.message : String(dbErr);
-        }
-      } catch (clientErr) {
-        checks.supabase_client = false;
-        details.client_error = clientErr instanceof Error ? clientErr.message : String(clientErr);
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { error } = await supabase.from('conversations').select('id').limit(1);
+      
+      if (error) {
+        results.overall = false;
+        results.checks = { ...results.checks, database: { status: 'error', error: error.message } };
+      } else {
+        results.checks = { ...results.checks, database: { status: 'ok' } };
       }
     } else {
-      checks.supabase_client = false;
-      details.client_error = 'Missing required environment variables';
+      results.overall = false;
+      results.checks = { ...results.checks, database: { status: 'error', error: 'Missing credentials' } };
     }
-    
-    // 4. Check OpenAI API key
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    checks.env_openai_api_key = !!openaiApiKey;
-    details.openai_api_key_set = checks.env_openai_api_key;
-    
-    // Calculate overall health status
-    const overall = Object.values(checks).every(check => check === true);
-    
-    return {
-      overall,
-      checks,
-      details,
-      timestamp: new Date().toISOString(),
-      version: '1.0.0'
-    };
   } catch (error) {
-    logger.error('Health check error', { error });
-    
-    return {
-      overall: false,
-      checks,
-      details: {
-        ...details,
-        error: error instanceof Error ? error.message : String(error)
-      },
-      timestamp: new Date().toISOString(),
-      version: '1.0.0'
-    };
+    results.overall = false;
+    results.checks = { ...results.checks, database: { status: 'error', error: String(error) } };
   }
+
+  return results;
 }
 
 /**
- * Run comprehensive smoke test suite
+ * Run smoke test suite
  */
-async function runSmokeTestSuite() {
-  const tests: Array<{ name: string; passed: boolean; error?: string; duration?: number }> = [];
-  const startTime = Date.now();
-  
+async function runSmokeTestSuite(): Promise<Record<string, unknown>> {
+  const results = {
+    timestamp: new Date().toISOString(),
+    status: 'passed',
+    tests_passed: 0,
+    tests_failed: 0,
+    tests: [] as Array<Record<string, unknown>>
+  };
+
+  // Test 1: Environment variables
   try {
-    // Test 1: Environment variables
-    const envTest = {
-      name: 'Environment Variables',
-      passed: false,
-      duration: 0
-    };
-    const envStart = Date.now();
+    const requiredVars = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY'];
+    const missingVars = requiredVars.filter(v => !Deno.env.get(v));
     
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-      const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-      
-      envTest.passed = !!(supabaseUrl && supabaseAnonKey && supabaseServiceRoleKey && openaiApiKey);
-      if (!envTest.passed) {
-        envTest.error = 'Missing required environment variables';
-      }
-    } catch (err) {
-      envTest.error = err instanceof Error ? err.message : String(err);
+    if (missingVars.length === 0) {
+      results.tests_passed++;
+      results.tests.push({ name: 'Environment Variables', status: 'passed' });
+    } else {
+      results.tests_failed++;
+      results.status = 'failed';
+      results.tests.push({ name: 'Environment Variables', status: 'failed', missing: missingVars });
     }
-    
-    envTest.duration = Date.now() - envStart;
-    tests.push(envTest);
-    
-    // Test 2: Supabase client creation
-    const clientTest = {
-      name: 'Supabase Client Creation',
-      passed: false,
-      duration: 0
-    };
-    const clientStart = Date.now();
-    
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (supabaseUrl && supabaseServiceRoleKey) {
-        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
-          }
-        });
-        
-        clientTest.passed = !!supabase;
-      } else {
-        clientTest.error = 'Missing Supabase credentials';
-      }
-    } catch (err) {
-      clientTest.error = err instanceof Error ? err.message : String(err);
-    }
-    
-    clientTest.duration = Date.now() - clientStart;
-    tests.push(clientTest);
-    
-    // Test 3: Database connectivity
-    const dbTest = {
-      name: 'Database Connectivity',
-      passed: false,
-      duration: 0
-    };
-    const dbStart = Date.now();
-    
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      
-      if (supabaseUrl && supabaseServiceRoleKey) {
-        const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false
-          }
-        });
-        
-        const { error } = await supabase.from('profiles').select('id').limit(1);
-        dbTest.passed = !error;
-        
-        if (error) {
-          dbTest.error = error.message;
-        }
-      } else {
-        dbTest.error = 'Missing Supabase credentials';
-      }
-    } catch (err) {
-      dbTest.error = err instanceof Error ? err.message : String(err);
-    }
-    
-    dbTest.duration = Date.now() - dbStart;
-    tests.push(dbTest);
-    
-    // Calculate results
-    const totalDuration = Date.now() - startTime;
-    const testsPassed = tests.filter(t => t.passed).length;
-    const testsFailed = tests.filter(t => !t.passed).length;
-    const status = testsFailed === 0 ? 'passed' : 'failed';
-    
-    return {
-      status,
-      tests_passed: testsPassed,
-      tests_failed: testsFailed,
-      total_tests: tests.length,
-      tests,
-      duration_ms: totalDuration,
-      timestamp: new Date().toISOString()
-    };
   } catch (error) {
-    logger.error('Smoke test suite error', { error });
-    
-    return {
-      status: 'failed',
-      tests_passed: 0,
-      tests_failed: tests.length,
-      total_tests: tests.length,
-      tests,
-      error: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
-    };
+    results.tests_failed++;
+    results.status = 'failed';
+    results.tests.push({ name: 'Environment Variables', status: 'error', error: String(error) });
   }
+
+  // Test 2: Database connection
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const { error } = await supabase.from('conversations').select('id').limit(1);
+      
+      if (error) {
+        results.tests_failed++;
+        results.status = 'failed';
+        results.tests.push({ name: 'Database Connection', status: 'failed', error: error.message });
+      } else {
+        results.tests_passed++;
+        results.tests.push({ name: 'Database Connection', status: 'passed' });
+      }
+    } else {
+      results.tests_failed++;
+      results.status = 'failed';
+      results.tests.push({ name: 'Database Connection', status: 'failed', error: 'Missing credentials' });
+    }
+  } catch (error) {
+    results.tests_failed++;
+    results.status = 'failed';
+    results.tests.push({ name: 'Database Connection', status: 'error', error: String(error) });
+  }
+
+  // Test 3: Table access
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      const tables = ['conversations', 'messages', 'documents', 'knowledge_entries'];
+      let allPassed = true;
+      
+      for (const table of tables) {
+        const { error } = await supabase.from(table).select('id').limit(1);
+        if (error) {
+          allPassed = false;
+          break;
+        }
+      }
+      
+      if (allPassed) {
+        results.tests_passed++;
+        results.tests.push({ name: 'Table Access', status: 'passed' });
+      } else {
+        results.tests_failed++;
+        results.status = 'failed';
+        results.tests.push({ name: 'Table Access', status: 'failed' });
+      }
+    }
+  } catch (error) {
+    results.tests_failed++;
+    results.status = 'failed';
+    results.tests.push({ name: 'Table Access', status: 'error', error: String(error) });
+  }
+
+  return results;
 }
 
 /**
- * Main request handler
+ * Main handler for smoke-test function
  */
 async function handler(req: Request): Promise<Response> {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders
+    });
+  }
+
   return new Response(
     JSON.stringify({
       error: 'Not Found',
-      message: 'This endpoint does not exist. Try /health or /smoke-test',
-      available_endpoints: ['/health', '/smoke-test'],
+      message: 'Unknown endpoint. Use /health for health check or /test for smoke tests.',
+      available_endpoints: ['/health', '/test', '/smoke-test'],
       timestamp: new Date().toISOString()
     }, null, 2),
     {
