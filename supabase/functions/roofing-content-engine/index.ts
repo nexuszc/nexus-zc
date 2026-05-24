@@ -22,7 +22,7 @@ Free forever → https://roofingos.dev
 No credit card. No contract. 5 jobs/month free.
 
 🏠 What is Roofing OS?
-Roofing OS gives your homeowners a live portal with job updates, photos, insurance status, and messaging — so they stop calling you during jobs. Free forever. Portal Pro $69/month for unlimited jobs.
+Roofing OS gives your homeowners a live portal with job updates, photos, insurance status, and messaging — so they stop calling you during jobs. Free forever. Starter $149/month for unlimited jobs.
 
 ✅ Live portal link sent in seconds
 ✅ Insurance claim status visible to homeowner
@@ -43,16 +43,11 @@ const SHORT_SYSTEM = `You write YouTube Shorts scripts for Roofing OS — a free
 TARGET: Insurance restoration roofers. Busy, skeptical, and practical.
 
 PRICING (use exactly):
-- Portal: FREE forever. No credit card. 5 jobs/month.
-- Portal Pro: $69/month. Unlimited jobs.
-- Measurements: $25/report. Bundles: 10 for $199.
-- Aria Internal: $249/month. Team calls.
-- Supplement Package: $99/job. AI generates it.
-- Supplement Full Handling: $329/job. Aria handles everything.
-- CRM: $299/month. Replaces AccuLynx.
-- Growth: $599/month. Storm + leads + content.
-- All In: $2,499/month. 20 jobs included.
-NEVER say $49, free trial, 14-day, or credit card required.
+- Free: FREE forever. No credit card. 5 jobs/month.
+- Starter: $149/month. Unlimited jobs + full portal.
+- Pro: $499/month. Unlimited everything + Aria AI.
+- Custom: $3-5k/month. Enterprise, done-for-you.
+NEVER say $49, $69, $249, $299, free trial, 14-day, or credit card required.
 ALWAYS say free forever, no credit card, 4 minutes.
 
 TOPIC CATEGORIES (pick one for every script):
@@ -97,16 +92,11 @@ const LONG_SYSTEM = `You write short YouTube video scripts for Roofing OS — a 
 TARGET: Insurance restoration roofers. Busy. Skeptical. Practical. 2-50 employees.
 
 PRICING (use exactly):
-- Portal: FREE forever. No credit card. 5 jobs/month.
-- Portal Pro: $69/month. Unlimited jobs.
-- Measurements: $25/report. Bundles: 10 for $199.
-- Aria Internal: $249/month. Team calls.
-- Supplement Package: $99/job. AI generates it.
-- Supplement Full Handling: $329/job. Aria handles everything.
-- CRM: $299/month. Replaces AccuLynx.
-- Growth: $599/month. Storm + leads + content.
-- All In: $2,499/month. 20 jobs included.
-NEVER say $49, free trial, 14-day, or credit card required.
+- Free: FREE forever. No credit card. 5 jobs/month.
+- Starter: $149/month. Unlimited jobs + full portal.
+- Pro: $499/month. Unlimited everything + Aria AI.
+- Custom: $3-5k/month. Enterprise, done-for-you.
+NEVER say $49, $69, $249, $299, free trial, 14-day, or credit card required.
 ALWAYS say free forever, no credit card, 4 minutes.
 
 TOPIC CATEGORIES (pick one for every script):

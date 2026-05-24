@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
 
       return Response.json({
         error: "job_limit_reached",
-        message: `You've used all ${jobLimit} free jobs. Upgrade to Pro ($69/mo) for unlimited jobs.`,
+        message: `You've used all ${jobLimit} free jobs. Upgrade to Starter ($149/mo) for unlimited jobs.`,
         upgrade_url: "https://roofingos.dev/upgrade",
         jobs_used: jobsUsed,
         job_limit: jobLimit,

@@ -239,7 +239,7 @@ function FirstJobExperience({ contractorId, contractorClientId, contractorName }
         const used = acct.jobs_used || 0
         const limit = acct.job_limit || 5
         if (used >= limit) {
-          setError(`You've used all ${limit} free jobs. Upgrade to Pro for unlimited jobs.`)
+          setError(`You've used all ${limit} free jobs. Upgrade to Starter ($149/mo) for unlimited jobs.`)
           setSaving(false)
           window.open(`https://roofingos.dev/upgrade?contractor_id=${contractorId}`, '_blank')
           return
@@ -437,8 +437,8 @@ export default function RoofingDashboard() {
       {isFree && jobs.length >= 4 && !hasAria && (
         <div style={{ margin: '12px 20px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <div>
-            <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: C.success }}>You have {jobs.length} jobs — unlock Pro for unlimited + homeowner portal</p>
-            <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>Portal Pro: branded portal, payment tracking, insurance status for homeowners.</p>
+            <p style={{ margin: '0 0 2px', fontSize: '13px', fontWeight: '600', color: C.success }}>You have {jobs.length} jobs — Starter ($149/mo) unlocks unlimited jobs + homeowner portal</p>
+            <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>Starter: unlimited jobs, branded portal, payment tracking, insurance status for homeowners.</p>
           </div>
           <a href={`https://roofingos.dev/upgrade?contractor_id=${contractor?.id}`} target="_blank" rel="noopener" style={{ flexShrink: 0, background: C.success, color: '#fff', borderRadius: '8px', padding: '7px 14px', fontSize: '12px', fontWeight: '700', textDecoration: 'none', whiteSpace: 'nowrap' }}>
             Upgrade →

@@ -35,13 +35,20 @@ Deno.serve(async (req) => {
 
   if (!contractor) return Response.json({ ok: false, error: 'contractor not found' }, { status: 404 });
 
-  const { data: tier } = await supabase
-    .from('platform_tiers')
-    .select('slug, name, price_cents, included_jobs_per_month, fully_handled_jobs_included, supplements_enabled, permits_enabled')
-    .eq('slug', contractor.plan || 'door')
-    .single();
+  const PLAN_LIMITS: Record<string, { jobs: number | null; team: number | null; supplements: boolean; permits: boolean; name: string }> = {
+    free:    { jobs: 5,    team: 1,    supplements: false, permits: false, name: 'Free' },
+    starter: { jobs: null, team: null, supplements: true,  permits: true,  name: 'Starter' },
+    pro:     { jobs: null, team: null, supplements: true,  permits: true,  name: 'Pro' },
+    custom:  { jobs: null, team: null, supplements: true,  permits: true,  name: 'Custom' },
+    // Legacy slugs
+    door:    { jobs: 5,    team: 1,    supplements: false, permits: false, name: 'Door' },
+    taste:   { jobs: 10,   team: 3,    supplements: true,  permits: false, name: 'Taste' },
+    revenue: { jobs: null, team: null, supplements: true,  permits: true,  name: 'Revenue' },
+    command: { jobs: null, team: null, supplements: true,  permits: true,  name: 'Command' },
+  };
 
-  if (!tier) return Response.json({ ok: false, error: 'tier not found' }, { status: 404 });
+  const plan = (contractor.plan || 'free').toLowerCase();
+  const tier = PLAN_LIMITS[plan] || PLAN_LIMITS['free'];
 
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 
@@ -62,74 +69,59 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'check_job_create') {
-    // Taste tier: cap is on fully-handled jobs (fully_handled_jobs_included)
-    if (tier.slug === 'taste' && tier.fully_handled_jobs_included > 0) {
-      const usedHandled = usage?.fully_handled_jobs_used || 0;
-      if (usedHandled >= tier.fully_handled_jobs_included) {
-        if (contractor.owner_phone) {
-          const firstName = (contractor.owner_name || '').split(' ')[0] || 'there';
-          await sendSMS(
-            contractor.owner_phone,
-            `${firstName} — you've used both fully-handled jobs this month on Roofing OS Taste. ` +
-            `Reply UPGRADE to unlock unlimited AI-handled jobs for $2,499/mo. ` +
-            `Every job we close pays for itself.`
-          );
-        }
-
-        await supabase.from('contractor_upgrade_events').insert({
-          contractor_id,
-          from_tier: tier.slug,
-          to_tier: 'revenue',
-          trigger_type: 'job_limit_reached',
-          upgrade_initiated_at: new Date().toISOString()
-        }).catch(() => {});
-
-        await supabase.from('contractor_monthly_usage')
-          .update({ upgrade_triggered: true, upgrade_triggered_at: new Date().toISOString() })
-          .eq('contractor_id', contractor_id)
-          .eq('month_year', currentMonth);
-
-        return Response.json({
-          ok: true,
-          allowed: false,
-          reason: `Fully-handled job limit reached (${tier.fully_handled_jobs_included} on ${tier.name} plan)`,
-          upgrade_triggered: true
-        });
-      }
-      return Response.json({ ok: true, allowed: true, handled_used: usedHandled, handled_limit: tier.fully_handled_jobs_included });
-    }
-
-    // Other tiers: check included_jobs_per_month (null = unlimited)
-    const jobsAllowed = tier.included_jobs_per_month;
+    const jobsAllowed = tier.jobs;
     const jobsUsed = usage?.total_jobs_created || 0;
     if (jobsAllowed !== null && jobsUsed >= jobsAllowed) {
+      if (contractor.owner_phone) {
+        const firstName = (contractor.owner_name || '').split(' ')[0] || 'there';
+        await sendSMS(
+          contractor.owner_phone,
+          `${firstName} — you've used all ${jobsAllowed} free jobs this month on Roofing OS. ` +
+          `Reply UPGRADE to unlock unlimited jobs — Starter is $149/mo. ` +
+          `roofingos.dev/upgrade`
+        );
+      }
+
+      await supabase.from('contractor_upgrade_events').insert({
+        contractor_id,
+        from_tier: plan,
+        to_tier: 'starter',
+        trigger_type: 'job_limit_reached',
+        upgrade_initiated_at: new Date().toISOString()
+      }).catch(() => {});
+
+      await supabase.from('contractor_monthly_usage')
+        .update({ upgrade_triggered: true, upgrade_triggered_at: new Date().toISOString() })
+        .eq('contractor_id', contractor_id)
+        .eq('month_year', currentMonth);
+
       return Response.json({
         ok: true,
         allowed: false,
-        reason: `Monthly job limit reached (${jobsAllowed} on ${tier.name} plan)`,
-        upgrade_triggered: false
+        reason: `Monthly job limit reached (${jobsAllowed} jobs on ${tier.name} plan). Upgrade at roofingos.dev/upgrade`,
+        upgrade_triggered: true
       });
     }
     return Response.json({ ok: true, allowed: true, jobs_used: jobsUsed, jobs_allowed: jobsAllowed });
   }
 
   if (action === 'check_supplement') {
-    if (!tier.supplements_enabled) {
+    if (!tier.supplements) {
       return Response.json({
         ok: true,
         allowed: false,
-        reason: `Supplements not enabled on ${tier.name}. Upgrade to Taste ($799/mo) or higher.`
+        reason: `Supplements not available on ${tier.name} plan. Upgrade to Starter ($149/mo) or higher.`
       });
     }
     return Response.json({ ok: true, allowed: true });
   }
 
   if (action === 'check_permit') {
-    if (!tier.permits_enabled) {
+    if (!tier.permits) {
       return Response.json({
         ok: true,
         allowed: false,
-        reason: `Permit tracking not enabled on ${tier.name}. Upgrade to Taste ($799/mo) or higher.`
+        reason: `Permit tracking not available on ${tier.name} plan. Upgrade to Starter ($149/mo) or higher.`
       });
     }
     return Response.json({ ok: true, allowed: true });

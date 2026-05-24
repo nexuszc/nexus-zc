@@ -51,1593 +51,290 @@ gtag('config', 'YOUR_GA4_ID');
 -->
 
 <style>
-/* ── RESET & BASE ──────────────────────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
 :root {
-  --bg: #0a0a0f;
-  --surface: #111118;
-  --card: #16161f;
-  --border: #1e1e2e;
-  --blue: #3b82f6;
-  --blue-light: #60a5fa;
-  --cyan: #06b6d4;
-  --cyan-dark: #0891b2;
-  --green: #22c55e;
-  --red: #ef4444;
-  --text: #f8fafc;
-  --muted: #94a3b8;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --bg: #0a0f1a;
+  --primary: #4a9eff;
+  --text: #fff;
+  --muted: #6b7a8d;
+  --border: rgba(255,255,255,0.1);
+  --surface: rgba(255,255,255,0.04);
+  --radius: 16px;
 }
-html { scroll-behavior: smooth; }
+
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, system-ui, sans-serif;
-  line-height: 1.6;
-  overflow-x: hidden;
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #0a0f1a;
+  color: #fff;
 }
 
-/* ── SCROLL PROGRESS ───────────────────────────────────────────────────────── */
-#scroll-progress {
-  position: fixed;
-  top: 0; left: 0;
-  height: 2px;
-  width: 0%;
-  background: linear-gradient(90deg, var(--cyan), #818cf8);
-  z-index: 10000;
-  transition: width 0.1s linear;
-  will-change: width;
-}
+a { transition: all 0.15s ease; }
 
-/* ── EXIT INTENT ───────────────────────────────────────────────────────────── */
-#exit-intent {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  background: rgba(6, 182, 212, 0.08);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(6, 182, 212, 0.3);
-  padding: 14px 24px;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  flex-wrap: wrap;
-  transform: translateY(-110%);
-  transition: transform 0.35s var(--ease-out);
-}
-#exit-intent.visible { transform: translateY(0); }
-#exit-intent p { font-size: 14px; font-weight: 600; color: var(--text); }
-#exit-intent a {
-  background: var(--cyan);
-  color: white;
-  text-decoration: none;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-#exit-dismiss {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 8px;
-  line-height: 1;
-}
-#exit-dismiss:hover { color: var(--text); }
-
-/* ── NAV ───────────────────────────────────────────────────────────────────── */
+/* NAV */
 nav {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 100;
-  padding: 14px 24px;
-  background: rgba(10,10,15,0.7);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: 64px; padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(10,15,26,0.8);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(30,30,46,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: background 0.3s ease, border-color 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease;
-}
-nav.scrolled {
-  background: rgba(10,10,15,0.97);
-  backdrop-filter: blur(24px);
-  border-bottom-color: var(--border);
-  box-shadow: 0 4px 32px rgba(0,0,0,0.4);
-}
-.logo { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
-.logo em { color: var(--cyan); font-style: normal; }
-.nav-cta {
-  background: var(--cyan);
-  color: white;
-  text-decoration: none;
-  padding: 9px 18px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-  animation: ctaPulse 3s ease infinite;
-}
-.nav-cta:hover {
-  background: var(--cyan-dark);
-  box-shadow: 0 0 20px rgba(6,182,212,0.5);
-  transform: translateY(-1px);
-  animation: none;
-}
-.nav-audit {
-  color: var(--cyan);
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  opacity: 0.85;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  transition: opacity 0.15s;
-}
-.nav-audit:hover { opacity: 1; }
-@keyframes ctaPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(6,182,212,0); }
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 
-/* ── HERO ──────────────────────────────────────────────────────────────────── */
-.hero-wrap {
-  position: relative;
-  min-height: 100vh;
-  overflow: hidden;
-  background: #0a0a0f;
-}
-/* Animated gradient overlay */
-.hero-gradient {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(6,182,212,0.07) 0%, transparent 60%),
-              radial-gradient(ellipse 60% 40% at 100% 50%, rgba(59,130,246,0.05) 0%, transparent 50%),
-              radial-gradient(ellipse 50% 50% at 0% 80%, rgba(6,182,212,0.04) 0%, transparent 50%);
-  animation: gradientPulse 12s ease infinite alternate;
-  pointer-events: none;
-}
-@keyframes gradientPulse {
-  0%   { opacity: 0.7; transform: scale(1); }
-  100% { opacity: 1;   transform: scale(1.05); }
-}
-/* Particles canvas */
-#particles { position: absolute; inset: 0; pointer-events: none; opacity: 0.6; }
-
-.hero {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  align-items: center;
-  gap: 60px;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 120px 24px 80px;
-}
-
-/* ── HERO COPY ANIMATIONS ──────────────────────────────────────────────────── */
-.hero-badge {
-  display: inline-block;
-  background: rgba(6,182,212,0.1);
-  border: 1px solid rgba(6,182,212,0.3);
-  color: var(--cyan);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 5px 14px;
-  border-radius: 100px;
+/* HERO HEADLINE */
+.hero-headline {
+  font-size: 64px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+  letter-spacing: -2px;
   margin-bottom: 20px;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: heroFadeUp 0.5s var(--ease-out) 0.1s forwards;
-}
-.hero-copy h1 {
-  font-size: clamp(36px, 5vw, 56px);
-  font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  margin-bottom: 24px;
-}
-.hero-copy h1 em { font-style: normal; color: var(--cyan); }
-/* Individual word spans — set by JS */
-.hero-word {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.4s ease, transform 0.4s ease;
-}
-.hero-word.revealed { opacity: 1; transform: translateY(0); }
-.hero-copy p {
-  color: var(--muted);
-  font-size: 17px;
-  line-height: 1.7;
-  margin-bottom: 32px;
-  max-width: 480px;
-  opacity: 0;
-  transform: translateY(16px);
-  animation: heroFadeUp 0.5s var(--ease-out) 0.7s forwards;
-}
-.hero-cta-wrap {
-  opacity: 0;
-  transform: translateY(16px);
-  animation: heroFadeUp 0.5s var(--ease-out) 0.9s forwards;
-}
-@keyframes heroFadeUp {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── CTA BUTTON ────────────────────────────────────────────────────────────── */
-.hero-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--cyan);
-  color: white;
-  text-decoration: none;
-  padding: 18px 36px;
-  border-radius: 12px;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  box-shadow: 0 8px 30px rgba(6,182,212,0.35);
-  min-height: 44px;
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), background 0.2s;
-}
-.hero-cta::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.hero-cta:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 0 0 3px rgba(6,182,212,0.25), 0 16px 48px rgba(6,182,212,0.5);
-}
-.hero-cta:hover::after { opacity: 1; }
-.hero-cta:active { transform: scale(0.97); transition-duration: 0.08s; }
-
-.hero-sub-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
-
-/* ── SOCIAL PROOF BAR ──────────────────────────────────────────────────────── */
-.social-proof-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 20px;
-  flex-wrap: wrap;
-}
-.sp-stars { color: #f59e0b; font-size: 15px; letter-spacing: 1px; }
-.sp-text { color: var(--muted); font-size: 13px; }
-.sp-text strong { color: var(--text); }
-.sp-avatars { display: flex; }
-.sp-avatar {
-  width: 26px; height: 26px;
-  border-radius: 50%;
-  border: 2px solid var(--bg);
-  margin-left: -6px;
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-.sp-avatar:first-child { margin-left: 0; }
-.av1 { background: linear-gradient(135deg,#06b6d4,#0891b2); }
-.av2 { background: linear-gradient(135deg,#8b5cf6,#6d28d9); }
-.av3 { background: linear-gradient(135deg,#f59e0b,#d97706); }
-.av4 { background: linear-gradient(135deg,#22c55e,#16a34a); }
-
-/* ── PHONE MOCKUP — FLOATING ───────────────────────────────────────────────── */
-.phone-wrap {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  opacity: 0;
-  transform: translateY(32px);
-  animation: heroFadeUp 0.7s var(--ease-out) 0.5s forwards;
-}
-.phone-float-container {
-  animation: phoneFloat 5s ease-in-out infinite;
-  filter: drop-shadow(0 40px 60px rgba(0,0,0,0.8)) drop-shadow(0 0 30px rgba(6,182,212,0.12));
-}
-@keyframes phoneFloat {
-  0%, 100% { transform: translateY(0) rotate(-0.5deg); }
-  50%       { transform: translateY(-12px) rotate(0.5deg); }
-}
-.phone {
-  width: 272px; height: 552px;
-  background: #0d0d14;
-  border: 2px solid #2a2a3a;
-  border-radius: 44px;
-  overflow: hidden;
-  position: relative;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-}
-.phone::before {
-  content: '';
-  position: absolute;
-  top: 12px; left: 50%;
-  transform: translateX(-50%);
-  width: 100px; height: 28px;
-  background: #0d0d14;
-  border-radius: 20px;
-  z-index: 10;
-  border: 1.5px solid #2a2a3a;
-}
-.phone::after {
-  content: '';
-  position: absolute;
-  top: 22px; left: 50%;
-  transform: translateX(-50%);
-  width: 10px; height: 10px;
-  background: #1a1a2a;
-  border-radius: 50%;
-  z-index: 11;
-}
-.phone-side-r  { position: absolute; right: -3px; top: 120px; width: 3px; height: 60px; background: #2a2a3a; border-radius: 0 3px 3px 0; }
-.phone-side-l1 { position: absolute; left: -3px; top: 100px; width: 3px; height: 36px; background: #2a2a3a; border-radius: 3px 0 0 3px; }
-.phone-side-l2 { position: absolute; left: -3px; top: 148px; width: 3px; height: 36px; background: #2a2a3a; border-radius: 3px 0 0 3px; }
-.phone-screen { width: 100%; height: 100%; overflow: hidden; padding-top: 44px; }
-.portal-scroll { animation: portalScroll 14s ease-in-out infinite; }
-.portal-scroll:hover, .portal-scroll.paused { animation-play-state: paused; }
-@keyframes portalScroll {
-  0%, 8%    { transform: translateY(0); }
-  40%, 60%  { transform: translateY(-240px); }
-  92%, 100% { transform: translateY(0); }
-}
-
-/* Portal content */
-.portal-header { background: linear-gradient(to bottom, #0f1f3d, #0a1628); padding: 12px 14px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
-.portal-name { font-size: 14px; font-weight: 700; color: white; display: flex; align-items: center; gap: 6px; }
-.live-dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; animation: blink 2s infinite; flex-shrink: 0; }
-@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-.portal-addr { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; }
-.portal-status-badge { display: inline-block; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.4); color: var(--green); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 100px; margin-top: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-.portal-body { padding: 10px 12px; background: #0a0a13; }
-.aria-msg { background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.25); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; }
-.aria-msg-header { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
-.aria-icon { width: 16px; height: 16px; background: var(--cyan); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 7px; flex-shrink: 0; color: white; font-weight: 700; }
-.aria-msg-name { font-size: 9px; font-weight: 700; color: var(--cyan); }
-.aria-msg-text { font-size: 10px; color: rgba(255,255,255,0.8); line-height: 1.4; }
-.act-item { display: flex; gap: 7px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: flex-start; }
-.act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); margin-top: 3px; flex-shrink: 0; }
-.act-text { font-size: 10px; color: rgba(255,255,255,0.65); line-height: 1.4; }
-.act-text strong { color: rgba(255,255,255,0.95); display: block; }
-.ins-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin: 10px 0; }
-.ins-label { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-.ins-bar-wrap { background: rgba(255,255,255,0.07); border-radius: 4px; height: 6px; margin-bottom: 8px; overflow: hidden; }
-.ins-bar-fill { height: 100%; background: var(--green); border-radius: 4px; width: 78%; }
-.ins-row { display: flex; justify-content: space-between; }
-.ins-amount { font-size: 10px; }
-.ins-amount strong { font-weight: 700; color: var(--green); }
-.ins-amount span { color: var(--muted); display: block; font-size: 9px; }
-.ins-amount.pending strong { color: #f59e0b; }
-.photo-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; margin: 10px 0; }
-.photo-thumb { aspect-ratio: 1; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.p1 { background: linear-gradient(135deg, #1a3a5c, #0f2040); }
-.p2 { background: linear-gradient(135deg, #2d1b00, #4a2e00); }
-.p3 { background: linear-gradient(135deg, #1a2a1a, #0d1a0d); }
-.portal-aria-btn { width: 100%; background: rgba(6,182,212,0.1); border: 1px solid rgba(6,182,212,0.28); border-radius: 8px; padding: 8px 12px; color: var(--cyan); font-size: 11px; font-weight: 600; text-align: center; margin-top: 10px; }
-
-/* ── SCROLL-TRIGGERED ANIMATIONS ───────────────────────────────────────────── */
-.reveal {
-  opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 0.65s var(--ease-out), transform 0.65s var(--ease-out);
-}
-.reveal.visible { opacity: 1; transform: translateY(0); }
-
-.reveal-left {
-  opacity: 0;
-  transform: translateX(-40px);
-  transition: opacity 0.65s var(--ease-out), transform 0.65s var(--ease-out);
-}
-.reveal-left.visible { opacity: 1; transform: translateX(0); }
-
-.reveal-right {
-  opacity: 0;
-  transform: translateX(40px);
-  transition: opacity 0.65s var(--ease-out), transform 0.65s var(--ease-out);
-}
-.reveal-right.visible { opacity: 1; transform: translateX(0); }
-
-/* Stagger delays */
-.d1 { transition-delay: 0.05s; }
-.d2 { transition-delay: 0.12s; }
-.d3 { transition-delay: 0.19s; }
-.d4 { transition-delay: 0.26s; }
-.d5 { transition-delay: 0.33s; }
-.d6 { transition-delay: 0.40s; }
-
-/* ── SECTIONS ──────────────────────────────────────────────────────────────── */
-section { padding: 80px 24px; }
-.section-inner { max-width: 1000px; margin: 0 auto; }
-.section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--cyan); margin-bottom: 12px; }
-.section-title { font-size: clamp(28px, 4.5vw, 44px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 16px; }
-.section-sub { color: var(--muted); font-size: 17px; max-width: 520px; line-height: 1.6; }
-.cyan { color: var(--cyan); }
-
-/* ── PAIN CARDS ────────────────────────────────────────────────────────────── */
-.pain-card {
-  background: #16161f;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 16px;
-  border-left: 3px solid var(--red);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.pain-card:hover { transform: translateX(4px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-.pain-card p { color: var(--text); font-size: 16px; margin: 0; line-height: 1.6; }
-
-/* ── HOW IT WORKS ──────────────────────────────────────────────────────────── */
-.step { display: flex; gap: 20px; margin-bottom: 32px; align-items: flex-start; }
-.step-num {
-  background: var(--cyan);
-  color: white;
-  font-weight: 800;
-  font-size: 18px;
-  width: 44px; height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 0 20px rgba(6,182,212,0.3);
-}
-.step h3 { color: var(--text); font-size: 18px; font-weight: 700; margin: 0 0 8px; }
-.step p { color: var(--muted); font-size: 15px; margin: 0; line-height: 1.6; }
-
-/* ── SARAH PORTAL ──────────────────────────────────────────────────────────── */
-.sarah-portal { background: #1e293b; border-radius: 16px; overflow: hidden; margin-bottom: 32px; border: 1px solid rgba(255,255,255,0.06); }
-.sarah-portal-header { padding: 16px 20px; border-bottom: 1px solid #334155; }
-.sarah-portal-header .name { font-weight: 700; color: white; font-size: 16px; }
-.sarah-portal-header .addr { color: #64748b; font-size: 14px; }
-.sarah-portal-body { padding: 20px; }
-.sarah-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.sarah-row:last-child { margin-bottom: 0; }
-.sarah-check { color: var(--green); font-size: 20px; flex-shrink: 0; }
-.sarah-arrow { color: var(--cyan); font-size: 20px; flex-shrink: 0; }
-.sarah-row .title { color: white; font-size: 14px; font-weight: 600; }
-.sarah-row .sub { color: #64748b; font-size: 12px; margin-top: 2px; }
-
-/* ── FOUNDER QUOTE ─────────────────────────────────────────────────────────── */
-.founder-card {
-  background: #1e293b;
-  border-radius: 16px;
-  padding: 36px;
-  border-left: 4px solid var(--cyan);
-  position: relative;
-  overflow: hidden;
-}
-.founder-card::before {
-  content: '"';
-  position: absolute;
-  top: -20px; right: 24px;
-  font-size: 140px;
-  font-weight: 900;
-  color: rgba(6,182,212,0.06);
-  line-height: 1;
-  pointer-events: none;
-}
-.founder-card blockquote { color: white; font-size: 17px; line-height: 1.8; margin: 0 0 24px; }
-.founder-meta { display: flex; align-items: center; gap: 12px; }
-.founder-avatar { width: 48px; height: 48px; background: linear-gradient(135deg, var(--cyan), var(--cyan-dark)); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; font-size: 18px; flex-shrink: 0; box-shadow: 0 4px 16px rgba(6,182,212,0.4); }
-.founder-name { color: white; font-weight: 700; font-size: 15px; }
-.founder-title { color: #64748b; font-size: 13px; }
-
-/* ── COMPARISON TABLE ──────────────────────────────────────────────────────── */
-.comparison {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  overflow: hidden;
-  margin-top: 48px;
-  max-width: 780px;
-  margin-left: auto;
-  margin-right: auto;
-}
-.comp-side { padding: 32px 28px; }
-.comp-side.bad { border-right: 1px solid var(--border); }
-.comp-head { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-.comp-head.red { color: var(--red); }
-.comp-head.green { color: var(--green); }
-.comp-item { font-size: 14px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--muted); display: flex; align-items: flex-start; gap: 8px; transition: color 0.2s, transform 0.2s; }
-.comp-item:last-child { border-bottom: none; }
-.comp-item:hover { transform: translateX(3px); }
-.comp-item.bad::before  { content: '✗'; color: var(--red);   flex-shrink: 0; font-weight: 700; }
-.comp-item.good::before { content: '✓'; color: var(--green); flex-shrink: 0; font-weight: 700; }
-.comp-item.good { color: var(--text); }
-
-/* ── FAQ ───────────────────────────────────────────────────────────────────── */
-.faq-wrap { max-width: 680px; margin: 0 auto; }
-details { border-bottom: 1px solid var(--border); }
-details summary {
-  padding: 20px 0;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  transition: color 0.2s;
-}
-details summary:hover { color: var(--cyan); }
-details summary::-webkit-details-marker { display: none; }
-details summary::after { content: '+'; font-size: 22px; font-weight: 300; color: var(--muted); flex-shrink: 0; transition: transform 0.3s ease, color 0.2s; }
-details[open] summary::after { content: '−'; transform: rotate(180deg); color: var(--cyan); }
-details p { color: var(--muted); font-size: 15px; line-height: 1.7; padding-bottom: 20px; }
-
-/* ── BLOG ──────────────────────────────────────────────────────────────────── */
-.blog-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 32px; }
-.blog-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-  text-decoration: none;
-  display: block;
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-.blog-card:hover { border-color: var(--cyan); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-.blog-card-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin-bottom: 8px; }
-.blog-card-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.4; }
-.blog-card-date { font-size: 12px; color: var(--muted); margin-top: 8px; }
-
-/* ── FOOTER ────────────────────────────────────────────────────────────────── */
-footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
-footer a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
-footer a:hover { color: var(--text); }
-
-/* ── PHONE NUMBER SHAKE ────────────────────────────────────────────────────── */
-.phone-link { transition: color 0.2s; }
-.phone-link:hover { color: var(--cyan) !important; animation: phoneShake 0.5s ease; }
-@keyframes phoneShake {
-  0%, 100% { transform: translateX(0); }
-  20%       { transform: translateX(-3px) rotate(-2deg); }
-  40%       { transform: translateX(3px) rotate(2deg); }
-  60%       { transform: translateX(-2px) rotate(-1deg); }
-  80%       { transform: translateX(2px) rotate(1deg); }
-}
-
-/* ── CANCEL TABLE ──────────────────────────────────────────────────────────── */
-.cancel-table { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; margin: 32px 0; }
-.cancel-row {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(30,30,46,0.7);
-  align-items: center;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-.cancel-row:not(.cancel-header):not(.cancel-total):hover { background: rgba(255,255,255,0.02); }
-.cancel-row:last-child { border-bottom: none; }
-.cancel-header { background: #111827; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-.cancel-total { background: rgba(6,182,212,0.05); font-weight: 700; }
-.old-price { color: #f87171; font-weight: 700; }
-.new-price { color: var(--green); font-weight: 700; }
-.new-price.free { color: var(--cyan); }
-.bold { font-weight: 900; }
-
-/* ── COMPANYCAM ────────────────────────────────────────────────────────────── */
-.cc-steps { display: flex; flex-direction: column; gap: 24px; margin: 32px 0; }
-.cc-step { display: flex; gap: 20px; align-items: flex-start; }
-.cc-step .step-num { background: var(--cyan); color: white; font-weight: 800; font-size: 16px; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 16px rgba(6,182,212,0.3); }
-.cc-step strong { font-size: 16px; font-weight: 700; display: block; margin-bottom: 4px; }
-.cc-step p { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 0; }
-.cc-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0; }
-.cc-col { border-radius: 16px; overflow: hidden; }
-.cc-lose { background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.2); }
-.cc-win { background: rgba(6,182,212,0.05); border: 1px solid rgba(6,182,212,0.25); }
-.col-head { padding: 14px 20px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
-.cc-lose .col-head { background: rgba(239,68,68,0.1); color: #f87171; }
-.cc-win .col-head { background: rgba(6,182,212,0.1); color: var(--cyan); }
-.cc-item { padding: 10px 20px; font-size: 13px; color: var(--muted); border-top: 1px solid rgba(255,255,255,0.04); line-height: 1.4; }
-
-/* ── FEATURES GRID ─────────────────────────────────────────────────────────── */
-.features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 32px 0; }
-.feature {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), border-color 0.25s;
-}
-.feature:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(6,182,212,0.15);
-  border-color: rgba(6,182,212,0.25);
-}
-.feat-icon { font-size: 24px; display: block; margin-bottom: 10px; }
-.feature strong { font-size: 15px; font-weight: 700; display: block; margin-bottom: 6px; }
-.feature p { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
-.demo-link-box {
-  display: block;
-  background: rgba(6,182,212,0.08);
-  border: 1px solid rgba(6,182,212,0.3);
-  border-radius: 12px;
-  padding: 20px 24px;
-  text-decoration: none;
-  color: var(--cyan);
-  font-size: 16px;
-  font-weight: 700;
-  margin-top: 32px;
-  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
-}
-.demo-link-box:hover { background: rgba(6,182,212,0.13); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-.demo-link-box span { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
-
-/* ── STATS ─────────────────────────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 40px; }
-.stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px 24px;
-  text-align: center;
-  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), border-color 0.25s;
-  position: relative;
-  overflow: hidden;
-}
-.stat::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 0%, rgba(6,182,212,0.06), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-.stat:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.4); border-color: rgba(6,182,212,0.2); }
-.stat:hover::before { opacity: 1; }
-.stat-num { font-size: 42px; font-weight: 900; color: var(--cyan); letter-spacing: -0.03em; line-height: 1; }
-.stat-label { font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
-
-/* ── PRODUCT STACK ─────────────────────────────────────────────────────────── */
-.free-card {
-  background: var(--surface);
-  border: 1.5px solid var(--cyan);
-  border-radius: 20px;
-  padding: 40px;
-  max-width: 700px;
-  margin: 0 auto 48px;
-  box-shadow: 0 0 60px rgba(6,182,212,0.1);
-  position: relative;
-  overflow: hidden;
-}
-.free-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(6,182,212,0.6), transparent);
-}
-.free-badge { display: inline-block; background: rgba(6,182,212,0.15); border: 1px solid rgba(6,182,212,0.4); color: var(--cyan); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 16px; }
-.product-name { font-size: 36px; font-weight: 900; letter-spacing: -0.03em; }
-.product-price { font-size: 52px; font-weight: 900; letter-spacing: -0.04em; color: var(--cyan); margin: 8px 0; }
-.product-features { list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin: 20px 0 28px; border-top: 1px solid var(--border); padding-top: 20px; }
-.product-features li { font-size: 14px; color: var(--text); display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
-.product-features li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
-.cta-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--cyan);
-  color: white;
-  text-decoration: none;
-  padding: 15px 28px;
-  border-radius: 10px;
-  font-size: 16px;
-  font-weight: 800;
-  box-shadow: 0 8px 24px rgba(6,182,212,0.3);
-  min-height: 44px;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-}
-.cta-primary:hover { background: var(--cyan-dark); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(6,182,212,0.4); }
-.cta-primary:active { transform: scale(0.97); }
-.cta-primary.large { padding: 18px 36px; font-size: 18px; }
-.no-card { color: var(--muted); font-size: 13px; margin-top: 10px; }
-.addons-title { text-align: center; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 24px; }
-.addons-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; max-width: 1000px; margin: 0 auto 40px; }
-.addon-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 28px;
-  transition: transform 0.25s var(--ease-out), box-shadow 0.25s var(--ease-out), border-color 0.25s;
-}
-.addon-card:hover { border-color: rgba(6,182,212,0.3); transform: translateY(-5px); box-shadow: 0 16px 40px rgba(0,0,0,0.5); }
-.addon-name { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
-.addon-price { font-size: 28px; font-weight: 900; color: var(--cyan); letter-spacing: -0.03em; }
-.addon-vs { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
-.addon-card p { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
-.addon-card a { color: var(--cyan); font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; }
-.addon-card a:hover { text-decoration: underline; }
-.all-in-card { background: var(--surface); border: 1px solid #f59e0b; border-radius: 20px; padding: 36px; max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 32px; flex-wrap: wrap; box-shadow: 0 0 40px rgba(245,158,11,0.06); }
-.all-in-badge { display: inline-block; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: #f59e0b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 4px 12px; border-radius: 100px; margin-bottom: 8px; }
-.all-in-name { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 8px; }
-.all-in-left p { color: var(--muted); font-size: 14px; line-height: 1.6; max-width: 380px; }
-.all-in-price { font-size: 44px; font-weight: 900; color: #f59e0b; letter-spacing: -0.04em; margin-bottom: 16px; }
-.all-in-right { text-align: center; }
-
-/* ── TRUST / SECURITY BADGES ───────────────────────────────────────────────── */
-.trust-section { text-align: center; padding: 40px 24px; background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.trust-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 20px; }
-.trust-badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-.trust-badge {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-  padding: 10px 16px;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  transition: border-color 0.2s, background 0.2s;
-}
-.trust-badge:hover { border-color: rgba(6,182,212,0.3); background: rgba(6,182,212,0.05); color: var(--text); }
-.trust-badge .icon { font-size: 15px; }
-
-/* ── SIGNUP SECTION ────────────────────────────────────────────────────────── */
-.signup-section { text-align: center; }
-.signup-section h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 900; letter-spacing: -0.03em; margin-bottom: 12px; }
-.signup-section p { color: var(--muted); font-size: 16px; margin-bottom: 28px; }
-.signup-note { font-size: 13px; color: var(--muted); margin-top: 14px; }
-.urgency-note { font-size: 12px; color: #f59e0b; margin-top: 8px; font-weight: 600; }
-.cta-note { color: var(--muted); font-size: 13px; margin-top: 12px; }
-
-/* ── COUNTER ELEMENTS ──────────────────────────────────────────────────────── */
-.counter { font-variant-numeric: tabular-nums; display: inline; }
-
-/* ── RESPONSIVE ────────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .hero { grid-template-columns: 1fr; padding-top: 90px; text-align: center; }
-  .phone-wrap { display: flex; justify-content: center; }
-  .hero-copy p { margin: 0 auto 32px; }
-  .social-proof-bar { justify-content: center; }
-  .blog-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 640px) {
-  .comparison { grid-template-columns: 1fr; }
-  .comp-side.bad { border-right: none; border-bottom: 1px solid var(--border); }
-  .cc-compare { grid-template-columns: 1fr; }
-  .stats-row { grid-template-columns: 1fr; }
+  max-width: 800px;
 }
 @media (max-width: 600px) {
-  .cancel-row { grid-template-columns: 1fr 1fr; }
-  .cancel-row span:nth-child(2) { display: none; }
-  .cancel-header span:nth-child(2) { display: none; }
-  .product-features { grid-template-columns: 1fr; }
-  .all-in-card { flex-direction: column; text-align: center; gap: 20px; padding: 24px 20px; }
-  .all-in-price { font-size: 36px; margin-bottom: 12px; }
-  .all-in-left p { max-width: 100%; }
-  .free-card { padding: 24px 20px; }
-  .product-price { font-size: 40px; }
-  .addons-grid { grid-template-columns: 1fr; }
-  .features-grid { grid-template-columns: 1fr; }
-  section { padding: 60px 20px; }
-  .blog-grid { grid-template-columns: 1fr; }
+  .hero-headline { font-size: 40px; letter-spacing: -1px; }
 }
-@media (max-width: 430px) {
-  .nav-audit { display: none; }
-  .phone-wrap { max-width: 100%; overflow: visible; }
-  .phone { max-width: calc(100vw - 48px); margin: 0 auto; }
-  .hero-cta { padding: 18px 28px; font-size: 17px; width: 100%; }
+
+/* HERO BUTTONS */
+.hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
+.btn-primary {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #4a9eff; color: #fff; text-decoration: none;
+  border-radius: 12px; padding: 0 28px; height: 52px;
+  font-size: 16px; font-weight: 700; transition: all 0.15s ease;
+  white-space: nowrap;
 }
+.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-outline {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: #fff; text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.2); border-radius: 12px;
+  padding: 0 28px; height: 52px; font-size: 16px; font-weight: 600;
+  transition: all 0.15s ease; white-space: nowrap;
+}
+.btn-outline:hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); }
+@media (max-width: 480px) {
+  .hero-btns { flex-direction: column; width: 100%; }
+  .btn-primary, .btn-outline { width: 100%; }
+}
+
+/* PRICING GRID */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+@media (max-width: 900px) {
+  .pricing-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .pricing-grid { grid-template-columns: 1fr; }
+}
+.pricing-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.pricing-card:hover {
+  border-color: #4a9eff;
+  transform: translateY(-2px);
+  background: rgba(74,158,255,0.04);
+}
+.pricing-card-featured {
+  border-color: rgba(74,158,255,0.4);
+  background: rgba(74,158,255,0.06);
+}
+.plan-badge {
+  display: inline-block;
+  background: rgba(74,158,255,0.15);
+  color: #4a9eff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 20px;
+  margin-bottom: 4px;
+  width: fit-content;
+}
+.plan-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7a8d;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.plan-price {
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.plan-period { font-size: 14px; font-weight: 400; color: #6b7a8d; }
+.plan-tagline {
+  font-size: 12px;
+  color: #6b7a8d;
+  margin-bottom: 14px;
+}
+.plan-features {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  margin-bottom: 16px;
+}
+.plan-features li {
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  line-height: 1.4;
+}
+.plan-btn {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; padding: 10px 16px;
+  font-size: 14px; font-weight: 700;
+  text-decoration: none; transition: all 0.15s ease;
+  text-align: center;
+}
+.plan-btn-primary { background: #4a9eff; color: #fff; }
+.plan-btn-primary:hover { filter: brightness(1.1); }
+.plan-btn-outline { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+.plan-btn-outline:hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); }
 </style>
 </head>
 <body>
 
-<!-- Scroll progress bar -->
-<div id="scroll-progress"></div>
-
-<!-- Exit intent banner (desktop only) -->
-<div id="exit-intent">
-  <p>Wait — Roofing OS is free forever. No credit card. Takes 4 minutes.</p>
-  <a href="https://roofingos.dev/signup">Get your free portal →</a>
-  <button id="exit-dismiss" aria-label="Dismiss">×</button>
-</div>
-
 <!-- NAV -->
-<nav id="main-nav">
-  <a href="/" class="logo">Roofing<em>OS</em></a>
-  <a href="/audit" class="nav-audit">Free supplement audit →</a>
-  <a href="https://roofingos.dev/signup" class="nav-cta">Free portal →</a>
+<nav>
+  <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.5px">Roofing<span style="color:#4a9eff">OS</span></span>
+  <a href="https://app.nexuszc.com/roofing/login" style="color:#6b7a8d;text-decoration:none;font-size:14px;font-weight:500">Sign in</a>
 </nav>
 
-<!-- ══ HERO ══════════════════════════════════════════════════════════════════ -->
-<div class="hero-wrap">
-  <div class="hero-gradient"></div>
-  <canvas id="particles"></canvas>
+<!-- ABOVE FOLD HERO -->
+<section style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 40px;background:#0a0f1a;">
 
-  <div class="hero">
-    <!-- COPY -->
-    <div class="hero-copy">
-      <div class="hero-badge">FREE FOREVER FOR ROOFING CONTRACTORS</div>
-      <h1 id="hero-h1">Never pay for photo storage again.<br><em>Your homeowners see every photo in real time.</em></h1>
-      <p>Roofing OS replaces CompanyCam — free. Every photo your crew takes appears in your homeowner's live portal automatically. No extra app. No extra cost. No bill.</p>
-
-      <div class="hero-cta-wrap">
-        <a href="https://roofingos.dev/signup" class="hero-cta">Get your free portal →</a>
-        <div class="hero-sub-note" style="margin-top:10px;">Free forever · No credit card · Setup in 4 minutes</div>
-        <div class="hero-sub-note" style="margin-top:6px;font-size:12px;opacity:0.6;color:#f59e0b;font-weight:600;">Free forever — but paid features are coming. Lock in free access now.</div>
-
-        <!-- Social proof bar -->
-        <div class="social-proof-bar">
-          <div class="sp-avatars">
-            <div class="sp-avatar av1">R</div>
-            <div class="sp-avatar av2">M</div>
-            <div class="sp-avatar av3">K</div>
-            <div class="sp-avatar av4">J</div>
-          </div>
-          <div class="sp-stars">★★★★★</div>
-          <div class="sp-text">Joined by <strong>1,000+ roofing contractors</strong></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PHONE -->
-    <div class="phone-wrap">
-      <div class="phone-float-container">
-        <div class="phone">
-          <div class="phone-side-r"></div>
-          <div class="phone-side-l1"></div>
-          <div class="phone-side-l2"></div>
-          <div class="phone-screen">
-            <div class="portal-scroll" id="portalScroll">
-              <div class="portal-header">
-                <div class="portal-name">
-                  <div class="live-dot"></div>
-                  Sarah Johnson
-                </div>
-                <div class="portal-addr">4821 Timberline Dr, Aurora CO</div>
-                <div class="portal-status-badge">Installation in Progress</div>
-              </div>
-              <div class="portal-body">
-                <div class="aria-msg">
-                  <div class="aria-msg-header">
-                    <div class="aria-icon">✦</div>
-                    <div class="aria-msg-name">Aria · 9:14am</div>
-                  </div>
-                  <div class="aria-msg-text">Good morning, Sarah — your crew arrived at 7:15am and tear-off is complete. You're on track for a new roof by 4pm today.</div>
-                </div>
-                <div class="act-item">
-                  <div class="act-dot"></div>
-                  <div class="act-text"><strong>Crew on site</strong>Tear-off complete. Decking in excellent shape.</div>
-                </div>
-                <div class="act-item">
-                  <div class="act-dot" style="background:#f59e0b;"></div>
-                  <div class="act-text"><strong>Supplement submitted</strong>$3,847 requested from Allstate. Pending.</div>
-                </div>
-                <div class="act-item">
-                  <div class="act-dot" style="background:var(--green);"></div>
-                  <div class="act-text"><strong>Permit approved</strong>City of Aurora #AUR-2026-04471</div>
-                </div>
-                <div class="act-item">
-                  <div class="act-dot"></div>
-                  <div class="act-text"><strong>Materials delivered</strong>GAF Timberline HDZ Charcoal confirmed.</div>
-                </div>
-                <div class="ins-card">
-                  <div class="ins-label">Allstate Claim · 78% settled</div>
-                  <div class="ins-bar-wrap"><div class="ins-bar-fill"></div></div>
-                  <div class="ins-row">
-                    <div class="ins-amount"><strong>$22,400</strong><span>Approved</span></div>
-                    <div class="ins-amount pending"><strong>$3,847</strong><span>Requested</span></div>
-                  </div>
-                </div>
-                <div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:8px 0 5px;">Today's Photos</div>
-                <div class="photo-grid">
-                  <div class="photo-thumb p1">🏠</div>
-                  <div class="photo-thumb p2">🔨</div>
-                  <div class="photo-thumb p3">📋</div>
-                </div>
-                <div class="portal-aria-btn">✦ Message Aria</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+  <!-- Badge -->
+  <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(74,158,255,0.12);border:1px solid rgba(74,158,255,0.25);border-radius:20px;padding:6px 14px;margin-bottom:24px">
+    <span style="font-size:14px">&#9889;</span>
+    <span style="font-size:12px;font-weight:600;color:#4a9eff;letter-spacing:0.03em">Free forever &middot; No credit card</span>
   </div>
-</div>
 
-<!-- ══ CANCEL TABLE ═══════════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="max-width:800px;margin:0 auto;">
-    <div class="section-label reveal">Cancel your other tools</div>
-    <h2 class="section-title reveal d1">You're already paying for tools Roofing OS replaces.</h2>
-    <p class="reveal d2" style="color:var(--muted);font-size:16px;margin:0 0 32px;line-height:1.6;">Most contractors save $800–2,000/month switching to Roofing OS.</p>
+  <!-- Headline -->
+  <h1 class="hero-headline">CompanyCam costs $49/month.<br>We do more. Free.</h1>
 
-    <div class="cancel-table">
-      <div class="cancel-row cancel-header">
-        <span>Tool</span>
-        <span>What you pay</span>
-        <span>Roofing OS</span>
-      </div>
-      <div class="cancel-row reveal d1"><span>📸 CompanyCam</span><span class="old-price">$79–199/mo</span><span class="new-price free">FREE</span></div>
-      <div class="cancel-row reveal d2"><span>📋 AccuLynx</span><span class="old-price">$550–1,200/mo</span><span class="new-price">CRM $299/mo</span></div>
-      <div class="cancel-row reveal d3"><span>📋 JobNimbus</span><span class="old-price">$619+/mo</span><span class="new-price">CRM $299/mo</span></div>
-      <div class="cancel-row reveal d4"><span>📐 EagleView</span><span class="old-price">$15–87/report</span><span class="new-price">$25/report</span></div>
-      <div class="cancel-row reveal d5"><span>📞 Answering service</span><span class="old-price">$200–500/mo</span><span class="new-price">Aria $249/mo</span></div>
-      <div class="cancel-row reveal d6"><span>📣 Marketing agency</span><span class="old-price">$2–5k/mo</span><span class="new-price">Growth $599/mo</span></div>
-      <div class="cancel-row cancel-total reveal" style="transition-delay:0.45s;">
-        <span>Average monthly savings</span>
-        <span></span>
-        <span class="cyan bold">$800–2,000/mo</span>
-      </div>
-    </div>
+  <!-- Subhead -->
+  <p style="font-size:18px;color:#6b7a8d;max-width:500px;margin:0 auto 40px;line-height:1.6">
+    Homeowner portal. AI supplements. Storm leads. CRM. Free to start.
+  </p>
+
+  <!-- Buttons -->
+  <div class="hero-btns">
+    <a href="/signup" class="btn-primary">Start free &rarr;</a>
+    <a href="/portal/DEMO2026ROOFINGOS" class="btn-outline">Watch demo &rarr;</a>
   </div>
-</section>
 
-<!-- ══ COMPANYCAM REPLACEMENT ═════════════════════════════════════════════════ -->
-<section>
-  <div style="max-width:800px;margin:0 auto;">
-    <div class="section-label reveal">CompanyCam replacement</div>
-    <h2 class="section-title reveal d1">Already using CompanyCam? <span class="cyan">Connect it. Import everything. Cancel it.</span></h2>
+  <!-- Pricing Cards -->
+  <div class="pricing-grid">
 
-    <div class="cc-steps">
-      <div class="cc-step reveal-left d1">
-        <div class="step-num">1</div>
-        <div>
-          <strong>Connect your account</strong>
-          <p>Paste your CompanyCam API key. 30 seconds. All your projects import automatically.</p>
-        </div>
-      </div>
-      <div class="cc-step reveal-left d2">
-        <div class="step-num">2</div>
-        <div>
-          <strong>Every job gets a homeowner portal</strong>
-          <p>All existing projects and photos imported in minutes. Active jobs get homeowner portals created instantly.</p>
-        </div>
-      </div>
-      <div class="cc-step reveal-left d3">
-        <div class="step-num">3</div>
-        <div>
-          <strong>Cancel CompanyCam</strong>
-          <p>Your photos stay in Roofing OS forever. New crew photos sync from any phone. Save $79–199/month.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="cc-compare">
-      <div class="cc-col cc-lose reveal-left">
-        <div class="col-head">CompanyCam</div>
-        <div class="cc-item">✗ Photos stay internal</div>
-        <div class="cc-item">✗ Homeowner sees nothing</div>
-        <div class="cc-item">✗ No portal, no AI, no supplements</div>
-        <div class="cc-item">✗ $79–199/month minimum</div>
-        <div class="cc-item">✗ 3-user minimum lock-in</div>
-        <div class="cc-item">✗ Just photo storage. Nothing else.</div>
-      </div>
-      <div class="cc-col cc-win reveal-right">
-        <div class="col-head">Roofing OS</div>
-        <div class="cc-item">✓ Photos go to homeowner portal instantly</div>
-        <div class="cc-item">✓ Homeowner tracks their own job</div>
-        <div class="cc-item">✓ Aria, supplements, CRM — all here</div>
-        <div class="cc-item">✓ Free forever, no seat minimums</div>
-        <div class="cc-item">✓ Unlimited team on free plan</div>
-        <div class="cc-item">✓ Photo storage plus everything else</div>
-      </div>
-    </div>
-
-    <div class="reveal" style="text-align:center;margin-top:32px;">
-      <a href="https://roofingos.dev/signup" class="hero-cta">Start free — connect CompanyCam →</a>
-      <p class="cta-note">No credit card. Cancel CompanyCam this month.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══ PORTAL EXPLANATION ══════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="max-width:1000px;margin:0 auto;">
-    <div class="section-label reveal">What homeowners see</div>
-    <h2 class="section-title reveal d1">Every homeowner gets a live portal. <span class="cyan">They stop calling because they don't need to.</span></h2>
-
-    <div class="features-grid">
-      <div class="feature reveal d1">
-        <span class="feat-icon">📸</span>
-        <strong>Real-time crew photos</strong>
-        <p>Your crew uploads from any phone. Homeowner sees it instantly.</p>
-      </div>
-      <div class="feature reveal d2">
-        <span class="feat-icon">✅</span>
-        <strong>Insurance status in plain English</strong>
-        <p>Approved amounts, pending items, deductible — no jargon.</p>
-      </div>
-      <div class="feature reveal d3">
-        <span class="feat-icon">🚛</span>
-        <strong>Crew schedule and arrival time</strong>
-        <p>They know when crew arrives. No need to call. No need to be home.</p>
-      </div>
-      <div class="feature reveal d4">
-        <span class="feat-icon">💰</span>
-        <strong>Supplement updates</strong>
-        <p>They see when you submit and when the carrier approves.</p>
-      </div>
-      <div class="feature reveal d5">
-        <span class="feat-icon">💬</span>
-        <strong>Aria chat — 24/7 (Portal Pro)</strong>
-        <p>Homeowners ask at midnight. Aria answers from the job data.</p>
-      </div>
-      <div class="feature reveal d6">
-        <span class="feat-icon">📄</span>
-        <strong>Documents and warranties</strong>
-        <p>Contracts, permits, warranty docs. E-sign in the portal.</p>
-      </div>
-    </div>
-
-    <a href="https://roofingos.dev/portal/demo" class="demo-link-box reveal">
-      See a real homeowner portal → roofingos.dev/portal/demo
-      <span>Live demo · Real job · No signup required</span>
-    </a>
-  </div>
-</section>
-
-<!-- ══ STORM / STATS ══════════════════════════════════════════════════════════ -->
-<section>
-  <div style="max-width:800px;margin:0 auto;">
-    <div class="section-label reveal">Storm season</div>
-    <h2 class="section-title reveal d1">When the storm hits, your salespeople should be selling. <span class="cyan">Not answering homeowner calls.</span></h2>
-    <p class="reveal d2" style="color:var(--muted);font-size:16px;margin:0 0 16px;line-height:1.7;">During storm season every interrupted sales call is a deal that doesn't close. Every homeowner on Roofing OS tracks their own job. Your team never stops to explain what's happening on a job they already closed.</p>
-
-    <div class="stats-row">
-      <div class="stat reveal d1">
-        <div class="stat-num" data-target="3" data-suffix="hrs"><span class="counter">0</span>hrs</div>
-        <div class="stat-label">Average daily homeowner calls per salesperson during storm season</div>
-      </div>
-      <div class="stat reveal d2">
-        <div class="stat-num"><span style="color:var(--cyan)">$0</span></div>
-        <div class="stat-label">Cost to give every homeowner a live portal</div>
-      </div>
-      <div class="stat reveal d3">
-        <div class="stat-num" data-target="4200" data-prefix="$" data-suffix="" data-comma="true"><span class="counter">$0</span></div>
-        <div class="stat-label">Average supplement recovery per insurance job</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══ PRODUCT STACK ══════════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="max-width:1000px;margin:0 auto;">
-    <div style="text-align:center;margin-bottom:48px;">
-      <div class="section-label reveal">Pricing</div>
-      <h2 class="section-title reveal d1">Start free. Add what you need.</h2>
-      <p class="section-sub reveal d2" style="margin:0 auto;">Every product pays for itself immediately. Nothing requires a long-term commitment.</p>
-    </div>
-
-    <div class="free-card reveal">
-      <div class="free-badge">FREE FOREVER</div>
-      <div class="product-name">Portal</div>
-      <div class="product-price">$0<span style="font-size:20px;font-weight:500;color:var(--muted);">/month</span></div>
-      <ul class="product-features">
-        <li>Homeowner portal — 5 new jobs/month</li>
-        <li>Insurance and activity tracking</li>
-        <li>All 7 integrations — CompanyCam, AccuLynx, JobNimbus and more</li>
-        <li>Photos sync from CompanyCam hourly</li>
-        <li>1 team member seat</li>
+    <!-- FREE -->
+    <div class="pricing-card">
+      <div class="plan-name">FREE</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-tagline">Start here</div>
+      <ul class="plan-features">
+        <li>&#10003; Homeowner portal</li>
+        <li>&#10003; Unlimited photos</li>
+        <li>&#10003; CRM + pipeline</li>
       </ul>
-      <a href="https://roofingos.dev/signup" class="cta-primary">Get started free →</a>
-      <p class="no-card">No credit card. No catch.</p>
+      <a href="/signup" class="plan-btn plan-btn-primary">Start free &rarr;</a>
     </div>
 
-    <h3 class="addons-title reveal">Add-ons — pay only for what you use</h3>
-
-    <div class="addons-grid">
-      <div class="addon-card reveal d1">
-        <div class="addon-name">Portal Pro</div>
-        <div class="addon-price">$69/mo</div>
-        <div class="addon-vs">vs CompanyCam $79–199/mo</div>
-        <p>Unlimited jobs, unlimited team, unlimited storage. Homeowner Aria included. Review requests and referral tracking built in. Cancel CompanyCam today.</p>
-        <a href="/upgrade#portal-pro">Add Portal Pro →</a>
-      </div>
-      <div class="addon-card reveal d2">
-        <div class="addon-name">Measurements</div>
-        <div class="addon-price">$25/report</div>
-        <div class="addon-vs">vs EagleView $15–87/report</div>
-        <p>Squares, pitch, eaves, ridges in 60 seconds. ESX/XML for Xactimate. Bundle 10 for $199.</p>
-        <a href="/upgrade#measurements">Order measurements →</a>
-      </div>
-      <div class="addon-card reveal d3">
-        <div class="addon-name">Aria Internal</div>
-        <div class="addon-price">$249/mo</div>
-        <div class="addon-vs">vs answering service $200–500/mo</div>
-        <p>One number. Your whole team. Salespeople call in jobs. Crew calls in updates. Admin handles scheduling. Aria knows every job.</p>
-        <a href="/upgrade#aria">Add Aria →</a>
-      </div>
-      <div class="addon-card reveal d4">
-        <div class="addon-name">Supplement AI</div>
-        <div class="addon-price">from $99/job</div>
-        <div class="addon-vs">or $329/job — Aria handles everything</div>
-        <p>AI generates supplement packages. Avg recovery: $4,200/job. Or let Aria call the adjuster, handle rebuttals, and track depreciation release for you.</p>
-        <a href="/upgrade#supplement">Add Supplement AI →</a>
-      </div>
-      <div class="addon-card reveal d5">
-        <div class="addon-name">CRM</div>
-        <div class="addon-price">$299/mo</div>
-        <div class="addon-vs">vs AccuLynx $550–1,200/mo</div>
-        <p>Replaces AccuLynx and JobNimbus. Full pipeline, proposals, payments, team management. Flat fee — no per-user charges ever.</p>
-        <a href="/upgrade#crm">Add CRM →</a>
-      </div>
-      <div class="addon-card reveal d6">
-        <div class="addon-name">Growth</div>
-        <div class="addon-price">$599/mo</div>
-        <div class="addon-vs">vs marketing agency $2–5k/mo</div>
-        <p>Storm alerts, outbound lead gen, YouTube content, email sequences — fully automated. Fills your pipeline while you sleep.</p>
-        <a href="/upgrade#growth">Add Growth →</a>
-      </div>
+    <!-- STARTER -->
+    <div class="pricing-card">
+      <div class="plan-name">STARTER</div>
+      <div class="plan-price">$149<span class="plan-period">/mo</span></div>
+      <div class="plan-tagline">Grow your business</div>
+      <ul class="plan-features">
+        <li>&#10003; Everything in Free</li>
+        <li>&#10003; Storm leads + reviews</li>
+        <li>&#10003; Email follow-up sequences</li>
+      </ul>
+      <a href="/signup?plan=starter" class="plan-btn plan-btn-outline">Get started &rarr;</a>
     </div>
 
-    <div class="all-in-card reveal">
-      <div class="all-in-left">
-        <div class="all-in-badge">BEST VALUE</div>
-        <div class="all-in-name">All In</div>
-        <p>Everything above. 20 jobs/month included. Dedicated account executive. Quarterly strategy review.</p>
-      </div>
-      <div class="all-in-right">
-        <div class="all-in-price">$2,499/mo</div>
-        <a href="/upgrade#all-in" class="cta-primary">Get All In →</a>
-      </div>
+    <!-- PRO — MOST POPULAR -->
+    <div class="pricing-card pricing-card-featured">
+      <div class="plan-badge">MOST POPULAR</div>
+      <div class="plan-name">PRO</div>
+      <div class="plan-price">$499<span class="plan-period">/mo</span></div>
+      <div class="plan-tagline">Run your whole operation</div>
+      <ul class="plan-features">
+        <li>&#10003; Everything in Starter</li>
+        <li>&#10003; Canvassing + GPS tracking</li>
+        <li>&#10003; Aria AI handles all calls</li>
+      </ul>
+      <a href="/signup?plan=pro" class="plan-btn plan-btn-primary">Get started &rarr;</a>
+    </div>
+
+    <!-- CUSTOM -->
+    <div class="pricing-card">
+      <div class="plan-name">CUSTOM</div>
+      <div class="plan-price">$3&ndash;5k<span class="plan-period">/mo</span></div>
+      <div class="plan-tagline">We run everything for you</div>
+      <ul class="plan-features">
+        <li>&#10003; Everything in Pro</li>
+        <li>&#10003; Marketing + YouTube machine</li>
+        <li>&#10003; Dedicated strategist</li>
+      </ul>
+      <a href="mailto:zach@roofingos.dev" class="plan-btn plan-btn-outline">Talk to us &rarr;</a>
+    </div>
+
+  </div>
+</section>
+
+<!-- BELOW FOLD: 3 FEATURES -->
+<section style="padding:80px 24px;max-width:640px;margin:0 auto;border-top:1px solid rgba(255,255,255,0.06)">
+  <div style="display:flex;flex-direction:column;gap:28px">
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <span style="font-size:28px;flex-shrink:0">&#128248;</span>
+      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>Homeowners see every photo in real time</strong> &mdash; they stop calling</p>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <span style="font-size:28px;flex-shrink:0">&#129302;</span>
+      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>AI writes your supplement package in minutes</strong></p>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      <span style="font-size:28px;flex-shrink:0">&#9889;</span>
+      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>Storm alerts hit your phone before competitors know</strong></p>
     </div>
   </div>
 </section>
 
-<!-- ══ PAIN CARDS ═════════════════════════════════════════════════════════════ -->
-<section style="background:var(--bg);border-bottom:1px solid var(--border);">
-  <div style="max-width:680px;margin:0 auto;">
-    <div class="section-label reveal">You know this feeling</div>
-    <h2 class="section-title reveal d1">The calls that cost you money.</h2>
-
-    <div class="pain-card reveal d1">
-      <p>📱 Your crew is on the roof. Your homeowner texts for the fourth time: <em>"When are you coming?"</em></p>
-    </div>
-    <div class="pain-card reveal d2">
-      <p>📞 Your adjuster approved the claim. You call the homeowner to schedule. No answer. Two days go by. They got three more bids.</p>
-    </div>
-    <div class="pain-card reveal d3">
-      <p>💸 Your homeowner called the adjuster directly. Got confused. Pulled the claim. You lost a $4,200 supplement.</p>
-    </div>
-
-    <p class="reveal d4" style="color:var(--muted);font-size:16px;margin-top:24px;line-height:1.7;">
-      These aren't bad homeowners. They're just uninformed.<br>
-      And when they can't reach you, they call whoever they can.
-    </p>
-  </div>
+<!-- BELOW FOLD: DEMO CTA -->
+<section style="padding:40px 24px 80px;text-align:center;max-width:600px;margin:0 auto">
+  <p style="font-size:18px;color:#6b7a8d;margin-bottom:20px">See exactly what your homeowners see &rarr;</p>
+  <a href="/portal/DEMO2026ROOFINGOS" class="btn-primary" style="display:inline-flex">View live demo</a>
 </section>
 
-<!-- ══ THREE STEPS ════════════════════════════════════════════════════════════ -->
-<section>
-  <div style="max-width:680px;margin:0 auto;">
-    <div class="section-label reveal">Setup</div>
-    <h2 class="section-title reveal d1">Three steps. That's it.</h2>
-    <p class="reveal d2" style="color:var(--muted);font-size:16px;margin:0 0 40px;line-height:1.6;">No complicated setup. No training your crew. No new software to learn.</p>
-
-    <div class="step reveal-left d1">
-      <div class="step-num">1</div>
-      <div>
-        <h3>You create a job</h3>
-        <p>Type the homeowner's name, address, and email. Takes 60 seconds. Or call our number and say it out loud — we create the job automatically.</p>
-      </div>
-    </div>
-    <div class="step reveal-left d2">
-      <div class="step-num">2</div>
-      <div>
-        <h3>Your homeowner gets a link</h3>
-        <p>We email them a portal link instantly. No app to download. No password. Just a link that works on any phone.</p>
-      </div>
-    </div>
-    <div class="step reveal-left d3">
-      <div class="step-num">3</div>
-      <div>
-        <h3>They track everything themselves</h3>
-        <p>Insurance status. Crew photos. Install date. Supplement updates. All of it — without calling you once.</p>
-      </div>
-    </div>
-
-    <a href="https://roofingos.dev/portal/demo" class="reveal" style="display:block;background:var(--cyan);color:white;padding:16px;border-radius:10px;font-size:16px;font-weight:700;text-decoration:none;text-align:center;box-shadow:0 8px 24px rgba(6,182,212,0.3);transition:transform 0.2s,box-shadow 0.2s;"
-       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 32px rgba(6,182,212,0.4)'"
-       onmouseout="this.style.transform='';this.style.boxShadow='0 8px 24px rgba(6,182,212,0.3)'">
-      See the demo portal — no signup →
-    </a>
-  </div>
-</section>
-
-<!-- ══ SARAH'S STORY ══════════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="max-width:680px;margin:0 auto;">
-    <div class="section-label reveal">Real job, real portal</div>
-    <h2 class="section-title reveal d1">Here's what your homeowner sees.</h2>
-    <p class="reveal d2" style="color:var(--muted);font-size:16px;margin:0 0 32px;line-height:1.6;">This is a real portal from a real job.</p>
-
-    <div class="sarah-portal reveal d2">
-      <div class="sarah-portal-header">
-        <div class="name">Sarah Johnson</div>
-        <div class="addr">4821 Timberline Dr, Aurora CO</div>
-      </div>
-      <div class="sarah-portal-body">
-        <div class="sarah-row"><div class="sarah-check">✓</div><div><div class="title">Claim approved</div><div class="sub">Allstate · $22,400 approved</div></div></div>
-        <div class="sarah-row"><div class="sarah-check">✓</div><div><div class="title">Materials ordered</div><div class="sub">GAF Timberline HDZ Charcoal</div></div></div>
-        <div class="sarah-row"><div class="sarah-arrow">→</div><div><div class="title">Installation: Thursday</div><div class="sub">Crew arrives 7am</div></div></div>
-        <div class="sarah-row"><div class="sarah-arrow">📸</div><div><div class="title">14 photos from your crew</div><div class="sub">Updated today at 9:14am</div></div></div>
-      </div>
-    </div>
-
-    <p class="reveal d3" style="color:var(--muted);font-size:16px;line-height:1.7;margin:0 0 24px;">
-      Sarah got this link the day her contractor opened her file. She never called once. Her contractor closed the job, got a 5-star review, and two referrals from her neighbors.
-    </p>
-
-    <a href="https://roofingos.dev/portal/demo" class="reveal d4" style="display:block;background:#1e293b;color:var(--cyan);padding:14px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;text-align:center;border:1px solid var(--cyan);transition:background 0.2s,transform 0.2s;"
-       onmouseover="this.style.background='rgba(6,182,212,0.08)';this.style.transform='translateY(-2px)'"
-       onmouseout="this.style.background='#1e293b';this.style.transform=''">
-      See the full demo portal →
-    </a>
-  </div>
-</section>
-
-<!-- ══ WHAT YOU STOP DOING ════════════════════════════════════════════════════ -->
-<section>
-  <div class="section-inner" style="text-align:center;">
-    <div class="section-label reveal">The job gets easier</div>
-    <h2 class="section-title reveal d1">What you stop doing the day you start.</h2>
-    <div class="comparison reveal d2">
-      <div class="comp-side bad">
-        <div class="comp-head red"><span>✗</span> Without it</div>
-        <div class="comp-item bad">Answering "what's happening with my roof" calls 3× a day</div>
-        <div class="comp-item bad">Explaining insurance claims over the phone in plain English</div>
-        <div class="comp-item bad">Chasing homeowners for signatures and decisions</div>
-        <div class="comp-item bad">Texting the same update to five homeowners individually</div>
-        <div class="comp-item bad">Losing referrals because the homeowner couldn't describe you</div>
-      </div>
-      <div class="comp-side">
-        <div class="comp-head green"><span>✓</span> With Roofing OS</div>
-        <div class="comp-item good">Homeowner checks the portal. They know exactly what's happening.</div>
-        <div class="comp-item good">Claim status updates automatically as the job progresses.</div>
-        <div class="comp-item good">Aria follows up and collects approvals while you're on a roof.</div>
-        <div class="comp-item good">One photo upload reaches every portal at once.</div>
-        <div class="comp-item good">They share their portal link. Their neighbor calls you first.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══ ZACH QUOTE ═════════════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="max-width:680px;margin:0 auto;">
-    <div class="founder-card reveal">
-      <blockquote>
-        "I built Roofing OS because I watched good roofers lose supplements, lose jobs, and lose their minds to homeowner calls. Not because they were bad contractors — because homeowners had no way to track what was happening.<br><br>
-        One portal link fixes all of it. I wish I had this 5 years ago."
-      </blockquote>
-      <div class="founder-meta">
-        <div class="founder-avatar">Z</div>
-        <div>
-          <div class="founder-name">Zach Curtis</div>
-          <div class="founder-title">Founder, Roofing OS</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══ TRUST SIGNALS ══════════════════════════════════════════════════════════ -->
-<div class="trust-section">
-  <div class="trust-label reveal">Built on a secure foundation</div>
-  <div class="trust-badges">
-    <div class="trust-badge reveal d1"><span class="icon">🔒</span> 256-bit SSL</div>
-    <div class="trust-badge reveal d2"><span class="icon">✅</span> SOC 2 Compliant</div>
-    <div class="trust-badge reveal d3"><span class="icon">📱</span> TCPA Compliant</div>
-    <div class="trust-badge reveal d4"><span class="icon">🎁</span> Free Forever</div>
-    <div class="trust-badge reveal d5"><span class="icon">🏗️</span> Built in Denver, CO</div>
-  </div>
-</div>
-
-<!-- ══ SIGNUP CTA ══════════════════════════════════════════════════════════════ -->
-<section class="signup-section" id="signup">
-  <div style="max-width:520px;margin:0 auto;">
-    <h2 class="reveal">Get your free portal</h2>
-    <p class="reveal d1">Free forever · No credit card · Setup in 4 minutes</p>
-    <div class="reveal d2">
-      <a href="https://roofingos.dev/signup" class="hero-cta" style="font-size:19px;padding:20px 40px;display:inline-flex;">
-        Create your free account →
-      </a>
-      <p class="urgency-note">Free forever — but paid features are coming. Lock in free access now.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══ FAQ ════════════════════════════════════════════════════════════════════ -->
-<section style="background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
-  <div style="text-align:center;margin-bottom:40px;max-width:680px;margin-left:auto;margin-right:auto;" class="reveal">
-    <div class="section-label">FAQ</div>
-    <h2 class="section-title">Frequently asked questions.</h2>
-  </div>
-  <div class="faq-wrap">
-    <details class="reveal d1">
-      <summary>Is it really free forever?</summary>
-      <p>Yes. Portal Pro is free for up to 5 jobs/month. No credit card required, no trial period, no bait-and-switch. Paid plans start at $69/month for unlimited jobs when you're ready to scale.</p>
-    </details>
-    <details class="reveal d2">
-      <summary>Do my homeowners need to download an app?</summary>
-      <p>No. They get a link via text or email. It opens in any browser on any phone — iPhone, Android, doesn't matter. No account, no password, no app store. Most homeowners open it within 5 minutes of receiving the link.</p>
-    </details>
-    <details class="reveal d3">
-      <summary>What happens to my CompanyCam photos?</summary>
-      <p>We import them automatically. Paste your CompanyCam API key and all your existing projects and photos sync into Roofing OS in minutes. Your photos, your data — available forever even if you cancel CompanyCam.</p>
-    </details>
-    <details class="reveal d4">
-      <summary>Does this work with AccuLynx or JobNimbus?</summary>
-      <p>Yes — we integrate with both, plus CompanyCam, EagleView, and four other tools. Connect your existing stack and the portal stays updated automatically. No manual entry required.</p>
-    </details>
-    <details class="reveal d5">
-      <summary>How long does setup take?</summary>
-      <p>4 minutes. We timed it. Create your account, create your first job, send the link to your homeowner. That's it. No training calls, no onboarding sessions, no learning curve. If you can send a text, you can use Roofing OS.</p>
-    </details>
-    <details class="reveal d6">
-      <summary>How much does it cost?</summary>
-      <p>The portal is free forever — no credit card required. Add-ons start at $25/report for measurements, $69/month for Portal Pro, and $249/month for Aria Internal. Cancel anytime. Questions? Call us at <a href="tel:+17205006668" class="phone-link" style="color:var(--cyan);">(720) 500-6668</a>.</p>
-    </details>
-  </div>
-</section>
-
-<!-- ══ BLOG ═══════════════════════════════════════════════════════════════════ -->
-<section style="background:var(--bg);border-top:1px solid var(--border);">
-  <div class="section-inner">
-    <div class="section-label reveal">For roofing contractors</div>
-    <h2 class="section-title reveal d1" style="margin-bottom:8px;">Latest from Roofing OS</h2>
-    <p class="reveal d2" style="color:var(--muted);font-size:15px;margin-bottom:8px;">Supplements, homeowners, storm strategy — written for people on job sites.</p>
-    <div class="blog-grid" id="blog-grid"></div>
-    <p style="text-align:center;margin-top:24px;" class="reveal">
-      <a href="/blog" style="color:var(--cyan);font-size:14px;font-weight:600;text-decoration:none;">View all articles →</a>
-    </p>
-  </div>
-</section>
-
-<!-- ══ FOOTER ══════════════════════════════════════════════════════════════════ -->
-<footer>
-  Roofing OS — Denver, CO &nbsp;·&nbsp;
-  <a href="mailto:zach@roofingos.dev">zach@roofingos.dev</a> &nbsp;·&nbsp;
-  <a href="tel:+17205006668" class="phone-link">(720) 500-6668</a>
+<!-- FOOTER -->
+<footer style="border-top:1px solid rgba(255,255,255,0.06);padding:24px;text-align:center">
+  <p style="font-size:13px;color:#6b7a8d">
+    roofingos.dev &nbsp;&middot;&nbsp; (720) 500-6668 &nbsp;&middot;&nbsp; <a href="mailto:zach@roofingos.dev" style="color:#6b7a8d;text-decoration:none">zach@roofingos.dev</a>
+  </p>
 </footer>
 
-<script>
-/* ══ SCROLL PROGRESS BAR ══════════════════════════════════════════════════════ */
-const progressBar = document.getElementById('scroll-progress');
-window.addEventListener('scroll', () => {
-  const scrolled = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
-  progressBar.style.width = Math.min(scrolled, 100) + '%';
-}, { passive: true });
-
-/* ══ NAV GLASS ON SCROLL ══════════════════════════════════════════════════════ */
-const nav = document.getElementById('main-nav');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 60);
-}, { passive: true });
-
-/* ══ HERO WORD-BY-WORD ANIMATION ══════════════════════════════════════════════ */
-(function() {
-  const h1 = document.getElementById('hero-h1');
-  if (!h1) return;
-  // Only wrap text nodes, preserve <em> and <br> elements
-  function wrapWords(node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const words = node.textContent.split(/(\s+)/);
-      const frag = document.createDocumentFragment();
-      words.forEach(part => {
-        if (/\S/.test(part)) {
-          const span = document.createElement('span');
-          span.className = 'hero-word';
-          span.textContent = part;
-          frag.appendChild(span);
-        } else {
-          frag.appendChild(document.createTextNode(part));
-        }
-      });
-      node.parentNode.replaceChild(frag, node);
-    } else if (node.nodeName !== 'BR') {
-      Array.from(node.childNodes).forEach(wrapWords);
-    }
-  }
-  Array.from(h1.childNodes).forEach(wrapWords);
-
-  const words = h1.querySelectorAll('.hero-word');
-  words.forEach((w, i) => {
-    setTimeout(() => w.classList.add('revealed'), 200 + i * 60);
-  });
-})();
-
-/* ══ PARTICLES ════════════════════════════════════════════════════════════════ */
-(function() {
-  const canvas = document.getElementById('particles');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  let W, H, particles = [];
-
-  function resize() {
-    W = canvas.width  = canvas.offsetWidth;
-    H = canvas.height = canvas.offsetHeight;
-  }
-  resize();
-  window.addEventListener('resize', resize, { passive: true });
-
-  const count = Math.min(60, Math.floor(W * H / 14000));
-  for (let i = 0; i < count; i++) {
-    particles.push({
-      x: Math.random() * W,
-      y: Math.random() * H,
-      r: Math.random() * 1.5 + 0.4,
-      vx: (Math.random() - 0.5) * 0.25,
-      vy: (Math.random() - 0.5) * 0.25,
-      a: Math.random() * 0.5 + 0.15,
-    });
-  }
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    particles.forEach(p => {
-      p.x += p.vx; p.y += p.vy;
-      if (p.x < 0) p.x = W;
-      if (p.x > W) p.x = 0;
-      if (p.y < 0) p.y = H;
-      if (p.y > H) p.y = 0;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(6,182,212,${p.a})`;
-      ctx.fill();
-    });
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
-/* ══ INTERSECTION OBSERVER — SCROLL ANIMATIONS ════════════════════════════════ */
-(function() {
-  const classes = ['reveal', 'reveal-left', 'reveal-right'];
-  const all = [];
-  classes.forEach(c => all.push(...document.querySelectorAll('.' + c)));
-
-  if (!('IntersectionObserver' in window)) {
-    all.forEach(el => el.classList.add('visible'));
-    return;
-  }
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('visible');
-        observer.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-
-  all.forEach(el => observer.observe(el));
-})();
-
-/* ══ COUNTER ANIMATION ════════════════════════════════════════════════════════ */
-(function() {
-  const stats = document.querySelectorAll('[data-target]');
-  if (!stats.length || !('IntersectionObserver' in window)) return;
-
-  function animateCounter(el) {
-    const target = parseInt(el.dataset.target, 10);
-    const prefix = el.dataset.prefix || '';
-    const suffix = el.dataset.suffix || '';
-    const useComma = el.dataset.comma === 'true';
-    const display = el.querySelector('.counter');
-    if (!display) return;
-
-    const duration = 1800;
-    const start = performance.now();
-    function format(n) {
-      return prefix + (useComma ? n.toLocaleString() : n) + suffix;
-    }
-    function step(now) {
-      const progress = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.floor(eased * target);
-      display.textContent = format(current);
-      if (progress < 1) requestAnimationFrame(step);
-      else display.textContent = format(target);
-    }
-    requestAnimationFrame(step);
-  }
-
-  const counterObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        animateCounter(entry.target);
-        counterObserver.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.5 });
-
-  stats.forEach(el => counterObserver.observe(el));
-})();
-
-/* ══ EXIT INTENT (desktop) ════════════════════════════════════════════════════ */
-(function() {
-  if (window.innerWidth < 768) return;
-  const banner = document.getElementById('exit-intent');
-  const dismiss = document.getElementById('exit-dismiss');
-  if (!banner) return;
-
-  let shown = false;
-  let timer;
-
-  document.addEventListener('mouseleave', (e) => {
-    if (e.clientY <= 5 && !shown && !sessionStorage.getItem('exit-dismissed')) {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        banner.classList.add('visible');
-        shown = true;
-      }, 300);
-    }
-  });
-
-  dismiss?.addEventListener('click', () => {
-    banner.classList.remove('visible');
-    sessionStorage.setItem('exit-dismissed', '1');
-  });
-})();
-
-/* ══ PORTAL SCROLL — TOUCH PAUSE ══════════════════════════════════════════════ */
-const portalScroll = document.getElementById('portalScroll');
-if (portalScroll) {
-  portalScroll.addEventListener('touchstart', () => portalScroll.classList.add('paused'), { passive: true });
-  portalScroll.addEventListener('touchend', () => {
-    setTimeout(() => portalScroll.classList.remove('paused'), 2000);
-  }, { passive: true });
-}
-
-/* ══ BLOG POSTS ══════════════════════════════════════════════════════════════ */
-const SUPABASE_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtvcXBibnhraGdic25iZGp3bGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5MjMwNjYsImV4cCI6MjA5MjQ5OTA2Nn0.b07zF8Uv46x3KDGe9EgvewLLvvSk_riDTsvA2oq_X0g';
-
-async function loadBlogPosts() {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/roofing_content?select=title,blog_url,created_at&type=eq.blog&status=eq.published&order=created_at.desc&limit=3`,
-      { headers: { 'apikey': ANON_KEY } }
-    );
-    const posts = await res.json();
-    const grid = document.getElementById('blog-grid');
-    if (!grid || !Array.isArray(posts) || posts.length === 0) return;
-    grid.innerHTML = posts.map(p => `
-      <a class="blog-card" href="${p.blog_url || '/blog'}" target="_blank" rel="noopener">
-        <div class="blog-card-label">Roofing OS</div>
-        <div class="blog-card-title">${p.title || 'Untitled'}</div>
-        <div class="blog-card-date">${p.created_at ? new Date(p.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : ''}</div>
-      </a>
-    `).join('');
-  } catch { /* blog stays empty */ }
-}
-loadBlogPosts();
-
-/* ══ PAGE VISIT TRACKING ══════════════════════════════════════════════════════ */
-fetch('https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/roofing-page-visit', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ page: '/' })
-}).catch(() => {});
-</script>
 </body>
 </html>
