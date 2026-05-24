@@ -117,7 +117,7 @@ function getNextAction(c) {
 }
 
 function smsBody(c) {
-  return `Hey ${firstName(c.contact_name)} — Zach from Roofing OS. Sent you an email earlier about the free homeowner portal. Worth 2 minutes? roofingos.dev`
+  return `Hey ${firstName(c.contact_name)} — Zach from Roofing OS.\nFree homeowner portal for roofers — your clients see real-time photos, stop calling mid-job.\nTakes 4 min: roofingos.dev`
 }
 
 function emailHref(c) {
@@ -183,7 +183,7 @@ function DailyDigest({ campaigns, todayStats }) {
 
 // ── CampaignCard ───────────────────────────────────────────────────────────────
 
-function CampaignCard({ c, onSelect, onStatusChange }) {
+function CampaignCard({ c, onSelect, onStatusChange, onCallNow }) {
   const heat = getHeat(c)
   const next = getNextAction(c)
   const sortedTouches = [...(c.touches || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -215,7 +215,6 @@ function CampaignCard({ c, onSelect, onStatusChange }) {
         <div className="flex-1 min-w-0">
           <div className="text-sm font-semibold text-white leading-tight truncate">{c.company_name || '(no name)'}</div>
           {c.contact_name && <div className="text-[10px] text-gray-600 mt-0.5">{c.contact_name}</div>}
-          {c.phone && <div className="text-[10px] text-gray-700 font-mono">{c.phone}</div>}
         </div>
         {c.source && (
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${
@@ -229,41 +228,51 @@ function CampaignCard({ c, onSelect, onStatusChange }) {
         )}
       </div>
 
+      {/* Phone — prominent */}
+      {c.phone && (
+        <div className="text-sm font-bold text-white/70 font-mono tracking-wide mb-2">{c.phone}</div>
+      )}
+
       {/* Last touch + next action */}
       <div className="text-[10px] text-gray-600 mb-1 truncate">{lastTouchDesc()}</div>
       <div className={`text-[10px] mb-2 ${next.cls}`}>{next.label}</div>
 
-      {/* Quick action buttons */}
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] text-gray-700">{c.touch_count || 0} touches</span>
-        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-          {c.phone && (
-            <a href={`tel:${c.phone}`} title="Call"
-               className="text-[10px] text-gray-600 hover:text-green-400 transition-colors bg-green-500/5 hover:bg-green-500/10 border border-green-500/10 rounded px-1.5 py-0.5">
-              📞 Call
+      {/* Call Now + Text buttons */}
+      <div className="flex gap-2 mt-1" onClick={e => e.stopPropagation()}>
+        {c.phone ? (
+          <>
+            <a
+              href={`tel:${c.phone}`}
+              onClick={() => onCallNow(c)}
+              className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/15 hover:bg-green-500/25 border border-green-500/30 rounded-lg py-2 text-xs font-bold text-green-400 transition-colors"
+            >
+              📞 Call Now
             </a>
-          )}
-          {c.phone && (
-            <a href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`} title="Text"
-               className="text-[10px] text-gray-600 hover:text-blue-400 transition-colors bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/10 rounded px-1.5 py-0.5">
+            <a
+              href={`sms:${c.phone}?body=${encodeURIComponent(smsBody(c))}`}
+              className="flex items-center justify-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg px-3 py-2 text-xs font-bold text-blue-400 transition-colors"
+            >
               💬 Text
             </a>
-          )}
-          {c.email && (
-            <a href={emailHref(c)} title="Email"
-               className="text-[10px] text-gray-600 hover:text-indigo-400 transition-colors bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/10 rounded px-1.5 py-0.5">
-              📧 Email
-            </a>
-          )}
-        </div>
+          </>
+        ) : c.email ? (
+          <a
+            href={emailHref(c)}
+            className="flex-1 flex items-center justify-center gap-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-lg py-2 text-xs font-bold text-indigo-400 transition-colors"
+          >
+            📧 Email
+          </a>
+        ) : null}
       </div>
+
+      <div className="mt-2 text-[9px] text-gray-700">{c.touch_count || 0} touches</div>
     </div>
   )
 }
 
 // ── KanbanColumn ───────────────────────────────────────────────────────────────
 
-function KanbanColumn({ col, campaigns, onSelect, onStatusChange }) {
+function KanbanColumn({ col, campaigns, onSelect, onStatusChange, onCallNow }) {
   return (
     <div className={`flex-shrink-0 w-64 rounded-xl border ${col.border} ${col.bg} p-3`}>
       <div className="flex items-center justify-between mb-3">
@@ -278,7 +287,7 @@ function KanbanColumn({ col, campaigns, onSelect, onStatusChange }) {
           <div className="text-[10px] text-gray-700 text-center py-6">—</div>
         ) : (
           campaigns.map(c => (
-            <CampaignCard key={c.id} c={c} onSelect={onSelect} onStatusChange={onStatusChange} />
+            <CampaignCard key={c.id} c={c} onSelect={onSelect} onStatusChange={onStatusChange} onCallNow={onCallNow} />
           ))
         )}
       </div>
@@ -288,7 +297,7 @@ function KanbanColumn({ col, campaigns, onSelect, onStatusChange }) {
 
 // ── TimelineView ───────────────────────────────────────────────────────────────
 
-function TimelineView({ c, onClose, onLogTouch, onStatusChange }) {
+function TimelineView({ c, onClose, onLogTouch, onStatusChange, onCallNow }) {
   const sortedTouches = [...(c.touches || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
   return (
@@ -302,7 +311,7 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange }) {
             <div>
               <h2 className="text-base font-bold text-white">{c.company_name}</h2>
               {c.contact_name && <div className="text-xs text-gray-500 mt-0.5">{c.contact_name}</div>}
-              {c.phone && <div className="text-xs text-gray-600 font-mono mt-0.5">{c.phone}</div>}
+              {c.phone && <div className="text-sm font-bold text-white/70 font-mono mt-1">{c.phone}</div>}
               {c.email && <div className="text-xs text-gray-700 mt-0.5">{c.email}</div>}
             </div>
             <button onClick={onClose} className="text-gray-600 hover:text-gray-300 text-xl leading-none mt-0.5 shrink-0">✕</button>
@@ -311,8 +320,12 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange }) {
           {/* Quick actions */}
           <div className="flex flex-wrap gap-2 mb-3">
             {c.phone && (
-              <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-1.5 text-xs text-green-400 hover:bg-green-500/20 transition-colors">
-                📞 Call
+              <a
+                href={`tel:${c.phone}`}
+                onClick={() => onCallNow(c)}
+                className="flex items-center gap-1.5 bg-green-500/15 border border-green-500/25 rounded-lg px-4 py-2 text-sm font-bold text-green-400 hover:bg-green-500/25 transition-colors"
+              >
+                📞 Call Now
               </a>
             )}
             {c.phone && (
@@ -395,6 +408,101 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange }) {
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── CallLogModal ───────────────────────────────────────────────────────────────
+// Shown immediately after tapping Call Now — pre-set to manual_call
+
+function CallLogModal({ c, onSave, onClose }) {
+  const [outcome, setOutcome] = useState('no_answer')
+  const [notes,   setNotes]   = useState('')
+  const [saving,  setSaving]  = useState(false)
+
+  const OUTCOMES = [
+    { key: 'no_answer',      label: 'No answer / voicemail',  icon: '📵' },
+    { key: 'not_interested', label: 'Talked — not interested', icon: '✗'  },
+    { key: 'interested',     label: 'Talked — interested',     icon: '🔥' },
+    { key: 'signed_up',      label: 'Talked — signed up',      icon: '✅' },
+  ]
+
+  const outcomeCls = {
+    interested:     'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+    signed_up:      'bg-green-500/20 text-green-300 border border-green-500/30',
+    not_interested: 'bg-red-500/15 text-red-300 border border-red-500/25',
+    no_answer:      'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
+  }
+
+  async function save() {
+    setSaving(true)
+    await onSave({
+      touch_type: 'manual_call',
+      direction:  'outbound',
+      status:     outcome,
+      outcome,
+      zach_notes: notes.trim() || null,
+    })
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-[#0f0f1a] border border-[#1e1e2e] rounded-xl p-5">
+        <h3 className="text-sm font-bold text-white mb-0.5">Log this call</h3>
+        <div className="text-xs text-gray-500 mb-4 font-mono">
+          {c?.company_name}{c?.phone ? ` · ${c.phone}` : ''}
+        </div>
+
+        <div className="mb-4">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">What happened?</label>
+          <div className="flex flex-col gap-1.5">
+            {OUTCOMES.map(o => (
+              <button
+                key={o.key}
+                onClick={() => setOutcome(o.key)}
+                className={`text-xs text-left px-3 py-2.5 rounded-lg transition-colors ${
+                  outcome === o.key
+                    ? outcomeCls[o.key]
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
+                }`}
+              >
+                {o.icon} {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Notes (optional)</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="What did they say?"
+            rows={3}
+            className="w-full bg-[#0a0a0f] border border-[#2e2e3e] rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/40 resize-none"
+          />
+        </div>
+
+        {(outcome === 'interested' || outcome === 'signed_up') && (
+          <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
+            🔥 Zach will get a Telegram alert when you save this.
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">Skip</button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex-1 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
         </div>
       </div>
     </div>
@@ -532,14 +640,15 @@ function LogTouchModal({ c, onSave, onClose }) {
 const EMPTY_STATS = { ariaMade: 0, ariaAnswered: 0, emailsSent: 0, emailsOpened: 0 }
 
 export default function Funnel() {
-  const [campaigns,  setCampaigns]  = useState([])
-  const [todayStats, setTodayStats] = useState(EMPTY_STATS)
-  const [selected,   setSelected]   = useState(null)
-  const [showLog,    setShowLog]    = useState(false)
-  const [search,     setSearch]     = useState('')
-  const [filter,     setFilter]     = useState('all')
-  const [sort,       setSort]       = useState('last_touch')
-  const [loading,    setLoading]    = useState(true)
+  const [campaigns,       setCampaigns]       = useState([])
+  const [todayStats,      setTodayStats]      = useState(EMPTY_STATS)
+  const [selected,        setSelected]        = useState(null)
+  const [showLog,         setShowLog]         = useState(false)
+  const [callingCampaign, setCallingCampaign] = useState(null)
+  const [search,          setSearch]          = useState('')
+  const [filter,          setFilter]          = useState('all')
+  const [sort,            setSort]            = useState('last_touch')
+  const [loading,         setLoading]         = useState(true)
 
   useEffect(() => { load() }, [])
 
@@ -602,31 +711,49 @@ export default function Funnel() {
     if (selected?.id === campaignId) setSelected(s => ({ ...s, ...patch }))
   }
 
-  async function saveTouch(touchData) {
-    if (!selected) return
+  // saveTouch accepts campaignId explicitly so it works from both the timeline and the call modal
+  async function saveTouch(campaignId, touchData) {
+    const campaign = campaigns.find(c => c.id === campaignId)
+    if (!campaign) return
+
     const now = new Date().toISOString()
     const { data: touch, error } = await supabase
       .from('roofing_touches')
-      .insert({ campaign_id: selected.id, ...touchData, created_at: now })
+      .insert({ campaign_id: campaignId, ...touchData, created_at: now })
       .select()
       .single()
     if (error || !touch) return
 
-    const newCount  = (selected.touch_count || 0) + 1
+    const newCount  = (campaign.touch_count || 0) + 1
     const newStatus = touchData.outcome === 'signed_up'      ? 'signed_up'
                     : touchData.outcome === 'interested'     ? 'interested'
                     : touchData.outcome === 'not_interested' ? 'not_interested'
-                    : selected.status === 'new'              ? 'contacted'
-                    : selected.status
+                    : campaign.status === 'new'              ? 'contacted'
+                    : campaign.status
 
     const patch = { last_touch_at: now, touch_count: newCount, status: newStatus }
-    if (newStatus === 'signed_up' && !selected.signed_up_at) patch.signed_up_at = now
+    if (newStatus === 'signed_up' && !campaign.signed_up_at) patch.signed_up_at = now
 
-    await supabase.from('roofing_campaigns').update(patch).eq('id', selected.id)
+    await supabase.from('roofing_campaigns').update(patch).eq('id', campaignId)
 
-    const updated = { ...selected, ...patch, touches: [touch, ...(selected.touches || [])] }
-    setSelected(updated)
-    setCampaigns(cs => cs.map(c => c.id === selected.id ? updated : c))
+    const updated = { ...campaign, ...patch, touches: [touch, ...(campaign.touches || [])] }
+    setCampaigns(cs => cs.map(c => c.id === campaignId ? updated : c))
+    if (selected?.id === campaignId) setSelected(updated)
+
+    // Telegram on hot outcomes
+    if (touchData.outcome === 'interested' || touchData.outcome === 'signed_up') {
+      supabase.functions.invoke('roofing-whale-alert', {
+        body: {
+          type:         'manual_call_hot',
+          company_name: campaign.company_name,
+          contact_name: campaign.contact_name,
+          phone:        campaign.phone,
+          outcome:      touchData.outcome,
+          notes:        touchData.zach_notes || '',
+          prospect_id:  campaign.prospect_id,
+        }
+      }).catch(() => {})
+    }
   }
 
   // ── Filter + sort ────────────────────────────────────────────────────────────
@@ -713,26 +840,37 @@ export default function Funnel() {
             campaigns={grouped[col.key] || []}
             onSelect={setSelected}
             onStatusChange={updateStatus}
+            onCallNow={setCallingCampaign}
           />
         ))}
       </div>
 
       {/* Timeline slide-over */}
-      {selected && !showLog && (
+      {selected && !showLog && !callingCampaign && (
         <TimelineView
           c={selected}
           onClose={() => setSelected(null)}
           onLogTouch={() => setShowLog(true)}
           onStatusChange={updateStatus}
+          onCallNow={setCallingCampaign}
         />
       )}
 
-      {/* Log touch modal */}
+      {/* Log touch modal (from timeline) */}
       {showLog && selected && (
         <LogTouchModal
           c={selected}
-          onSave={saveTouch}
+          onSave={data => saveTouch(selected.id, data)}
           onClose={() => setShowLog(false)}
+        />
+      )}
+
+      {/* Call log modal (from Call Now button) */}
+      {callingCampaign && (
+        <CallLogModal
+          c={callingCampaign}
+          onSave={data => saveTouch(callingCampaign.id, data)}
+          onClose={() => setCallingCampaign(null)}
         />
       )}
     </div>

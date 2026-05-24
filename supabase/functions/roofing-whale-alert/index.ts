@@ -26,6 +26,22 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: "roofing-whale-alert ready" });
 
+  // Manual call hot lead alert (from Funnel click-to-call)
+  if (body.type === "manual_call_hot") {
+    const { company_name, contact_name, phone, outcome, notes } = body;
+    const header = outcome === "signed_up" ? "✅ *SIGNED UP — Manual Call*" : "🔥 *INTERESTED — Manual Call*";
+    await tg(
+      `${header}\n\n` +
+      `*${company_name || "Unknown"}*\n` +
+      `👤 ${contact_name || ""}\n` +
+      `📞 ${phone || "no phone"}\n\n` +
+      `Outcome: ${outcome}\n` +
+      `${notes ? `Notes: ${notes}\n\n` : "\n"}` +
+      `You just got off the phone. Follow up now.`
+    );
+    return Response.json({ ok: true });
+  }
+
   const { prospect_id, touch_number } = body;
   if (!prospect_id) {
     return Response.json({ error: "prospect_id required" }, { status: 400 });
