@@ -467,7 +467,7 @@ Then productized and sold to other multi-business operators.
 ## VPS STACK (Hostinger — 31.220.60.77)
 
 - SSH key: `~/.ssh/hostinger_vps` — alias `hostinger-vps`
-- pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *)
+- pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *), `youtube-recorder` (cron: 0 12 * * 1)
 - Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`
 - Env: `/opt/roofing/.env`
 - nginx serves `/health` at port 80 → `{"ok":true,"service":"roofing-vps"}`
@@ -485,9 +485,12 @@ Then productized and sold to other multi-business operators.
 
 ## EMAIL TEMPLATE SUBJECTS (Hormozi-style, updated May 24 2026)
 
-- Touch 1: "Your roof just cost you $4,200 (you don't know it yet)"
-- Touch 2: "The adjuster didn't tell you this"
-- Touch 3: "Last email — here's what $4,200 looks like"
+- Touch 1: "your homeowners are calling you too much"
+- Touch 2: "CompanyCam charged you $99 again"
+- Touch 3: "your competitor just signed up for free"
+- Touch 4: "hail hit Denver — did you get the leads?"
+- Touch 5: "last email — free tool for roofers"
+- Touches 6-11 unchanged (story arc continues)
 - Subjects live in `email_templates` keyed by `touch_number`, NOT in `email_sequences`
 - `email_sequences` has `type` column (not `sequence_type`), no `subject` column
 
@@ -504,8 +507,11 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 24, 2026)
 
-**DONE this session:**
-- (nothing yet this session)
+**DONE this session (Marketing V1):**
+- Phase 1: VPS YouTube recorder — /opt/roofing/youtube/recorder.js, Playwright + ElevenLabs + ffmpeg + YouTube OAuth, pm2 cron "0 12 * * 1" (Monday 6am MT), 5 videos queued. BLOCKED: needs ELEVENLABS_API_KEY + YOUTUBE_* keys in /opt/roofing/.env (get from Supabase vault)
+- Phase 2: email_templates touches 1-5 rewritten — new Hormozi subjects + 5-sentence bodies
+- Phase 3: outreach-sequencer v18 deployed — FROM_NAME "Zach from Roofing OS", plain-text fallback, List-Unsubscribe header
+- Phase 4: email-webhook v2 deployed — first open fires Telegram "👀 [company] opened your email [subject] [phone] Call them now."; Resend webhook confirmed registered (ID: 2d3d95a4)
 
 **FREE + STARTER build (May 24):**
 - FREE FIX 1: 10-photo banner in RoofingJobDetail — triggers when photos >= 10, portal not yet sent
