@@ -521,6 +521,22 @@ Then productized and sold to other multi-business operators.
 - roofing-notify v47: portal limit + review_request event + full CORS
 - contractor-lead-followup v1: day 3/7/14 SMS sequences, marks follow_up_complete on day 14
 
+**Roofing OS V2 build (May 24 — session 2):**
+- Phase 1: DB migrations — job_payments, job_costs, supplement_status, job_weather, contractor_briefings, lead_scores, insurance_adjusters, canvass_knocks tables; new columns on roofing_jobs/crew_assignments/contractor_accounts/portal_documents
+- Phase 2: GPS photo tagging in RoofingJobDetail — 📍 badge, coords captured on upload
+- Phase 3: Payment Tracking tab — auto-creates 33/33/34% milestones on contract_signed
+- Phase 4: Job Completion modal — gates on after-photos + payments before marking complete
+- Phase 5: Supplement tab — Xactimate line items, CSV export, adjuster info
+- Phase 6: RoofingCrewMobile (/roofing/crew/:token) — public GPS photo + arrival/complete
+- Phase 7: roofing-weather-check — 5am MT cron, rain/wind warnings
+- Phase 8: contractor-morning-briefing — 7am MT cron, paid plans only
+- Phase 9: storm-to-lead — VPS trigger → leads with score=75 + Aria queue
+- Phase 10: roofing-lead-scorer — 0-100 formula, 8am MT cron
+- Phase 11: Financials tab — job costing, margin % color-coded
+- Phase 12: RoofingCanvass (/roofing/canvass) — door-knocking tracker, closer script, GPS, convert to job
+- Phase 15: Dashboard — 🔥/🟡/⚪ score badge, supplement pill, payment dot, ⛈️ warning, Today section, Hot Leads stat
+- Phase 16: All verified — tables, crons, smoke tests, routes
+
 **NEXT:**
 1. Fix smoke_test_failed error
 2. Fix Recurring Smoke Test Failures
