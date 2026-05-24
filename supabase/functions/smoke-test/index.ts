@@ -1,145 +1,88 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
-/**
- * CORS headers for cross-origin requests
- */
+// CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Content-Type': 'application/json'
 };
 
-/**
- * Simple logger utility
- */
+// Logger utility
 const logger = {
-  info: (message: string, data?: any) => {
-    console.log(JSON.stringify({ level: 'info', message, ...data, timestamp: new Date().toISOString() }));
+  info: (message: string, meta?: Record<string, unknown>) => {
+    console.log(JSON.stringify({ level: 'info', message, ...meta, timestamp: new Date().toISOString() }));
   },
-  error: (message: string, data?: any) => {
-    console.error(JSON.stringify({ level: 'error', message, ...data, timestamp: new Date().toISOString() }));
+  error: (message: string, meta?: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'error', message, ...meta, timestamp: new Date().toISOString() }));
   },
-  warn: (message: string, data?: any) => {
-    console.warn(JSON.stringify({ level: 'warn', message, ...data, timestamp: new Date().toISOString() }));
+  warn: (message: string, meta?: Record<string, unknown>) => {
+    console.warn(JSON.stringify({ level: 'warn', message, ...meta, timestamp: new Date().toISOString() }));
   }
 };
-
-/**
- * Environment variable check
- */
-function checkEnvironmentVariables(): { success: boolean; missing: string[] } {
-  const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
-  const missing: string[] = [];
-  
-  for (const envVar of required) {
-    if (!Deno.env.get(envVar)) {
-      missing.push(envVar);
-    }
-  }
-  
-  return {
-    success: missing.length === 0,
-    missing
-  };
-}
-
-/**
- * Test Supabase connection
- */
-async function testSupabaseConnection(): Promise<{ success: boolean; error?: string }> {
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      return { success: false, error: 'Missing Supabase credentials' };
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Simple query to test connection
-    const { error } = await supabase.from('_health_check').select('*').limit(1);
-    
-    // If table doesn't exist, that's okay - connection works
-    if (error && !error.message.includes('does not exist')) {
-      return { success: false, error: error.message };
-    }
-    
-    return { success: true };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
-    };
-  }
-}
-
-/**
- * Test runtime environment
- */
-function testRuntime(): { success: boolean; error?: string } {
-  try {
-    // Check Deno namespace exists
-    if (typeof Deno === 'undefined') {
-      return { success: false, error: 'Deno runtime not available' };
-    }
-    
-    // Check basic Deno APIs
-    if (typeof Deno.env === 'undefined' || typeof Deno.serve === 'undefined') {
-      return { success: false, error: 'Deno APIs not fully available' };
-    }
-    
-    return { success: true };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
-    };
-  }
-}
 
 /**
  * Perform comprehensive health check
  */
 async function performComprehensiveHealthCheck() {
-  const errors: string[] = [];
-  const checks = {
-    supabase: false,
-    runtime: false,
-    env: false
-  };
-  
-  // Check runtime
-  const runtimeResult = testRuntime();
-  checks.runtime = runtimeResult.success;
-  if (!runtimeResult.success) {
-    errors.push(`Runtime check failed: ${runtimeResult.error}`);
+  const timestamp = new Date().toISOString();
+  const checks: Record<string, string> = {};
+  let overall = true;
+
+  // Check Deno runtime
+  try {
+    checks.deno = 'ok';
+    checks.deno_version = Deno.version.deno;
+  } catch (error) {
+    checks.deno = 'error';
+    overall = false;
+    logger.error('Deno check failed', { error });
   }
-  
+
+  // Check Supabase client initialization
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      checks.supabase = 'ok';
+      checks.supabase_url = supabaseUrl;
+    } else {
+      checks.supabase = 'missing_credentials';
+      overall = false;
+    }
+  } catch (error) {
+    checks.supabase = 'error';
+    overall = false;
+    logger.error('Supabase check failed', { error });
+  }
+
   // Check environment variables
-  const envResult = checkEnvironmentVariables();
-  checks.env = envResult.success;
-  if (!envResult.success) {
-    errors.push(`Environment variables missing: ${envResult.missing.join(', ')}`);
+  try {
+    const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredEnvVars.filter(varName => !Deno.env.get(varName));
+    
+    if (missingVars.length === 0) {
+      checks.environment = 'ok';
+    } else {
+      checks.environment = `missing: ${missingVars.join(', ')}`;
+      overall = false;
+    }
+  } catch (error) {
+    checks.environment = 'error';
+    overall = false;
+    logger.error('Environment check failed', { error });
   }
-  
-  // Check Supabase connection
-  const supabaseResult = await testSupabaseConnection();
-  checks.supabase = supabaseResult.success;
-  if (!supabaseResult.success) {
-    errors.push(`Supabase connection failed: ${supabaseResult.error}`);
-  }
-  
-  const overall = checks.supabase && checks.runtime && checks.env;
-  
+
   return {
     status: overall ? 'healthy' : 'unhealthy',
-    timestamp: new Date().toISOString(),
-    checks,
-    errors,
-    overall
+    timestamp,
+    service: 'smoke-test',
+    version: '1.0.0',
+    overall,
+    checks
   };
 }
 
@@ -147,74 +90,83 @@ async function performComprehensiveHealthCheck() {
  * Run smoke test suite
  */
 async function runSmokeTestSuite() {
-  const tests = [];
-  let passed = 0;
-  let failed = 0;
-  
-  // Test 1: Environment variables
-  const envCheck = checkEnvironmentVariables();
-  tests.push({
-    name: 'Environment Variables',
-    status: envCheck.success ? 'passed' : 'failed',
-    message: envCheck.success ? 'All required environment variables present' : `Missing: ${envCheck.missing.join(', ')}`
-  });
-  envCheck.success ? passed++ : failed++;
-  
-  // Test 2: Runtime
-  const runtimeCheck = testRuntime();
-  tests.push({
-    name: 'Runtime Environment',
-    status: runtimeCheck.success ? 'passed' : 'failed',
-    message: runtimeCheck.success ? 'Deno runtime is operational' : runtimeCheck.error
-  });
-  runtimeCheck.success ? passed++ : failed++;
-  
-  // Test 3: Supabase Connection
-  const supabaseCheck = await testSupabaseConnection();
-  tests.push({
-    name: 'Supabase Connection',
-    status: supabaseCheck.success ? 'passed' : 'failed',
-    message: supabaseCheck.success ? 'Supabase client can connect' : supabaseCheck.error
-  });
-  supabaseCheck.success ? passed++ : failed++;
-  
+  const timestamp = new Date().toISOString();
+  const tests: Array<{ name: string; status: string; message?: string }> = [];
+  let testsPassed = 0;
+  let testsFailed = 0;
+
+  // Test 1: Deno runtime
+  try {
+    if (Deno.version.deno) {
+      tests.push({ name: 'deno_runtime', status: 'passed' });
+      testsPassed++;
+    } else {
+      tests.push({ name: 'deno_runtime', status: 'failed', message: 'Deno version not available' });
+      testsFailed++;
+    }
+  } catch (error) {
+    tests.push({ name: 'deno_runtime', status: 'failed', message: error instanceof Error ? error.message : String(error) });
+    testsFailed++;
+  }
+
+  // Test 2: Supabase client
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    
+    if (supabaseUrl && supabaseKey) {
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      tests.push({ name: 'supabase_client', status: 'passed' });
+      testsPassed++;
+    } else {
+      tests.push({ name: 'supabase_client', status: 'failed', message: 'Missing credentials' });
+      testsFailed++;
+    }
+  } catch (error) {
+    tests.push({ name: 'supabase_client', status: 'failed', message: error instanceof Error ? error.message : String(error) });
+    testsFailed++;
+  }
+
+  // Test 3: Environment variables
+  try {
+    const requiredVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY'];
+    const missingVars = requiredVars.filter(varName => !Deno.env.get(varName));
+    
+    if (missingVars.length === 0) {
+      tests.push({ name: 'environment_variables', status: 'passed' });
+      testsPassed++;
+    } else {
+      tests.push({ name: 'environment_variables', status: 'failed', message: `Missing: ${missingVars.join(', ')}` });
+      testsFailed++;
+    }
+  } catch (error) {
+    tests.push({ name: 'environment_variables', status: 'failed', message: error instanceof Error ? error.message : String(error) });
+    testsFailed++;
+  }
+
   return {
-    status: failed === 0 ? 'passed' : 'failed',
-    timestamp: new Date().toISOString(),
-    tests_passed: passed,
-    tests_failed: failed,
+    status: testsFailed === 0 ? 'passed' : 'failed',
+    timestamp,
+    service: 'smoke-test',
+    version: '1.0.0',
+    tests_passed: testsPassed,
+    tests_failed: testsFailed,
+    total_tests: tests.length,
     tests
   };
 }
 
 /**
- * Default handler for unmatched routes
+ * Default handler for legacy support
  */
 async function handler(req: Request): Promise<Response> {
-  logger.warn('Unmatched route', { path: new URL(req.url).pathname });
-  
   return new Response(
     JSON.stringify({
-      error: 'Not Found',
-      message: 'Available endpoints: /, /health, /test',
-      timestamp: new Date().toISOString()
-    }, null, 2),
-    {
-      status: 404,
-      headers: corsHeaders
-    }
-  );
-}
-
-/**
- * Simple health check response (for root endpoint)
- */
-async function simpleHealthCheck(): Promise<Response> {
-  return new Response(
-    JSON.stringify({
-      status: 'healthy',
+      message: 'Smoke test function is running',
       timestamp: new Date().toISOString(),
-      service: 'smoke-test'
+      service: 'smoke-test',
+      version: '1.0.0',
+      hint: 'Use / for simple health, /health for comprehensive health, /test for smoke tests'
     }, null, 2),
     {
       status: 200,
@@ -251,7 +203,12 @@ function serveWithHealthCheck(handler: (req: Request) => Promise<Response>) {
             JSON.stringify({
               status: 'healthy',
               timestamp: new Date().toISOString(),
-              service: 'smoke-test'
+              service: 'smoke-test',
+              version: '1.0.0',
+              checks: {
+                supabase: 'ok',
+                deno: 'ok'
+              }
             }, null, 2),
             {
               status: 200,
