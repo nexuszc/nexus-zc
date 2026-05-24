@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 24, 2026 — v8
+# Last updated: May 24, 2026 — v9
 
 ---
 
@@ -536,6 +536,30 @@ Then productized and sold to other multi-business operators.
 - Phase 12: RoofingCanvass (/roofing/canvass) — door-knocking tracker, closer script, GPS, convert to job
 - Phase 15: Dashboard — 🔥/🟡/⚪ score badge, supplement pill, payment dot, ⛈️ warning, Today section, Hot Leads stat
 - Phase 16: All verified — tables, crons, smoke tests, routes
+
+**Roofing OS V3 build (May 24, 2026 — session 3):**
+- Phase 1: Route collision fix — `/roofing/settings` admin renamed to `/roofing/admin/settings`
+- Phase 1: RoofingJobDetail — 10 tabs → 5 tabs (overview+inspection / photos / messages / money / docs)
+  - TAB_COMPAT backward mapping preserves old `?tab=` URL params
+- Phase 1: RoofingTeam route added at `/roofing/team` (ProtectedRoute/admin)
+- Phase 1: RoofingOS.jsx activeTab() cleaned of dead legacy route patterns
+- Phase 2-4 (DB): portal_payments→job_payments, supplement_tracker→supplement_status migrated;
+  job_financials→job_costs migrated; nexus_improvements deduped to 68; crons staggered (no more 5@14:00 collision)
+- Phase 5: RoofingEstimate — material visualizer (6 shingle swatches) + financing calculator (12/36/60 mo @ 7.99% APR, Hearth link)
+- Phase 5: RoofingCanvass — weekly leaderboard (top 5 reps by knock count, gold/silver/bronze)
+- Phase 5: RoofingOnboardingSetup — 3-step wizard at `/roofing/onboarding-setup` (city → review link → done)
+- Phase 5: PWA — sw.js service worker (cache-first assets, network-first nav, Supabase bypass); manifest.json dark bg; SW registered in main.jsx
+- Phase 7: Removed 5 dead legacy route aliases (pipeline/outbound/calls/contractors/exposure)
+- Phase 6: Apex Roofing market_city populated to "Denver"; outreach sequencer confirmed healthy (running daily since May 22)
+
+## ROOFING OS V3 — SCHEMA NOTES (V3 consolidation)
+- `job_payments` is canonical — `portal_payments` is deprecated (still exists, 6 rows migrated)
+- `supplement_status` is canonical — `supplement_tracker` is deprecated
+- `job_costs` is canonical — `job_financials` is deprecated
+- `canvass_knocks` is canonical — `door_knock_log` had 0 rows, deprecated
+- `contractor_accounts.market_city` — set via onboarding-setup wizard or Settings; Apex=Denver
+- `contractor_accounts.onboarding_complete` — set true after step 2 of onboarding-setup wizard
+- Job detail tabs: 5 tabs now. Old ?tab= values map: inspection→overview, notes→docs, payments/supplement/financials→money, portal/documents→docs
 
 **NEXT:**
 1. Fix smoke_test_failed error
