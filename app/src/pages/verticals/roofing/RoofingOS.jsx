@@ -12,7 +12,7 @@ const TABS = [
   { key: 'jobs',      label: 'Jobs',      path: '/roofing/admin/jobs' },
   { key: 'funnel',    label: '🎯 Funnel',  path: '/roofing/funnel'   },
   { key: 'content',   label: 'Content',   path: '/roofing/content'  },
-  { key: 'settings',  label: 'Settings',  path: '/roofing/settings' },
+  { key: 'settings',  label: 'Settings',  path: '/roofing/system'   },
 ]
 
 function activeTab(pathname) {
@@ -40,9 +40,12 @@ export default function RoofingOS() {
       {/* Header + 5-tab bar */}
       <div className="bg-[#0c0c14] border-b border-[#1e1e2e]">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center gap-2.5 pt-4 pb-3">
-            <span className="text-base">🏠</span>
-            <h1 className="text-sm font-bold text-white tracking-tight">Roofing OS</h1>
+          <div className="flex items-center justify-between pt-4 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">🏠</span>
+              <h1 className="text-sm font-bold text-white tracking-tight">Roofing OS</h1>
+            </div>
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 tracking-widest">⚡ ADMIN</span>
           </div>
           <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none">
             {TABS.map(t => (

@@ -414,96 +414,119 @@ function TimelineView({ c, onClose, onLogTouch, onStatusChange, onCallNow }) {
   )
 }
 
-// ── CallLogModal ───────────────────────────────────────────────────────────────
-// Shown immediately after tapping Call Now — pre-set to manual_call
+// ── FloatingCallCard ───────────────────────────────────────────────────────────
+// Bottom-right floating script card — shown after tapping Call Now
 
-function CallLogModal({ c, onSave, onClose }) {
-  const [outcome, setOutcome] = useState('no_answer')
-  const [notes,   setNotes]   = useState('')
+function FloatingCallCard({ c, onSave, onClose }) {
+  const [outcome, setOutcome] = useState('')
   const [saving,  setSaving]  = useState(false)
+  const name = firstName(c?.contact_name || c?.company_name)
 
   const OUTCOMES = [
-    { key: 'no_answer',      label: 'No answer / voicemail',  icon: '📵' },
-    { key: 'not_interested', label: 'Talked — not interested', icon: '✗'  },
-    { key: 'interested',     label: 'Talked — interested',     icon: '🔥' },
-    { key: 'signed_up',      label: 'Talked — signed up',      icon: '✅' },
+    { key: 'no_answer',      label: 'No answer'      },
+    { key: 'interested',     label: 'Interested'     },
+    { key: 'not_interested', label: 'Not interested' },
+    { key: 'signed_up',      label: 'Signed up'      },
   ]
 
-  const outcomeCls = {
-    interested:     'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-    signed_up:      'bg-green-500/20 text-green-300 border border-green-500/30',
-    not_interested: 'bg-red-500/15 text-red-300 border border-red-500/25',
-    no_answer:      'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
-  }
-
   async function save() {
+    if (!outcome) return
     setSaving(true)
     await onSave({
       touch_type: 'manual_call',
       direction:  'outbound',
       status:     outcome,
       outcome,
-      zach_notes: notes.trim() || null,
+      zach_notes: null,
     })
     setSaving(false)
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#0f0f1a] border border-[#1e1e2e] rounded-xl p-5">
-        <h3 className="text-sm font-bold text-white mb-0.5">Log this call</h3>
-        <div className="text-xs text-gray-500 mb-4 font-mono">
-          {c?.company_name}{c?.phone ? ` · ${c.phone}` : ''}
-        </div>
+    <div style={{
+      position: 'fixed', bottom: '80px', right: '16px',
+      width: '320px', zIndex: 9999,
+      background: '#1a2535',
+      borderRadius: '12px',
+      boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      overflow: 'hidden',
+    }}>
 
-        <div className="mb-4">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">What happened?</label>
-          <div className="flex flex-col gap-1.5">
-            {OUTCOMES.map(o => (
-              <button
-                key={o.key}
-                onClick={() => setOutcome(o.key)}
-                className={`text-xs text-left px-3 py-2.5 rounded-lg transition-colors ${
-                  outcome === o.key
-                    ? outcomeCls[o.key]
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]'
-                }`}
-              >
-                {o.icon} {o.label}
-              </button>
-            ))}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(74,158,255,0.08)' }}>
+        <div>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: '#4a9eff', letterSpacing: '0.08em' }}>📞 CALL SCRIPT</span>
+          <span style={{ fontSize: '10px', color: '#64748b', marginLeft: '8px' }}>{c?.company_name}</span>
+        </div>
+        <button onClick={onClose} style={{ color: '#64748b', fontSize: '14px', background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '2px 4px' }}>✕</button>
+      </div>
+
+      {/* Script */}
+      <div style={{ padding: '12px 14px', maxHeight: '280px', overflowY: 'auto', fontSize: '11px', lineHeight: 1.6 }}>
+
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ color: '#4a9eff', fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', marginBottom: '5px' }}>OPENER</div>
+          <div style={{ color: '#e2e8f0' }}>
+            "Hey {name} — I'm Zach, I built a free homeowner portal for roofing contractors. Your clients see real-time photos during the job and stop calling you mid-install. Can I send you the link?"
           </div>
         </div>
 
-        <div className="mb-5">
-          <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Notes (optional)</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="What did they say?"
-            rows={3}
-            className="w-full bg-[#0a0a0f] border border-[#2e2e3e] rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500/40 resize-none"
-          />
-        </div>
-
-        {(outcome === 'interested' || outcome === 'signed_up') && (
-          <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300">
-            🔥 Zach will get a Telegram alert when you save this.
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ color: '#22c55e', fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', marginBottom: '5px' }}>IF INTERESTED</div>
+          <div style={{ color: '#cbd5e1' }}>
+            "Takes 4 minutes to set up. Completely free forever. Sending you roofingos.dev right now."
           </div>
-        )}
-
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors">Skip</button>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex-1 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
         </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', marginBottom: '5px' }}>IF OBJECTION</div>
+          <div style={{ color: '#cbd5e1' }}>
+            "No credit card, no trial — actually free. CompanyCam charges $49/month for the same thing."
+          </div>
+        </div>
+
+        <div>
+          <div style={{ color: '#64748b', fontWeight: 700, fontSize: '9px', letterSpacing: '0.1em', marginBottom: '5px' }}>IF VOICEMAIL</div>
+          <div style={{ color: '#94a3b8' }}>
+            "Hey {name}, Zach from Roofing OS — built a free tool for roofers, sending you a text now."
+          </div>
+        </div>
+      </div>
+
+      {/* Outcome + save */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.25)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '10px' }}>
+          {OUTCOMES.map(o => (
+            <label key={o.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: outcome === o.key ? '#e2e8f0' : '#64748b', userSelect: 'none' }}>
+              <input
+                type="radio"
+                name={`outcome-${c?.id}`}
+                value={o.key}
+                checked={outcome === o.key}
+                onChange={() => setOutcome(o.key)}
+                style={{ accentColor: '#4a9eff', cursor: 'pointer' }}
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+        <button
+          onClick={save}
+          disabled={!outcome || saving}
+          style={{
+            width: '100%', padding: '8px 0',
+            fontSize: '12px', fontWeight: 700,
+            background: outcome ? '#4a9eff' : 'rgba(74,158,255,0.15)',
+            color: outcome ? '#fff' : '#4a9eff',
+            border: 'none', borderRadius: '8px',
+            cursor: outcome ? 'pointer' : 'not-allowed',
+            transition: 'all 0.15s',
+          }}
+        >
+          {saving ? 'Saving…' : 'Save & close'}
+        </button>
       </div>
     </div>
   )
@@ -846,7 +869,7 @@ export default function Funnel() {
       </div>
 
       {/* Timeline slide-over */}
-      {selected && !showLog && !callingCampaign && (
+      {selected && !showLog && (
         <TimelineView
           c={selected}
           onClose={() => setSelected(null)}
@@ -865,9 +888,9 @@ export default function Funnel() {
         />
       )}
 
-      {/* Call log modal (from Call Now button) */}
+      {/* Floating call script card (from Call Now button) */}
       {callingCampaign && (
-        <CallLogModal
+        <FloatingCallCard
           c={callingCampaign}
           onSave={data => saveTouch(callingCampaign.id, data)}
           onClose={() => setCallingCampaign(null)}
