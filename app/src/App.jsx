@@ -56,9 +56,10 @@ export default function App() {
       setSession(session)
       setLoading(false)
     })
+    const ADMIN_EMAILS = ['zach@nexuszc.com']
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (event === 'SIGNED_IN' && session && window.location.pathname === '/') {
+      if (event === 'SIGNED_IN' && session && window.location.pathname === '/' && !ADMIN_EMAILS.includes(session.user.email?.toLowerCase())) {
         supabase
           .from('contractor_accounts')
           .select('id')
