@@ -12,7 +12,7 @@ const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").replace(/[^\x20-\x
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
 const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID")!;
 const FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "zach@roofingos.dev";
-const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach @ Roofing OS";
+const FROM_NAME  = Deno.env.get("RESEND_FROM_NAME")  || "Zach from Roofing OS";
 
 const EMAIL_TRACKER_BASE = `${SUPABASE_URL}/functions/v1/roofing-email-tracker`;
 
@@ -72,7 +72,7 @@ function pixelHtml(logId: string): string {
   return `<img src="${EMAIL_TRACKER_BASE}?lid=${logId}" width="1" height="1" style="display:block;width:1px;height:1px;" alt="" />`;
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<string | null> {
+async function sendEmail(to: string, subject: string, html: string, text: string): Promise<string | null> {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -83,6 +83,8 @@ async function sendEmail(to: string, subject: string, html: string): Promise<str
         to: [to],
         subject,
         html,
+        text,
+        headers: { "List-Unsubscribe": "<mailto:unsubscribe@roofingos.dev>" },
         track_opens: true,
         track_clicks: true,
       }),
@@ -239,6 +241,10 @@ Deno.serve(async (req) => {
         .replace(/\[companyName\]/gi, companyName)
         .replace(/\[prospectId\]/gi, prospectId);
 
+      const textBody = (template.body_text || "")
+        .replace(/\[firstName\]/gi, fn)
+        .replace(/\[companyName\]/gi, companyName);
+
       const subject = template.subject
         .replace(/\[firstName\]/gi, fn)
         .replace(/\[companyName\]/gi, companyName);
@@ -257,7 +263,7 @@ Deno.serve(async (req) => {
           : htmlBody + pixel;
       }
 
-      const emailId = await sendEmail(seq.prospect_email, subject, htmlBody);
+      const emailId = await sendEmail(seq.prospect_email, subject, htmlBody, textBody);
 
       if (emailId) {
         if (logId) {
