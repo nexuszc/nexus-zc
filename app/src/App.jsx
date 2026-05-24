@@ -97,7 +97,7 @@ export default function App() {
             <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
             <Route path="/roofing/crew" element={<RoofingCrew />} />
             <Route path="/roofing/settings" element={<RoofingSettings />} />
-            <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
+            <Route path="/roofing/onboarding" element={<Navigate to="/roofing/onboarding-setup" replace />} />
             <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
             <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
             <Route path="/roofing/schedule" element={<RoofingSchedule />} />
@@ -119,21 +119,20 @@ export default function App() {
 
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>
-            {/* Legacy home — kept for breadcrumb links that haven't migrated */}
-            <Route path="/home" element={<Home />} />
+            <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/brain" element={<Brain />} />
 
             {/* Roofing OS vertical — all sub-tabs handled inside RoofingOS */}
-            {/* Roofing OS — 5 tabs: Dashboard / Jobs / Funnel / Content / Settings */}
-            <Route path="/roofing"             element={<RoofingOS />} />
-            <Route path="/roofing/admin/jobs"  element={<RoofingOS />} />
-            <Route path="/roofing/funnel"      element={<RoofingOS />} />
-            <Route path="/roofing/content"     element={<RoofingOS />} />
+            <Route path="/roofing"                element={<RoofingOS />} />
+            <Route path="/roofing/admin/jobs"     element={<RoofingOS />} />
             <Route path="/roofing/admin/settings" element={<RoofingOS />} />
-            <Route path="/roofing/system"      element={<RoofingOS />} />
+            <Route path="/roofing/system"         element={<RoofingOS />} />
+            <Route path="/roofing/funnel"         element={<Navigate to="/roofing/sales" replace />} />
+            <Route path="/roofing/content"        element={<Navigate to="/roofing/marketing" replace />} />
 
-            {/* Legacy routes kept intact */}
-            <Route path="/dashboard" element={<Dashboard />} />
+            {/* Legacy redirects */}
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
+            {/* Preserved — have content, linked from legacy pages */}
             <Route path="/clients" element={<Clients />} />
             <Route path="/clients/:id" element={<ClientDetail />} />
             <Route path="/leads" element={<Leads />} />

@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 24, 2026 — v9
+# Last updated: May 24, 2026 — v10
 
 ---
 
@@ -468,13 +468,14 @@ Then productized and sold to other multi-business operators.
 
 - SSH key: `~/.ssh/hostinger_vps` — alias `hostinger-vps`
 - pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *), `youtube-recorder` (cron: 0 12 * * 1)
-- Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`
-- Env: `/opt/roofing/.env`
+- Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`, `/opt/roofing/youtube/recorder.js`
+- Env: `/opt/roofing/.env` — contains ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SERPER_API_KEY, OPENAI_API_KEY, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN, YOUTUBE_CHANNEL_ID, YOUTUBE_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
 - nginx serves `/health` at port 80 → `{"ok":true,"service":"roofing-vps"}`
-- nexus-worker v3: 4-hour build dedup, smoke-test exclusion in reflection prompt
+- nexus-worker v3: 4-hour build dedup, smoke-test exclusion in reflection prompt, extractJSON() handles trailing text after Claude JSON responses
 - video-renderer: uses ffmpeg (not Creatomate — 402 no credits), outputs 1080x1920 MP4 to `roofing-content` bucket
 - lead-sniper: Playwright headless scrapes Google Maps for roofing contractors 3.8–4.6 stars, 10–100 reviews, inserts into `roofing_prospects`
 - hail-trigger: weather.gov alerts API, dedupes via `/opt/roofing/sniper/processed_alerts.json`, inserts into `hail_events`, sends Telegram alert
+- youtube-recorder: Playwright captures portal/dashboard screenshots, OpenAI TTS (tts-1, onyx voice) for voiceovers, ffmpeg renders 1920x1080 MP4, uploads via YouTube Data API OAuth2; 5 videos live: v1=4N1kn0O9tl0, v2=0z3yVttDFAo, v3=OskqZbT3ufo, v4=2d7D_qDbik8, v5=MCIwRmbPCQo
 
 ## ARIA CALL GATE RULES
 
@@ -567,6 +568,15 @@ Then productized and sold to other multi-business operators.
 - `contractor_accounts.onboarding_complete` — set true after step 2 of onboarding-setup wizard
 - Job detail tabs: 5 tabs now. Old ?tab= values map: inspection→overview, notes→docs, payments/supplement/financials→money, portal/documents→docs
 
+**Routing + stability fixes (May 24, 2026 — session 5):**
+- App.jsx: 5 dead route redirects added (/roofing/onboarding → /roofing/onboarding-setup, /home → /, /roofing/funnel → /roofing/sales, /roofing/content → /roofing/marketing, /dashboard → /)
+- App.jsx: ADMIN_EMAILS guard in SIGNED_IN handler — prevents zach@nexuszc.com from being redirected to /roofing/jobs when signing in at /
+- Login.jsx: replaced password login with magic link (signInWithOtp), emailRedirectTo: https://app.nexuszc.com; shows "check your email" confirmation state
+- NexusDashboard.jsx: localStorage caching (5-min TTL, CACHE_KEY = 'nexus-dashboard-stats') — renders from cache instantly, refreshes in background
+- nexus-worker (/root/nexus-worker/index.js): extractJSON() helper added — handles Claude API responses with trailing text after JSON (regex fallback `\{[\s\S]*\}`); both reflection and research cycles use it; added process.on('unhandledRejection') crash guard
+- RoofingSettings.jsx: Tools section added — Measurements (📐 → /roofing/measurements) and Integrations (🔌 → /roofing/integrations) tappable rows with chevron
+- YouTube recorder v3 (/opt/roofing/youtube/recorder.js): OpenAI TTS (tts-1, onyx), Playwright auth via Supabase admin generate_link, per-video scene sequences, 5 videos published; all /opt/roofing/.env YouTube/OpenAI/ElevenLabs secrets populated
+
 **Nexus Dashboard v1 build (May 24, 2026 — session 4):**
 - NexusDashboard.jsx at / — replaces Home; revenue banner, verticals grid, brain stats
 - RoofingVertical.jsx at /roofing/dashboard — 6 stat cards, 6 section cards with nav
@@ -588,7 +598,7 @@ Then productized and sold to other multi-business operators.
 - `/roofing/finance` → RoofingFinance (standalone)
 - `/roofing/customers` → RoofingCustomers (standalone)
 - `/roofing` → RoofingOS (admin shell, now 6-tab nav pointing to standalone pages)
-- `/home` → legacy Home page (still exists, not primary)
+- `/home` → redirects to / (NexusDashboard)
 - Standalone pages have their own sticky headers with "← Nexus" back nav to /
 - All under ProtectedRoute (Supabase admin session), no Layout shell
 
@@ -601,7 +611,7 @@ Then productized and sold to other multi-business operators.
 6. Draft operating agreement for Nexus ZC LLC
 7. Build Roofing OS go-to-market system and landing page
 8. Complete homeowner portal fixes and documentation
-9. Add /opt/roofing/.env YouTube/ElevenLabs keys to VPS (from Supabase vault — 6 keys)
+9. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
 
 ---
 

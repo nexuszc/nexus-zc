@@ -124,6 +124,23 @@ function VerticalCard({ vertical, roofingStats, navigate }) {
   )
 }
 
+const CACHE_KEY = 'nexus-dashboard-stats'
+const CACHE_TTL = 5 * 60 * 1000
+
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const { ts, data } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data
+  } catch { return null }
+}
+
+function writeCache(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })) } catch {}
+}
+
 export default function NexusDashboard() {
   const navigate = useNavigate()
   const [verticals, setVerticals] = useState([])
@@ -132,8 +149,20 @@ export default function NexusDashboard() {
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  function applyStats({ verts, roofing, brain }) {
+    setVerticals(verts)
+    setTotalRevenue(verts.reduce((sum, v) => sum + (v.total_revenue_cents || 0), 0))
+    setRoofingStats(roofing)
+    setBrainStats(brain)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    async function load() {
+    // Render instantly from cache if fresh
+    const cached = readCache()
+    if (cached) applyStats(cached)
+
+    async function fetchFresh() {
       const todayStart = new Date()
       todayStart.setHours(0, 0, 0, 0)
       const dayAgo = new Date(Date.now() - 86400000)
@@ -148,65 +177,36 @@ export default function NexusDashboard() {
         directivesRes,
         errorsRes,
       ] = await Promise.all([
-        supabase
-          .from('nexus_verticals')
-          .select('slug, name, route, color, enabled, total_revenue_cents')
-          .eq('enabled', true)
-          .order('slug'),
-        supabase
-          .from('contractor_accounts')
-          .select('id', { count: 'exact', head: true }),
-        supabase
-          .from('roofing_prospects')
-          .select('id', { count: 'exact', head: true })
-          .eq('clicked', true)
-          .is('outcome', null),
-        supabase
-          .from('aria_call_queue')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'queued'),
-        supabase
-          .from('roofing_outreach_log')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', todayStart.toISOString()),
-        supabase
-          .from('nexus_agent_cycles')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', todayStart.toISOString()),
-        supabase
-          .from('nexus_directives')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'active'),
-        supabase
-          .from('system_heartbeats')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'error')
-          .gte('recorded_at', dayAgo.toISOString()),
+        supabase.from('nexus_verticals').select('slug, name, route, color, enabled, total_revenue_cents').eq('enabled', true).order('slug'),
+        supabase.from('contractor_accounts').select('id', { count: 'exact', head: true }),
+        supabase.from('roofing_prospects').select('id', { count: 'exact', head: true }).eq('clicked', true).is('outcome', null),
+        supabase.from('aria_call_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
+        supabase.from('roofing_outreach_log').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+        supabase.from('nexus_agent_cycles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+        supabase.from('nexus_directives').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('system_heartbeats').select('id', { count: 'exact', head: true }).eq('status', 'error').gte('recorded_at', dayAgo.toISOString()),
       ])
 
-      const verts = vertsData || []
-      setVerticals(verts)
+      const fresh = {
+        verts: vertsData || [],
+        roofing: {
+          contractors: contractorsRes.count ?? 0,
+          hotLeads: hotLeadsRes.count ?? 0,
+          calls: callsRes.count ?? 0,
+          emailsSent: emailsSentRes.count ?? 0,
+        },
+        brain: {
+          cycles: cyclesRes.count ?? 0,
+          directives: directivesRes.count ?? 0,
+          errors: errorsRes.count ?? 0,
+        },
+      }
 
-      const total = verts.reduce((sum, v) => sum + (v.total_revenue_cents || 0), 0)
-      setTotalRevenue(total)
-
-      setRoofingStats({
-        contractors: contractorsRes.count ?? 0,
-        hotLeads: hotLeadsRes.count ?? 0,
-        calls: callsRes.count ?? 0,
-        emailsSent: emailsSentRes.count ?? 0,
-      })
-
-      setBrainStats({
-        cycles: cyclesRes.count ?? 0,
-        directives: directivesRes.count ?? 0,
-        errors: errorsRes.count ?? 0,
-      })
-
-      setLoading(false)
+      writeCache(fresh)
+      applyStats(fresh)
     }
 
-    load()
+    fetchFresh()
   }, [])
 
   const totalStr = fmtDollars(totalRevenue)

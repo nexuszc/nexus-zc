@@ -276,6 +276,32 @@ export default function RoofingSettings() {
           )}
         </Section>
 
+        {/* Tools */}
+        <Section title="Tools">
+          {[
+            { label: 'Roof Measurements', desc: 'Aerial measurements & material estimates', path: '/roofing/measurements', icon: '📐' },
+            { label: 'Integrations', desc: 'Connect CompanyCam, Stripe, and more', path: '/roofing/integrations', icon: '🔌' },
+          ].map(tool => (
+            <div
+              key={tool.path}
+              onClick={() => navigate(tool.path)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 0', borderBottom: `1px solid ${C.border}`, cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '20px' }}>{tool.icon}</span>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: '600', color: C.text }}>{tool.label}</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>{tool.desc}</p>
+                </div>
+              </div>
+              <span style={{ color: C.muted, fontSize: '16px' }}>›</span>
+            </div>
+          ))}
+        </Section>
+
         {/* Account */}
         <Section title="Account">
           <button
