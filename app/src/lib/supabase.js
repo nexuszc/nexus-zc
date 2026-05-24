@@ -7,7 +7,7 @@ export const supabase = createClient(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      storageKey: 'roofing-os-contractor',
+      storageKey: 'nexus-admin-session',
       storage: localStorage,
     },
   }

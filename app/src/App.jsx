@@ -35,6 +35,12 @@ import Brain        from './pages/Brain'
 import RoofingOS    from './pages/verticals/roofing/RoofingOS'
 import AEDashboard  from './pages/verticals/roofing/AEDashboard'
 import AELogin      from './pages/verticals/roofing/AELogin'
+import NexusDashboard  from './pages/NexusDashboard'
+import RoofingVertical from './pages/roofing/RoofingVertical'
+import RoofingMarketing from './pages/roofing/RoofingMarketing'
+import RoofingSalesPage from './pages/roofing/RoofingSales'
+import RoofingFinancePage from './pages/roofing/RoofingFinance'
+import RoofingCustomersPage from './pages/roofing/RoofingCustomers'
 
 function ContractorRoute({ session }) {
   if (!session) return <Navigate to="/roofing/login" />
@@ -100,10 +106,20 @@ export default function App() {
           </Route>
         </Route>
 
+        {/* Nexus admin standalone pages — ProtectedRoute, no Layout shell */}
+        <Route element={<ProtectedRoute session={session} />}>
+          <Route path="/"                  element={<NexusDashboard />} />
+          <Route path="/roofing/dashboard" element={<RoofingVertical />} />
+          <Route path="/roofing/marketing" element={<RoofingMarketing />} />
+          <Route path="/roofing/sales"     element={<RoofingSalesPage />} />
+          <Route path="/roofing/finance"   element={<RoofingFinancePage />} />
+          <Route path="/roofing/customers" element={<RoofingCustomersPage />} />
+        </Route>
+
         <Route element={<ProtectedRoute session={session} />}>
           <Route element={<Layout session={session} />}>
-            {/* Nexus command center */}
-            <Route path="/" element={<Home />} />
+            {/* Legacy home — kept for breadcrumb links that haven't migrated */}
+            <Route path="/home" element={<Home />} />
             <Route path="/brain" element={<Brain />} />
 
             {/* Roofing OS vertical — all sub-tabs handled inside RoofingOS */}

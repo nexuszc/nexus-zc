@@ -1,6 +1,6 @@
-// NEXUS briefing v4 — COO morning brief via Telegram
+// NEXUS briefing v5 — COO morning brief via Telegram
 // Scheduled: 13:00 UTC daily (7:00 AM MT)
-// v4 adds: funnel pipeline, hot leads 24h, manual calls today, sequences running
+// v5 adds: email 24h stats + HOT openers, youtube live counts, funnel movement 24h
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -21,7 +21,7 @@ async function tg(chatId: string, text: string) {
 Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: "briefing v4 ready" });
+  if (body.test) return Response.json({ ok: true, message: "briefing v5 ready" });
 
   try {
     // ── 0. Telegram chat ID ──────────────────────────────────────────────────
@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
       signupsYestRes, signupsWeekRes, signupsTotalRes, visitsYestRes,
       ariaCallsRes, emailOpensRes,
       signupsTodayRes,
+      emailSent24hRes, emailClicked24hRes,
     ] = await Promise.all([
       supabase.from("roofing_captures").select("id", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00`),
       supabase.from("roofing_captures").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
@@ -65,10 +66,15 @@ Deno.serve(async (req) => {
       supabase.from("roofing_page_visits").select("visits").eq("date", today).eq("page", "/").maybeSingle(),
       supabase.from("roofing_aria_calls").select("contact_name, contact_phone, outcome, appointment_booked, answered")
         .gte("created_at", yest).limit(20),
-      supabase.from("roofing_outreach_log").select("prospect_id, open_count")
-        .eq("bot_open", false).not("first_opened_at", "is", null).gte("first_opened_at", yest).limit(20),
+      supabase.from("roofing_outreach_log")
+        .select("prospect_id, subject, open_count")
+        .eq("bot_open", false).not("first_opened_at", "is", null).gte("first_opened_at", minus24).limit(20),
       supabase.from("contractor_accounts").select("id", { count: "exact", head: true })
         .gte("created_at", `${today}T00:00:00`).neq("is_test_account", true),
+      supabase.from("roofing_outreach_log").select("id", { count: "exact", head: true })
+        .gte("created_at", minus24).eq("direction", "outbound"),
+      supabase.from("email_log").select("id", { count: "exact", head: true })
+        .not("clicked_at", "is", null).gte("clicked_at", minus24),
     ]);
 
     const signupsToday = signupsYestRes.count || 0;
@@ -78,19 +84,23 @@ Deno.serve(async (req) => {
     const ariaCalls    = ariaCallsRes.data || [];
     const ariaAnswered = ariaCalls.filter((c: any) => c.answered).length;
     const ariaInterested = ariaCalls.filter((c: any) => c.outcome === "interested" || c.appointment_booked).length;
-    const emailOpens   = (emailOpensRes.data || []).length;
+    const emailOpens24h = (emailOpensRes.data || []).length;
+    const emailSent24h  = emailSent24hRes.count || 0;
+    const emailClicked24h = emailClicked24hRes.count || 0;
     const newContractorSignups = signupsTodayRes.count || 0;
+    const openRate24h = emailSent24h > 0 ? Math.round(emailOpens24h / emailSent24h * 100) : 0;
 
     // Pace to 1000 signups (60-day goal)
     const paceNeeded = Math.ceil((1000 - signupsTotal) / 60);
     const onPace = signupsToday >= paceNeeded;
     const paceDays = signupsToday > 0 ? Math.ceil((1000 - signupsTotal) / signupsToday) : 999;
 
-    // ── 3. Funnel pipeline ────────────────────────────────────────────────────
-    const [funnelStagesRes, hotLeads24hRes, manualCallsTodayRes, sequencesActiveRes] = await Promise.all([
+    // ── 3. Funnel pipeline + movement ────────────────────────────────────────
+    const [funnelStagesRes, hotLeads24hRes, manualCallsTodayRes, sequencesActiveRes,
+           newProspects24hRes, movedInterested24hRes] = await Promise.all([
       supabase.from("roofing_prospects").select("funnel_stage"),
       supabase.from("roofing_prospects")
-        .select("owner_name, company_name, phone")
+        .select("owner_name, company_name, phone, total_opens")
         .eq("funnel_stage", "hot")
         .gte("funnel_stage_updated_at", minus24)
         .limit(5),
@@ -100,8 +110,15 @@ Deno.serve(async (req) => {
         .eq("direction", "outbound"),
       supabase.from("email_sequences")
         .select("id", { count: "exact", head: true })
-        .eq("completed", false)
-        .eq("unsubscribed", false),
+        .eq("status", "active")
+        .neq("unsubscribed", true),
+      supabase.from("roofing_prospects")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", minus24),
+      supabase.from("roofing_prospects")
+        .select("id", { count: "exact", head: true })
+        .eq("funnel_stage", "interested")
+        .gte("funnel_stage_updated_at", minus24),
     ]);
 
     const funnelCounts: Record<string, number> = {};
@@ -116,6 +133,8 @@ Deno.serve(async (req) => {
     );
     const manualCallsToday = manualCallsTodayRes.count || 0;
     const sequencesActive  = sequencesActiveRes.count || 0;
+    const newProspects24h  = newProspects24hRes.count || 0;
+    const movedInterested24h = movedInterested24hRes.count || 0;
 
     // ── 4. Partnership pipeline ───────────────────────────────────────────────
     const [partnerStatusRes, partnerRepliesRes, partnerOutreachYestRes, newTargetsWeekRes] = await Promise.all([
@@ -139,8 +158,9 @@ Deno.serve(async (req) => {
     const outreachYest      = (partnerOutreachYestRes.data || []).length;
     const partnerReplies    = (partnerRepliesRes.data || []);
 
-    // ── 5. Content queue ─────────────────────────────────────────────────────
-    const [ytReadyRes, ytPostedYestRes, contentQueueRes, ytAnalyticsRes, voiceoverCostRes, contentPublishedTodayRes] = await Promise.all([
+    // ── 5. Content queue + YouTube ───────────────────────────────────────────
+    const [ytReadyRes, ytPostedYestRes, contentQueueRes, ytAnalyticsRes,
+           voiceoverCostRes, contentPublishedTodayRes, videosLiveRes] = await Promise.all([
       supabase.from("roofing_content").select("id, title").eq("youtube_upload_ready", true).is("published_url", null).limit(5),
       supabase.from("roofing_content").select("title").not("published_url", "is", null).gte("published_at", yest).limit(1),
       supabase.from("roofing_content").select("channel, status").eq("status", "approved").not("channel", "is", null),
@@ -151,11 +171,14 @@ Deno.serve(async (req) => {
         .not("voiceover_chars", "is", null).gte("created_at", weekAgo),
       supabase.from("roofing_content").select("id", { count: "exact", head: true })
         .not("published_url", "is", null).gte("published_at", `${today}T00:00:00`),
+      supabase.from("roofing_content").select("id", { count: "exact", head: true })
+        .not("published_url", "is", null),
     ]);
 
     const ytReady      = (ytReadyRes.data || []).length;
     const ytPostedYest = ytPostedYestRes.data?.[0]?.title || "none";
     const contentPublishedToday = contentPublishedTodayRes.count || 0;
+    const videosLive   = videosLiveRes.count || 0;
 
     const contentByChannel: Record<string, number> = {};
     for (const c of contentQueueRes.data || []) {
@@ -169,6 +192,7 @@ Deno.serve(async (req) => {
     const ytSubs       = (ytMeta as Record<string, number>).subscribers || 0;
     const ytWatchHours = (ytMeta as Record<string, number>).watch_hours || 0;
     const ytTotalViews = (ytMeta as Record<string, number>).total_views || 0;
+    const ytNewViews24h = (ytMeta as Record<string, number>).new_views_24h || 0;
     const ytSubsPct    = Math.min(100, Math.round(ytSubs / 1000 * 100));
     const ytHoursPct   = Math.min(100, Math.round(ytWatchHours / 4000 * 100));
 
@@ -237,16 +261,22 @@ Deno.serve(async (req) => {
       `Pace to 1,000: ${paceDays} days ${onPace ? "✅" : "⚠️ behind — need " + paceNeeded + "/day"}`,
       visitsToday > 0 ? `Visits today: ${visitsToday} → conv ${visitsToday > 0 ? Math.round(signupsToday / visitsToday * 100) : 0}%` : "",
       "",
+      `📧 EMAIL LAST 24H`,
+      `Sent: ${emailSent24h} | Opened: ${emailOpens24h} (${openRate24h}%) | Clicked: ${emailClicked24h}`,
+      `Active sequences: ${sequencesActive}`,
+      hotLeads24h.length > 0
+        ? `🔥 HOT openers:\n${hotLeads24h.map(l => `  • ${l}`).join("\n")}`
+        : "No hot leads in 24h",
+      "",
       `🎯 FUNNEL (${funnelTotal} active)`,
       funnelLine,
-      hotLeads24h.length > 0
-        ? `🔥 HOT last 24h:\n${hotLeads24h.map(l => `  • ${l}`).join("\n")}`
-        : "No new hot leads in 24h",
-      `Calls today: ${manualCallsToday} | Sequences running: ${sequencesActive}`,
+      "",
+      `📊 FUNNEL MOVEMENT (24h)`,
+      `New prospects: ${newProspects24h} | Moved to interested: ${movedInterested24h} | Signed up: ${newContractorSignups}`,
+      `Calls today: ${manualCallsToday}`,
       "",
       `📞 OUTREACH`,
       `Aria calls yesterday: ${ariaCalls.length} (${ariaAnswered} answered, ${ariaInterested} interested)`,
-      `Email opens: ${emailOpens}`,
       "",
       `🤝 PARTNERSHIPS`,
       `Active: ${activePartners} | Pipeline: ${contactedPartners} | New targets this week: ${newTargetsWeek}`,
@@ -255,10 +285,11 @@ Deno.serve(async (req) => {
         ? `Replies: ${partnerReplies.length}\n${partnerReplies.map((p: any) => `  • ${p.name} REPLIED`).join("\n")}`
         : "Replies: 0",
       "",
-      `📱 CONTENT`,
-      `Published today: ${contentPublishedToday} | Last upload: ${ytPostedYest}`,
+      `🎬 YOUTUBE`,
+      `Videos live: ${videosLive} | Total views: ${ytTotalViews.toLocaleString()}${ytNewViews24h > 0 ? ` (+${ytNewViews24h} today)` : ""}`,
+      ytSubs > 0 ? `Subs: ${ytSubs} (${ytSubsPct}% to 1K) | Watch hours: ${ytWatchHours.toFixed(0)}h (${ytHoursPct}% to monetize)` : "",
       `Queue: ${ytReady} ready | YT ${ytQueueDays} | FB ${fbQueueDays} | Reddit ${redQueueDays}`,
-      ytSubs > 0 ? `Channel: ${ytSubs} subs (${ytSubsPct}%) | ${ytTotalViews.toLocaleString()} views | ${ytWatchHours.toFixed(0)}h (${ytHoursPct}% to monetize)` : "",
+      contentPublishedToday > 0 ? `Published today: ${contentPublishedToday}` : "",
       voiceoverCharsWeek > 0 ? `TTS this week: ${(voiceoverCharsWeek / 1000).toFixed(1)}K chars ≈ $${ttsWeekCost}` : "",
       ytReady < 3 ? "⚠️ YouTube queue low" : "",
       "",

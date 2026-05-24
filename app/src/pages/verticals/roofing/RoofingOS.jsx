@@ -5,25 +5,25 @@ import Funnel          from './Funnel'
 import Content         from './Content'
 import System          from './System'
 
-// ── 5 tabs only ────────────────────────────────────────────────────────────────
+// ── 6 tabs — each navigates to a standalone page ───────────────────────────
 
 const TABS = [
-  { key: 'dashboard', label: 'Dashboard', path: '/roofing'          },
-  { key: 'jobs',      label: 'Jobs',      path: '/roofing/admin/jobs' },
-  { key: 'funnel',    label: '🎯 Funnel',  path: '/roofing/funnel'   },
-  { key: 'content',   label: 'Content',   path: '/roofing/content'  },
-  { key: 'settings',  label: 'Settings',  path: '/roofing/system'   },
+  { key: 'overview',   label: 'Overview',   path: '/roofing/dashboard'  },
+  { key: 'marketing',  label: 'Marketing',  path: '/roofing/marketing'  },
+  { key: 'sales',      label: 'Sales',      path: '/roofing/sales'      },
+  { key: 'finance',    label: 'Finance',    path: '/roofing/finance'    },
+  { key: 'customers',  label: 'Customers',  path: '/roofing/customers'  },
+  { key: 'system',     label: 'System',     path: '/roofing/system'     },
 ]
 
 function activeTab(pathname) {
-  if (pathname === '/roofing')                          return 'dashboard'
-  if (pathname.startsWith('/roofing/admin/jobs'))       return 'jobs'
-  if (pathname.startsWith('/roofing/funnel'))           return 'funnel'
-  if (pathname.startsWith('/roofing/content'))          return 'content'
-  if (pathname.startsWith('/roofing/settings')
-    || pathname.startsWith('/roofing/system')
-    || pathname.startsWith('/roofing/admin/settings'))  return 'settings'
-  return 'dashboard'
+  if (pathname.startsWith('/roofing/marketing'))        return 'marketing'
+  if (pathname.startsWith('/roofing/sales'))            return 'sales'
+  if (pathname.startsWith('/roofing/finance'))          return 'finance'
+  if (pathname.startsWith('/roofing/customers'))        return 'customers'
+  if (pathname.startsWith('/roofing/system')
+    || pathname.startsWith('/roofing/admin/settings'))  return 'system'
+  return 'overview'
 }
 
 export default function RoofingOS() {
@@ -61,12 +61,9 @@ export default function RoofingOS() {
         </div>
       </div>
 
-      {/* Tab content */}
-      {tab === 'dashboard' && <RoofingOverview />}
-      {tab === 'jobs'      && <AdminJobs />}
-      {tab === 'funnel'    && <Funnel />}
-      {tab === 'content'   && <Content />}
-      {tab === 'settings'  && <System />}
+      {/* Tab content — standalone tabs navigate away; system renders inline */}
+      {tab === 'overview'  && <RoofingOverview />}
+      {tab === 'system'    && <System />}
     </div>
   )
 }
