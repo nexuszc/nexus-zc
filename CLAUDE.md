@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 24, 2026 — v9
+# Last updated: May 24, 2026 — v8
 
 ---
 
@@ -504,22 +504,8 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 24, 2026)
 
-**DONE (Hormozi mode — May 24):**
-- Aria calls: diagnosed as working correctly (Sunday = blocked by TCPA gate, fires Monday)
-- Portal gap (RoofingDashboard.jsx): already wired, no fix needed
-- Settings page: already fully built (System.jsx), no fix needed
-- measurement_orders table: created
-- Auto-approve on-brand content: 214 pieces approved (was 28; cleared pending + pending_approval)
-- Landing page social proof: "Join 500+ roofing contractors" added below hero CTA
-- Landing page FREE plan urgency: "Free forever — upgrade when you're ready"
-- Landing page SMS bubble: floating bottom-right "Text us a question" → sms:+17205006668
-- Demo portal: upgraded (supplement approved $4,200, 20 photos, job completed, review request, realistic messages)
-- Email subjects: Hormozi-style touch 1/2/3 updated in email_templates
-- roofing-email-webhook v20: mirrors Resend events to email_log
-- roofing-youtube-engine v28: enforces Roofing OS-only content, 10 product categories
-- VPS stack: nexus-worker v3 (dedup), hail-trigger, lead-sniper, video-renderer, nginx /health
-- roofing-notify v46: CORS fix — OPTIONS handler + CORS headers on all responses (unblocks portal link + sequencer)
-- briefing v4 (v64): adds FUNNEL section (stage breakdown), hot leads 24h, calls today, new contractor signups, sequences running, content published today
+**DONE this session:**
+- (nothing yet this session)
 
 **NEXT:**
 1. Fix smoke_test_failed error
@@ -527,9 +513,9 @@ Then productized and sold to other multi-business operators.
 3. Add Self-Learning Pattern Recognition
 4. Add memory consolidation ability
 5. Add Conversation Context Memory
-6. Draft complete operating agreement for Nexus ZC LLC
-7. Build complete Roofing OS go-to-market system
-8. Stabilize Denver Pro Roofing client health to 75+
+6. Draft operating agreement for Nexus ZC LLC
+7. Build Roofing OS go-to-market system and landing page
+8. Complete homeowner portal fixes and documentation
 
 ---
 
