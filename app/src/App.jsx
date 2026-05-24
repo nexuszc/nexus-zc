@@ -23,6 +23,8 @@ import RoofingSchedule from './pages/roofing/RoofingSchedule'
 import RoofingEstimate from './pages/roofing/RoofingEstimate'
 import RoofingCrewMobile from './pages/roofing/RoofingCrewMobile'
 import RoofingCanvass from './pages/roofing/RoofingCanvass'
+import RoofingTeam from './pages/roofing/RoofingTeam'
+import RoofingOnboardingSetup from './pages/roofing/RoofingOnboardingSetup'
 import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
@@ -94,6 +96,7 @@ export default function App() {
             <Route path="/roofing/schedule" element={<RoofingSchedule />} />
             <Route path="/roofing/estimate/:id" element={<RoofingEstimate />} />
             <Route path="/roofing/canvass" element={<RoofingCanvass />} />
+            <Route path="/roofing/onboarding-setup" element={<RoofingOnboardingSetup />} />
           </Route>
         </Route>
 
@@ -109,14 +112,8 @@ export default function App() {
             <Route path="/roofing/admin/jobs"  element={<RoofingOS />} />
             <Route path="/roofing/funnel"      element={<RoofingOS />} />
             <Route path="/roofing/content"     element={<RoofingOS />} />
-            <Route path="/roofing/settings"    element={<RoofingOS />} />
-            {/* Legacy routes — activeTab() maps these to nearest new tab */}
-            <Route path="/roofing/pipeline"    element={<RoofingOS />} />
-            <Route path="/roofing/outbound"    element={<RoofingOS />} />
-            <Route path="/roofing/calls"       element={<RoofingOS />} />
-            <Route path="/roofing/contractors" element={<RoofingOS />} />
+            <Route path="/roofing/admin/settings" element={<RoofingOS />} />
             <Route path="/roofing/system"      element={<RoofingOS />} />
-            <Route path="/roofing/exposure"    element={<RoofingOS />} />
 
             {/* Legacy routes kept intact */}
             <Route path="/dashboard" element={<Dashboard />} />
@@ -126,6 +123,7 @@ export default function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
             <Route path="/outreach" element={<OutreachDashboard />} />
+            <Route path="/roofing/team" element={<RoofingTeam />} />
 
           </Route>
         </Route>

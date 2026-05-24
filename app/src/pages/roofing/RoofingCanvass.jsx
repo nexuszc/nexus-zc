@@ -108,6 +108,15 @@ export default function RoofingCanvass() {
 
   const displayKnocks = filterResult === 'all' ? knocks : knocks.filter(k => k.result === filterResult)
 
+  const thisWeekStart = new Date()
+  thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay())
+  thisWeekStart.setHours(0, 0, 0, 0)
+  const leaderboard = Object.entries(
+    knocks
+      .filter(k => new Date(k.knocked_at) >= thisWeekStart && k.knocked_by)
+      .reduce((acc, k) => { acc[k.knocked_by] = (acc[k.knocked_by] || 0) + 1; return acc }, {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 5)
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg, ...font, paddingBottom: '80px' }}>
       {/* Header */}
@@ -274,6 +283,25 @@ export default function RoofingCanvass() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {/* Leaderboard — this week */}
+        {leaderboard.length > 0 && (
+          <div style={{ marginTop: '20px' }}>
+            <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏆 This Week's Leaderboard</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {leaderboard.map(([name, count], i) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: C.surface, border: `1px solid ${i === 0 ? 'rgba(245,158,11,0.3)' : C.border}`, borderRadius: '10px', padding: '10px 14px' }}>
+                  <span style={{ fontSize: '16px', minWidth: '24px', textAlign: 'center' }}>
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
+                  </span>
+                  <span style={{ flex: 1, fontSize: '14px', fontWeight: '600', color: C.text }}>{name}</span>
+                  <span style={{ fontSize: '18px', fontWeight: '800', color: i === 0 ? C.warning : C.primary }}>{count}</span>
+                  <span style={{ fontSize: '11px', color: C.muted }}>knock{count !== 1 ? 's' : ''}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

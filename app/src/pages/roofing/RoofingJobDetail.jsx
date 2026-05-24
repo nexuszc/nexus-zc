@@ -151,7 +151,9 @@ export default function RoofingJobDetail() {
   const [suppStatus, setSuppStatus] = useState(null)
   const [jobCosts, setJobCosts] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview')
+  const TAB_COMPAT = { inspection: 'overview', notes: 'docs', payments: 'money', supplement: 'money', financials: 'money', portal: 'docs', documents: 'docs' }
+  const rawTab = searchParams.get('tab') || 'overview'
+  const [activeTab, setActiveTab] = useState(TAB_COMPAT[rawTab] || rawTab)
 
   // form states
   const [newMessage, setNewMessage] = useState('')
@@ -674,16 +676,11 @@ export default function RoofingJobDetail() {
   const xactTotal = xactItems.reduce((s, i) => s + (i.qty * i.unit_price_cents), 0)
 
   const tabs = [
-    { id: 'overview',    label: 'Overview' },
-    { id: 'inspection',  label: `Inspection${inspection?.passed === false ? ' ⚠️' : inspection ? ' ✓' : ''}` },
-    { id: 'payments',    label: `Payments${payments.length ? ` (${paidPayments.length}/${payments.length})` : ''}` },
-    { id: 'supplement',  label: `Supplement${suppStatus?.status && suppStatus.status !== 'not_started' ? ' •' : ''}` },
-    { id: 'financials',  label: 'Financials' },
-    { id: 'portal',      label: 'Portal' },
-    { id: 'photos',      label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
-    { id: 'messages',    label: `Messages${unreadCount > 0 ? ` 🔴` : messages.length ? ` (${messages.length})` : ''}` },
-    { id: 'documents',   label: `Docs${docs.length ? ` (${docs.length})` : ''}` },
-    { id: 'notes',       label: 'Notes' },
+    { id: 'overview',  label: 'Overview' },
+    { id: 'photos',    label: `Photos${photos.length ? ` (${photos.length})` : ''}` },
+    { id: 'messages',  label: `Messages${unreadCount > 0 ? ` 🔴` : messages.length ? ` (${messages.length})` : ''}` },
+    { id: 'money',     label: `Money${payments.length || (suppStatus?.status && suppStatus.status !== 'not_started') ? ' •' : ''}` },
+    { id: 'docs',      label: `Docs${docs.length ? ` (${docs.length})` : ''}` },
   ]
 
   const permitStatusMeta = PERMIT_STATUSES.find(s => s.value === (permit?.status || permitForm.status)) || PERMIT_STATUSES[0]
@@ -968,8 +965,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── INSPECTION ──────────────────────────────────────────────── */}
-        {activeTab === 'inspection' && (
+        {/* ── INSPECTION (shown in overview) ─────────────────────────── */}
+        {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
               <p style={{ margin: '0 0 14px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Inspector Info</p>
@@ -1037,8 +1034,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── PAYMENTS ────────────────────────────────────────────────── */}
-        {activeTab === 'payments' && (
+        {/* ── MONEY: PAYMENTS ─────────────────────────────────────────── */}
+        {activeTab === 'money' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Summary */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
@@ -1093,8 +1090,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── SUPPLEMENT ──────────────────────────────────────────────── */}
-        {activeTab === 'supplement' && (
+        {/* ── MONEY: SUPPLEMENT ───────────────────────────────────────── */}
+        {activeTab === 'money' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Status + adjuster */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '16px' }}>
@@ -1193,8 +1190,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── FINANCIALS ──────────────────────────────────────────────── */}
-        {activeTab === 'financials' && (
+        {/* ── MONEY: FINANCIALS ───────────────────────────────────────── */}
+        {activeTab === 'money' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Margin summary */}
             {revenueCents > 0 && totalCostsCents > 0 && (
@@ -1275,8 +1272,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── PORTAL ─────────────────────────────────────────────────── */}
-        {activeTab === 'portal' && (
+        {/* ── DOCS: PORTAL ────────────────────────────────────────────── */}
+        {activeTab === 'docs' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
               <p style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: '700', color: C.text }}>🔗 Homeowner Portal</p>
@@ -1435,8 +1432,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── DOCUMENTS ──────────────────────────────────────────────── */}
-        {activeTab === 'documents' && (
+        {/* ── DOCS: DOCUMENTS ─────────────────────────────────────────── */}
+        {activeTab === 'docs' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {docs.map(d => (
               <div key={d.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '14px 16px' }}>
@@ -1460,8 +1457,8 @@ export default function RoofingJobDetail() {
           </div>
         )}
 
-        {/* ── NOTES ──────────────────────────────────────────────────── */}
-        {activeTab === 'notes' && (
+        {/* ── DOCS: NOTES ─────────────────────────────────────────────── */}
+        {activeTab === 'docs' && (
           <div>
             <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Internal Notes</p>
             <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'rgba(136,150,168,0.6)' }}>Not visible to the homeowner.</p>

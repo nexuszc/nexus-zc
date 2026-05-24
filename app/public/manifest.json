@@ -3,8 +3,9 @@
   "short_name": "Roofing OS",
   "description": "Contractor dashboard — manage jobs, homeowner portals, and photos",
   "start_url": "/roofing/jobs",
+  "scope": "/roofing/",
   "display": "standalone",
-  "background_color": "#f9fafb",
+  "background_color": "#0f1923",
   "theme_color": "#4a9eff",
   "orientation": "portrait-primary",
   "icons": [

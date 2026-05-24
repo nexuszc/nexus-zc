@@ -16,17 +16,13 @@ const TABS = [
 ]
 
 function activeTab(pathname) {
-  if (pathname === '/roofing'
-    || pathname.startsWith('/roofing/contractors')
-    || pathname.startsWith('/roofing/exposure'))       return 'dashboard'
-  if (pathname.startsWith('/roofing/admin/jobs'))      return 'jobs'
-  if (pathname.startsWith('/roofing/funnel')
-    || pathname.startsWith('/roofing/outbound')
-    || pathname.startsWith('/roofing/calls')
-    || pathname.startsWith('/roofing/pipeline'))       return 'funnel'
-  if (pathname.startsWith('/roofing/content'))         return 'content'
+  if (pathname === '/roofing')                          return 'dashboard'
+  if (pathname.startsWith('/roofing/admin/jobs'))       return 'jobs'
+  if (pathname.startsWith('/roofing/funnel'))           return 'funnel'
+  if (pathname.startsWith('/roofing/content'))          return 'content'
   if (pathname.startsWith('/roofing/settings')
-    || pathname.startsWith('/roofing/system'))         return 'settings'
+    || pathname.startsWith('/roofing/system')
+    || pathname.startsWith('/roofing/admin/settings'))  return 'settings'
   return 'dashboard'
 }
 

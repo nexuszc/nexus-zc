@@ -26,6 +26,15 @@ const COMMON_ITEMS = [
   { description: 'Permit fee', qty: 1, unit: 'flat', price: 0 },
 ]
 
+const SHINGLE_COLORS = [
+  { name: 'Charcoal',       hex: '#3d3d3d', brand: 'GAF Timberline HD' },
+  { name: 'Barkwood',       hex: '#6b4f3a', brand: 'GAF Timberline HD' },
+  { name: 'Weathered Wood', hex: '#8b7355', brand: 'GAF Timberline HD' },
+  { name: 'Shakewood',      hex: '#7a6b5d', brand: 'GAF Timberline HDZ' },
+  { name: 'Oyster Gray',    hex: '#b0a99f', brand: 'Owens Corning Duration' },
+  { name: 'Hickory',        hex: '#5c4a38', brand: 'Owens Corning Duration' },
+]
+
 function newItem(description = '') {
   return { id: Date.now() + Math.random(), description, qty: 1, unit: 'job', price: 0 }
 }
@@ -50,6 +59,7 @@ export default function RoofingEstimate() {
   const [showSigPad, setShowSigPad] = useState(false)
   const [sigName, setSigName] = useState('')
   const [savingSig, setSavingSig] = useState(false)
+  const [selectedShingle, setSelectedShingle] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -299,6 +309,25 @@ export default function RoofingEstimate() {
           </div>
         </div>
 
+        {/* Material Visualizer */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
+          <p style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🏠 Shingle Color</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            {SHINGLE_COLORS.map(c => (
+              <button key={c.name} onClick={() => setSelectedShingle(selectedShingle === c.name ? null : c.name)}
+                style={{ background: selectedShingle === c.name ? `${c.hex}33` : 'rgba(255,255,255,0.03)', border: `2px solid ${selectedShingle === c.name ? c.hex : 'rgba(255,255,255,0.08)'}`, borderRadius: '10px', padding: '10px 6px', cursor: 'pointer', textAlign: 'center' }}>
+                <div style={{ width: '100%', height: '32px', borderRadius: '6px', background: c.hex, marginBottom: '6px' }} />
+                <p style={{ margin: 0, fontSize: '10px', fontWeight: '600', color: selectedShingle === c.name ? '#ffffff' : '#8896a8', lineHeight: 1.2 }}>{c.name}</p>
+              </button>
+            ))}
+          </div>
+          {selectedShingle && (
+            <p style={{ margin: '10px 0 0', fontSize: '12px', color: '#8896a8' }}>
+              Selected: <strong style={{ color: '#ffffff' }}>{selectedShingle}</strong> — {SHINGLE_COLORS.find(c => c.name === selectedShingle)?.brand}
+            </p>
+          )}
+        </div>
+
         {/* Totals */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -321,6 +350,33 @@ export default function RoofingEstimate() {
             </div>
           </div>
         </div>
+
+        {/* Financing Calculator */}
+        {total > 0 && (
+          <div style={{ background: C.surface, border: '1px solid rgba(74,158,255,0.2)', borderRadius: '14px', padding: '16px' }}>
+            <p style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '700', color: '#4a9eff', textTransform: 'uppercase', letterSpacing: '0.06em' }}>💳 Financing Options</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '12px' }}>
+              {[12, 36, 60].map(months => {
+                const rate = 0.0799 / 12
+                const monthly = total * rate / (1 - Math.pow(1 + rate, -months))
+                return (
+                  <div key={months} style={{ background: C.surface2, borderRadius: '10px', padding: '12px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 3px', fontSize: '11px', color: C.muted }}>{months} mo</p>
+                    <p style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: C.text }}>
+                      ${monthly.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      <span style={{ fontSize: '10px', fontWeight: '400', color: C.muted }}>/mo</span>
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+            <p style={{ margin: '0 0 8px', fontSize: '11px', color: C.muted }}>7.99% APR estimate — subject to credit approval. Powered by Hearth.</p>
+            <a href="https://www.gethearth.com" target="_blank" rel="noopener"
+              style={{ display: 'block', background: 'rgba(74,158,255,0.1)', border: '1px solid rgba(74,158,255,0.25)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', color: '#4a9eff', textDecoration: 'none', textAlign: 'center' }}>
+              Apply for Financing via Hearth →
+            </a>
+          </div>
+        )}
 
         {/* Notes */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
