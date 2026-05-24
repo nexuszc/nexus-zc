@@ -53,10 +53,30 @@ async function sendEmail(to: string, subject: string, html: string) {
   return res.json();
 }
 
-Deno.serve(async (req) => {
-  const { event, job_id, data } = await req.json();
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
 
-  if (!job_id) return Response.json({ error: "job_id required" }, { status: 400 });
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: CORS_HEADERS });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  if (body.test) return json({ ok: true, message: "roofing-notify ready" });
+
+  const { event, job_id, data } = body;
+
+  if (!job_id) return json({ error: "job_id required" }, 400);
 
   const { data: job } = await supabase
     .from("roofing_jobs")
@@ -64,7 +84,7 @@ Deno.serve(async (req) => {
     .eq("id", job_id)
     .single();
 
-  if (!job) return Response.json({ error: "Job not found" }, { status: 404 });
+  if (!job) return json({ error: "Job not found" }, 404);
 
   const contractor = job.clients;
   const portalUrl = `https://app.nexuszc.com/roofing/portal/${job.portal_token}`;
@@ -182,9 +202,9 @@ Deno.serve(async (req) => {
     await supabase.from("roofing_jobs")
       .update({ portal_last_viewed_at: new Date().toISOString() })
       .eq("id", job_id);
-    return Response.json({ ok: true, event: "portal_viewed" });
+    return json({ ok: true, event: "portal_viewed" });
   }
 
   await Promise.allSettled(notifications);
-  return Response.json({ ok: true, event, notifications_sent: notifications.length });
+  return json({ ok: true, event, notifications_sent: notifications.length });
 });

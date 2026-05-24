@@ -507,9 +507,9 @@ Then productized and sold to other multi-business operators.
 **DONE (Hormozi mode — May 24):**
 - Aria calls: diagnosed as working correctly (Sunday = blocked by TCPA gate, fires Monday)
 - Portal gap (RoofingDashboard.jsx): already wired, no fix needed
-- Settings page: already fully built, no fix needed
+- Settings page: already fully built (System.jsx), no fix needed
 - measurement_orders table: created
-- Auto-approve on-brand content: 28 pieces approved
+- Auto-approve on-brand content: 214 pieces approved (was 28; cleared pending + pending_approval)
 - Landing page social proof: "Join 500+ roofing contractors" added below hero CTA
 - Landing page FREE plan urgency: "Free forever — upgrade when you're ready"
 - Landing page SMS bubble: floating bottom-right "Text us a question" → sms:+17205006668
@@ -518,6 +518,8 @@ Then productized and sold to other multi-business operators.
 - roofing-email-webhook v20: mirrors Resend events to email_log
 - roofing-youtube-engine v28: enforces Roofing OS-only content, 10 product categories
 - VPS stack: nexus-worker v3 (dedup), hail-trigger, lead-sniper, video-renderer, nginx /health
+- roofing-notify v46: CORS fix — OPTIONS handler + CORS headers on all responses (unblocks portal link + sequencer)
+- briefing v4 (v64): adds FUNNEL section (stage breakdown), hot leads 24h, calls today, new contractor signups, sequences running, content published today
 
 **NEXT:**
 1. Fix smoke_test_failed error
