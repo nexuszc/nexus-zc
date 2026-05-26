@@ -484,6 +484,23 @@ Then productized and sold to other multi-business operators.
 - Blocked calls are rescheduled to next Monday 9–10am local time in `aria_call_queue`
 - `aria_call_queue` schema has NO `prospect_id` column — use `contact_phone`, `contact_name`, `contact_type`
 
+## ARIA EMERGENCY STOP — May 26, 2026
+
+**ALL ARIA CALLS ARE PAUSED. DO NOT RE-ENABLE WITHOUT FIXING DEDUP.**
+
+- 1,000 queued calls set to `paused` on May 26
+- 207 calls had already fired before stop
+- Worst offenders: Storm & Hail AL called **11 times**, Weather Shield called **10 times** — both since May 17
+- Root cause: no dedup guard in queue processor — same contacts re-queued daily for 9 days
+- `aria-queue-processor` and `aria-queue-daily` crons were not in cron table (already absent)
+- Re-queuing source: likely `nexus-core` or the edge functions themselves
+
+**Before re-enabling Aria calls:**
+1. Add dedup: check `aria_call_queue` for prior entries per `contact_phone` before inserting
+2. Add max-attempts cap (e.g. 3 attempts per contact per 30 days)
+3. Audit `aria-queue-processor` for the re-queuing loop
+4. Update this section when fixed and re-enabled
+
 ## EMAIL TEMPLATE SUBJECTS (Hormozi-style, updated May 24 2026)
 
 - Touch 1: "your homeowners are calling you too much"
