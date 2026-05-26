@@ -41,6 +41,7 @@ import RoofingMarketing from './pages/roofing/RoofingMarketing'
 import RoofingSalesPage from './pages/roofing/RoofingSales'
 import RoofingFinancePage from './pages/roofing/RoofingFinance'
 import RoofingCustomersPage from './pages/roofing/RoofingCustomers'
+import RoofingSEO from './pages/roofing/RoofingSEO'
 
 function ContractorRoute({ session }) {
   if (!session) return <Navigate to="/roofing/login" />
@@ -115,6 +116,7 @@ export default function App() {
           <Route path="/roofing/sales"     element={<RoofingSalesPage />} />
           <Route path="/roofing/finance"   element={<RoofingFinancePage />} />
           <Route path="/roofing/customers" element={<RoofingCustomersPage />} />
+          <Route path="/roofing/seo"       element={<RoofingSEO />} />
         </Route>
 
         <Route element={<ProtectedRoute session={session} />}>

@@ -641,15 +641,32 @@ Then productized and sold to other multi-business operators.
   - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false, "Send my dashboard link →", success message names zach@roofingos.dev sender
   - REQUIRED MANUAL STEP: Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add https://roofingos.dev/auth/** (needed for client-side OTP to honor the redirectTo)
 
+**Roofing OS SEO Machine (May 26, 2026):**
+- DB: 6 tables — seo_pillars, seo_posts, seo_keyword_queue, seo_competitor_content, seo_performance, seo_internal_links
+- 6 edge functions deployed (all `--no-verify-jwt`, all verified with `{"test":true}`):
+  - seo-pillar-builder: builds 4 cornerstone guides (3500+ words each), auto-skips if already published
+  - seo-keyword-finder: Google Autocomplete × 8 seeds × 13 letters + Reddit + 5 competitor blogs + portal_messages, saves top 20/run (score ≥8)
+  - seo-content-writer: pulls highest-score keyword → Claude with Zach voice → quality gate (0-7 score) → auto-rewrite at 5 → approved/needs_review
+  - seo-internal-linker: single post mode (resolves [LINK:topic] placeholders + injects backlinks) and sweep mode (10 published posts with 0 links per run)
+  - seo-performance-tracker: GSC JWT auth via Web Crypto RS256 → per-slug DB updates → content boosts + title rewrites → weekly snapshot
+  - seo-competitor-hunter: scrapes 5 competitor blogs as Googlebot, enqueues new keywords at intent_score:18, tracks counter-post coverage
+- 5 pg_cron jobs (IDs 60-64): keyword-finder 11:00 UTC daily, content-writer 12:00 UTC daily, performance-tracker 13:00 UTC Monday, competitor-hunter 12:00 UTC Tue+Fri, internal-linker 13:00 UTC Sunday
+- Blog template: roofingos-landing/blog/_template.html — schema markup, sticky CTA sidebar, TOC, author bio, related posts, category pills
+- VPS publisher: vps/seo/publisher.js — polls approved posts/pillars, renders HTML via template, git commit + push, updates sitemap.xml, Telegram summary
+  - Deploy to VPS: copy to /opt/roofing/seo/publisher.js, pm2 start with cron "0 14 * * *"
+  - Requires: SEO_REPO_PATH=/path/to/roofingos-landing clone on VPS
+- RoofingSEO.jsx: /roofing/seo — 5 tabs (Overview/Posts/Keywords/Competitors/Pillars), action buttons, live GSC data, quality check detail, write now + boost buttons
+- RoofingOS.jsx: SEO tab added (7 tabs now) between Marketing and Sales
+- REQUIRED MANUAL STEP: Set up Google Search Console service account + add GOOGLE_SC_CLIENT_EMAIL + GOOGLE_SC_PRIVATE_KEY to Supabase secrets for performance tracker to pull GSC data
+
 **NEXT:**
-1. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
-2. Add Self-Learning Pattern Recognition
-3. Add memory consolidation ability
-4. Add Conversation Context Memory
-5. Draft operating agreement for Nexus ZC LLC
-6. Build Roofing OS go-to-market system and landing page
-7. Complete homeowner portal fixes and documentation
-8. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
+1. VPS: deploy publisher.js to /opt/roofing/seo/publisher.js, clone roofingos-landing repo, pm2 start
+2. Run seo-pillar-builder with `{"build_all":true}` to seed the 4 pillar pages
+3. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
+4. Add Self-Learning Pattern Recognition
+5. Add memory consolidation ability
+6. Draft operating agreement for Nexus ZC LLC
+7. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
 
 ---
 

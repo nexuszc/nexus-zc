@@ -10,6 +10,7 @@ import System          from './System'
 const TABS = [
   { key: 'overview',   label: 'Overview',   path: '/roofing/dashboard'  },
   { key: 'marketing',  label: 'Marketing',  path: '/roofing/marketing'  },
+  { key: 'seo',        label: 'SEO',        path: '/roofing/seo'        },
   { key: 'sales',      label: 'Sales',      path: '/roofing/sales'      },
   { key: 'finance',    label: 'Finance',    path: '/roofing/finance'    },
   { key: 'customers',  label: 'Customers',  path: '/roofing/customers'  },
@@ -18,6 +19,7 @@ const TABS = [
 
 function activeTab(pathname) {
   if (pathname.startsWith('/roofing/marketing'))        return 'marketing'
+  if (pathname.startsWith('/roofing/seo'))              return 'seo'
   if (pathname.startsWith('/roofing/sales'))            return 'sales'
   if (pathname.startsWith('/roofing/finance'))          return 'finance'
   if (pathname.startsWith('/roofing/customers'))        return 'customers'
