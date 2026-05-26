@@ -370,6 +370,7 @@ function FirstJobExperience({ contractorId, contractorClientId, contractorName }
 
 export default function RoofingDashboard() {
   const { contractorClientId, contractor } = useContractor()
+  const navigate = useNavigate()
   const [jobs, setJobs] = useState([])
   const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
@@ -415,6 +416,12 @@ export default function RoofingDashboard() {
   }, [contractor, contractorClientId])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!loading && jobs.length === 0 && contractor && contractor.onboarding_complete === false) {
+      navigate('/roofing/onboarding-setup')
+    }
+  }, [loading, jobs.length, contractor, navigate])
 
   const stageCounts = jobs.reduce((acc, j) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc }, {})
   const displayJobs = stageFilter === 'active' ? jobs.filter(j => ACTIVE_KEYS.has(j.status)) : stageFilter === 'all' ? jobs : jobs.filter(j => j.status === stageFilter)

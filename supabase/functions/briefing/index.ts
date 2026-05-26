@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
     // ── 3. Funnel pipeline + movement ────────────────────────────────────────
     const [funnelStagesRes, hotLeads24hRes, manualCallsTodayRes, sequencesActiveRes,
-           newProspects24hRes, movedInterested24hRes] = await Promise.all([
+           newProspects24hRes, movedInterested24hRes, whaleUncalledRes] = await Promise.all([
       supabase.from("roofing_prospects").select("funnel_stage"),
       supabase.from("roofing_prospects")
         .select("owner_name, company_name, phone, total_opens")
@@ -119,6 +119,13 @@ Deno.serve(async (req) => {
         .select("id", { count: "exact", head: true })
         .eq("funnel_stage", "interested")
         .gte("funnel_stage_updated_at", minus24),
+      supabase.from("roofing_prospects")
+        .select("owner_name, company_name, phone, last_activity_at")
+        .eq("whale_alerted", true)
+        .eq("call_attempts", 0)
+        .is("last_contacted_at", null)
+        .order("last_activity_at", { ascending: true })
+        .limit(10),
     ]);
 
     const funnelCounts: Record<string, number> = {};
@@ -135,6 +142,7 @@ Deno.serve(async (req) => {
     const sequencesActive  = sequencesActiveRes.count || 0;
     const newProspects24h  = newProspects24hRes.count || 0;
     const movedInterested24h = movedInterested24hRes.count || 0;
+    const whaleUncalled    = (whaleUncalledRes.data || []) as Array<{ owner_name?: string; company_name?: string; phone?: string; last_activity_at?: string }>;
 
     // ── 4. Partnership pipeline ───────────────────────────────────────────────
     const [partnerStatusRes, partnerRepliesRes, partnerOutreachYestRes, newTargetsWeekRes] = await Promise.all([
@@ -219,6 +227,10 @@ Deno.serve(async (req) => {
     ]);
 
     const needsZach: string[] = [];
+    if (whaleUncalled.length > 0) {
+      needsZach.push(`🔥 CALL THESE NOW (${whaleUncalled.length} whale leads — clicked portal, never contacted):`);
+      whaleUncalled.forEach(w => needsZach.push(`   📞 ${w.company_name || "Unknown"} — ${w.owner_name || "?"} — ${w.phone || "no phone"}`));
+    }
     if (hotLeads24h.length > 0) hotLeads24h.forEach(l => needsZach.push(`📞 Call HOT: ${l}`));
     if (partnerReplies.length > 0) partnerReplies.forEach((p: any) => needsZach.push(`🤝 Partner replied: ${p.name} (${p.email})`));
     if ((pendingApprovals.data || []).length > 0) needsZach.push(`✅ Approve builds: ${(pendingApprovals.data || []).map((p: any) => p.title).join(", ")}`);

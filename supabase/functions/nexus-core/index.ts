@@ -16,52 +16,49 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 // ── UTILITIES ─────────────────────────────────────────────────────────────────
 
-async function ai(prompt: string, maxTokens = 1500): Promise<string> {
-  const call = () => fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }]
-    })
+function retryAfterMs(res: Response): number {
+  const header = res.headers.get("retry-after");
+  if (!header) return 0;
+  const secs = Number(header);
+  if (!isNaN(secs)) return secs * 1000;
+  const date = new Date(header).getTime();
+  if (!isNaN(date)) return Math.max(0, date - Date.now());
+  return 0;
+}
+
+async function anthropicFetch(model: string, maxTokens: number, prompt: string): Promise<string> {
+  const body = JSON.stringify({
+    model, max_tokens: maxTokens,
+    messages: [{ role: "user", content: prompt }]
   });
-  let res = await call();
-  if (res.status === 429) {
-    await new Promise(r => setTimeout(r, 60_000));
-    res = await call();
-    if (res.status === 429) throw new Error("RateLimitError: still rate-limited after 60s backoff — skipping cycle");
+  const headers = {
+    "x-api-key": ANTHROPIC_API_KEY,
+    "anthropic-version": "2023-06-01",
+    "content-type": "application/json"
+  };
+  const BASE_DELAYS = [15_000, 30_000, 60_000];
+  let res!: Response;
+  for (let attempt = 0; attempt <= BASE_DELAYS.length; attempt++) {
+    res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body });
+    if (res.status !== 429) break;
+    if (attempt === BASE_DELAYS.length) throw new Error("RateLimitError: exhausted retries after rate limiting");
+    const wait = Math.max(BASE_DELAYS[attempt], retryAfterMs(res));
+    await new Promise(r => setTimeout(r, wait));
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`AnthropicError ${res.status}: ${text.slice(0, 200)}`);
   }
   const data = await res.json();
   return data.content?.[0]?.text || "";
 }
 
+async function ai(prompt: string, maxTokens = 1500): Promise<string> {
+  return anthropicFetch("claude-sonnet-4-5", maxTokens, prompt);
+}
+
 async function aiHaiku(prompt: string, maxTokens = 400): Promise<string> {
-  const call = () => fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-  let res = await call();
-  if (res.status === 429) {
-    await new Promise(r => setTimeout(r, 60_000));
-    res = await call();
-    if (res.status === 429) throw new Error("RateLimitError: still rate-limited after 60s backoff — skipping cycle");
-  }
-  const data = await res.json();
-  return data.content?.[0]?.text || "";
+  return anthropicFetch("claude-haiku-4-5-20251001", maxTokens, prompt);
 }
 
 async function tg(text: string) {

@@ -68,6 +68,7 @@ export default function RoofingSales() {
   const [copiedId, setCopiedId] = useState(null)
 
   const [stats, setStats] = useState({ hot: 0, pipeline: 0, callsToday: 0, activeSeq: 0 })
+  const [whaleLeads, setWhaleLeads] = useState([])
   const [hotLeads, setHotLeads] = useState([])
   const [funnelData, setFunnelData] = useState({})
 
@@ -97,6 +98,18 @@ export default function RoofingSales() {
     ])
 
     setStats({ hot: hot || 0, pipeline: pipeline || 0, callsToday: callsToday || 0, activeSeq: activeSeq || 0 })
+  }, [])
+
+  const fetchWhaleLeads = useCallback(async () => {
+    const { data } = await supabase
+      .from('roofing_prospects')
+      .select('id, company_name, owner_name, phone, last_activity_at, call_attempts')
+      .eq('whale_alerted', true)
+      .eq('call_attempts', 0)
+      .is('last_contacted_at', null)
+      .order('last_activity_at', { ascending: true })
+      .limit(10)
+    setWhaleLeads(data || [])
   }, [])
 
   const fetchHotLeads = useCallback(async () => {
@@ -147,10 +160,11 @@ export default function RoofingSales() {
 
   useEffect(() => {
     fetchStats()
+    fetchWhaleLeads()
     fetchHotLeads()
     fetchFunnel()
     fetchAria()
-  }, [fetchStats, fetchHotLeads, fetchFunnel, fetchAria])
+  }, [fetchStats, fetchWhaleLeads, fetchHotLeads, fetchFunnel, fetchAria])
 
   const copyPhone = (id, phone) => {
     if (!phone) return
@@ -167,6 +181,15 @@ export default function RoofingSales() {
       .update({ funnel_stage: 'contacted', last_activity_at: new Date().toISOString() })
       .eq('id', id)
     setHotLeads(prev => prev.filter(l => l.id !== id))
+    showToast('Marked contacted')
+  }
+
+  const markWhaleContacted = async (id) => {
+    await supabase
+      .from('roofing_prospects')
+      .update({ funnel_stage: 'contacted', last_contacted_at: new Date().toISOString(), last_activity_at: new Date().toISOString() })
+      .eq('id', id)
+    setWhaleLeads(prev => prev.filter(l => l.id !== id))
     showToast('Marked contacted')
   }
 
@@ -206,6 +229,69 @@ export default function RoofingSales() {
       </header>
 
       <div className="p-4 max-w-7xl mx-auto flex flex-col gap-6">
+
+        {whaleLeads.length > 0 && (
+          <div className="rounded-xl overflow-hidden" style={{ border: '2px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.05)' }}>
+            <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)' }}>
+              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
+              <p className="text-xs font-bold uppercase tracking-widest" style={{ color: '#f87171' }}>
+                CALL THESE NOW — clicked your link, never been contacted
+              </p>
+              <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(239,68,68,0.3)', color: '#f87171' }}>
+                {whaleLeads.length} uncalled
+              </span>
+            </div>
+            <div className="flex flex-col divide-y" style={{ divideColor: 'rgba(239,68,68,0.1)' }}>
+              {whaleLeads.map(lead => {
+                const smsBody = encodeURIComponent(`Hey ${lead.owner_name || 'there'} — Zach from Roofing OS. You checked out our homeowner portal earlier. Want a quick walkthrough? Free forever. roofingos.dev`)
+                const phone = lead.phone || ''
+                const dialPhone = phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`
+                return (
+                  <div key={lead.id} className="flex items-center gap-3 px-4 py-3 flex-wrap">
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-bold text-sm truncate" style={{ color: '#ffffff' }}>{lead.company_name || '—'}</span>
+                      <span className="text-xs truncate" style={{ color: '#9ca3af' }}>{lead.owner_name || '—'} · alerted {relativeTime(lead.last_activity_at)}</span>
+                    </div>
+                    <span className="font-mono text-base font-bold shrink-0" style={{ color: '#f87171' }}>{lead.phone || '—'}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => copyPhone(lead.id, lead.phone)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-opacity hover:opacity-70"
+                        style={{ background: copiedId === lead.id ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.2)', color: copiedId === lead.id ? '#22c55e' : '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}
+                        title="Copy phone"
+                      >
+                        {copiedId === lead.id ? '✓' : '📋'}
+                      </button>
+                      <a
+                        href={`tel:${dialPhone}`}
+                        className="px-3 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-opacity hover:opacity-70"
+                        style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}
+                      >
+                        📞 Call
+                      </a>
+                      <a
+                        href={`sms:${dialPhone}?body=${smsBody}`}
+                        className="px-3 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-opacity hover:opacity-70"
+                        style={{ background: 'rgba(74,158,255,0.15)', color: '#4a9eff', border: '1px solid rgba(74,158,255,0.25)' }}
+                      >
+                        💬 Text
+                      </a>
+                      <button
+                        onClick={() => markWhaleContacted(lead.id)}
+                        className="px-3 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-opacity hover:opacity-70"
+                        style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' }}
+                        title="Mark as contacted"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <StatCard label="Hot Leads" value={stats.hot} color={stats.hot > 0 ? '#ef4444' : '#ffffff'} />
           <StatCard label="In Pipeline" value={stats.pipeline} />

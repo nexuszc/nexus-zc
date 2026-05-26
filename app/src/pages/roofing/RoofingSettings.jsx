@@ -47,7 +47,7 @@ function Toggle({ label, checked, onChange }) {
 export default function RoofingSettings() {
   const navigate = useNavigate()
   const { contractor } = useContractor()
-  const [form, setForm] = useState({ company_name: '', owner_phone: '' })
+  const [form, setForm] = useState({ company_name: '', owner_phone: '', google_review_link: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [notifications, setNotifications] = useState({
@@ -59,7 +59,7 @@ export default function RoofingSettings() {
 
   useEffect(() => {
     if (contractor) {
-      setForm({ company_name: contractor.company_name || '', owner_phone: contractor.owner_phone || '' })
+      setForm({ company_name: contractor.company_name || '', owner_phone: contractor.owner_phone || '', google_review_link: contractor.google_review_link || '' })
       supabase.from('contractor_employees')
         .select('id, name, phone, role, is_owner, active')
         .eq('contractor_id', contractor.id)
@@ -75,6 +75,7 @@ export default function RoofingSettings() {
     await supabase.from('contractor_accounts').update({
       company_name: form.company_name,
       owner_phone: form.owner_phone,
+      google_review_link: form.google_review_link || null,
     }).eq('id', contractor.id)
     setSaving(false)
     setSaved(true)
@@ -161,6 +162,20 @@ export default function RoofingSettings() {
             onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
             onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
           />
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Google Review Link</label>
+          <input
+            value={form.google_review_link}
+            onChange={e => setForm(p => ({ ...p, google_review_link: e.target.value }))}
+            placeholder="https://g.page/r/your-business/review"
+            style={inputStyle}
+            onFocus={e => { e.target.style.borderColor = C.primary; e.target.style.boxShadow = '0 0 0 3px rgba(74,158,255,0.15)' }}
+            onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' }}
+          />
+          {form.google_review_link && (
+            <p style={{ fontSize: '11px', color: C.muted, margin: '-8px 0 12px' }}>
+              ✓ Used in review request SMS after job completion
+            </p>
+          )}
           <button
             onClick={saveProfile}
             disabled={saving}
