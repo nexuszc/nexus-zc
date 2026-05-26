@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 24, 2026 — v10
+# Last updated: May 26, 2026 — v11
 
 ---
 
@@ -618,6 +618,19 @@ Then productized and sold to other multi-business operators.
 - `/home` → redirects to / (NexusDashboard)
 - Standalone pages have their own sticky headers with "← Nexus" back nav to /
 - All under ProtectedRoute (Supabase admin session), no Layout shell
+
+**Master Fix Session (May 26, 2026):**
+- FIX 9: RoofingDashboard — redirect to /roofing/onboarding-setup when onboarding_complete=false && no jobs
+- FIX 10: contractor-welcome-sequence edge function deployed — 3-email drip day 0/2/5, pg_cron job 59 at 14:00 UTC, CAN-SPAM compliant
+- FIX 11: RoofingSales — URGENT whale leads section (whale_alerted=true, call_attempts=0, last_contacted_at IS NULL) with tap-to-call/SMS buttons + pre-written text
+- FIX 15: VPS crontab: `0 7 * * * /opt/roofing/youtube-upload-cron.sh` (midnight PT = quota reset)
+- FIX 16: nexus-core — exponential backoff 15/30/60s + retry-after header; shared anthropicFetch() replaces both ai() and aiHaiku()
+- UPGRADE 1: All 31 blog posts — og:url, og:image, og:site_name added; 4 missing og:title/og:description fixed
+- UPGRADE 2: sitemap.xml rebuilt — 37 URLs (7 main + 30 blog), lastmod 2026-05-26, no .html in paths
+- UPGRADE 3: briefing v6 — whale uncalled leads in NEEDS YOU section with name/phone/company
+- UPGRADE 6: RoofingSettings — Google Review Link field saves to contractor_accounts.google_review_link
+- VPS nexus-worker: .catch() on awaited inserts fixed — worker online (pid 82296)
+- VPS video-renderer: escapeFFmpeg strips "#"'"'`; renderer online (pid 82719)
 
 **NEXT:**
 1. Fix smoke_test_failed error
