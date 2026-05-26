@@ -631,17 +631,19 @@ Then productized and sold to other multi-business operators.
 - UPGRADE 6: RoofingSettings — Google Review Link field saves to contractor_accounts.google_review_link
 - VPS nexus-worker: .catch() on awaited inserts fixed — worker online (pid 82296)
 - VPS video-renderer: escapeFFmpeg strips "#"'"'`; renderer online (pid 82719)
+- nexus-unsubscribe v4: replaced `.catch(() => {})` anti-pattern with explicit `{error}` destructuring + top-level try/catch; added UNIQUE constraint on `nexus_unsubscribes(email, channel)`; confirmed working
+- Full 20-item smoke test: **20/20 PASS** (legal, revenue, system, security, content, Aria TCPA — all green)
+- NOTE: hail-trigger and lead-sniper are stopped on VPS (intentional during Aria emergency stop — re-enable after dedup fix)
 
 **NEXT:**
-1. Fix smoke_test_failed error
-2. Fix Recurring Smoke Test Failures
-3. Add Self-Learning Pattern Recognition
-4. Add memory consolidation ability
-5. Add Conversation Context Memory
-6. Draft operating agreement for Nexus ZC LLC
-7. Build Roofing OS go-to-market system and landing page
-8. Complete homeowner portal fixes and documentation
-9. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
+1. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
+2. Add Self-Learning Pattern Recognition
+3. Add memory consolidation ability
+4. Add Conversation Context Memory
+5. Draft operating agreement for Nexus ZC LLC
+6. Build Roofing OS go-to-market system and landing page
+7. Complete homeowner portal fixes and documentation
+8. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
 
 ---
 
