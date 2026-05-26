@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Opening Roofing OS...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0f1a;
+      color: #ffffff;
+      font-family: -apple-system, 'Inter', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+    .logo span { color: #4a9eff; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(74,158,255,0.2);
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .message {
+      font-size: 16px;
+      color: #8896a8;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">Roofing<span>OS</span></div>
+  <div class="spinner"></div>
+  <p class="message">Opening your dashboard...</p>
+
+  <script>
+    const hash = window.location.hash;
+
+    if (hash && hash.includes('access_token')) {
+      window.location.replace(
+        'https://app.nexuszc.com/roofing/jobs' + hash
+      );
+    } else if (hash && hash.includes('error')) {
+      document.querySelector('.message').textContent =
+        'Link expired. Please request a new one.';
+      document.querySelector('.spinner').style.display = 'none';
+
+      const btn = document.createElement('a');
+      btn.href = 'https://roofingos.dev/login';
+      btn.style.cssText = 'background:#4a9eff;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px';
+      btn.textContent = 'Get a new link →';
+      document.body.appendChild(btn);
+    } else {
+      window.location.replace('https://roofingos.dev/login');
+    }
+  </script>
+</body>
+</html>

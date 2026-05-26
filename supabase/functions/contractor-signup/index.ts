@@ -6,7 +6,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'zach@roofingos.dev';
-const FROM_NAME  = Deno.env.get('RESEND_FROM_NAME')  || 'Zach @ Roofing OS';
+const FROM_NAME  = 'Zach from Roofing OS';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': 'https://roofingos.dev',
@@ -24,52 +24,113 @@ async function sendTelegram(msg: string) {
   }).catch(() => {});
 }
 
-function generateWelcomeEmail(contractor: Record<string, unknown>): string {
-  const companyName = contractor.company_name as string || '';
-  const referralCode = contractor.referral_code as string || '';
-  const plan = (contractor.plan as string || 'free').toLowerCase();
-  const isFree = !plan || plan === 'free';
-  const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
-
-  const referralUrl = `https://roofingos.dev/r/${referralCode}`;
-
-  const referralBlock = isFree && referralCode ? `
-<hr>
-<h3 style="color:#e85d26">Share your link — both of you get 5 free jobs</h3>
-<p>Your referral link:</p>
-<p style="background:#f8f8f6;padding:12px 16px;border-radius:6px;font-family:monospace;font-size:15px;margin:12px 0"><strong>${referralUrl}</strong></p>
-<p class="sub">When another contractor signs up using your link, they get 5 free jobs AND you get 5 more. Share it in your contractor group chats — it takes 30 seconds.</p>` : '';
-
+function generateMagicLinkEmail(firstName: string, magicLink: string, email: string): string {
   return `<!DOCTYPE html>
 <html>
 <head>
-<style>
-  body{font-family:-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1a1a1a;line-height:1.8}
-  h2{font-size:22px;margin-bottom:4px}
-  h3{font-size:16px;margin-bottom:8px}
-  hr{border:none;border-top:1px solid #e2e8f0;margin:24px 0}
-  .cta{background:#e85d26;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block}
-  .sub{color:#64748b;font-size:14px}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width">
 </head>
-<body>
-<h2>Welcome to Roofing OS, ${companyName}.</h2>
-<p class="sub" style="margin-top:0">Your account is active. Here's how to get started.</p>
-<hr>
-<h3>Step 1 — Log into your dashboard</h3>
-<p>Enter your email address to get a magic link — no password needed:</p>
-<p style="margin:16px 0"><a href="https://app.nexuszc.com/roofing/login" class="cta">Log In to Your Dashboard →</a></p>
-<p class="sub">Use the email address you signed up with. We'll send you a one-click login link.</p>
-<hr>
-<h3>Step 2 — Create your first job</h3>
-<p>Call or text <strong>${twilioNumber}</strong> to start a job with your voice. Say the homeowner's name, address, and insurance carrier. We handle the rest.</p>
-<hr>
-<h3>Step 3 — Your homeowner gets the portal</h3>
-<p>When you enter the homeowner's email, we send them a live project link instantly. They see every update. They stop calling.</p>
-${referralBlock}
-<hr>
-<p>Questions? Reply to this email or text ${twilioNumber} anytime.</p>
-<p style="margin-top:32px" class="sub">Roofing OS<br>roofingos.dev</p>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding:40px 20px">
+        <table width="560" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#0a0f1a;padding:32px 40px;text-align:center">
+              <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">
+                Roofing<span style="color:#4a9eff">OS</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px">
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#0a0f1a;line-height:1.2">
+                Hey ${firstName} — your dashboard is ready 👋
+              </h1>
+              <p style="margin:0 0 32px;font-size:16px;color:#6b7a8d;line-height:1.6">
+                Tap the button below to open your Roofing OS dashboard.
+                No password needed — ever.
+              </p>
+
+              <!-- CTA Button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="${magicLink}"
+                       style="display:inline-block;background:#4a9eff;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:16px 40px;border-radius:12px;letter-spacing:-0.2px">
+                      Open My Dashboard →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- What to expect -->
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="margin:32px 0;background:#f8fafc;border-radius:12px">
+                <tr>
+                  <td style="padding:24px">
+                    <p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#0a0f1a;text-transform:uppercase;letter-spacing:0.05em">
+                      What to do first:
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding:6px 0">
+                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">1</span>
+                          <span style="color:#374151;font-size:15px">Click "Open My Dashboard" above</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0">
+                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">2</span>
+                          <span style="color:#374151;font-size:15px">Create your first job — takes 2 minutes</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0">
+                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">3</span>
+                          <span style="color:#374151;font-size:15px">Your homeowner gets a real-time portal instantly</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Security note -->
+              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5">
+                This link expires in 24 hours and can only be used once.
+                If you didn't sign up for Roofing OS, you can ignore this email.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 40px;border-top:1px solid #f1f5f9;text-align:center">
+              <p style="margin:0;font-size:13px;color:#9ca3af">
+                Roofing OS · 1700 Lincoln St · Denver, CO 80203
+              </p>
+              <p style="margin:8px 0 0;font-size:13px;color:#9ca3af">
+                Questions? Reply to this email or text
+                <a href="tel:7205006668" style="color:#4a9eff;text-decoration:none">(720) 500-6668</a>
+              </p>
+              <p style="margin:8px 0 0;font-size:12px">
+                <a href="https://roofingos.dev/unsubscribe?email=${encodeURIComponent(email)}"
+                   style="color:#9ca3af;text-decoration:none">Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
@@ -145,7 +206,6 @@ Deno.serve(async (req) => {
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     if (stripeKey) {
       try {
-        // Create Stripe customer
         const customerRes = await fetch('https://api.stripe.com/v1/customers', {
           method: 'POST',
           headers: {
@@ -163,7 +223,6 @@ Deno.serve(async (req) => {
         stripeCustomerId = customer.id || '';
 
         if (stripeCustomerId) {
-          // Attach payment method
           await fetch(`https://api.stripe.com/v1/payment_methods/${payment_method_id}/attach`, {
             method: 'POST',
             headers: {
@@ -173,7 +232,6 @@ Deno.serve(async (req) => {
             body: new URLSearchParams({ customer: stripeCustomerId })
           });
 
-          // Create subscription
           const subRes = await fetch('https://api.stripe.com/v1/subscriptions', {
             method: 'POST',
             headers: {
@@ -226,7 +284,7 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Failed to create account' }, { status: 500, headers: corsHeaders });
   }
 
-  // Log signup source to roofing_captures (fire and forget)
+  // Fire-and-forget side effects
   void supabase.from('roofing_captures').insert({
     email: owner_email,
     name: owner_name || '',
@@ -236,14 +294,12 @@ Deno.serve(async (req) => {
     utm_campaign: utm_campaign || null,
   });
 
-  // Link from audit lead
   if (audit_lead_id) {
     void supabase.from('supplement_audit_leads')
       .update({ converted_to_contractor: true, contractor_account_id: contractor.id })
       .eq('id', audit_lead_id);
   }
 
-  // Track referral
   if (referredBy && referral_code) {
     void supabase.from('contractor_referrals').insert({
       referring_contractor_id: referredBy,
@@ -257,9 +313,45 @@ Deno.serve(async (req) => {
   const twilioNumber = Deno.env.get('TWILIO_FROM_NUMBER') || Deno.env.get('TWILIO_PHONE_NUMBER') || '+17202921930';
   const firstName = (owner_name || '').split(' ')[0] || 'there';
 
-  // Welcome call + email + SMS
+  // Create auth user first so we can generate the magic link
+  await supabase.auth.admin.createUser({
+    email: owner_email,
+    email_confirm: true,
+  }).catch(() => {}); // ignore if already exists
+
+  // Generate magic link pointing to our branded verify page
+  let action_link: string | null = null;
+  try {
+    const { data: linkData } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: owner_email,
+      options: { redirectTo: 'https://roofingos.dev/auth/verify' },
+    });
+    action_link = linkData?.properties?.action_link || null;
+  } catch { /* non-fatal */ }
+
+  // Send the beautiful dashboard-ready email (with embedded magic link)
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      reply_to: 'zach@roofingos.dev',
+      to: owner_email,
+      subject: 'Your Roofing OS dashboard is ready →',
+      html: generateMagicLinkEmail(
+        firstName,
+        action_link || 'https://roofingos.dev/login',
+        owner_email
+      ),
+    })
+  }).catch(() => {});
+
+  // Welcome call + SMS (parallel, non-blocking)
   await Promise.allSettled([
-    // Aria welcome call
     owner_phone ? fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
@@ -272,22 +364,6 @@ Deno.serve(async (req) => {
       })
     }).catch(() => {}) : Promise.resolve(),
 
-    // Welcome email
-    fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: `${FROM_NAME} <${FROM_EMAIL}>`,
-        to: owner_email,
-        subject: `Welcome to Roofing OS — here's how to get started`,
-        html: generateWelcomeEmail(contractor)
-      })
-    }).catch(() => {}),
-
-    // Welcome SMS (only if Twilio is configured)
     owner_phone && Deno.env.get('TWILIO_ACCOUNT_SID') ? (() => {
       const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
       const token = Deno.env.get('TWILIO_AUTH_TOKEN')!;
@@ -300,20 +376,20 @@ Deno.serve(async (req) => {
         body: new URLSearchParams({
           To: owner_phone,
           From: twilioNumber,
-          Body: `Hey ${firstName} — welcome to Roofing OS.\n\nLog in anytime at app.nexuszc.com/roofing/login — enter your email and we'll send you a magic link.`
+          Body: `Hey ${firstName} — welcome to Roofing OS. Check your email for a link to open your dashboard. Reply STOP to opt out.`
         }).toString()
       }).catch(() => {});
     })() : Promise.resolve(),
   ]);
 
-  // Schedule onboarding reminder (fire and forget)
+  // Reminders + Telegram (fire and forget)
   void supabase.from('reminders').insert({
     chat_id: Deno.env.get('TELEGRAM_CHAT_ID'),
     message: `🎉 New contractor signed up: ${company_name} (${owner_email})\nCall to onboard: ${owner_phone || 'no phone'}\nPlan: ${plan}`,
     fire_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   });
 
-  await sendTelegram(
+  void sendTelegram(
     `🎉 *New Contractor Signed Up*\n` +
     `*${company_name}*\n` +
     `Owner: ${owner_name}\n` +
@@ -324,23 +400,6 @@ Deno.serve(async (req) => {
     `Referred by: ${referral_code || 'none'}\n` +
     `Trial ends: ${new Date(trialEndsAt).toLocaleDateString()}`
   );
-
-  // Create Supabase auth user (email confirmed, no confirmation email sent)
-  // and generate an instant-access magic link so signup leads directly to dashboard
-  await supabase.auth.admin.createUser({
-    email: owner_email,
-    email_confirm: true,
-  }).catch(() => {}); // ignore if already exists
-
-  let action_link: string | null = null;
-  try {
-    const { data: linkData } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: owner_email,
-      options: { redirectTo: 'https://app.nexuszc.com/roofing/jobs' },
-    });
-    action_link = linkData?.properties?.action_link || null;
-  } catch { /* non-fatal — signup still succeeded */ }
 
   return Response.json({
     ok: true,

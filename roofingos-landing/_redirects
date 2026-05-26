@@ -1,3 +1,5 @@
+/auth/verify /auth/verify.html 200
+/auth/* /auth/verify.html 200
 /dashboard/* https://app.nexuszc.com/roofing/jobs 302
 /dashboard https://app.nexuszc.com/roofing/jobs 302
 /demo https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS 302

@@ -634,6 +634,12 @@ Then productized and sold to other multi-business operators.
 - nexus-unsubscribe v4: replaced `.catch(() => {})` anti-pattern with explicit `{error}` destructuring + top-level try/catch; added UNIQUE constraint on `nexus_unsubscribes(email, channel)`; confirmed working
 - Full 20-item smoke test: **20/20 PASS** (legal, revenue, system, security, content, Aria TCPA — all green)
 - NOTE: hail-trigger and lead-sniper are stopped on VPS (intentional during Aria emergency stop — re-enable after dedup fix)
+- Magic link UX: roofingos.dev/auth/verify handles all auth redirects — zero Supabase branding
+  - roofingos-landing/auth/verify.html — branded loading page, reads #access_token, redirects to app.nexuszc.com/roofing/jobs
+  - _redirects: /auth/verify → verify.html (200 rewrite), /auth/* → verify.html (200 rewrite)
+  - contractor-signup: generates magic link with redirectTo=roofingos.dev/auth/verify; sends beautiful HTML email "Your Roofing OS dashboard is ready →" with embedded button; FROM "Zach from Roofing OS <zach@roofingos.dev>"
+  - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false, "Send my dashboard link →", success message names zach@roofingos.dev sender
+  - REQUIRED MANUAL STEP: Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add https://roofingos.dev/auth/** (needed for client-side OTP to honor the redirectTo)
 
 **NEXT:**
 1. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS

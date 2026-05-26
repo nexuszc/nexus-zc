@@ -13,7 +13,10 @@ export default function RoofingLogin() {
     setError('')
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: 'https://app.nexuszc.com/roofing/jobs' },
+      options: {
+        emailRedirectTo: 'https://roofingos.dev/auth/verify',
+        shouldCreateUser: false,
+      },
     })
     if (err) {
       const isRateLimit = err.message.toLowerCase().includes('rate') || err.message.toLowerCase().includes('security') || err.status === 429
@@ -103,9 +106,12 @@ export default function RoofingLogin() {
             <div style={{ background: '#1a2535', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '32px 24px', textAlign: 'center' }}>
               <div style={{ fontSize: '42px', marginBottom: '16px' }}>📬</div>
               <p style={{ color: '#22c55e', fontSize: '18px', fontWeight: '700', margin: '0 0 8px' }}>Check your email</p>
-              <p style={{ color: '#8896a8', fontSize: '14px', margin: '0 0 4px' }}>We sent a magic link to</p>
+              <p style={{ color: '#8896a8', fontSize: '14px', margin: '0 0 4px' }}>We sent your dashboard link to</p>
               <p style={{ color: '#fff', fontSize: '14px', fontWeight: '600', margin: 0 }}>{email}</p>
-              <p style={{ color: '#8896a8', fontSize: '14px', marginTop: '16px', lineHeight: 1.5 }}>Tap the link in the email, then come back to this app.</p>
+              <p style={{ color: '#8896a8', fontSize: '14px', marginTop: '16px', lineHeight: 1.5 }}>
+                The email comes from <strong style={{ color: '#fff' }}>zach@roofingos.dev</strong>.<br />
+                Tap the button to open your dashboard.
+              </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ background: '#1a2535', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '28px' }}>
@@ -135,7 +141,7 @@ export default function RoofingLogin() {
                 onMouseDown={e => !loading && email && (e.currentTarget.style.transform = 'scale(0.98)')}
                 onMouseUp={e => (e.currentTarget.style.transform = 'none')}
               >
-                {loading ? 'Sending…' : 'Send Magic Link →'}
+                {loading ? 'Sending…' : 'Send my dashboard link →'}
               </button>
               <p style={{ textAlign: 'center', fontSize: '13px', color: '#8896a8', marginTop: '20px', marginBottom: 0 }}>
                 New here?{' '}
