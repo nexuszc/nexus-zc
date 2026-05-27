@@ -36,8 +36,9 @@ const REPO_PATH     = process.env.SEO_REPO_PATH || '/opt/roofing/repo/roofingos-
 const TG_TOKEN      = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT       = process.env.TELEGRAM_CHAT_ID;
 
-const HAIKU  = 'claude-haiku-4-5-20251001';
-const SONNET = 'claude-sonnet-4-6';
+const HAIKU       = 'claude-haiku-4-5-20251001';
+const SONNET      = 'claude-sonnet-4-6';
+const GEMINI_KEY  = process.env.GEMINI_API_KEY;
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_KEY });
 
@@ -123,6 +124,29 @@ function tgDigest(msg) {
 }
 
 // ── AI helpers ──────────────────────────────────────────────────────────────
+
+// Gemini Flash — free tier, used for location pages (saves ~$8/day)
+// Falls back to Haiku if GEMINI_API_KEY not set
+async function generateWithGemini(prompt) {
+  if (!GEMINI_KEY) return askHaiku(prompt);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      },
+    );
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!text) throw new Error('Empty Gemini response');
+    return text;
+  } catch (err) {
+    console.warn('  Gemini failed, falling back to Haiku:', err.message);
+    return askHaiku(prompt);
+  }
+}
 
 async function askHaiku(prompt) {
   const msg = await anthropic.messages.create({
@@ -254,18 +278,35 @@ Population: ${page.population?.toLocaleString()}. Hail risk: ${page.hail_risk}.
 Do NOT mention competitors by name. Do NOT include placeholder text.
 End with: META_DESC: [155-character meta description]`;
 
-      const raw = await askHaiku(prompt);
+      // PATCH 3: Gemini Flash for location pages (free tier, falls back to Haiku)
+      const raw = await generateWithGemini(prompt);
 
       // Extract meta description
       const metaMatch = raw.match(/META_DESC:\s*(.+?)(\n|$)/);
       const metaDesc = metaMatch ? metaMatch[1].trim() : `Free roofing contractor software for ${page.city}, ${page.state}. Homeowner portal, AI supplements, Aria voice. Start free today.`;
       const bodyContent = raw.replace(/META_DESC:.+?(\n|$)/, '').trim();
 
+      // PATCH 4: Geographic internal linking — find nearby cities (same state, published)
+      let geoLinks = '';
+      try {
+        const nearby = await dbGet(
+          `seo_location_pages?state_code=eq.${page.state_code}&status=eq.published&slug=neq.${page.slug}&select=city,state_code,slug&limit=3`,
+        );
+        if (nearby && nearby.length > 0) {
+          const links = nearby.map(n =>
+            `<a href="/locations/${n.slug}">${n.city}</a>`,
+          ).join(' | ');
+          geoLinks = `<div style="margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,.07);font-size:14px;color:#64748b">
+  Also serving roofing contractors in: ${links}
+</div>`;
+        }
+      } catch { /* skip geo links if query fails */ }
+
       const canonical = `/locations/${page.slug}`;
       const fullHtml = wrapPage(
         `Best Roofing Contractor Software in ${page.city}, ${page.state}`,
         metaDesc,
-        `<div class="container">${bodyContent}<div class="cta-box"><h2>Start Free in ${page.city} Today</h2><p>Join roofing contractors across ${page.state} using Roofing OS. No credit card required.</p><a href="https://app.nexuszc.com/roofing/signup" class="btn">Start free →</a></div></div>`,
+        `<div class="container">${bodyContent}<div class="cta-box"><h2>Start Free in ${page.city} Today</h2><p>Join roofing contractors across ${page.state} using Roofing OS. No credit card required.</p><a href="https://app.nexuszc.com/roofing/signup" class="btn">Start free →</a></div>${geoLinks}</div>`,
         canonical,
       );
 
@@ -557,6 +598,16 @@ h1{font-size:clamp(26px,5vw,38px);font-weight:800;color:#fff;margin-bottom:12px;
 .cta-btn:hover{background:#2563eb}
 footer{margin-top:40px;border-top:1px solid rgba(255,255,255,.06);padding:24px;text-align:center;font-size:13px;color:#475569}
 footer a{color:#64748b;margin:0 10px}
+.gate-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,15,26,.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-card{background:#111827;border:1px solid rgba(59,130,246,.3);border-radius:20px;padding:40px;max-width:420px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.gate-card h2{font-size:22px;font-weight:800;color:#fff;margin-bottom:10px}
+.gate-card p{color:#94a3b8;font-size:15px;margin-bottom:24px}
+.gate-input{width:100%;background:#0a0f1a;border:1px solid #1e293b;border-radius:10px;padding:14px 16px;font-size:15px;color:#f1f5f9;outline:none;margin-bottom:12px;font-family:inherit;box-sizing:border-box}
+.gate-input:focus{border-color:#3b82f6}
+.gate-submit{width:100%;background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s}
+.gate-submit:hover{background:#2563eb}
+.gate-submit:disabled{opacity:.6;cursor:not-allowed}
+.gate-meta{font-size:12px;color:#475569;margin-top:12px}
 </style>
 </head>
 <body>
@@ -566,6 +617,18 @@ footer a{color:#64748b;margin:0 10px}
     <a href="https://app.nexuszc.com/roofing/signup" class="nav-cta">Start free →</a>
   </div>
 </nav>
+<div id="gateOverlay" class="gate-overlay">
+  <div class="gate-card">
+    <div style="font-size:36px;margin-bottom:16px">🛠️</div>
+    <h2>Get the complete 40-item checklist</h2>
+    <p>40 Xactimate line items adjusters routinely miss. Enter your email to unlock the full tool — free forever.</p>
+    <form id="gateForm" onsubmit="unlockChecklist(event)">
+      <input id="gateEmail" class="gate-input" type="email" placeholder="your@email.com" required autocomplete="email">
+      <button class="gate-submit" type="submit" id="gateBtn">Get free checklist →</button>
+    </form>
+    <p class="gate-meta">No spam. Just roofing tools. <a href="/privacy" style="color:#475569">Privacy policy</a></p>
+  </div>
+</div>
 <div class="container">
   <h1>Roofing Supplement Checklist</h1>
   <p class="subtitle">40 line items adjusters routinely miss. Check what you found. See your potential recovery total.</p>
@@ -608,6 +671,36 @@ footer a{color:#64748b;margin:0 10px}
   <a href="/privacy">Privacy</a>
 </footer>
 <script>
+const GATE_KEY = 'supplement_unlocked';
+const LEAD_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/tool-lead-capture';
+
+function initGate() {
+  const overlay = document.getElementById('gateOverlay');
+  if (!overlay) return;
+  if (localStorage.getItem(GATE_KEY)) { overlay.remove(); return; }
+  setTimeout(() => document.getElementById('gateEmail')?.focus(), 100);
+}
+
+async function unlockChecklist(e) {
+  e.preventDefault();
+  const email = (document.getElementById('gateEmail')?.value || '').trim();
+  if (!email) return;
+  const btn = document.getElementById('gateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Unlocking…';
+  try {
+    await fetch(LEAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, tool_name: 'supplement-checklist' }),
+    });
+  } catch { /* fire and forget */ }
+  localStorage.setItem(GATE_KEY, '1');
+  document.getElementById('gateOverlay').remove();
+}
+
+initGate();
+
 const ITEMS = ${itemsJs};
 const STORAGE_KEY = 'supplement-checklist-v1';
 

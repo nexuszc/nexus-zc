@@ -140,6 +140,79 @@ async function gatherAutocomplete(): Promise<Array<{ keyword: string; source: st
 }
 
 // ---------------------------------------------------------------------------
+// Source 1b: Question-prefix autocomplete → seo_questions table
+// ---------------------------------------------------------------------------
+
+const QUESTION_SEEDS = [
+  "roofing contractor",
+  "roof replacement",
+  "roofing software",
+  "companycam",
+  "roofing supplement",
+];
+
+const QUESTION_PREFIXES = [
+  "how to ",
+  "what is ",
+  "why does ",
+  "how much ",
+  "when to ",
+  "what are ",
+  "can a ",
+  "do i need ",
+  "how long ",
+];
+
+function scoreQuestion(q: string): number {
+  let score = 0;
+  const lower = q.toLowerCase();
+  if (/\b(how|what|why|when|does|can|is|do)\b/.test(lower)) score += 4;
+  if (/\b(roof|contractor|insurance|supplement|hail|claim|software|app|permit)\b/.test(lower)) score += 5;
+  if (/\b(best|free|cost|price|worth|good|need)\b/.test(lower)) score += 3;
+  if (q.split(" ").length >= 5) score += 2;
+  return score;
+}
+
+async function gatherQuestionKeywords(): Promise<number> {
+  let saved = 0;
+  const seen = new Set<string>();
+
+  for (const seed of QUESTION_SEEDS) {
+    for (const prefix of QUESTION_PREFIXES) {
+      const query = prefix + seed;
+      const url   = `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`;
+      try {
+        const res  = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5_000) });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const suggestions: string[] = data[1] || [];
+
+        for (const s of suggestions) {
+          const clean = s.trim().toLowerCase();
+          if (seen.has(clean) || clean.length < 8) continue;
+          if (!s.includes("?") && !s.startsWith("how") && !s.startsWith("what") && !s.startsWith("why") && !s.startsWith("can") && !s.startsWith("do") && !s.startsWith("when")) continue;
+          seen.add(clean);
+
+          const score = scoreQuestion(s);
+          if (score < 6) continue;
+
+          const { error } = await supabase.from("seo_questions").upsert(
+            { question: clean, seed_keyword: seed, source: "google_autocomplete", intent_score: score, audience: "roofer", status: "pending" },
+            { onConflict: "question", ignoreDuplicates: true },
+          );
+          if (!error) saved++;
+        }
+
+        await new Promise(r => setTimeout(r, 200));
+      } catch { /* skip */ }
+    }
+  }
+
+  console.log(`seo-keyword-finder: question autocomplete saved ${saved} questions to seo_questions`);
+  return saved;
+}
+
+// ---------------------------------------------------------------------------
 // Source 2: Reddit r/Roofing
 // ---------------------------------------------------------------------------
 
@@ -377,14 +450,15 @@ Deno.serve(async (req) => {
     console.log("seo-keyword-finder: starting keyword discovery run");
 
     // -----------------------------------------------------------------------
-    // 1. Gather from all 4 sources in parallel
+    // 1. Gather from all sources in parallel (questions run alongside)
     // -----------------------------------------------------------------------
-    const [autocompleteResult, redditResult, competitorResult, portalResult] =
+    const [autocompleteResult, redditResult, competitorResult, portalResult, questionsResult] =
       await Promise.allSettled([
         gatherAutocomplete(),
         scrapeReddit(),
         gatherCompetitorData(),
         gatherPortalQuestions(),
+        gatherQuestionKeywords(),
       ]);
 
     const rawKeywords: Array<{ keyword: string; source: string }> = [];
@@ -418,6 +492,9 @@ Deno.serve(async (req) => {
     } else {
       console.warn("seo-keyword-finder: portal messages source failed:", portalResult.reason);
     }
+
+    const questionsSaved = questionsResult.status === "fulfilled" ? questionsResult.value : 0;
+    console.log(`seo-keyword-finder: question autocomplete saved ${questionsSaved} to seo_questions`);
 
     // -----------------------------------------------------------------------
     // 2. Score each keyword
@@ -523,6 +600,7 @@ Deno.serve(async (req) => {
       {
         ok:               true,
         found:            savedCount,
+        questions_saved:  questionsSaved,
         top_keywords:     top20.map(kw => ({ keyword: kw.keyword, score: kw.score, source: kw.source })),
         competitor_posts: competitorPosts.length,
       },

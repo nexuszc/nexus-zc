@@ -312,6 +312,51 @@ async function enqueuePresetKeywords(competitor: Competitor): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
+// Pricing scraper — keeps VS pages accurate automatically
+// ---------------------------------------------------------------------------
+
+const PRICING_URLS: Record<string, string> = {
+  companycam:  "https://companycam.com/pricing",
+  jobnimbus:   "https://jobnimbus.com/pricing",
+  acculynx:    "https://www.acculynx.com/pricing",
+  salesrabbit: "https://salesrabbit.com/pricing",
+  roofr:       "https://roofr.com/pricing",
+  hover:       "https://hover.to/pricing",
+};
+
+async function scrapeCompetitorPricing(competitor: Competitor): Promise<string[]> {
+  const pricingUrl = PRICING_URLS[competitor.name];
+  if (!pricingUrl) return [];
+
+  try {
+    const res = await fetch(pricingUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return [];
+
+    const html = await res.text();
+    // Strip tags first, then match prices
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const matches = text.match(/\$[\d,]+(?:\/mo(?:nth)?|\/user(?:\/mo)?|\/year|\/yr)?/gi) || [];
+
+    // Deduplicate and keep unique price mentions
+    return [...new Set(matches.map(m => m.toLowerCase()))].slice(0, 10);
+  } catch {
+    return [];
+  }
+}
+
+async function updateVsPagePricing(competitorName: string, prices: string[]): Promise<void> {
+  if (prices.length === 0) return;
+  await supabase
+    .from("seo_vs_pages")
+    .update({ pricing_raw: prices, pricing_updated_at: new Date().toISOString() })
+    .eq("competitor", competitorName)
+    .catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
 // Full competitor processing — blog + sitemap
 // ---------------------------------------------------------------------------
 
@@ -344,7 +389,14 @@ async function processCompetitor(competitor: Competitor): Promise<{
   // 2. Sitemap gap analysis → competitor_pages (new table)
   const sitemapResult = await analyzeCompetitorSitemap(competitor);
 
-  // 3. Preset keywords
+  // 3. Pricing scraper → seo_vs_pages
+  const prices = await scrapeCompetitorPricing(competitor);
+  if (prices.length > 0) {
+    await updateVsPagePricing(competitor.name, prices);
+    console.log(`  [pricing] ${competitor.name}: ${prices.join(", ")}`);
+  }
+
+  // 4. Preset keywords
   const presetAdded = await enqueuePresetKeywords(competitor);
 
   console.log(`  ${competitor.name}: ${newBlogPosts} blog posts, ${sitemapResult.gaps_discovered} gaps found, ${sitemapResult.gaps_queued} queued`);

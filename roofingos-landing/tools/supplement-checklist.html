@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roofing Supplement Checklist — Free Tool | Roofing OS</title>
+<meta name="description" content="Complete checklist of 40 Xactimate line items adjusters miss. Check off what you found. See your potential recovery total. Free tool by Roofing OS.">
+<link rel="canonical" href="https://roofingos.dev/tools/supplement-checklist">
+<meta property="og:title" content="Free Roofing Supplement Checklist — 40 Items Adjusters Miss">
+<meta property="og:description" content="Check off what you found on the job. Calculate your potential recovery total. Free tool by Roofing OS.">
+<meta property="og:url" content="https://roofingos.dev/tools/supplement-checklist">
+<meta property="og:site_name" content="Roofing OS">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#0a0f1a;color:#f1f5f9;line-height:1.6}
+nav{position:sticky;top:0;z-index:100;background:rgba(10,15,26,.95);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);padding:0 24px}
+.nav-inner{max-width:1100px;margin:0 auto;height:60px;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-size:17px;font-weight:800;color:#fff;letter-spacing:-.5px;text-decoration:none}
+.nav-logo span{color:#3b82f6}
+.nav-cta{background:#3b82f6;color:#fff;padding:8px 18px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none}
+.nav-cta:hover{background:#2563eb}
+.container{max-width:760px;margin:0 auto;padding:48px 24px}
+h1{font-size:clamp(26px,5vw,38px);font-weight:800;color:#fff;margin-bottom:12px;letter-spacing:-.5px}
+.subtitle{font-size:17px;color:#94a3b8;margin-bottom:32px}
+.progress-bar{background:#111827;border-radius:12px;height:8px;margin-bottom:8px;overflow:hidden}
+.progress-fill{background:linear-gradient(90deg,#3b82f6,#22c55e);height:100%;border-radius:12px;transition:width .3s}
+.progress-label{font-size:13px;color:#64748b;margin-bottom:32px}
+.total-box{background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(99,102,241,.12));border:1px solid rgba(59,130,246,.25);border-radius:16px;padding:28px 32px;margin-bottom:32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.total-label{font-size:14px;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.total-value{font-size:40px;font-weight:800;color:#22c55e;letter-spacing:-1px}
+.total-note{font-size:12px;color:#64748b;margin-top:4px}
+.items-list{display:flex;flex-direction:column;gap:8px;margin-bottom:40px}
+.item{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:border-color .15s}
+.item:hover{border-color:#374151}
+.item.checked{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.05)}
+.item input[type=checkbox]{width:18px;height:18px;accent-color:#22c55e;cursor:pointer;flex-shrink:0}
+.item-label{flex:1;font-size:15px;color:#d1d5db}
+.item.checked .item-label{color:#f1f5f9}
+.item-value{font-size:14px;font-weight:600;color:#64748b}
+.item.checked .item-value{color:#22c55e}
+.item-value.pct{color:#f59e0b;font-size:12px}
+.actions{display:flex;gap:12px;margin-bottom:40px;flex-wrap:wrap}
+.btn{display:inline-block;padding:12px 24px;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:background .2s;font-family:inherit}
+.btn-primary{background:#3b82f6;color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.15);color:#94a3b8}
+.btn-ghost:hover{border-color:#4b5563;color:#d1d5db}
+.cta-box{background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(99,102,241,.1));border:1px solid rgba(59,130,246,.2);border-radius:16px;padding:36px;text-align:center;margin-bottom:40px}
+.cta-box h2{font-size:22px;font-weight:700;color:#fff;margin-bottom:10px}
+.cta-box p{color:#94a3b8;margin-bottom:24px;font-size:15px}
+.cta-btn{display:inline-block;background:#3b82f6;color:#fff;padding:14px 32px;border-radius:10px;font-weight:700;font-size:16px;text-decoration:none}
+.cta-btn:hover{background:#2563eb}
+footer{margin-top:40px;border-top:1px solid rgba(255,255,255,.06);padding:24px;text-align:center;font-size:13px;color:#475569}
+footer a{color:#64748b;margin:0 10px}
+.gate-overlay{position:fixed;inset:0;z-index:1000;background:rgba(10,15,26,.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:24px}
+.gate-card{background:#111827;border:1px solid rgba(59,130,246,.3);border-radius:20px;padding:40px;max-width:420px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.6)}
+.gate-card h2{font-size:22px;font-weight:800;color:#fff;margin-bottom:10px}
+.gate-card p{color:#94a3b8;font-size:15px;margin-bottom:24px}
+.gate-input{width:100%;background:#0a0f1a;border:1px solid #1e293b;border-radius:10px;padding:14px 16px;font-size:15px;color:#f1f5f9;outline:none;margin-bottom:12px;font-family:inherit;box-sizing:border-box}
+.gate-input:focus{border-color:#3b82f6}
+.gate-submit{width:100%;background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:background .2s}
+.gate-submit:hover{background:#2563eb}
+.gate-submit:disabled{opacity:.6;cursor:not-allowed}
+.gate-meta{font-size:12px;color:#475569;margin-top:12px}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Roofing<span>OS</span></a>
+    <a href="https://app.nexuszc.com/roofing/signup" class="nav-cta">Start free →</a>
+  </div>
+</nav>
+<div id="gateOverlay" class="gate-overlay">
+  <div class="gate-card">
+    <div style="font-size:36px;margin-bottom:16px">🛠️</div>
+    <h2>Get the complete 40-item checklist</h2>
+    <p>40 Xactimate line items adjusters routinely miss. Enter your email to unlock the full tool — free forever.</p>
+    <form id="gateForm" onsubmit="unlockChecklist(event)">
+      <input id="gateEmail" class="gate-input" type="email" placeholder="your@email.com" required autocomplete="email">
+      <button class="gate-submit" type="submit" id="gateBtn">Get free checklist →</button>
+    </form>
+    <p class="gate-meta">No spam. Just roofing tools. <a href="/privacy" style="color:#475569">Privacy policy</a></p>
+  </div>
+</div>
+<div class="container">
+  <h1>Roofing Supplement Checklist</h1>
+  <p class="subtitle">40 line items adjusters routinely miss. Check what you found. See your potential recovery total.</p>
+
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  <p class="progress-label" id="progressLabel">0 of 40 items checked</p>
+
+  <div class="total-box">
+    <div>
+      <div class="total-label">Potential Recovery</div>
+      <div class="total-value" id="totalValue">$0</div>
+      <div class="total-note">Based on typical Xactimate values · Your actual amounts may vary</div>
+    </div>
+    <div style="text-align:right">
+      <div class="total-label">Items Found</div>
+      <div style="font-size:32px;font-weight:800;color:#3b82f6" id="itemCount">0</div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" onclick="checkAll()">Check all</button>
+    <button class="btn btn-ghost" onclick="clearAll()">Clear all</button>
+    <button class="btn btn-ghost" onclick="printList()">Print / save PDF</button>
+  </div>
+
+  <div class="items-list" id="itemsList"></div>
+
+  <div class="cta-box">
+    <h2>Track every supplement automatically.</h2>
+    <p>Roofing OS logs every line item, flags adjuster denials, and generates rebuttal letters with AI. Free to start.</p>
+    <a href="https://app.nexuszc.com/roofing/signup" class="cta-btn">Start free with Roofing OS →</a>
+    <p style="font-size:12px;color:#475569;margin-top:12px">Generated by Roofing OS · roofingos.dev</p>
+  </div>
+</div>
+<footer>
+  <p style="margin-bottom:10px">© 2026 Roofing OS · Free tools for roofing contractors</p>
+  <a href="/">Home</a>
+  <a href="/tools">All Tools</a>
+  <a href="/blog">Blog</a>
+  <a href="/privacy">Privacy</a>
+</footer>
+<script>
+const GATE_KEY = 'supplement_unlocked';
+const LEAD_URL = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/functions/v1/tool-lead-capture';
+
+function initGate() {
+  const overlay = document.getElementById('gateOverlay');
+  if (!overlay) return;
+  if (localStorage.getItem(GATE_KEY)) { overlay.remove(); return; }
+  setTimeout(() => document.getElementById('gateEmail')?.focus(), 100);
+}
+
+async function unlockChecklist(e) {
+  e.preventDefault();
+  const email = (document.getElementById('gateEmail')?.value || '').trim();
+  if (!email) return;
+  const btn = document.getElementById('gateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Unlocking…';
+  try {
+    await fetch(LEAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, tool_name: 'supplement-checklist' }),
+    });
+  } catch { /* fire and forget */ }
+  localStorage.setItem(GATE_KEY, '1');
+  document.getElementById('gateOverlay').remove();
+}
+
+initGate();
+
+const ITEMS = [
+  { item: 'Drip edge (eave and rake)', value: 280 },
+  { item: 'Ice & water shield (first 3 feet)', value: 420 },
+  { item: 'Ice & water shield (valleys)', value: 340 },
+  { item: 'Synthetic underlayment', value: 380 },
+  { item: 'Ridge cap shingles', value: 290 },
+  { item: 'High-nail starter strip', value: 180 },
+  { item: 'Pipe jack flashings', value: 120 },
+  { item: 'Step flashing (per chimney)', value: 340 },
+  { item: 'Counter flashing', value: 280 },
+  { item: 'Chimney cricket', value: 450 },
+  { item: 'Ventilation: ridge vent', value: 310 },
+  { item: 'Ventilation: off-ridge vents', value: 240 },
+  { item: 'Gutters: removal & reset', value: 680 },
+  { item: 'Gutter guards replacement', value: 420 },
+  { item: 'Satellite dish: removal & reset', value: 180 },
+  { item: 'Skylight flashing', value: 320 },
+  { item: 'Caulking/sealant (all penetrations)', value: 160 },
+  { item: 'O&P (overhead & profit) 20%', value: 0 },
+  { item: 'Permit fees', value: 350 },
+  { item: 'Dumpster/haul-away', value: 480 },
+  { item: 'Decking: replace rotted sheathing (per sheet)', value: 120 },
+  { item: 'Additional layers: tear-off 2nd layer', value: 580 },
+  { item: 'Hip cap shingles', value: 220 },
+  { item: 'Valley metal/open valley', value: 380 },
+  { item: 'Steep slope labor (7/12+ pitch)', value: 640 },
+  { item: 'Detach & reset solar panels', value: 1200 },
+  { item: 'Detach & reset HVAC equipment', value: 280 },
+  { item: 'Mansard or flat section', value: 820 },
+  { item: 'Snow guard removal & reset', value: 240 },
+  { item: 'Fascia board replacement (per LF)', value: 14 },
+  { item: 'Soffit replacement (per SF)', value: 12 },
+  { item: 'Lead flashing (where required)', value: 280 },
+  { item: 'Code upgrade: egress window flashing', value: 380 },
+  { item: 'Power washing (post-install)', value: 220 },
+  { item: 'Landscaping protection/cleanup', value: 180 },
+  { item: 'Nails through decking (extra fasteners)', value: 140 },
+  { item: 'Peel & stick underlayment (full)', value: 680 },
+  { item: 'High-wind fastener pattern (per code)', value: 320 },
+  { item: 'Heat cable removal & reset', value: 460 },
+  { item: 'Final inspection fee', value: 150 },
+];
+
+const STORAGE_KEY = 'supplement-checklist-v1';
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+}
+
+function render() {
+  const state = loadState();
+  const list = document.getElementById('itemsList');
+  list.innerHTML = '';
+
+  let total = 0, count = 0;
+  ITEMS.forEach((item, i) => {
+    const checked = !!state[i];
+    if (checked) { count++; if (item.value > 0) total += item.value; }
+
+    const div = document.createElement('div');
+    div.className = 'item' + (checked ? ' checked' : '');
+    div.onclick = () => toggle(i);
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.onclick = e => { e.stopPropagation(); toggle(i); };
+
+    const label = document.createElement('span');
+    label.className = 'item-label';
+    label.textContent = item.item;
+
+    const val = document.createElement('span');
+    if (item.value === 0) {
+      val.className = 'item-value pct';
+      val.textContent = '20% O&P';
+    } else {
+      val.className = 'item-value';
+      val.textContent = '$' + item.value.toLocaleString();
+    }
+
+    div.appendChild(cb);
+    div.appendChild(label);
+    div.appendChild(val);
+    list.appendChild(div);
+  });
+
+  document.getElementById('totalValue').textContent = '$' + total.toLocaleString();
+  document.getElementById('itemCount').textContent = count;
+  document.getElementById('progressLabel').textContent = count + ' of ' + ITEMS.length + ' items checked';
+  document.getElementById('progressFill').style.width = Math.round(count / ITEMS.length * 100) + '%';
+}
+
+function toggle(i) {
+  const state = loadState();
+  state[i] = !state[i];
+  saveState(state);
+  render();
+}
+
+function checkAll() {
+  const state = {};
+  ITEMS.forEach((_, i) => state[i] = true);
+  saveState(state);
+  render();
+}
+
+function clearAll() {
+  if (!confirm('Clear all checkboxes?')) return;
+  saveState({});
+  render();
+}
+
+function printList() { window.print(); }
+
+render();
+</script>
+</body>
+</html>
