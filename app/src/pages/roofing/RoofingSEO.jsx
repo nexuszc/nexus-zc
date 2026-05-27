@@ -263,6 +263,13 @@ export default function RoofingSEO() {
   const [allPosts, setAllPosts]         = useState([])
   const [pillars, setPillars]           = useState([])
 
+  // 100X SEO state
+  const [locationPages, setLocationPages]   = useState([])
+  const [vsPages, setVsPages]               = useState([])
+  const [competitorGaps, setCompetitorGaps] = useState([])
+  const [questions, setQuestions]           = useState([])
+  const [tools, setTools]                   = useState([])
+
   // UI state
   const [loading, setLoading]           = useState(true)
   const [activeTab, setActiveTab]       = useState('overview')
@@ -285,6 +292,11 @@ export default function RoofingSEO() {
         recentRes,
         allPostsRes,
         pillarsRes,
+        locationPagesRes,
+        vsPagesRes,
+        competitorGapsRes,
+        questionsRes,
+        toolsRes,
       ] = await Promise.all([
         supabase
           .from('seo_performance')
@@ -347,6 +359,40 @@ export default function RoofingSEO() {
           .select('*')
           .order('created_at', { ascending: false })
           .catch(() => ({ data: [] })),
+
+        supabase
+          .from('seo_location_pages')
+          .select('id, city, state_code, slug, hail_risk, status, google_impressions, google_clicks')
+          .order('population', { ascending: false })
+          .catch(() => ({ data: [] })),
+
+        supabase
+          .from('seo_vs_pages')
+          .select('id, competitor, slug, status, published_at, google_impressions, google_clicks')
+          .order('created_at', { ascending: false })
+          .catch(() => ({ data: [] })),
+
+        supabase
+          .from('competitor_pages')
+          .select('id, competitor, url, keyword, priority_score, gap_status, discovered_at')
+          .eq('gap_status', 'uncovered')
+          .order('priority_score', { ascending: false })
+          .limit(50)
+          .catch(() => ({ data: [] })),
+
+        supabase
+          .from('seo_questions')
+          .select('id, question, seed_keyword, intent_score, audience, status')
+          .eq('status', 'pending')
+          .order('intent_score', { ascending: false })
+          .limit(30)
+          .catch(() => ({ data: [] })),
+
+        supabase
+          .from('seo_tools')
+          .select('id, name, slug, tool_type, status, monthly_visits')
+          .order('created_at', { ascending: false })
+          .catch(() => ({ data: [] })),
       ])
 
       setStats(statsRes.data)
@@ -357,6 +403,11 @@ export default function RoofingSEO() {
       setRecentPosts(recentRes.data || [])
       setAllPosts(allPostsRes.data || [])
       setPillars(pillarsRes.data || [])
+      setLocationPages(locationPagesRes.data || [])
+      setVsPages(vsPagesRes.data || [])
+      setCompetitorGaps(competitorGapsRes.data || [])
+      setQuestions(questionsRes.data || [])
+      setTools(toolsRes.data || [])
     } catch (err) {
       console.error('RoofingSEO fetchAll error:', err)
     } finally {
@@ -570,6 +621,36 @@ export default function RoofingSEO() {
                 label="Top 10 Rankings"
                 value={stats?.top_10_count ?? '—'}
                 sub="keywords in top 10"
+                color="#4a9eff"
+              />
+              <StatCard
+                label="Location Pages"
+                value={`${locationPages.filter(p => p.status === 'published').length}/50`}
+                sub="cities published"
+                color="#a78bfa"
+              />
+              <StatCard
+                label="VS Pages"
+                value={`${vsPages.filter(p => p.status === 'published').length}/6`}
+                sub="comparisons live"
+                color="#f59e0b"
+              />
+              <StatCard
+                label="Competitor Gaps"
+                value={competitorGaps.length}
+                sub="uncovered topics"
+                color="#ef4444"
+              />
+              <StatCard
+                label="Questions Queued"
+                value={questions.length}
+                sub="from AlsoAsked"
+                color="#22c55e"
+              />
+              <StatCard
+                label="Free Tools"
+                value={`${tools.filter(t => t.status === 'published').length}/${tools.length}`}
+                sub="tools live"
                 color="#4a9eff"
               />
             </>
@@ -1276,15 +1357,479 @@ export default function RoofingSEO() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // TAB: Content Map
+  // ─────────────────────────────────────────────────────────────────────────
+
+  function ContentMapTab() {
+    const [buildingLocation, setBuildingLocation] = useState(null)
+    const [buildingVs, setBuildingVs]             = useState(null)
+    const [buildingQuestion, setBuildingQuestion] = useState(null)
+
+    const locationPublished  = locationPages.filter(p => p.status === 'published')
+    const locationPending    = locationPages.filter(p => p.status === 'pending')
+    const vsPublished        = vsPages.filter(p => p.status === 'published')
+    const vsPending          = vsPages.filter(p => p.status === 'pending')
+
+    const HAIL_COLORS = {
+      high:   { bg: 'rgba(239,68,68,.15)',    color: '#f87171' },
+      medium: { bg: 'rgba(245,158,11,.15)',   color: '#fbbf24' },
+      low:    { bg: 'rgba(100,116,139,.15)',  color: '#94a3b8' },
+    }
+
+    const COMP_DISPLAY = {
+      companycam:  'CompanyCam',
+      jobnimbus:   'JobNimbus',
+      acculynx:    'AccuLynx',
+      salesrabbit: 'SalesRabbit',
+      eagleview:   'EagleView',
+      hover:       'Hover',
+    }
+
+    async function triggerLocationBuild(slug) {
+      setBuildingLocation(slug)
+      try {
+        // Trigger via content-writer edge function as a keyword
+        await callEdgeFunction('seo-content-writer', { keyword: `roofing software ${slug.replace('roofing-software-', '').replace(/-/g, ' ')}`, location_slug: slug })
+        flash(`Building location page: ${slug}`)
+        await fetchAll()
+      } catch (err) {
+        flash(`Failed: ${err.message}`, true)
+      } finally {
+        setBuildingLocation(null)
+      }
+    }
+
+    async function triggerVsBuild(slug) {
+      setBuildingVs(slug)
+      try {
+        await callEdgeFunction('seo-content-writer', { keyword: `roofing os vs ${slug.replace('roofing-os-vs-', '').replace(/-/g, ' ')}`, vs_slug: slug })
+        flash(`Building VS page: ${slug}`)
+        await fetchAll()
+      } catch (err) {
+        flash(`Failed: ${err.message}`, true)
+      } finally {
+        setBuildingVs(null)
+      }
+    }
+
+    async function triggerQuestionWrite(q) {
+      setBuildingQuestion(q.id)
+      try {
+        await callEdgeFunction('seo-content-writer', { keyword: q.question })
+        flash(`Writing post for: "${q.question}"`)
+        await fetchAll()
+      } catch (err) {
+        flash(`Failed: ${err.message}`, true)
+      } finally {
+        setBuildingQuestion(null)
+      }
+    }
+
+    async function triggerCompetitorGap(gap) {
+      setTrigger(`gap-${gap.id}`, true)
+      try {
+        await callEdgeFunction('seo-content-writer', { keyword: gap.keyword })
+        flash(`Writing counter: "${gap.keyword}"`)
+        await fetchAll()
+      } catch (err) {
+        flash(`Failed: ${err.message}`, true)
+      } finally {
+        setTrigger(`gap-${gap.id}`, false)
+      }
+    }
+
+    async function runCompetitorHunter() {
+      setTrigger('comp-hunter', true)
+      try {
+        await callEdgeFunction('seo-competitor-hunter', { scheduled: true })
+        flash('Competitor hunter running — scanning all sitemaps…')
+        setTimeout(fetchAll, 5000)
+      } catch (err) {
+        flash(`Failed: ${err.message}`, true)
+      } finally {
+        setTrigger('comp-hunter', false)
+      }
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+
+        {/* ─── Location Pages ─────────────────────────────── */}
+        <div>
+          <SectionTitle>
+            Location Pages
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Chip
+                label={`${locationPublished.length}/50 live`}
+                scheme={{ bg: 'rgba(167,139,250,.15)', color: '#a78bfa' }}
+              />
+              <a
+                href="https://roofingos.dev/locations/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, color: '#4b5563', textDecoration: 'none' }}
+              >
+                View index ↗
+              </a>
+            </div>
+          </SectionTitle>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 8,
+          }}>
+            {locationPages.map(page => {
+              const hailScheme = HAIL_COLORS[page.hail_risk] || HAIL_COLORS.low
+              const isPublished = page.status === 'published'
+              return (
+                <div
+                  key={page.id}
+                  style={{
+                    background: isPublished ? 'rgba(34,197,94,.05)' : '#111827',
+                    border: `1px solid ${isPublished ? 'rgba(34,197,94,.3)' : '#1e293b'}`,
+                    borderRadius: 10,
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: isPublished ? '#d1fae5' : '#d1d5db' }}>
+                      {page.city}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#6b7280' }}>{page.state_code}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Chip label={page.hail_risk} scheme={hailScheme} style={{ fontSize: 9 }} />
+                    {isPublished
+                      ? <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 700 }}>✓ Live</span>
+                      : <button
+                          onClick={() => triggerLocationBuild(page.slug)}
+                          disabled={buildingLocation === page.slug}
+                          style={{
+                            background: 'transparent',
+                            color: '#3b82f6',
+                            border: '1px solid #1e3a5f',
+                            borderRadius: 5,
+                            padding: '2px 7px',
+                            fontSize: 10,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {buildingLocation === page.slug ? '…' : 'Build'}
+                        </button>
+                    }
+                  </div>
+                  {page.google_impressions > 0 && (
+                    <span style={{ fontSize: 10, color: '#6b7280' }}>{fmtNum(page.google_impressions)} impr</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── VS Pages ───────────────────────────────────── */}
+        <div>
+          <SectionTitle>
+            VS Comparison Pages
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Chip
+                label={`${vsPublished.length}/6 live`}
+                scheme={{ bg: 'rgba(245,158,11,.15)', color: '#f59e0b' }}
+              />
+              <a
+                href="https://roofingos.dev/vs/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, color: '#4b5563', textDecoration: 'none' }}
+              >
+                View index ↗
+              </a>
+            </div>
+          </SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+            {vsPages.map(page => {
+              const isPublished = page.status === 'published'
+              const display = COMP_DISPLAY[page.competitor] || page.competitor
+              return (
+                <Card key={page.id} style={{ padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                      vs {display}
+                    </div>
+                    {isPublished
+                      ? <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ Live</span>
+                      : <Chip label="pending" scheme={STATUS_COLORS.pending} />
+                    }
+                  </div>
+                  <div style={{ fontSize: 11, color: '#4b5563', marginBottom: 12 }}>{page.slug}</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {isPublished
+                      ? <>
+                          <a
+                            href={`https://roofingos.dev/vs/${page.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: 12, color: '#4a9eff' }}
+                          >
+                            View ↗
+                          </a>
+                          {page.google_impressions > 0 && (
+                            <span style={{ fontSize: 11, color: '#6b7280' }}>{fmtNum(page.google_impressions)} impr</span>
+                          )}
+                        </>
+                      : <BtnPrimary
+                          onClick={() => triggerVsBuild(page.slug)}
+                          disabled={buildingVs === page.slug}
+                          style={{ padding: '6px 14px', fontSize: 12 }}
+                        >
+                          {buildingVs === page.slug ? 'Writing…' : 'Build Now →'}
+                        </BtnPrimary>
+                    }
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ─── Free Tools ─────────────────────────────────── */}
+        <div>
+          <SectionTitle>
+            Free Tools
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Chip
+                label={`${tools.filter(t => t.status === 'published').length}/${tools.length} live`}
+                scheme={{ bg: 'rgba(74,158,255,.15)', color: '#4a9eff' }}
+              />
+              <a
+                href="https://roofingos.dev/tools/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 12, color: '#4b5563', textDecoration: 'none' }}
+              >
+                View index ↗
+              </a>
+            </div>
+          </SectionTitle>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <TableHeader cols={[
+                { label: 'Tool' },
+                { label: 'Type' },
+                { label: 'Status' },
+                { label: 'Visits/mo', right: true },
+                { label: '' },
+              ]} />
+              <tbody>
+                {tools.map(tool => (
+                  <tr key={tool.id} style={{ borderBottom: '1px solid #1a2235' }}>
+                    <td style={{ padding: '12px', fontSize: 14, color: '#d1d5db', fontWeight: 500 }}>{tool.name}</td>
+                    <td style={{ padding: '12px' }}>
+                      <Chip
+                        label={tool.tool_type || 'tool'}
+                        scheme={{ bg: 'rgba(74,158,255,.1)', color: '#4a9eff' }}
+                      />
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <StatusChip status={tool.status} />
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontSize: 13, color: '#9ca3af' }}>
+                      {tool.monthly_visits > 0 ? fmtNum(tool.monthly_visits) : '—'}
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      {tool.status === 'published' && (
+                        <a
+                          href={`https://roofingos.dev/tools/${tool.slug}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontSize: 12, color: '#4a9eff' }}
+                        >
+                          View ↗
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+
+        {/* ─── Competitor Gaps ─────────────────────────────── */}
+        <div>
+          <SectionTitle>
+            Competitor Gaps
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Chip label={`${competitorGaps.length} uncovered`} scheme={{ bg: 'rgba(239,68,68,.15)', color: '#ef4444' }} />
+              <BtnGhost
+                onClick={runCompetitorHunter}
+                disabled={triggering['comp-hunter']}
+              >
+                {triggering['comp-hunter'] ? 'Scanning…' : '🕵️ Scan Sitemaps'}
+              </BtnGhost>
+            </div>
+          </SectionTitle>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            {competitorGaps.length === 0 ? (
+              <EmptyState icon="✓" message="No uncovered gaps found yet — run sitemap scanner to discover gaps" />
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <TableHeader cols={[
+                    { label: 'Competitor' },
+                    { label: 'Their URL / Keyword' },
+                    { label: 'Priority', right: true },
+                    { label: 'Found' },
+                    { label: 'Action' },
+                  ]} />
+                  <tbody>
+                    {competitorGaps.map(gap => {
+                      const cKey = gap.competitor?.toLowerCase()
+                      const cScheme = COMPETITOR_COLORS[cKey] || { bg: 'rgba(107,114,128,.15)', color: '#9ca3af' }
+                      return (
+                        <tr
+                          key={gap.id}
+                          style={{ borderBottom: '1px solid #1a2235' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#131b2c'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                            <Chip label={gap.competitor} scheme={cScheme} />
+                          </td>
+                          <td style={{ padding: '10px 12px', maxWidth: 320 }}>
+                            <div style={{ fontSize: 13, color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {gap.keyword || '(no keyword)'}
+                            </div>
+                            {gap.url && (
+                              <a
+                                href={gap.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontSize: 10, color: '#4b5563' }}
+                              >
+                                {gap.url.length > 50 ? gap.url.slice(0, 50) + '…' : gap.url}
+                              </a>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                            <span style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              color: gap.priority_score >= 10 ? '#ef4444' : gap.priority_score >= 7 ? '#f59e0b' : '#6b7280',
+                            }}>
+                              {gap.priority_score}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                            {fmtDate(gap.discovered_at)}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {gap.keyword && (
+                              <BtnPrimary
+                                onClick={() => triggerCompetitorGap(gap)}
+                                disabled={triggering[`gap-${gap.id}`]}
+                                style={{ padding: '6px 12px', fontSize: 12 }}
+                              >
+                                {triggering[`gap-${gap.id}`] ? 'Writing…' : 'Write Counter'}
+                              </BtnPrimary>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* ─── Questions Queue ─────────────────────────────── */}
+        <div>
+          <SectionTitle>
+            Questions Queue
+            <Chip label={`${questions.length} pending`} scheme={{ bg: 'rgba(34,197,94,.15)', color: '#22c55e' }} />
+          </SectionTitle>
+          <Card style={{ padding: 0, overflow: 'hidden' }}>
+            {questions.length === 0 ? (
+              <EmptyState icon="❓" message="No questions queued — questions are fetched nightly via Google Autocomplete" />
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <TableHeader cols={[
+                    { label: 'Question' },
+                    { label: 'Audience' },
+                    { label: 'Score', right: true },
+                    { label: 'Seed' },
+                    { label: 'Action' },
+                  ]} />
+                  <tbody>
+                    {questions.map(q => (
+                      <tr
+                        key={q.id}
+                        style={{ borderBottom: '1px solid #1a2235' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#131b2c'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <td style={{ padding: '10px 12px', maxWidth: 340 }}>
+                          <div style={{ fontSize: 13, color: '#d1d5db', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {q.question}
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <Chip
+                            label={q.audience}
+                            scheme={
+                              q.audience === 'homeowner'
+                                ? { bg: 'rgba(34,197,94,.12)', color: '#22c55e' }
+                                : q.audience === 'adjuster'
+                                ? { bg: 'rgba(245,158,11,.12)', color: '#f59e0b' }
+                                : { bg: 'rgba(74,158,255,.12)', color: '#4a9eff' }
+                            }
+                          />
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 13, fontWeight: 700, color: q.intent_score >= 12 ? '#22c55e' : '#9ca3af' }}>
+                          {q.intent_score}
+                        </td>
+                        <td style={{ padding: '10px 12px', fontSize: 12, color: '#6b7280' }}>
+                          {q.seed_keyword}
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <BtnPrimary
+                            onClick={() => triggerQuestionWrite(q)}
+                            disabled={buildingQuestion === q.id}
+                            style={{ padding: '6px 12px', fontSize: 12 }}
+                          >
+                            {buildingQuestion === q.id ? 'Writing…' : 'Write Now'}
+                          </BtnPrimary>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+
+      </div>
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // TABS CONFIG
   // ─────────────────────────────────────────────────────────────────────────
 
   const TABS = [
-    { id: 'overview',    label: 'Overview',     badge: needsReview.length > 0 ? needsReview.length : null },
-    { id: 'posts',       label: 'Posts',        badge: allPosts.length || null },
-    { id: 'keywords',    label: 'Keywords',     badge: keywords.length || null },
-    { id: 'competitors', label: 'Competitors',  badge: null },
-    { id: 'pillars',     label: 'Pillars',      badge: pillars.length || null },
+    { id: 'overview',    label: 'Overview',      badge: needsReview.length > 0 ? needsReview.length : null },
+    { id: 'content-map', label: 'Content Map',   badge: competitorGaps.length > 0 ? competitorGaps.length : null },
+    { id: 'posts',       label: 'Posts',         badge: allPosts.length || null },
+    { id: 'keywords',    label: 'Keywords',      badge: keywords.length || null },
+    { id: 'competitors', label: 'Competitors',   badge: null },
+    { id: 'pillars',     label: 'Pillars',       badge: pillars.length || null },
   ]
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1438,6 +1983,7 @@ export default function RoofingSEO() {
       {/* Main Content */}
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 24px' }}>
         {activeTab === 'overview'    && <OverviewTab />}
+        {activeTab === 'content-map' && <ContentMapTab />}
         {activeTab === 'posts'       && <PostsTab />}
         {activeTab === 'keywords'    && <KeywordsTab />}
         {activeTab === 'competitors' && <CompetitorsTab />}
