@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 27, 2026 — v12
+# Last updated: May 27, 2026 — v13
 
 ---
 
@@ -678,6 +678,23 @@ Then productized and sold to other multi-business operators.
 - Phase 6: RoofingTeam.jsx — full rewrite; 7 roles with permission labels; expandable contractor cards; add employee form; SMS invite button saves invite_token
 - Phase 7: App.jsx + RoofingJobDetail.jsx — inspection route wired; overview tab shows inspection banner (0 photos → Start, N photos → status pill)
 - CRITICAL LESSON: Tables created via SQL without GRANT ALL are invisible to edge functions even with service_role key — always run GRANT ALL ON <table> TO anon, authenticated, service_role after creating new tables
+
+**Roofing OS V3 — Tiered Visualization + Pricing Pages (May 27, 2026):**
+- Tiered visualization logic: `getVisualizationTier(plan)` in RoofingPortal.jsx
+  - free/null → 'swatches': color circles only + 🔒 upsell block ("See these colors on your actual home" → roofingos.dev/pro)
+  - starter → 'basic': hero photo with CSS mix-blend-mode:multiply overlay on upper 55% at 0.4 opacity using selected hex + "upgrade to PRO" nudge
+  - pro/custom → 'ai': full AI renders (existing behavior) + "Colors ✨" badge in tab bar via DarkTabBar plan prop
+- DB: visualization_count (int, default 0) + visualization_limit (int, default 0) added to contractor_accounts
+  - 0 = free/none, 50 = starter basic, 500 = pro AI, -1 = unlimited
+- Landing page pricing overhaul (roofingos-landing/index.html):
+  - Pricing cards: 6 bullets each + "See everything included →" links to /plans/{free,starter,pro,custom}
+  - Full comparison table added after pricing section (5 categories: Portal, CRM, AI, Sales, White-label)
+- Plan detail pages created at roofingos-landing/plans/:
+  - free.html — $0, feature breakdown, upgrade nudges to Starter
+  - starter.html — $149/mo, automation features, upgrade nudge to Pro
+  - pro.html — $499/mo, MOST POPULAR badge, AI viz section, competitor replacement table (~~CompanyCam~~ ~~JobNimbus~~ etc. = ~$600+/mo vs $499)
+  - custom.html — $3k–5k/mo, white-label, dedicated strategist, done-for-you content
+  - All pages: dark #0a0f1a, Inter font, sticky mobile CTA bar, OG tags, 100% static HTML
 
 **NEXT:**
 1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
