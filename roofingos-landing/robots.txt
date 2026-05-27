@@ -2,4 +2,5 @@ User-agent: *
 Allow: /
 Disallow: /dashboard
 
+Sitemap: https://roofingos.dev/sitemap-index.xml
 Sitemap: https://roofingos.dev/sitemap.xml
