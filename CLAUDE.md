@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 27, 2026 — v14
+# Last updated: May 27, 2026 — v15
 
 ---
 
@@ -706,6 +706,15 @@ Then productized and sold to other multi-business operators.
 - Demo button: links to /portal/demo (redirect already existed in _redirects → /portal/DEMO2026ROOFINGOS)
 - Footer: updated with address (1700 Lincoln St, Denver CO 80203) + 6 links (Plans/Blog/Login/Privacy/Terms/Unsubscribe)
 - SMS bubble: SVG chat icon replacing emoji; collapses to icon-only circle on mobile
+
+**100X SEO System (May 27, 2026):**
+- Phase 1 (DB): 5 new tables — competitor_pages, seo_location_pages, seo_vs_pages, seo_questions, seo_tools; 50 hail-market cities seeded, 6 VS pages seeded, 5 free tools seeded; GRANT ALL on all tables
+- Phase 2 (Edge Function): seo-competitor-hunter v2 deployed — parseSitemap() parses sitemap index + sub-sitemaps, slugToKeyword() extracts keyword from URL slug, scoreGap() 0-17 scoring (+5 high traffic, +4 question-based, +3 competitor mention/how-to/vs, +2 roofing keyword), saves gaps to competitor_pages, queues score≥8 to seo_keyword_queue at intent_score=15
+- Phase 3 (VPS): /opt/roofing/seo/content-generator.js — pm2 ID 7, cron 0 5 * * * (11pm MT); TASK 1: 5 location pages/night (Haiku — templated 650 words); TASK 2: 1 VS page/night (Sonnet — 900 words with comparison table); TASK 3: 3 question posts/night via Google Autocomplete; TASK 4: supplement checklist tool (weekly, Sundays — 40 line items, localStorage, value calc); TASK 5: 5 homeowner education posts (weekly, Sundays — Haiku, audience:homeowner); updates sitemap, git commits, sends Telegram digest
+- Phase 4 (Landing): roofingos-landing/locations/index.html (50 cities grid, high/medium/low hail badge sections), vs/index.html (6 competitor cards with pricing), tools/index.html (5 tool cards with type badges), homeowners/index.html (homeowner education hub with 6 seed cards)
+- Phase 5 (Sitemap): content-generator.js walkDir() auto-discovers all HTML files, sets priority by path: vs=0.9, locations/plans/tools=0.8, blog/homeowners=0.7, others=0.6
+- Phase 6 (Dashboard): RoofingSEO.jsx — 6 new stat cards (Location Pages X/50, VS Pages X/6, Competitor Gaps N, Questions Queued N, Free Tools X/5); Content Map tab: location page grid with hail badges + Build buttons, VS page cards with Write Now, tools table, competitor gaps table with priority score + Write Counter, questions queue with Write Now
+- CRITICAL MODEL RULES: Haiku (claude-haiku-4-5-20251001) for location pages + questions + homeowner posts. Sonnet (claude-sonnet-4-6) for VS comparison pages only.
 
 **NEXT:**
 1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
