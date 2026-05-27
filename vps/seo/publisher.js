@@ -18,7 +18,7 @@ const { execSync } = require('child_process');
 require('dotenv').config({ path: '/opt/roofing/.env' });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const REPO_PATH = process.env.SEO_REPO_PATH || '/opt/roofing/roofingos-landing';
 const BLOG_DIR = path.join(REPO_PATH, 'blog');
 const TEMPLATE_PATH = path.join(BLOG_DIR, '_template.html');
