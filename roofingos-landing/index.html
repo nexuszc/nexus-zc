@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Roofing OS — Free homeowner portal for roofing contractors</title>
-<meta name="description" content="Cancel CompanyCam. Roofing OS replaces it free. Every homeowner gets a live portal — photos, insurance, crew schedule. Free forever for roofing contractors.">
+<title>Roofing OS — Run your entire roofing business from one place</title>
+<meta name="description" content="Homeowner portal, AI supplements, storm leads, CRM, and roof visualization. Free to start. Built for roofing contractors.">
 
 <!-- Open Graph -->
-<meta property="og:title" content="Roofing OS — Free Forever">
-<meta property="og:description" content="Free homeowner portal for roofing contractors. Cancel CompanyCam. No credit card. Setup in 4 minutes.">
+<meta property="og:title" content="Roofing OS — Free for roofing contractors">
+<meta property="og:description" content="Homeowner portal, AI supplements, storm leads, CRM. Free to start. Built for roofing contractors.">
 <meta property="og:url" content="https://roofingos.dev">
 <meta property="og:image" content="https://roofingos.dev/og-image.png">
 <meta property="og:type" content="website">
@@ -16,11 +16,10 @@
 
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Roofing OS — Free Forever">
-<meta name="twitter:description" content="Free homeowner portal for roofing contractors. Cancel CompanyCam. No credit card.">
+<meta name="twitter:title" content="Roofing OS — Free for roofing contractors">
+<meta name="twitter:description" content="Homeowner portal, AI supplements, storm leads, CRM. Free to start.">
 <meta name="twitter:image" content="https://roofingos.dev/og-image.png">
 
-<!-- Preload critical font -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
@@ -55,10 +54,12 @@ gtag('config', 'YOUR_GA4_ID');
 
 :root {
   --bg: #0a0f1a;
-  --primary: #4a9eff;
+  --primary: #3b82f6;
+  --primary-light: rgba(59,130,246,0.15);
+  --primary-border: rgba(59,130,246,0.3);
   --text: #fff;
   --muted: #6b7a8d;
-  --border: rgba(255,255,255,0.1);
+  --border: rgba(255,255,255,0.08);
   --surface: rgba(255,255,255,0.04);
   --radius: 16px;
 }
@@ -67,40 +68,75 @@ body {
   font-family: 'Inter', -apple-system, sans-serif;
   background: #0a0f1a;
   color: #fff;
+  -webkit-font-smoothing: antialiased;
 }
 
 a { transition: all 0.15s ease; }
 
-/* NAV */
+/* ── NAV ── */
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
   height: 64px; padding: 0 24px;
   display: flex; align-items: center; justify-content: space-between;
-  background: rgba(10,15,26,0.8);
+  background: rgba(10,15,26,0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
+.nav-logo {
+  font-size: 18px; font-weight: 800; color: #fff;
+  letter-spacing: -0.5px; text-decoration: none;
+}
+.nav-logo span { color: #3b82f6; }
+.nav-right { display: flex; align-items: center; gap: 20px; }
+.nav-signin {
+  color: #6b7a8d; text-decoration: none;
+  font-size: 14px; font-weight: 500;
+}
+.nav-signin:hover { color: #fff; }
+.nav-cta {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #3b82f6; color: #fff; text-decoration: none;
+  border-radius: 10px; padding: 0 18px; height: 38px;
+  font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.nav-cta:hover { filter: brightness(1.1); }
 
-/* HERO HEADLINE */
+/* ── HERO ── */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 100px 24px 64px;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(59,130,246,0.12);
+  border: 1px solid rgba(59,130,246,0.25);
+  border-radius: 20px; padding: 6px 14px;
+  margin-bottom: 28px;
+}
+.hero-badge-text {
+  font-size: 12px; font-weight: 600; color: #3b82f6; letter-spacing: 0.03em;
+}
 .hero-headline {
-  font-size: 64px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.1;
-  letter-spacing: -2px;
-  margin-bottom: 20px;
-  max-width: 800px;
+  font-size: 62px; font-weight: 800; color: #fff;
+  line-height: 1.08; letter-spacing: -2px;
+  margin-bottom: 20px; max-width: 760px;
 }
-@media (max-width: 600px) {
-  .hero-headline { font-size: 40px; letter-spacing: -1px; }
+.hero-sub {
+  font-size: 18px; color: #6b7a8d;
+  max-width: 480px; margin: 0 auto 40px;
+  line-height: 1.65;
 }
-
-/* HERO BUTTONS */
-.hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 56px; }
+.hero-btns {
+  display: flex; gap: 12px; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 32px;
+}
 .btn-primary {
   display: inline-flex; align-items: center; justify-content: center;
-  background: #4a9eff; color: #fff; text-decoration: none;
+  background: #3b82f6; color: #fff; text-decoration: none;
   border-radius: 12px; padding: 0 28px; height: 52px;
   font-size: 16px; font-weight: 700; transition: all 0.15s ease;
   white-space: nowrap;
@@ -115,12 +151,120 @@ nav {
   transition: all 0.15s ease; white-space: nowrap;
 }
 .btn-outline:hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); }
-@media (max-width: 480px) {
+.hero-proof {
+  font-size: 12px; color: #4b5563; letter-spacing: 0.05em;
+  text-transform: uppercase; font-weight: 600;
+}
+@media (max-width: 600px) {
+  .hero-headline { font-size: 36px; letter-spacing: -1px; }
+  .hero-sub { font-size: 16px; }
   .hero-btns { flex-direction: column; width: 100%; }
   .btn-primary, .btn-outline { width: 100%; }
 }
 
-/* PRICING GRID */
+/* ── SECTION SHARED ── */
+.section {
+  padding: 80px 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.section-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+.section-label {
+  font-size: 11px; font-weight: 700; color: #3b82f6;
+  text-transform: uppercase; letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+.section-title {
+  font-size: 32px; font-weight: 800; color: #fff;
+  letter-spacing: -0.5px; line-height: 1.2;
+  margin-bottom: 10px;
+}
+.section-sub {
+  font-size: 16px; color: #6b7a8d; max-width: 480px;
+  margin: 0 auto; line-height: 1.6;
+}
+@media (max-width: 600px) {
+  .section { padding: 60px 20px; }
+  .section-title { font-size: 26px; }
+}
+
+/* ── FEATURES GRID ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .features-grid { grid-template-columns: 1fr; }
+}
+.feature-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 24px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.feature-card:hover {
+  border-color: rgba(59,130,246,0.3);
+  background: rgba(59,130,246,0.04);
+}
+.feature-icon {
+  width: 36px; height: 36px;
+  background: rgba(59,130,246,0.12);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #3b82f6;
+  margin-bottom: 14px;
+}
+.feature-title {
+  font-size: 15px; font-weight: 700; color: #fff;
+  margin-bottom: 8px; line-height: 1.3;
+}
+.feature-desc {
+  font-size: 13px; color: #6b7a8d; line-height: 1.6;
+}
+
+/* ── HOW IT WORKS ── */
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  position: relative;
+}
+@media (max-width: 640px) {
+  .steps-grid { grid-template-columns: 1fr; gap: 16px; }
+}
+.step {
+  text-align: center;
+  padding: 32px 20px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+}
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  background: rgba(59,130,246,0.15);
+  border: 1px solid rgba(59,130,246,0.3);
+  border-radius: 50%;
+  font-size: 16px; font-weight: 800; color: #3b82f6;
+  margin: 0 auto 16px;
+}
+.step-title {
+  font-size: 16px; font-weight: 700; color: #fff;
+  margin-bottom: 10px; line-height: 1.3;
+}
+.step-desc {
+  font-size: 14px; color: #6b7a8d; line-height: 1.6;
+}
+
+/* ── PRICING ── */
 .pricing-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -137,7 +281,7 @@ nav {
 }
 .pricing-card {
   background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: 16px;
   padding: 24px;
   display: flex;
@@ -147,20 +291,19 @@ nav {
   position: relative;
 }
 .pricing-card:hover {
-  border-color: #4a9eff;
+  border-color: rgba(59,130,246,0.4);
   transform: translateY(-2px);
-  background: rgba(74,158,255,0.04);
+  background: rgba(59,130,246,0.04);
 }
 .pricing-card-featured {
-  border-color: rgba(74,158,255,0.4);
-  background: rgba(74,158,255,0.06);
+  border-color: rgba(59,130,246,0.4);
+  background: rgba(59,130,246,0.06);
 }
 .plan-badge {
   display: inline-block;
-  background: rgba(74,158,255,0.15);
-  color: #4a9eff;
-  font-size: 10px;
-  font-weight: 700;
+  background: rgba(59,130,246,0.15);
+  color: #3b82f6;
+  font-size: 10px; font-weight: 700;
   letter-spacing: 0.08em;
   padding: 3px 8px;
   border-radius: 20px;
@@ -168,40 +311,36 @@ nav {
   width: fit-content;
 }
 .plan-name {
-  font-size: 11px;
-  font-weight: 700;
-  color: #6b7a8d;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px; font-weight: 700; color: #6b7a8d;
+  letter-spacing: 0.1em; text-transform: uppercase;
   margin-bottom: 4px;
 }
 .plan-price {
-  font-size: 28px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: -1px;
-  line-height: 1;
+  font-size: 28px; font-weight: 800; color: #fff;
+  letter-spacing: -1px; line-height: 1;
   margin-bottom: 4px;
 }
 .plan-period { font-size: 14px; font-weight: 400; color: #6b7a8d; }
-.plan-tagline {
-  font-size: 12px;
-  color: #6b7a8d;
-  margin-bottom: 14px;
-}
+.plan-tagline { font-size: 12px; color: #6b7a8d; margin-bottom: 14px; }
 .plan-features {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   flex: 1;
   margin-bottom: 16px;
 }
 .plan-features li {
-  font-size: 13px;
-  color: rgba(255,255,255,0.8);
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
   line-height: 1.4;
 }
+.plan-detail-link {
+  font-size: 11px; color: #3b82f6; text-decoration: none;
+  margin-bottom: 12px; display: block;
+  opacity: 0.8;
+}
+.plan-detail-link:hover { opacity: 1; }
 .plan-btn {
   display: flex; align-items: center; justify-content: center;
   border-radius: 10px; padding: 10px 16px;
@@ -209,63 +348,194 @@ nav {
   text-decoration: none; transition: all 0.15s ease;
   text-align: center;
 }
-.plan-btn-primary { background: #4a9eff; color: #fff; }
+.plan-btn-primary { background: #3b82f6; color: #fff; }
 .plan-btn-primary:hover { filter: brightness(1.1); }
 .plan-btn-outline { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
 .plan-btn-outline:hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); }
+
+/* ── SOCIAL PROOF BAR ── */
+.social-proof {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 28px 24px;
+  text-align: center;
+}
+.social-proof p {
+  font-size: 14px; color: #4b5563;
+  font-weight: 500; letter-spacing: 0.03em;
+}
+
+/* ── FOOTER ── */
+footer {
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 40px 24px;
+  text-align: center;
+}
+.footer-logo {
+  font-size: 16px; font-weight: 800; color: #fff;
+  letter-spacing: -0.3px; margin-bottom: 8px;
+}
+.footer-logo span { color: #3b82f6; }
+.footer-address {
+  font-size: 12px; color: #4b5563;
+  margin-bottom: 20px; line-height: 1.6;
+}
+.footer-links {
+  display: flex; flex-wrap: wrap; gap: 20px;
+  justify-content: center; margin-bottom: 20px;
+}
+.footer-links a {
+  font-size: 13px; color: #6b7a8d; text-decoration: none; font-weight: 500;
+}
+.footer-links a:hover { color: #fff; }
+.footer-copy {
+  font-size: 12px; color: #374151;
+}
 </style>
 </head>
 <body>
 
 <!-- NAV -->
 <nav>
-  <span style="font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.5px">Roofing<span style="color:#4a9eff">OS</span></span>
-  <a href="https://app.nexuszc.com/roofing/login" style="color:#6b7a8d;text-decoration:none;font-size:14px;font-weight:500">Sign in</a>
+  <a href="/" class="nav-logo">Roofing<span>OS</span></a>
+  <div class="nav-right">
+    <a href="https://app.nexuszc.com/roofing/login" class="nav-signin">Sign in</a>
+    <a href="/signup" class="nav-cta">Start free &rarr;</a>
+  </div>
 </nav>
 
-<!-- ABOVE FOLD HERO -->
-<section style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:80px 24px 40px;background:#0a0f1a;">
-
-  <!-- Badge -->
-  <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(74,158,255,0.12);border:1px solid rgba(74,158,255,0.25);border-radius:20px;padding:6px 14px;margin-bottom:24px">
-    <span style="font-size:14px">&#9889;</span>
-    <span style="font-size:12px;font-weight:600;color:#4a9eff;letter-spacing:0.03em">Free forever &middot; No credit card</span>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    <span class="hero-badge-text">Free forever &middot; No credit card</span>
   </div>
 
-  <!-- Headline -->
-  <h1 class="hero-headline">CompanyCam costs $49/month.<br>We do more. Free.</h1>
+  <h1 class="hero-headline">Run your entire roofing business<br>from one place.</h1>
 
-  <!-- Subhead -->
-  <p style="font-size:18px;color:#6b7a8d;max-width:500px;margin:0 auto 40px;line-height:1.6">
-    Homeowner portal. AI supplements. Storm leads. CRM. Free to start.
-  </p>
+  <p class="hero-sub">Homeowner portal. AI supplements. Storm leads. CRM. Free to start.</p>
 
-  <!-- Buttons -->
   <div class="hero-btns">
     <a href="/signup" class="btn-primary">Start free &rarr;</a>
-    <a href="/portal/DEMO2026ROOFINGOS" class="btn-outline">Watch demo &rarr;</a>
+    <a href="/portal/demo" class="btn-outline">Watch demo &rarr;</a>
   </div>
 
-  <!-- Social proof -->
-  <p style="font-size:13px;color:#6b7a8d;margin-bottom:32px;letter-spacing:0.02em">Join 500+ roofing contractors already using Roofing OS</p>
+  <p class="hero-proof">Built for roofing contractors</p>
+</section>
 
-  <!-- Pricing Cards -->
+<!-- FEATURES -->
+<section class="section" id="features" style="border-top:1px solid rgba(255,255,255,0.06)">
+  <div class="section-header">
+    <p class="section-label">What you get</p>
+    <h2 class="section-title">Everything to run a modern roofing company</h2>
+    <p class="section-sub">One platform replaces the tools you're already paying for.</p>
+  </div>
+  <div class="features-grid">
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75"/></svg>
+      </div>
+      <p class="feature-title">Homeowner Portal</p>
+      <p class="feature-desc">Real-time photos, progress tracking, and messaging. Your homeowners stop calling and start trusting.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+      </div>
+      <p class="feature-title">AI Supplements</p>
+      <p class="feature-desc">Our AI writes your supplement packages. Average contractor recovers $4,200 more per claim.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+      </div>
+      <p class="feature-title">Storm Leads</p>
+      <p class="feature-desc">Get notified when hail hits your market. First to knock wins the job.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+      </div>
+      <p class="feature-title">Full CRM</p>
+      <p class="feature-desc">Manage every lead, job, and customer from one dashboard. No more spreadsheets.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+      <p class="feature-title">Roof Visualization</p>
+      <p class="feature-desc">Show homeowners their house with new shingles before they sign. Closes jobs faster.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+      </div>
+      <p class="feature-title">Aria AI</p>
+      <p class="feature-desc">Aria follows up with every lead automatically. Never let a lead go cold again.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how-it-works" style="border-top:1px solid rgba(255,255,255,0.06)">
+  <div class="section-header">
+    <p class="section-label">How it works</p>
+    <h2 class="section-title">Up and running in minutes</h2>
+    <p class="section-sub">No training. No setup call. Just create a job and go.</p>
+  </div>
+  <div class="steps-grid">
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <p class="step-title">Create a job in 2 minutes</p>
+      <p class="step-desc">Add homeowner info, address, and job details. That's it.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <p class="step-title">Send the portal link</p>
+      <p class="step-desc">Your homeowner gets a real-time portal showing photos, progress, and messages as you work.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <p class="step-title">Get paid and get reviewed</p>
+      <p class="step-desc">Invoice through the portal. Automatic Google review request when the job is complete.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="section" id="pricing" style="border-top:1px solid rgba(255,255,255,0.06)">
+  <div class="section-header">
+    <p class="section-label">Pricing</p>
+    <h2 class="section-title">Simple, honest pricing</h2>
+    <p class="section-sub">Start free. Upgrade when you need more.</p>
+  </div>
+
   <div class="pricing-grid">
 
     <!-- FREE -->
     <div class="pricing-card">
       <div class="plan-name">FREE</div>
       <div class="plan-price">$0</div>
-      <div class="plan-tagline">Free forever &mdash; upgrade when you're ready</div>
+      <div class="plan-tagline">Free forever &mdash; upgrade when ready</div>
       <ul class="plan-features">
-        <li>&#x2705; Homeowner portal (photos, status, docs)</li>
+        <li>&#x2705; Homeowner portal</li>
         <li>&#x2705; Unlimited photo uploads</li>
-        <li>&#x2705; CRM &mdash; up to 3 active jobs</li>
-        <li>&#x2705; Customer chat + messaging</li>
-        <li>&#x274C; AI color visualizations</li>
-        <li>&#x274C; Aria calling / follow-up sequences</li>
+        <li>&#x2705; CRM &mdash; up to 3 jobs</li>
+        <li>&#x2705; Customer messaging</li>
+        <li>&#x274C; AI supplements &amp; automation</li>
       </ul>
-      <a href="/plans/free" style="font-size:12px;color:#4a9eff;text-decoration:none;margin-bottom:12px;display:block">See everything included &rarr;</a>
+      <a href="/plans/free" class="plan-detail-link">See everything included &rarr;</a>
       <a href="/signup" class="plan-btn plan-btn-primary">Start free &rarr;</a>
     </div>
 
@@ -276,13 +546,12 @@ nav {
       <div class="plan-tagline">Grow your business</div>
       <ul class="plan-features">
         <li>&#x2705; Everything in Free &mdash; unlimited jobs</li>
-        <li>&#x2705; Aria AI follow-up sequences (SMS + email)</li>
-        <li>&#x2705; Basic color tint preview on photos</li>
-        <li>&#x2705; Supplement package generator</li>
-        <li>&#x2705; Permit tracking + job scheduler</li>
-        <li>&#x274C; AI roof visualizations (Pro only)</li>
+        <li>&#x2705; Aria AI follow-up sequences</li>
+        <li>&#x2705; Basic color tint preview</li>
+        <li>&#x2705; Supplement generator</li>
+        <li>&#x274C; AI roof visualizations (Pro)</li>
       </ul>
-      <a href="/plans/starter" style="font-size:12px;color:#4a9eff;text-decoration:none;margin-bottom:12px;display:block">See everything included &rarr;</a>
+      <a href="/plans/starter" class="plan-detail-link">See everything included &rarr;</a>
       <a href="/signup?plan=starter" class="plan-btn plan-btn-outline">Get started &rarr;</a>
     </div>
 
@@ -294,13 +563,12 @@ nav {
       <div class="plan-tagline">Run your whole operation</div>
       <ul class="plan-features">
         <li>&#x2705; Everything in Starter</li>
-        <li>&#x2B50; AI roof color visualizations (50 renders/mo)</li>
-        <li>&#x2B50; EagleView measurements (2/mo included)</li>
-        <li>&#x2B50; Canvassing + GPS door-knock tracker</li>
-        <li>&#x2B50; Aria handles all inbound + outbound calls</li>
-        <li>&#x2B50; Replaces CompanyCam &middot; JobNimbus &middot; AccuLynx</li>
+        <li>&#x2B50; AI roof visualizations (50/mo)</li>
+        <li>&#x2B50; Canvassing + GPS tracker</li>
+        <li>&#x2B50; Aria handles all calls</li>
+        <li>&#x2B50; Replaces CompanyCam &middot; JobNimbus</li>
       </ul>
-      <a href="/plans/pro" style="font-size:12px;color:#4a9eff;text-decoration:none;margin-bottom:12px;display:block">See everything included &rarr;</a>
+      <a href="/plans/pro" class="plan-detail-link">See everything included &rarr;</a>
       <a href="/signup?plan=pro" class="plan-btn plan-btn-primary">Get Pro &rarr;</a>
     </div>
 
@@ -310,14 +578,13 @@ nav {
       <div class="plan-price" style="font-size:20px;letter-spacing:-0.5px">$3k&ndash;5k<span class="plan-period">/mo</span></div>
       <div class="plan-tagline">We run everything for you</div>
       <ul class="plan-features">
-        <li>&#x2705; Everything in Pro &mdash; unlimited everything</li>
-        <li>&#x2B50; White-label portal (your brand, your domain)</li>
-        <li>&#x2B50; Dedicated Nexus strategist</li>
-        <li>&#x2B50; Done-for-you content + YouTube machine</li>
-        <li>&#x2B50; Custom AI training on your market data</li>
-        <li>&#x2B50; Unlimited AI renders + measurements</li>
+        <li>&#x2705; Everything in Pro &mdash; unlimited</li>
+        <li>&#x2B50; White-label portal + domain</li>
+        <li>&#x2B50; Dedicated strategist</li>
+        <li>&#x2B50; Done-for-you content + YouTube</li>
+        <li>&#x2B50; Custom AI training</li>
       </ul>
-      <a href="/plans/custom" style="font-size:12px;color:#4a9eff;text-decoration:none;margin-bottom:12px;display:block">See everything included &rarr;</a>
+      <a href="/plans/custom" class="plan-detail-link">See everything included &rarr;</a>
       <a href="mailto:zach@roofingos.dev" class="plan-btn plan-btn-outline">Book a call &rarr;</a>
     </div>
 
@@ -335,41 +602,36 @@ nav {
           <th style="text-align:left;padding:10px 12px;color:#6b7a8d;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Feature</th>
           <th style="text-align:center;padding:10px 12px;color:#6b7a8d;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Free</th>
           <th style="text-align:center;padding:10px 12px;color:#6b7a8d;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Starter</th>
-          <th style="text-align:center;padding:10px 12px;color:#4a9eff;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08)">Pro</th>
+          <th style="text-align:center;padding:10px 12px;color:#3b82f6;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08)">Pro</th>
           <th style="text-align:center;padding:10px 12px;color:#6b7a8d;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Custom</th>
         </tr>
       </thead>
       <tbody>
-        <!-- Homeowner Portal -->
         <tr style="background:rgba(255,255,255,0.02)">
           <td colspan="5" style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.08em">Homeowner Portal</td>
         </tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Live status + photo feed</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Homeowner messaging</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Insurance + supplement tracker</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
-        <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Color visualizations</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">Swatches</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">Tint preview</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#4a9eff">AI renders</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#4a9eff">Unlimited</td></tr>
-        <!-- CRM -->
+        <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Color visualizations</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">Swatches</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">Tint preview</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#3b82f6">AI renders</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#3b82f6">Unlimited</td></tr>
         <tr style="background:rgba(255,255,255,0.02)">
           <td colspan="5" style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.08em">CRM + Pipeline</td>
         </tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Active jobs</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">3 max</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705; Unlimited</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705; Unlimited</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705; Unlimited</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Permit tracking</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Job scheduler + crew assign</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
-        <!-- AI -->
         <tr style="background:rgba(255,255,255,0.02)">
           <td colspan="5" style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.08em">AI + Automation</td>
         </tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Aria follow-up sequences</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Aria handles all calls</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Supplement generator</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
-        <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">EagleView measurements</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#4a9eff">2/mo</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#4a9eff">Unlimited</td></tr>
-        <!-- Sales -->
+        <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">EagleView measurements</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#3b82f6">2/mo</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#3b82f6">Unlimited</td></tr>
         <tr style="background:rgba(255,255,255,0.02)">
           <td colspan="5" style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.08em">Sales + Canvassing</td>
         </tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Canvassing + GPS tracker</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
         <tr><td style="padding:10px 12px;color:#e2e8f0;border-bottom:1px solid rgba(255,255,255,0.04)">Storm lead alerts</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);color:#6b7a8d">&#x274C;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td><td style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.04)">&#x2705;</td></tr>
-        <!-- White-label -->
         <tr style="background:rgba(255,255,255,0.02)">
           <td colspan="5" style="padding:8px 12px;font-size:11px;font-weight:700;color:#6b7a8d;text-transform:uppercase;letter-spacing:0.08em">White-label + Agency</td>
         </tr>
@@ -381,54 +643,53 @@ nav {
   </div>
 </section>
 
-<!-- BELOW FOLD: 3 FEATURES -->
-<section style="padding:80px 24px;max-width:640px;margin:0 auto;border-top:1px solid rgba(255,255,255,0.06)">
-  <div style="display:flex;flex-direction:column;gap:28px">
-    <div style="display:flex;align-items:flex-start;gap:16px">
-      <span style="font-size:28px;flex-shrink:0">&#128248;</span>
-      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>Homeowners see every photo in real time</strong> &mdash; they stop calling</p>
-    </div>
-    <div style="display:flex;align-items:flex-start;gap:16px">
-      <span style="font-size:28px;flex-shrink:0">&#129302;</span>
-      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>AI writes your supplement package in minutes</strong></p>
-    </div>
-    <div style="display:flex;align-items:flex-start;gap:16px">
-      <span style="font-size:28px;flex-shrink:0">&#9889;</span>
-      <p style="font-size:16px;color:#fff;line-height:1.6"><strong>Storm alerts hit your phone before competitors know</strong></p>
-    </div>
-  </div>
-</section>
+<!-- SOCIAL PROOF -->
+<div class="social-proof">
+  <p>Used by roofing contractors across Colorado and growing.</p>
+</div>
 
-<!-- BELOW FOLD: DEMO CTA -->
-<section style="padding:40px 24px 80px;text-align:center;max-width:600px;margin:0 auto">
-  <p style="font-size:18px;color:#6b7a8d;margin-bottom:20px">See exactly what your homeowners see &rarr;</p>
-  <a href="/portal/DEMO2026ROOFINGOS" class="btn-primary" style="display:inline-flex">View live demo</a>
+<!-- DEMO CTA -->
+<section style="padding:64px 24px;text-align:center;max-width:600px;margin:0 auto">
+  <p style="font-size:18px;color:#6b7a8d;margin-bottom:20px">See exactly what your homeowners see</p>
+  <a href="/portal/demo" class="btn-primary" style="display:inline-flex">View live demo &rarr;</a>
 </section>
 
 <!-- FOOTER -->
-<footer style="border-top:1px solid rgba(255,255,255,0.06);padding:24px;text-align:center">
-  <p style="font-size:13px;color:#6b7a8d">
-    roofingos.dev &nbsp;&middot;&nbsp; (720) 500-6668 &nbsp;&middot;&nbsp; <a href="mailto:zach@roofingos.dev" style="color:#6b7a8d;text-decoration:none">zach@roofingos.dev</a>
+<footer>
+  <div class="footer-logo">Roofing<span>OS</span></div>
+  <p class="footer-address">
+    1700 Lincoln St &middot; Denver, CO 80203<br>
+    (720) 500-6668 &middot; <a href="mailto:zach@roofingos.dev" style="color:#4b5563;text-decoration:none">zach@roofingos.dev</a>
   </p>
+  <div class="footer-links">
+    <a href="/#pricing">Plans</a>
+    <a href="/blog">Blog</a>
+    <a href="https://app.nexuszc.com/roofing/login">Login</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="/unsubscribe">Unsubscribe</a>
+  </div>
+  <p class="footer-copy">&copy; 2026 Roofing OS. All rights reserved.</p>
 </footer>
 
 <!-- FLOATING SMS CHAT BUBBLE -->
 <a href="sms:+17205006668" id="sms-bubble" style="
   position:fixed;bottom:24px;right:24px;z-index:999;
   display:flex;align-items:center;gap:10px;
-  background:#4a9eff;color:#fff;text-decoration:none;
+  background:#3b82f6;color:#fff;text-decoration:none;
   border-radius:50px;padding:12px 20px 12px 16px;
   font-size:14px;font-weight:700;
-  box-shadow:0 4px 24px rgba(74,158,255,0.4);
+  box-shadow:0 4px 24px rgba(59,130,246,0.4);
   transition:all 0.2s ease;
   white-space:nowrap;
 ">
-  <span style="font-size:20px;line-height:1">&#128172;</span>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
   <span>Text us a question</span>
 </a>
 <style>
-  #sms-bubble:hover { filter:brightness(1.1); transform:translateY(-2px); box-shadow:0 6px 32px rgba(74,158,255,0.5); }
+  #sms-bubble:hover { filter:brightness(1.1); transform:translateY(-2px); box-shadow:0 6px 32px rgba(59,130,246,0.5); }
   #sms-bubble:active { transform:scale(0.97); }
+  @media (max-width:480px) { #sms-bubble span { display:none; } #sms-bubble { padding:14px; border-radius:50%; } }
 </style>
 
 </body>
