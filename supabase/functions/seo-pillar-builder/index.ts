@@ -217,8 +217,6 @@ async function buildPillar(pillar: typeof PILLARS[number]): Promise<BuildResult>
     console.warn(`seo-pillar-builder: WARNING — ${pillar.slug} only ${wordCount} words (expected 3000+)`);
   }
 
-  const now = new Date().toISOString();
-
   const record = {
     slug:             pillar.slug,
     title:            pillar.title,
@@ -229,7 +227,6 @@ async function buildPillar(pillar: typeof PILLARS[number]): Promise<BuildResult>
     meta_description: metaDescription,
     word_count:       wordCount,
     status:           "approved",
-    updated_at:       now,
   };
 
   const { error: upsertError } = await supabase

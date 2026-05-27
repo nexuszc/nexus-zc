@@ -274,8 +274,6 @@ async function buildPillar(pillar) {
     console.log(`  Generated ${wordCount} words`);
   }
 
-  const now = new Date().toISOString();
-
   await supabaseUpsert('seo_pillars', {
     slug:             pillar.slug,
     title:            pillar.title,
@@ -286,7 +284,6 @@ async function buildPillar(pillar) {
     meta_description: metaDescription,
     word_count:       wordCount,
     status:           'approved',
-    updated_at:       now,
   });
 
   console.log(`  Saved to DB ✓`);
