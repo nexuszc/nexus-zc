@@ -232,7 +232,8 @@ Deno.serve(async () => {
 
       if (refilled > 0 && telegramChatId) {
         await sendTelegram(telegramChatId,
-          `📞 *Aria queue low (${ariaQ || 0}) — refilled ${refilled} calls*`
+          `📞 *Aria queue low (${ariaQ || 0}) — refilled ${refilled} calls*`,
+          "health"
         );
       }
     }
@@ -277,7 +278,8 @@ Deno.serve(async () => {
 
       if (enrolled > 0 && telegramChatId) {
         await sendTelegram(telegramChatId,
-          `📧 *Email sequences low (${activeSeqs || 0}) — enrolled ${enrolled} new prospects*`
+          `📧 *Email sequences low (${activeSeqs || 0}) — enrolled ${enrolled} new prospects*`,
+          "health"
         );
       }
     }
@@ -356,7 +358,8 @@ Deno.serve(async () => {
 
       if (sent > 0 && telegramChatId) {
         await sendTelegram(telegramChatId,
-          `🤝 *Sent ${sent} overdue partner follow-ups (${overduePartners} were overdue)*`
+          `🤝 *Sent ${sent} overdue partner follow-ups (${overduePartners} were overdue)*`,
+          "health"
         );
       }
     }
@@ -579,11 +582,16 @@ async function generateWeeklyReport(supabase: any, telegramChatId: string | null
   });
 }
 
-async function sendTelegram(chatId: string, text: string): Promise<void> {
-  const truncated = text.length > 4000 ? text.slice(0, 3900) + "..." : text;
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: truncated }),
-  });
+async function sendTelegram(chatId: string, text: string, category = "system_down"): Promise<void> {
+  const IMMEDIATE = new Set(["system_down", "tcpa_alert", "payment_received"]);
+  if (IMMEDIATE.has(category)) {
+    const truncated = text.length > 4000 ? text.slice(0, 3900) + "..." : text;
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: truncated }),
+    }).catch(() => {});
+  } else {
+    await supabase.from("telegram_digest_queue").insert({ message: text, category }).catch(() => {});
+  }
 }

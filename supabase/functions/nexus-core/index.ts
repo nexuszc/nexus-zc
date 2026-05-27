@@ -70,7 +70,11 @@ async function tg(text: string) {
       text: text.slice(0, 4000),
       parse_mode: "Markdown"
     })
-  });
+  }).catch(() => {});
+}
+
+async function tgDigest(text: string, category = "nexus") {
+  await supabase.from("telegram_digest_queue").insert({ message: text, category }).catch(() => {});
 }
 
 async function log(type: string, detail: string, outcome = "success", data?: Record<string, unknown>) {
@@ -1475,14 +1479,15 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ action: "dashboard" })
         });
         const finData = await finRes.json();
-        await tg(
+        await tgDigest(
           `💰 *Weekly Roofing Financial Summary*\n\n` +
           `Revenue (30d): $${((finData.revenue || 0) / 100).toLocaleString()}\n` +
           `Profit (30d): $${((finData.profit || 0) / 100).toLocaleString()}\n` +
           `Avg margin: ${finData.avg_margin || 0}%\n` +
           `Supplement revenue: $${((finData.supplement_revenue || 0) / 100).toLocaleString()}\n` +
           `Outstanding: $${((finData.outstanding || 0) / 100).toLocaleString()}\n` +
-          `Pipeline: $${((finData.pipeline || 0) / 100).toLocaleString()}`
+          `Pipeline: $${((finData.pipeline || 0) / 100).toLocaleString()}`,
+          "contractor"
         );
       })().catch(() => {});
     }

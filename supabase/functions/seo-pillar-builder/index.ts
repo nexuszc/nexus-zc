@@ -46,13 +46,7 @@ async function ai(prompt: string, maxTokens = 4000): Promise<string> {
 }
 
 async function sendTelegram(msg: string) {
-  const token = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-  const chatId = Deno.env.get("TELEGRAM_CHAT_ID")!;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: msg.slice(0, 4000), parse_mode: "Markdown" }),
-  }).catch(() => {});
+  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
 }
 
 async function submitToGoogleIndexing(url: string): Promise<boolean> {
@@ -286,42 +280,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    const results: BuildResult[] = [];
-
-    for (let i = 0; i < targets.length; i++) {
-      const pillar = targets[i];
-      try {
-        const result = await buildPillar(pillar);
-        results.push(result);
-      } catch (err) {
-        console.error(`seo-pillar-builder: error building ${pillar.slug}:`, err);
-        results.push({ slug: pillar.slug, title: pillar.title, word_count: 0, skipped: false, error: String(err) });
-        // Still notify on error so we know something went wrong
-        await sendTelegram(`⚠️ Pillar build FAILED: ${pillar.slug}\n${String(err).slice(0, 300)}`);
+    // Return immediately — each Claude call takes ~90s, exceeds 150s limit
+    // Background processing via waitUntil; Telegram digest will report results
+    EdgeRuntime.waitUntil((async () => {
+      for (let i = 0; i < targets.length; i++) {
+        const pillar = targets[i];
+        try {
+          await buildPillar(pillar);
+        } catch (err) {
+          console.error(`seo-pillar-builder: error building ${pillar.slug}:`, err);
+          await sendTelegram(`⚠️ Pillar build FAILED: ${pillar.slug}\n${String(err).slice(0, 300)}`);
+        }
+        if (i < targets.length - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
-
-      // 2-second delay between pillars to avoid rate limits (skip after the last one)
-      if (i < targets.length - 1) {
-        await new Promise(r => setTimeout(r, 2000));
-      }
-    }
-
-    const built   = results.filter(r => !r.skipped && !r.error).length;
-    const skipped = results.filter(r => r.skipped).length;
-    const failed  = results.filter(r => !!r.error).length;
+    })());
 
     return Response.json(
       {
-        ok:      true,
-        built,
-        skipped,
-        failed,
-        pillars: results.map(r => ({
-          slug:       r.slug,
-          word_count: r.word_count,
-          skipped:    r.skipped,
-          error:      r.error ?? null,
-        })),
+        ok: true,
+        building: targets.map(p => p.slug),
+        message: `Building ${targets.length} pillar(s) in background. Check telegram digest or seo_pillars table for results.`,
       },
       { headers: CORS },
     );

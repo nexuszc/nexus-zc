@@ -659,10 +659,19 @@ Then productized and sold to other multi-business operators.
 - RoofingOS.jsx: SEO tab added (7 tabs now) between Marketing and Sales
 - REQUIRED MANUAL STEP: Set up Google Search Console service account + add GOOGLE_SC_CLIENT_EMAIL + GOOGLE_SC_PRIVATE_KEY to Supabase secrets for performance tracker to pull GSC data
 
+**Telegram Flood Fix + YouTube Uploader Retire + VPS Publisher (May 26, 2026):**
+- telegram_digest_queue table created (id, message, category, priority, sent, created_at); index on unsent rows
+- telegram-daily-digest edge function: runs 2am UTC daily (pg_cron job 65); groups by category, sends ONE message; test ping works
+- 6 SEO functions (pillar-builder, keyword-finder, content-writer, internal-linker, performance-tracker, competitor-hunter): sendTelegram now inserts to telegram_digest_queue (category:'seo') instead of direct API call
+- nexus-core: added tgDigest() helper; weekly financial summary routes to digest; all critical alerts (build staged, Nexus Alert, Aria model revert, churn risk) stay immediate
+- health-monitor: sendTelegram updated to accept category; 'system_down' = immediate, 'health' = digest; operational refill/enroll/YouTube queue messages → digest; critical degraded alerts stay immediate
+- roofing-youtube-uploader: RETIRED (stub v8) — Creatomate removed, returns 302 to VPS recorder info
+- seo-pillar-builder: fixed 150s timeout — now returns immediately, uses EdgeRuntime.waitUntil for background Claude calls; pillars build in BG and report via digest
+- VPS: /opt/roofing/repo cloned (github.com/nexuszc/nexus-zc), seo-publisher pm2 process registered (ID 5), runs 0 14 * * * (8am MT)
+
 **NEXT:**
-1. VPS: deploy publisher.js to /opt/roofing/seo/publisher.js, clone roofingos-landing repo, pm2 start
-2. Run seo-pillar-builder with `{"build_all":true}` to seed the 4 pillar pages
-3. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
+1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
+2. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
 4. Add Self-Learning Pattern Recognition
 5. Add memory consolidation ability
 6. Draft operating agreement for Nexus ZC LLC

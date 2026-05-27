@@ -80,13 +80,7 @@ type Competitor = typeof COMPETITORS[number];
 // ---------------------------------------------------------------------------
 
 async function sendTelegram(msg: string) {
-  const token  = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-  const chatId = Deno.env.get("TELEGRAM_CHAT_ID")!;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: msg.slice(0, 4000), parse_mode: "Markdown" }),
-  }).catch(() => {});
+  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
 }
 
 function extractKeyword(title: string): string {
