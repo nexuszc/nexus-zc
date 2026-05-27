@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 26, 2026 — v11
+# Last updated: May 27, 2026 — v12
 
 ---
 
@@ -668,6 +668,16 @@ Then productized and sold to other multi-business operators.
 - roofing-youtube-uploader: RETIRED (stub v8) — Creatomate removed, returns 302 to VPS recorder info
 - seo-pillar-builder: fixed 150s timeout — now returns immediately, uses EdgeRuntime.waitUntil for background Claude calls; pillars build in BG and report via digest
 - VPS: /opt/roofing/repo cloned (github.com/nexuszc/nexus-zc), seo-publisher pm2 process registered (ID 5), runs 0 14 * * * (8am MT)
+
+**Roofing OS V3 — Visualization System (May 27, 2026):**
+- Phase 1 (DB): product_manufacturers, roofing_products, product_colors, contractor_products, job_inspection_photos, job_visualizations, homeowner_color_selections tables; storage buckets inspection-photos + job-visualizations; 4 manufacturers + 27 colors seeded; GRANT ALL on all new tables (missing grants caused silent 0-row returns in edge functions)
+- Phase 2 (VPS): /opt/roofing/visualization/engine.py — pm2 process, polls every 120s, Replicate SAM segmentation + heuristic fallback, 45% blend overlay, uploads to job-visualizations bucket
+- Phase 3: RoofingInspection.jsx — new file at /roofing/jobs/:id/inspection; 10-shot guided capture; rear camera; uploads to inspection-photos; inserts job_inspection_photos with angle metadata
+- Phase 4: RoofingSettings.jsx — Products & Colors section added before Tools; 4 manufacturer accordions; swatch circles; Add All; individual toggles auto-save to contractor_products
+- Phase 5: RoofingPortal.jsx — Colors 5th tab (PaletteIcon); ColorsTab with angle selector, rendered preview, swatches, ❤️ CTA → saves to homeowner_color_selections + Telegram alert; portal-api v41 returns visualizations + colors
+- Phase 6: RoofingTeam.jsx — full rewrite; 7 roles with permission labels; expandable contractor cards; add employee form; SMS invite button saves invite_token
+- Phase 7: App.jsx + RoofingJobDetail.jsx — inspection route wired; overview tab shows inspection banner (0 photos → Start, N photos → status pill)
+- CRITICAL LESSON: Tables created via SQL without GRANT ALL are invisible to edge functions even with service_role key — always run GRANT ALL ON <table> TO anon, authenticated, service_role after creating new tables
 
 **NEXT:**
 1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
