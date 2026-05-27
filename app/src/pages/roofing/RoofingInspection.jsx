@@ -12,17 +12,19 @@ const C = {
 }
 
 const SHOTS = [
-  { id: 'front',        label: 'Front of House',      icon: '🏠', instruction: 'Stand at the street. Face the house directly. Fit the entire front in frame.', tip: 'Include the full roofline' },
-  { id: 'front_left',   label: 'Front-Left Corner',   icon: '↖️', instruction: 'Move to the left corner. Show both the front and left side of the house.', tip: 'Show the corner of the roof' },
-  { id: 'left',         label: 'Left Side',            icon: '◀️', instruction: 'Stand facing the full left side of the house.', tip: 'Fit the full side in frame' },
-  { id: 'back_left',    label: 'Back-Left Corner',     icon: '↙️', instruction: 'Move to the back-left corner. Show both the left and back sides.', tip: 'Show the corner clearly' },
-  { id: 'back',         label: 'Back of House',        icon: '🔄', instruction: 'Face the full back of the house.', tip: 'Include the full roofline' },
-  { id: 'back_right',   label: 'Back-Right Corner',    icon: '↘️', instruction: 'Move to the back-right corner.', tip: 'Show both sides of the corner' },
-  { id: 'right',        label: 'Right Side',           icon: '▶️', instruction: 'Face the full right side of the house.', tip: 'Fit the full side in frame' },
-  { id: 'front_right',  label: 'Front-Right Corner',   icon: '↗️', instruction: 'Move to the front-right corner.', tip: 'Show corner of roof clearly' },
-  { id: 'roof_overview', label: 'Roof from Street',    icon: '🔭', instruction: 'Step back to show as much of the roof as possible from ground level.', tip: 'Show the roofline and pitch' },
-  { id: 'damage_primary', label: 'Primary Damage Area', icon: '⚠️', instruction: 'Capture the main area of storm damage or visible wear.', tip: 'Get close enough to show detail' },
+  { id: 'front',         label: 'Front of House',       required: true,  icon: '🏠', instruction: 'Stand at the street. Face the house directly. Fit the entire front in frame including the roofline.', tip: 'Step back until the full roofline is visible' },
+  { id: 'back',          label: 'Back of House',         required: false, icon: '🔄', instruction: 'Face the full back of the house and roofline.', tip: 'Get far enough back to show roof pitch' },
+  { id: 'left',          label: 'Left Side',             required: false, icon: '◀️', instruction: 'Stand facing the full left side of the house.', tip: 'Can skip if blocked by fence or trees' },
+  { id: 'right',         label: 'Right Side',            required: false, icon: '▶️', instruction: 'Face the full right side of the house.', tip: 'Include gutters and drip edge if visible' },
+  { id: 'front_left',    label: 'Front-Left Corner',     required: false, icon: '↖️', instruction: 'Show both the front and left side of the house meeting at the corner.', tip: 'Shows the corner of the roof clearly' },
+  { id: 'back_right',    label: 'Back-Right Corner',     required: false, icon: '↘️', instruction: 'Show the back and right side meeting at the corner.', tip: 'Captures rear corner details' },
+  { id: 'roof_overview', label: 'Roofline Overview',     required: false, icon: '🔭', instruction: 'Step back to show as much of the roofline as possible from ground level.', tip: 'Used for color visualization' },
+  { id: 'damage_1',      label: 'Primary Damage Area',   required: false, icon: '⚠️', instruction: 'Get close to the main area of storm damage or visible wear.', tip: 'Important for insurance documentation' },
+  { id: 'gutters',       label: 'Gutters & Fascia',      required: false, icon: '🪣', instruction: 'Show the gutters and fascia board condition clearly.', tip: 'Helps with supplement documentation' },
+  { id: 'street_view',   label: 'Street View',           required: false, icon: '🛣️', instruction: 'Wide view from the street showing the property and surroundings.', tip: 'Context shot for the full property' },
 ]
+
+const REQUIRED_SHOTS = SHOTS.filter(s => s.required).map(s => s.id)
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const ANON_KEY     = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -132,9 +134,14 @@ export default function RoofingInspection() {
         <p style={{ fontSize: 15, color: C.muted, margin: '0 0 8px', lineHeight: 1.6 }}>
           Take 10 photos from the guided angles below.
         </p>
-        <p style={{ fontSize: 13, color: 'rgba(136,150,168,0.6)', margin: '0 0 40px' }}>
-          10 photos required · Takes ~5 minutes
+        <p style={{ fontSize: 13, color: 'rgba(136,150,168,0.6)', margin: '0 0 12px' }}>
+          1 required · 9 optional · Takes ~5 minutes
         </p>
+        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginBottom: 32, flexWrap: 'wrap' }}>
+          {[['📍','Walk clockwise around the house'],['☀️','Best in daylight'],['🌳','Skip blocked angles — that\'s OK']].map(([icon,text]) => (
+            <p key={icon} style={{ fontSize: 12, color: 'rgba(136,150,168,0.7)', margin: 0, display: 'flex', alignItems: 'center', gap: 5 }}>{icon} {text}</p>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 40 }}>
           {SHOTS.map(s => (
             <div key={s.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -189,17 +196,29 @@ export default function RoofingInspection() {
         })}
       </div>
       <div style={{ padding: '0 20px' }}>
-        {Object.keys(photos).length < 10 && (
-          <p style={{ color: C.warning, fontSize: 13, margin: '0 0 12px', textAlign: 'center' }}>
-            {10 - Object.keys(photos).length} photo{10 - Object.keys(photos).length !== 1 ? 's' : ''} still needed
-          </p>
-        )}
-        <button
-          onClick={submitInspection}
-          disabled={submitting || Object.keys(photos).length < 10}
-          style={{ width: '100%', background: Object.keys(photos).length < 10 ? 'rgba(74,158,255,0.3)' : C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '16px', fontSize: 17, fontWeight: 700, cursor: Object.keys(photos).length < 10 ? 'default' : 'pointer', minHeight: 56 }}>
-          {submitting ? 'Uploading…' : `Submit Inspection ✅`}
-        </button>
+        {(() => {
+          const captured = Object.keys(photos).length
+          const missingRequired = REQUIRED_SHOTS.filter(id => !photos[id])
+          const canSubmit = missingRequired.length === 0
+          return (
+            <>
+              {missingRequired.length > 0 && (
+                <p style={{ color: C.danger, fontSize: 13, margin: '0 0 12px', textAlign: 'center' }}>
+                  Required: {missingRequired.join(', ').replace(/_/g,' ')} not yet captured
+                </p>
+              )}
+              {missingRequired.length === 0 && captured < 10 && (
+                <p style={{ color: C.muted, fontSize: 13, margin: '0 0 12px', textAlign: 'center' }}>
+                  {captured} photo{captured !== 1 ? 's' : ''} captured · {10 - captured} optional remaining
+                </p>
+              )}
+              <button onClick={submitInspection} disabled={submitting || !canSubmit}
+                style={{ width: '100%', background: !canSubmit ? 'rgba(74,158,255,0.25)' : C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '16px', fontSize: 17, fontWeight: 700, cursor: !canSubmit ? 'default' : 'pointer', minHeight: 56 }}>
+                {submitting ? 'Uploading…' : `Submit Inspection ✅`}
+              </button>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
@@ -213,7 +232,13 @@ export default function RoofingInspection() {
         <button onClick={() => { setPreview(null); setStep(s => Math.max(1, s - 1)) }}
           style={{ background: 'none', border: 'none', color: C.muted, fontSize: 22, cursor: 'pointer', padding: '8px 0', minHeight: 44 }}>‹</button>
         <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 12, color: C.muted, fontWeight: 600 }}>Step {step} of 10</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.muted, fontWeight: 600 }}>Shot {step} of 10</p>
+            {currentShot?.required
+              ? <span style={{ fontSize: 10, fontWeight: 700, background: 'rgba(239,68,68,0.15)', color: C.danger, padding: '2px 7px', borderRadius: 100 }}>Required</span>
+              : <span style={{ fontSize: 10, fontWeight: 600, background: 'rgba(136,150,168,0.12)', color: C.muted, padding: '2px 7px', borderRadius: 100 }}>Optional</span>
+            }
+          </div>
           <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text }}>{currentShot?.label}</p>
         </div>
         <button onClick={() => { setPreview(null); setStep(11) }}
@@ -287,6 +312,12 @@ export default function RoofingInspection() {
                 <button onClick={() => { if (step < 10) setStep(s => s + 1); else setStep(11) }}
                   style={{ background: 'transparent', color: C.primary, border: 'none', fontSize: 14, cursor: 'pointer', padding: '8px', minHeight: 44 }}>
                   Keep existing & continue →
+                </button>
+              )}
+              {!currentShot?.required && !existing && (
+                <button onClick={() => { if (step < 10) setStep(s => s + 1); else setStep(11) }}
+                  style={{ background: 'transparent', color: C.muted, border: 'none', fontSize: 13, cursor: 'pointer', padding: '8px', minHeight: 44 }}>
+                  Skip this shot →
                 </button>
               )}
             </>

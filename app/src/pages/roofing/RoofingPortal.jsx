@@ -691,10 +691,45 @@ function DocsTab({ data, token }) {
 const TABS = [
   { id: 'status',   label: 'Status',   Icon: HomeIcon    },
   { id: 'photos',   label: 'Photos',   Icon: CameraIcon  },
-  { id: 'colors',   label: 'Colors',   Icon: PaletteIcon },
+  { id: 'colors',   label: 'Design',   Icon: PaletteIcon },
   { id: 'messages', label: 'Messages', Icon: ChatIcon    },
   { id: 'docs',     label: 'Docs',     Icon: DocIcon     },
 ]
+
+// ─── Design tab constants ─────────────────────────────────────────────────
+const SHINGLES = [
+  { id: 'gaf-charcoal',  brand: 'GAF Timberline HDZ',    name: 'Charcoal',       hex: '#3d3d3d', badge: 'Most Popular' },
+  { id: 'gaf-weather',   brand: 'GAF Timberline HDZ',    name: 'Weathered Wood', hex: '#8b7355' },
+  { id: 'gaf-slate',     brand: 'GAF Timberline HDZ',    name: 'Slate',          hex: '#708090' },
+  { id: 'gaf-barkwood',  brand: 'GAF Timberline HDZ',    name: 'Barkwood',       hex: '#5c4a32' },
+  { id: 'gaf-pewter',    brand: 'GAF Timberline HDZ',    name: 'Pewter Gray',    hex: '#8a8a8a' },
+  { id: 'oc-estate',     brand: 'Owens Corning Duration', name: 'Estate Gray',    hex: '#6e7270', badge: '#1 Nationwide' },
+  { id: 'oc-onyx',       brand: 'Owens Corning Duration', name: 'Onyx Black',     hex: '#2c2c2c' },
+  { id: 'oc-driftwood',  brand: 'Owens Corning Duration', name: 'Driftwood',      hex: '#9e8e7a' },
+  { id: 'oc-evergreen',  brand: 'Owens Corning Duration', name: 'Evergreen Mist', hex: '#5a7a5a', badge: '2026' },
+]
+const METALS = [
+  { id: 'white',      name: 'White',    hex: '#f0f0f0' },
+  { id: 'bronze',     name: 'Bronze',   hex: '#8b6914' },
+  { id: 'black-m',    name: 'Black',    hex: '#1a1a1a' },
+  { id: 'clay',       name: 'Clay',     hex: '#c4a882' },
+  { id: 'charcoal-m', name: 'Charcoal', hex: '#3d3d3d' },
+  { id: 'copper',     name: 'Copper',   hex: '#b87333' },
+]
+const ANGLE_PRIORITY = ['front', 'front_wide', 'left', 'right', 'back', 'roofline', 'street', 'front_left', 'back_left', 'back_right']
+const ANGLE_LABELS   = { front: 'Front', front_wide: 'Wide', front_left: 'Front-Left', left: 'Left', right: 'Right', back: 'Back', back_left: 'Back-Left', back_right: 'Back-Right', roofline: 'Roofline', street: 'Street' }
+
+function getAngleKey(url) { return (url || '').split('/').pop().replace(/\.(jpeg|jpg|png)$/i, '') }
+function getAngleLabel(url) { const k = getAngleKey(url); return ANGLE_LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) }
+
+function getContextTip(shingle, gutter) {
+  if (!shingle) return null
+  const isDark = ['#3d3d3d', '#2c2c2c', '#1a1a1a', '#5c4a32'].includes(shingle.hex)
+  const isLight = gutter && ['#f0f0f0', '#c4a882'].includes(gutter.hex)
+  if (isDark && isLight) return 'Classic Colorado combo — dark roof with light trim works beautifully with tan, gray, and beige siding.'
+  if (isDark && !isLight) return 'Bold, modern look. Great for contemporary homes. Dark-on-dark adds drama and curb appeal.'
+  return 'Solid choice for Colorado homes — this combination pairs well with most siding colors and HOA guidelines.'
+}
 
 // ─── Colors tab ───────────────────────────────────────────────────────────
 const getVisualizationTier = (plan) => {
@@ -703,241 +738,177 @@ const getVisualizationTier = (plan) => {
   return 'swatches'
 }
 
-function ColorsTab({ data, token }) {
-  const { job, visualizations, colors, plan, photos } = data
-  const tier = getVisualizationTier(plan)
+function ColorsTab({ data, token, isDemo }) {
+  const beforePhotos = (data.photos || []).filter(p => p.phase === 'before' || (p.url || '').includes('/demo/sarah-johnson'))
+  const sortedPhotos = [...beforePhotos].sort((a, b) => {
+    const ai = ANGLE_PRIORITY.indexOf(getAngleKey(a.url))
+    const bi = ANGLE_PRIORITY.indexOf(getAngleKey(b.url))
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+  })
 
-  const [selectedAngle, setSelectedAngle] = useState(null)
-  const [selectedColor, setSelectedColor] = useState(null)
-  const [loveSaving, setLoveSaving]       = useState(false)
-  const [loveSaved, setLoveSaved]         = useState(false)
+  const [activeUrl, setActiveUrl]       = useState(sortedPhotos[0]?.url || null)
+  const [shingle, setShingle]           = useState(SHINGLES[0])
+  const [gutter, setGutter]             = useState(METALS[0])
+  const [drip, setDrip]                 = useState(METALS[4])
+  const [loveSaving, setLoveSaving]     = useState(false)
+  const [loveSaved, setLoveSaved]       = useState(false)
+  const [shared, setShared]             = useState(false)
 
-  const allColors  = colors || []
-  const heroPhoto  = (photos || [])[0]?.url || null
+  const tip = getContextTip(shingle, gutter)
 
-  // Angle + viz state (used by AI tier, computed for all to keep hook order stable)
-  const angles      = [...new Set((visualizations || []).map(v => v.angle))].filter(Boolean)
-  const activeAngle = selectedAngle || angles[0] || null
-  const vizForAngle = (visualizations || []).filter(v => v.angle === activeAngle)
-  const colorMap    = {}
-  vizForAngle.forEach(v => { colorMap[v.color_id] = v.rendered_url })
-
-  const activeViz      = selectedColor ? colorMap[selectedColor] : (vizForAngle[0]?.rendered_url || null)
-  const activeColorObj = allColors.find(c => c.id === selectedColor)
-    || (tier === 'ai' ? allColors.find(c => colorMap[c.id]) : allColors[0])
-    || null
-
-  const selectColor = (id) => { setSelectedColor(id); setLoveSaved(false) }
-
-  const loveThisColor = async () => {
-    if (!activeColorObj || !job?.id || loveSaved) return
+  const loveIt = async () => {
+    if (loveSaved) return
     setLoveSaving(true)
     try {
       await callPortalApi('portal-api', {
         method: 'POST',
-        body: JSON.stringify({
-          action: 'love_color',
-          token,
-          job_id: job.id,
-          color_id: activeColorObj.id,
-          color_name: activeColorObj.name,
-          hex_color: activeColorObj.hex_color,
-          rendered_url: activeViz || null,
-        }),
+        body: JSON.stringify({ action: 'love_color', token, job_id: data.job?.id, color_name: shingle?.name, hex_color: shingle?.hex, metadata: { brand: shingle?.brand, gutter: gutter?.name, drip: drip?.name } }),
       })
       setLoveSaved(true)
     } catch (_) {}
     setLoveSaving(false)
   }
 
-  // Shared swatch grid
-  const swatchGrid = allColors.length > 0 ? (
-    <div style={{ padding: '16px 20px 0' }}>
-      <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Available Colors</p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-        {allColors.map(color => {
-          const isSelected = (selectedColor || activeColorObj?.id) === color.id
-          const hasRender  = !!colorMap[color.id]
-          return (
-            <button
-              key={color.id}
-              onClick={() => selectColor(color.id)}
-              title={color.name}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', opacity: tier === 'ai' && vizForAngle.length > 0 && !hasRender ? 0.5 : 1 }}
-            >
-              <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                background: color.hex_color || '#555',
-                border: isSelected ? `3px solid ${C.primary}` : `2px solid rgba(255,255,255,0.12)`,
-                boxShadow: isSelected ? `0 0 0 2px rgba(59,130,246,0.4)` : 'none',
-                transition: 'border 0.15s, box-shadow 0.15s',
-              }} />
-              <span style={{ fontSize: 10, color: isSelected ? C.primary : C.muted, fontWeight: isSelected ? 700 : 400, maxWidth: 48, textAlign: 'center', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {color.name}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  ) : null
-
-  // Shared love CTA
-  const loveCTA = activeColorObj ? (
-    <div style={{ margin: '20px 20px 0' }}>
-      <button
-        onClick={loveThisColor}
-        disabled={loveSaving || loveSaved}
-        style={{
-          width: '100%', padding: '14px 20px', border: 'none', borderRadius: 14, cursor: loveSaved ? 'default' : 'pointer',
-          background: loveSaved ? 'rgba(16,185,129,0.15)' : 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))',
-          border: `1px solid ${loveSaved ? C.success : 'rgba(59,130,246,0.4)'}`,
-          color: loveSaved ? C.success : C.text,
-          fontSize: 15, fontWeight: 700, transition: 'all 0.2s',
-        }}
-      >
-        {loveSaved ? '✓ Saved! Your contractor will see this' : loveSaving ? 'Saving…' : `❤️ I Love ${activeColorObj.name}`}
-      </button>
-      {!loveSaved && (
-        <p style={{ margin: '8px 0 0', fontSize: 11, color: C.muted, textAlign: 'center' }}>
-          Let your contractor know which color you love
-        </p>
-      )}
-    </div>
-  ) : null
-
-  // ── FREE TIER: swatches + upsell ──────────────────────────────────────────
-  if (tier === 'swatches') {
-    return (
-      <div style={{ padding: '20px 0 24px' }}>
-        <div style={{ padding: '0 20px 16px' }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
-          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Choose the perfect shingle color</p>
-        </div>
-        <div style={{ margin: '0 20px 20px', padding: '20px', background: 'rgba(59,130,246,0.06)', borderRadius: 16, border: '1px solid rgba(59,130,246,0.2)', textAlign: 'center' }}>
-          <p style={{ margin: '0 0 8px', fontSize: 24 }}>🔒</p>
-          <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: C.text }}>See these colors on your actual home</p>
-          <p style={{ margin: '0 0 16px', fontSize: 13, color: C.muted, lineHeight: 1.5 }}>Your contractor uses Roofing OS PRO — ask them to enable AI color previews for your project.</p>
-          <a href="https://roofingos.dev/pro" target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.primary, fontWeight: 600, textDecoration: 'none' }}>Learn more →</a>
-        </div>
-        {swatchGrid}
-        {loveCTA}
-      </div>
-    )
+  const shareIt = () => {
+    const url = 'https://roofingos.dev/portal/demo'
+    if (navigator.share) navigator.share({ title: 'Check out my new roof design!', url }).catch(() => {})
+    else { navigator.clipboard.writeText(url).catch(() => {}); setShared(true) }
   }
 
-  // ── STARTER TIER: photo tint overlay ──────────────────────────────────────
-  if (tier === 'basic') {
-    return (
-      <div style={{ padding: '20px 0 24px' }}>
-        <div style={{ padding: '0 20px 16px' }}>
-          <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
-          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Tap a color to preview on your home</p>
-        </div>
-        {heroPhoto ? (
-          <div style={{ position: 'relative', margin: '0 0 4px', overflow: 'hidden' }}>
-            <img src={heroPhoto} alt="Your roof" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />
-            {activeColorObj && (
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: '55%',
-                background: activeColorObj.hex_color || 'transparent',
-                mixBlendMode: 'multiply',
-                opacity: 0.4,
-                pointerEvents: 'none',
-              }} />
-            )}
-            {activeColorObj && (
-              <div style={{
-                position: 'absolute', bottom: 12, left: 12, right: 12,
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: 'rgba(10,15,26,0.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                borderRadius: 12, padding: '10px 14px', border: `1px solid ${C.border}`,
-              }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: activeColorObj.hex_color || '#555', flexShrink: 0 }} />
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>{activeColorObj.name}</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ margin: '0 20px 16px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
-            <p style={{ margin: '0 0 4px', fontSize: 24 }}>🏠</p>
-            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: C.text }}>Photos coming soon</p>
-            <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Your contractor will add roof photos to enable color preview.</p>
-          </div>
-        )}
-        <div style={{ margin: '12px 20px 4px', padding: '12px 16px', background: 'rgba(59,130,246,0.06)', borderRadius: 12, border: '1px solid rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>⭐</span>
-          <p style={{ margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Want pixel-perfect renders? Ask your contractor to upgrade to <strong style={{ color: C.primary }}>PRO</strong>.</p>
-        </div>
-        {swatchGrid}
-        {loveCTA}
-      </div>
-    )
-  }
-
-  // ── AI TIER (pro/custom): full renders ────────────────────────────────────
-  const hasViz = vizForAngle.length > 0
+  const SwatchRow = ({ items, value, onChange, size = 44 }) => (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+      {items.map(s => {
+        const active = value?.id === s.id
+        const textDark = ['#f0f0f0', '#c4a882', '#9e8e7a', '#8b7355', '#8a8a8a', '#708090', '#6e7270', '#b87333'].includes(s.hex)
+        return (
+          <button key={s.id} onClick={() => onChange(s)} title={s.name}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', position: 'relative' }}>
+            <div style={{ width: size, height: size, borderRadius: '50%', background: s.hex, border: active ? `3px solid ${C.primary}` : '2px solid rgba(255,255,255,0.15)', boxShadow: active ? `0 0 0 3px rgba(59,130,246,0.3)` : 'none', transition: 'all 0.15s', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {active && <span style={{ fontSize: size > 40 ? 16 : 12, fontWeight: 700, color: textDark ? '#000' : '#fff' }}>✓</span>}
+            </div>
+            {s.badge && <div style={{ position: 'absolute', top: 2, right: 0, background: '#f59e0b', borderRadius: 4, padding: '1px 4px', fontSize: 7, fontWeight: 700, color: '#000', lineHeight: 1.4, whiteSpace: 'nowrap' }}>★</div>}
+            <span style={{ fontSize: 9, color: active ? C.primary : C.muted, fontWeight: active ? 700 : 400, maxWidth: size + 8, textAlign: 'center', lineHeight: 1.2 }}>{s.name}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
 
   return (
-    <div style={{ padding: '20px 0 24px' }}>
-      <div style={{ padding: '0 20px 16px' }}>
-        <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
-        <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Tap a color to preview it on your home</p>
+    <div style={{ paddingBottom: 32 }}>
+      {/* Header */}
+      <div style={{ padding: '16px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h3 style={{ margin: '0 0 2px', fontSize: 18, fontWeight: 700, color: C.text }}>Design Your New Roof</h3>
+          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>See exactly how your home will look</p>
+        </div>
+        {isDemo && (
+          <button onClick={shareIt} style={{ background: 'none', border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34, flexShrink: 0 }}>
+            {shared ? '✓ Copied' : 'Share →'}
+          </button>
+        )}
       </div>
 
-      {angles.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 20px 16px', scrollbarWidth: 'none' }}>
-          {angles.map(angle => (
-            <button
-              key={angle}
-              onClick={() => setSelectedAngle(angle)}
-              style={{
-                flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${activeAngle === angle ? C.primary : C.border}`,
-                background: activeAngle === angle ? 'rgba(59,130,246,0.15)' : 'transparent',
-                color: activeAngle === angle ? C.primary : C.muted,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              {angle.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-            </button>
-          ))}
+      {/* Angle selector */}
+      {sortedPhotos.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 20px 0', scrollbarWidth: 'none' }}>
+          {sortedPhotos.map(p => {
+            const active = activeUrl === p.url
+            return (
+              <button key={p.url} onClick={() => setActiveUrl(p.url)}
+                style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? C.primary : C.border}`, background: active ? 'rgba(59,130,246,0.12)' : 'transparent', color: active ? C.primary : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34 }}>
+                {getAngleLabel(p.url)}
+              </button>
+            )
+          })}
         </div>
       )}
 
-      {hasViz && activeViz ? (
-        <div style={{ position: 'relative', margin: '0 0 4px', overflow: 'hidden' }}>
-          <img
-            src={activeViz}
-            alt="Roof preview"
-            style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
-          />
-          {activeColorObj && (
-            <div style={{
-              position: 'absolute', bottom: 12, left: 12, right: 12,
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(10,15,26,0.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-              borderRadius: 12, padding: '10px 14px', border: `1px solid ${C.border}`,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: activeColorObj.hex_color || '#555', flexShrink: 0 }} />
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>{activeColorObj.name}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{activeColorObj.product_name || ''}</p>
-                </div>
+      {/* Photo + color overlay */}
+      <div style={{ position: 'relative', margin: '12px 0 0', overflow: 'hidden' }}>
+        {activeUrl ? (
+          <>
+            <img src={activeUrl} alt="Your home" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle?.hex || 'transparent', mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
+            <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(10,15,26,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: 10, padding: '8px 14px', border: `1px solid ${C.border}` }}>
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: shingle?.hex, flexShrink: 0, border: '1px solid rgba(255,255,255,0.15)' }} />
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{shingle?.name}</p>
+                <p style={{ margin: 0, fontSize: 10, color: C.muted }}>{shingle?.brand}</p>
               </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div style={{ margin: '0 20px 16px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
-          <p style={{ margin: '0 0 4px', fontSize: 24 }}>🏠</p>
-          <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: C.text }}>Visualizations loading</p>
-          <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Your contractor is preparing your color previews. Check back soon!</p>
+          </>
+        ) : (
+          <div style={{ margin: '0 20px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 4px', fontSize: 22 }}>🏠</p>
+            <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Photos will appear here after the inspection</p>
+          </div>
+        )}
+      </div>
+
+      {/* Context tip */}
+      {tip && activeUrl && (
+        <div style={{ margin: '10px 20px 0', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', borderRadius: 10, border: '1px solid rgba(59,130,246,0.12)' }}>
+          <p style={{ margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>💡 {tip}</p>
         </div>
       )}
 
-      {swatchGrid}
-      {loveCTA}
+      {/* Shingles */}
+      <div style={{ padding: '20px 20px 0' }}>
+        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Shingles</p>
+        <SwatchRow items={SHINGLES} value={shingle} onChange={(s) => { setShingle(s); setLoveSaved(false) }} size={44} />
+      </div>
+
+      {/* Gutters */}
+      <div style={{ padding: '16px 20px 0' }}>
+        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Gutters & Metals</p>
+        <SwatchRow items={METALS} value={gutter} onChange={(m) => { setGutter(m); setLoveSaved(false) }} size={36} />
+      </div>
+
+      {/* Drip edge */}
+      <div style={{ padding: '16px 20px 0' }}>
+        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Drip Edge</p>
+        <SwatchRow items={METALS} value={drip} onChange={(m) => { setDrip(m); setLoveSaved(false) }} size={36} />
+      </div>
+
+      {/* Selection summary */}
+      <div style={{ margin: '20px 20px 0', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px 16px' }}>
+        <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Your Selection</p>
+        {[['Shingles', shingle, shingle ? `${shingle.brand} — ${shingle.name}` : '—'],
+          ['Gutters', gutter, gutter?.name || '—'],
+          ['Drip Edge', drip, drip?.name || '—']].map(([label, item, display]) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: label !== 'Drip Edge' ? `1px solid ${C.border}` : 'none' }}>
+            <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              {item && <div style={{ width: 14, height: 14, borderRadius: '50%', background: item.hex, border: '1px solid rgba(255,255,255,0.15)', flexShrink: 0 }} />}
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{display}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Love CTA */}
+      <div style={{ padding: '16px 20px 0' }}>
+        <button onClick={loveIt} disabled={loveSaving || loveSaved}
+          style={{ width: '100%', padding: '15px', border: `1px solid ${loveSaved ? C.success : 'rgba(59,130,246,0.35)'}`, borderRadius: 14, cursor: loveSaved ? 'default' : 'pointer', background: loveSaved ? 'rgba(16,185,129,0.1)' : 'linear-gradient(135deg,rgba(59,130,246,0.16),rgba(139,92,246,0.16))', color: loveSaved ? C.success : C.text, fontSize: 15, fontWeight: 700, transition: 'all 0.2s', minHeight: 52 }}>
+          {loveSaved ? '✓ Your contractor has been notified!' : loveSaving ? 'Saving…' : '❤️ I Love This Combination!'}
+        </button>
+        {!loveSaved && (
+          <p style={{ margin: '8px 0 0', fontSize: 11, color: C.muted, textAlign: 'center' }}>Your contractor will see your selection and confirm materials</p>
+        )}
+      </div>
+
+      {/* Demo roofer CTA */}
+      {isDemo && (
+        <div style={{ margin: '24px 20px 0', background: 'linear-gradient(135deg,rgba(59,130,246,0.1),rgba(59,130,246,0.04))', border: '1px solid rgba(59,130,246,0.22)', borderRadius: 18, padding: '24px 20px', textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 10 }}>🏠</div>
+          <h3 style={{ color: C.text, fontSize: 18, fontWeight: 800, margin: '0 0 8px', lineHeight: 1.3 }}>Your homeowners could have this.</h3>
+          <p style={{ color: C.muted, fontSize: 13, margin: '0 0 6px', lineHeight: 1.6 }}>Set up your free Roofing OS account in 4 minutes. Your next homeowner gets a real-time portal like this one — photos, progress updates, color visualization, and more.</p>
+          <p style={{ color: C.primary, fontSize: 13, fontWeight: 600, margin: '0 0 20px' }}>Free forever. No credit card. No time limit.</p>
+          <a href="https://app.nexuszc.com/roofing/signup" style={{ display: 'block', background: C.primary, color: '#fff', padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none', marginBottom: 10 }}>Create Free Account →</a>
+          <a href="https://roofingos.dev" style={{ display: 'block', color: C.muted, fontSize: 12, textDecoration: 'none' }}>Learn more about Roofing OS</a>
+        </div>
+      )}
     </div>
   )
 }
@@ -977,10 +948,14 @@ function ProPortalV2({ data, token, isDemo }) {
     <div style={{ background: C.bg, display: 'flex', flexDirection: 'column', height: '100dvh', color: C.text, fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto', position: 'relative' }}>
       {lightboxPhotos && <Lightbox photos={lightboxPhotos} startIndex={lightboxStart} onClose={() => setLightboxPhotos(null)} />}
 
-      {/* Demo banner — subtle dark pill */}
+      {/* Demo banner — conversion bar */}
       {isDemo && (
-        <div style={{ background: 'rgba(17,24,39,0.95)', borderBottom: `1px solid ${C.border}`, padding: '8px 20px', textAlign: 'center', fontSize: 12, color: C.muted, flexShrink: 0 }}>
-          👋 Demo — this is what your homeowners see
+        <div style={{ background: '#0d1520', borderBottom: '1px solid rgba(59,130,246,0.18)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+          <div>
+            <p style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>👋 Demo Portal</p>
+            <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>This is what your homeowners see</p>
+          </div>
+          <a href="https://app.nexuszc.com/roofing/signup" style={{ background: C.primary, color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>Start free →</a>
         </div>
       )}
 
@@ -993,7 +968,7 @@ function ProPortalV2({ data, token, isDemo }) {
           <div style={{ height: '100%', overflowY: 'auto' }}>
             {tab === 'status'  && <StatusTab   data={data} onViewPhotos={() => setTab('photos')} onLightbox={(i) => openLightbox(data.photos || [], i)} token={token} />}
             {tab === 'photos'  && <PhotosTab   data={data} />}
-            {tab === 'colors'  && <ColorsTab   data={data} token={token} />}
+            {tab === 'colors'  && <ColorsTab   data={data} token={token} isDemo={isDemo} />}
             {tab === 'docs'    && <DocsTab     data={data} token={token} />}
           </div>
         )}
