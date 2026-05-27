@@ -56,6 +56,9 @@ export default function RoofingSettings() {
   const [employees, setEmployees] = useState([])
   const [addingCrew, setAddingCrew] = useState(false)
   const [newCrew, setNewCrew] = useState({ name: '', phone: '', role: 'crew' })
+  const [manufacturers, setManufacturers] = useState([])
+  const [activeColorIds, setActiveColorIds] = useState(new Set())
+  const [expandedMfg, setExpandedMfg] = useState(null)
 
   useEffect(() => {
     if (contractor) {
@@ -66,6 +69,15 @@ export default function RoofingSettings() {
         .eq('active', true)
         .order('is_owner', { ascending: false })
         .then(({ data }) => setEmployees(data || []))
+      supabase.from('product_manufacturers')
+        .select('id, name, roofing_products(id, name, product_colors(id, name, hex_color))')
+        .order('name')
+        .then(({ data }) => setManufacturers(data || []))
+      supabase.from('contractor_products')
+        .select('color_id')
+        .eq('contractor_id', contractor.id)
+        .eq('is_active', true)
+        .then(({ data }) => setActiveColorIds(new Set((data || []).map(r => r.color_id))))
     }
   }, [contractor])
 
@@ -100,6 +112,38 @@ export default function RoofingSettings() {
       .eq('active', true)
       .order('is_owner', { ascending: false })
     setEmployees(data || [])
+  }
+
+  const toggleColor = async (colorId) => {
+    const isActive = activeColorIds.has(colorId)
+    const next = new Set(activeColorIds)
+    if (isActive) {
+      next.delete(colorId)
+      setActiveColorIds(next)
+      await supabase.from('contractor_products')
+        .update({ is_active: false })
+        .eq('contractor_id', contractor.id)
+        .eq('color_id', colorId)
+    } else {
+      next.add(colorId)
+      setActiveColorIds(next)
+      await supabase.from('contractor_products')
+        .upsert({ contractor_id: contractor.id, color_id: colorId, is_active: true },
+          { onConflict: 'contractor_id,color_id' })
+    }
+  }
+
+  const addAllColors = async (product) => {
+    const colorIds = (product.product_colors || []).map(c => c.id)
+    if (!colorIds.length) return
+    const next = new Set(activeColorIds)
+    colorIds.forEach(id => next.add(id))
+    setActiveColorIds(next)
+    await supabase.from('contractor_products')
+      .upsert(
+        colorIds.map(color_id => ({ contractor_id: contractor.id, color_id, is_active: true })),
+        { onConflict: 'contractor_id,color_id' }
+      )
   }
 
   const handleSignOut = async () => {
@@ -288,6 +332,92 @@ export default function RoofingSettings() {
             >
               + Add Crew Member
             </button>
+          )}
+        </Section>
+
+        {/* Products & Colors */}
+        <Section title="Products & Colors">
+          <p style={{ margin: '0 0 16px', fontSize: '13px', color: C.muted }}>
+            Choose which shingle colors to show homeowners in their portal.
+          </p>
+          {manufacturers.map(mfg => {
+            const isOpen = expandedMfg === mfg.id
+            const totalColors = (mfg.roofing_products || []).reduce((n, p) => n + (p.product_colors || []).length, 0)
+            const activeCount = (mfg.roofing_products || []).reduce((n, p) =>
+              n + (p.product_colors || []).filter(c => activeColorIds.has(c.id)).length, 0)
+            return (
+              <div key={mfg.id} style={{ marginBottom: '8px', border: `1px solid ${C.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+                <div
+                  onClick={() => setExpandedMfg(isOpen ? null : mfg.id)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer', background: isOpen ? C.surface2 : 'transparent' }}
+                >
+                  <div>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: C.text }}>{mfg.name}</span>
+                    {activeCount > 0 && (
+                      <span style={{ marginLeft: '8px', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: 'rgba(74,158,255,0.15)', color: C.primary }}>
+                        {activeCount} active
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '11px', color: C.muted }}>{totalColors} colors</span>
+                    <span style={{ color: C.muted, fontSize: '14px', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>›</span>
+                  </div>
+                </div>
+                {isOpen && (
+                  <div style={{ padding: '4px 16px 16px', borderTop: `1px solid ${C.border}` }}>
+                    {(mfg.roofing_products || []).map(product => (
+                      <div key={product.id} style={{ marginTop: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{product.name}</span>
+                          <button
+                            onClick={() => addAllColors(product)}
+                            style={{ fontSize: '11px', fontWeight: '700', color: C.primary, background: 'rgba(74,158,255,0.12)', border: 'none', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer' }}
+                          >
+                            Add All
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                          {(product.product_colors || []).map(color => {
+                            const on = activeColorIds.has(color.id)
+                            return (
+                              <button
+                                key={color.id}
+                                onClick={() => toggleColor(color.id)}
+                                title={color.name}
+                                style={{
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                                  background: 'none', border: 'none', cursor: 'pointer', padding: '4px',
+                                }}
+                              >
+                                <div style={{
+                                  width: '36px', height: '36px', borderRadius: '50%',
+                                  background: color.hex_color || '#555',
+                                  border: on ? `3px solid ${C.primary}` : `2px solid ${C.border}`,
+                                  boxShadow: on ? `0 0 0 2px rgba(74,158,255,0.3)` : 'none',
+                                  transition: 'border 0.15s, box-shadow 0.15s',
+                                }} />
+                                <span style={{ fontSize: '9px', color: on ? C.primary : C.muted, fontWeight: on ? '700' : '400', maxWidth: '44px', textAlign: 'center', lineHeight: '1.2', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {color.name}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {manufacturers.length === 0 && (
+            <p style={{ color: C.muted, fontSize: '13px', margin: 0 }}>Loading products…</p>
+          )}
+          {activeColorIds.size > 0 && (
+            <p style={{ margin: '16px 0 0', fontSize: '12px', color: C.success }}>
+              ✓ {activeColorIds.size} color{activeColorIds.size !== 1 ? 's' : ''} active — homeowners will see these in their portal
+            </p>
           )}
         </Section>
 

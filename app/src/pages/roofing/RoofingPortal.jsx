@@ -170,11 +170,12 @@ function Lightbox({ photos, startIndex = 0, onClose }) {
 }
 
 // ─── SVG tab icons ────────────────────────────────────────────────────────
-const HomeIcon   = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-const CameraIcon = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-const ChatIcon   = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-const DocIcon    = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-const PhoneIcon  = ({ c }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.53 2 2 0 0 1 3.59 1.37h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+const HomeIcon    = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+const CameraIcon  = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+const ChatIcon    = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+const DocIcon     = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+const PaletteIcon = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="1.5" fill={c} stroke="none"/><circle cx="17.5" cy="10.5" r="1.5" fill={c} stroke="none"/><circle cx="8.5" cy="7.5" r="1.5" fill={c} stroke="none"/><circle cx="6.5" cy="12.5" r="1.5" fill={c} stroke="none"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+const PhoneIcon   = ({ c }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.53 2 2 0 0 1 3.59 1.37h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
 
 // ─── Portal header ────────────────────────────────────────────────────────
 function PortalHeader({ contractor }) {
@@ -688,11 +689,180 @@ function DocsTab({ data, token }) {
 
 // ─── Dark tab bar ─────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'status',   label: 'Status',   Icon: HomeIcon   },
-  { id: 'photos',   label: 'Photos',   Icon: CameraIcon },
-  { id: 'messages', label: 'Messages', Icon: ChatIcon   },
-  { id: 'docs',     label: 'Docs',     Icon: DocIcon    },
+  { id: 'status',   label: 'Status',   Icon: HomeIcon    },
+  { id: 'photos',   label: 'Photos',   Icon: CameraIcon  },
+  { id: 'colors',   label: 'Colors',   Icon: PaletteIcon },
+  { id: 'messages', label: 'Messages', Icon: ChatIcon    },
+  { id: 'docs',     label: 'Docs',     Icon: DocIcon     },
 ]
+
+// ─── Colors tab ───────────────────────────────────────────────────────────
+function ColorsTab({ data, token }) {
+  const { job, visualizations, colors } = data
+  const [selectedAngle, setSelectedAngle]   = useState(null)
+  const [selectedColor, setSelectedColor]   = useState(null)
+  const [lovedColor, setLovedColor]         = useState(null)
+  const [loveSaving, setLoveSaving]         = useState(false)
+  const [loveSaved, setLoveSaved]           = useState(false)
+
+  // angles that have rendered visualizations
+  const angles = [...new Set((visualizations || []).map(v => v.angle))].filter(Boolean)
+  const activeAngle = selectedAngle || angles[0] || null
+
+  // colors with a rendered image for the active angle
+  const vizForAngle = (visualizations || []).filter(v => v.angle === activeAngle)
+  const colorMap = {}
+  vizForAngle.forEach(v => { colorMap[v.color_id] = v.rendered_url })
+
+  // all available colors (from contractor_products catalog)
+  const allColors = colors || []
+
+  const activeViz = selectedColor ? colorMap[selectedColor] : (vizForAngle[0]?.rendered_url || null)
+  const activeColorObj = allColors.find(c => c.id === selectedColor) || allColors.find(c => colorMap[c.id]) || null
+
+  const loveThisColor = async () => {
+    if (!activeColorObj || !job?.id || loveSaved) return
+    setLoveSaving(true)
+    try {
+      await callPortalApi('portal-api', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'love_color',
+          token,
+          job_id: job.id,
+          color_id: activeColorObj.id,
+          color_name: activeColorObj.name,
+          hex_color: activeColorObj.hex_color,
+          rendered_url: activeViz || null,
+        }),
+      })
+      setLovedColor(activeColorObj.id)
+      setLoveSaved(true)
+    } catch (_) {}
+    setLoveSaving(false)
+  }
+
+  const hasViz = vizForAngle.length > 0
+
+  return (
+    <div style={{ padding: '20px 0 24px' }}>
+      {/* Heading */}
+      <div style={{ padding: '0 20px 16px' }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
+        <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Tap a color to preview it on your home</p>
+      </div>
+
+      {/* Angle selector */}
+      {angles.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 20px 16px', scrollbarWidth: 'none' }}>
+          {angles.map(angle => (
+            <button
+              key={angle}
+              onClick={() => setSelectedAngle(angle)}
+              style={{
+                flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${activeAngle === angle ? C.primary : C.border}`,
+                background: activeAngle === angle ? 'rgba(59,130,246,0.15)' : 'transparent',
+                color: activeAngle === angle ? C.primary : C.muted,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {angle.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Rendered image */}
+      {hasViz && activeViz ? (
+        <div style={{ position: 'relative', margin: '0 0 4px', overflow: 'hidden' }}>
+          <img
+            src={activeViz}
+            alt="Roof preview"
+            style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }}
+          />
+          {activeColorObj && (
+            <div style={{
+              position: 'absolute', bottom: 12, left: 12, right: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(10,15,26,0.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+              borderRadius: 12, padding: '10px 14px', border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: activeColorObj.hex_color || '#555', flexShrink: 0 }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>{activeColorObj.name}</p>
+                  <p style={{ margin: 0, fontSize: 11, color: C.muted }}>{activeColorObj.product_name || ''}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ margin: '0 20px 16px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
+          <p style={{ margin: '0 0 4px', fontSize: 24 }}>🏠</p>
+          <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: C.text }}>Visualizations loading</p>
+          <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Your contractor is preparing your color previews. Check back soon!</p>
+        </div>
+      )}
+
+      {/* Color swatches */}
+      {allColors.length > 0 && (
+        <div style={{ padding: '16px 20px 0' }}>
+          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Available Colors</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {allColors.map(color => {
+              const isSelected = (selectedColor || (vizForAngle[0]?.color_id)) === color.id
+              const hasRender  = !!colorMap[color.id]
+              return (
+                <button
+                  key={color.id}
+                  onClick={() => { setSelectedColor(color.id); setLoveSaved(false) }}
+                  title={color.name}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', opacity: hasViz && !hasRender ? 0.5 : 1 }}
+                >
+                  <div style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: color.hex_color || '#555',
+                    border: isSelected ? `3px solid ${C.primary}` : `2px solid rgba(255,255,255,0.12)`,
+                    boxShadow: isSelected ? `0 0 0 2px rgba(59,130,246,0.4)` : 'none',
+                    transition: 'border 0.15s, box-shadow 0.15s',
+                  }} />
+                  <span style={{ fontSize: 10, color: isSelected ? C.primary : C.muted, fontWeight: isSelected ? 700 : 400, maxWidth: 48, textAlign: 'center', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {color.name}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Love this color CTA */}
+      {activeColorObj && (
+        <div style={{ margin: '20px 20px 0' }}>
+          <button
+            onClick={loveThisColor}
+            disabled={loveSaving || loveSaved}
+            style={{
+              width: '100%', padding: '14px 20px', border: 'none', borderRadius: 14, cursor: loveSaved ? 'default' : 'pointer',
+              background: loveSaved ? 'rgba(16,185,129,0.15)' : 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))',
+              border: `1px solid ${loveSaved ? C.success : 'rgba(59,130,246,0.4)'}`,
+              color: loveSaved ? C.success : C.text,
+              fontSize: 15, fontWeight: 700, transition: 'all 0.2s',
+            }}
+          >
+            {loveSaved ? '✓ Saved! Your contractor will see this' : loveSaving ? 'Saving…' : `❤️ I Love ${activeColorObj.name}`}
+          </button>
+          {!loveSaved && (
+            <p style={{ margin: '8px 0 0', fontSize: 11, color: C.muted, textAlign: 'center' }}>
+              Let your contractor know which color you love
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function DarkTabBar({ tab, setTab }) {
   return (
@@ -736,12 +906,13 @@ function ProPortalV2({ data, token, isDemo }) {
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {/* Status + Photos + Docs: scrollable */}
+        {/* Status + Photos + Colors + Docs: scrollable */}
         {tab !== 'messages' && (
           <div style={{ height: '100%', overflowY: 'auto' }}>
-            {tab === 'status' && <StatusTab data={data} onViewPhotos={() => setTab('photos')} onLightbox={(i) => openLightbox(data.photos || [], i)} token={token} />}
-            {tab === 'photos' && <PhotosTab data={data} />}
-            {tab === 'docs'   && <DocsTab   data={data} token={token} />}
+            {tab === 'status'  && <StatusTab   data={data} onViewPhotos={() => setTab('photos')} onLightbox={(i) => openLightbox(data.photos || [], i)} token={token} />}
+            {tab === 'photos'  && <PhotosTab   data={data} />}
+            {tab === 'colors'  && <ColorsTab   data={data} token={token} />}
+            {tab === 'docs'    && <DocsTab     data={data} token={token} />}
           </div>
         )}
         {/* Messages: flex column with sticky input */}

@@ -24,6 +24,7 @@ import RoofingEstimate from './pages/roofing/RoofingEstimate'
 import RoofingCrewMobile from './pages/roofing/RoofingCrewMobile'
 import RoofingCanvass from './pages/roofing/RoofingCanvass'
 import RoofingTeam from './pages/roofing/RoofingTeam'
+import RoofingInspection from './pages/roofing/RoofingInspection'
 import RoofingOnboardingSetup from './pages/roofing/RoofingOnboardingSetup'
 import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
@@ -96,6 +97,7 @@ export default function App() {
             <Route path="/roofing/jobs" element={<RoofingDashboard />} />
             <Route path="/roofing/jobs/new" element={<RoofingNewJob />} />
             <Route path="/roofing/jobs/:id" element={<RoofingJobDetail />} />
+            <Route path="/roofing/jobs/:id/inspection" element={<RoofingInspection />} />
             <Route path="/roofing/crew" element={<RoofingCrew />} />
             <Route path="/roofing/settings" element={<RoofingSettings />} />
             <Route path="/roofing/onboarding" element={<Navigate to="/roofing/onboarding-setup" replace />} />

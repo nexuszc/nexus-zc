@@ -150,6 +150,7 @@ export default function RoofingJobDetail() {
   const [payments, setPayments] = useState([])
   const [suppStatus, setSuppStatus] = useState(null)
   const [jobCosts, setJobCosts] = useState(null)
+  const [inspPhotoCount, setInspPhotoCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const TAB_COMPAT = { inspection: 'overview', notes: 'docs', payments: 'money', supplement: 'money', financials: 'money', portal: 'docs', documents: 'docs' }
   const rawTab = searchParams.get('tab') || 'overview'
@@ -220,6 +221,7 @@ export default function RoofingJobDetail() {
       { data: pays },
       { data: supp },
       { data: costs },
+      { count: inspCount },
     ] = await Promise.all([
       supabase.from('roofing_jobs').select('*').eq('id', id).single(),
       supabase.from('portal_messages').select('*').eq('job_id', id).order('created_at'),
@@ -234,7 +236,9 @@ export default function RoofingJobDetail() {
       supabase.from('job_payments').select('*').eq('job_id', id).order('created_at'),
       supabase.from('supplement_status').select('*').eq('job_id', id).maybeSingle(),
       supabase.from('job_costs').select('*').eq('job_id', id).maybeSingle(),
+      supabase.from('job_inspection_photos').select('id', { count: 'exact', head: true }).eq('job_id', id),
     ])
+    setInspPhotoCount(inspCount ?? 0)
     setJob(j)
     setMessages(msgs || [])
     setDocs(d || [])
@@ -749,6 +753,39 @@ export default function RoofingJobDetail() {
         {/* ── OVERVIEW ───────────────────────────────────────────────── */}
         {activeTab === 'overview' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Inspection banner */}
+            {inspPhotoCount === 0 && (
+              <div
+                onClick={() => navigate(`/roofing/jobs/${id}/inspection`)}
+                style={{
+                  background: 'linear-gradient(135deg,rgba(74,158,255,0.15),rgba(139,92,246,0.15))',
+                  border: '1px solid rgba(74,158,255,0.3)', borderRadius: '14px',
+                  padding: '16px 18px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '14px',
+                }}
+              >
+                <span style={{ fontSize: '28px', flexShrink: 0 }}>📷</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ margin: '0 0 2px', fontSize: '14px', fontWeight: '700', color: C.text }}>Start Roof Inspection</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: C.muted }}>Capture 10 angles to generate color visualizations for your homeowner</p>
+                </div>
+                <span style={{ color: C.primary, fontSize: '18px', flexShrink: 0 }}>›</span>
+              </div>
+            )}
+            {inspPhotoCount > 0 && (
+              <div
+                onClick={() => navigate(`/roofing/jobs/${id}/inspection`)}
+                style={{
+                  background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
+                  borderRadius: '14px', padding: '12px 18px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '12px',
+                }}
+              >
+                <span style={{ fontSize: '20px' }}>✅</span>
+                <p style={{ margin: 0, flex: 1, fontSize: '13px', fontWeight: '600', color: C.success }}>{inspPhotoCount} inspection photo{inspPhotoCount !== 1 ? 's' : ''} captured</p>
+                <span style={{ color: C.muted, fontSize: '14px' }}>›</span>
+              </div>
+            )}
             {/* Status stepper */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '16px', padding: '20px' }}>
               <p style={{ margin: '0 0 16px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Job Status</p>
