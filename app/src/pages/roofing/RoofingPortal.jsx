@@ -697,28 +697,37 @@ const TABS = [
 ]
 
 // ─── Colors tab ───────────────────────────────────────────────────────────
+const getVisualizationTier = (plan) => {
+  if (plan === 'pro' || plan === 'custom') return 'ai'
+  if (plan === 'starter') return 'basic'
+  return 'swatches'
+}
+
 function ColorsTab({ data, token }) {
-  const { job, visualizations, colors } = data
-  const [selectedAngle, setSelectedAngle]   = useState(null)
-  const [selectedColor, setSelectedColor]   = useState(null)
-  const [lovedColor, setLovedColor]         = useState(null)
-  const [loveSaving, setLoveSaving]         = useState(false)
-  const [loveSaved, setLoveSaved]           = useState(false)
+  const { job, visualizations, colors, plan, photos } = data
+  const tier = getVisualizationTier(plan)
 
-  // angles that have rendered visualizations
-  const angles = [...new Set((visualizations || []).map(v => v.angle))].filter(Boolean)
+  const [selectedAngle, setSelectedAngle] = useState(null)
+  const [selectedColor, setSelectedColor] = useState(null)
+  const [loveSaving, setLoveSaving]       = useState(false)
+  const [loveSaved, setLoveSaved]         = useState(false)
+
+  const allColors  = colors || []
+  const heroPhoto  = (photos || [])[0]?.url || null
+
+  // Angle + viz state (used by AI tier, computed for all to keep hook order stable)
+  const angles      = [...new Set((visualizations || []).map(v => v.angle))].filter(Boolean)
   const activeAngle = selectedAngle || angles[0] || null
-
-  // colors with a rendered image for the active angle
   const vizForAngle = (visualizations || []).filter(v => v.angle === activeAngle)
-  const colorMap = {}
+  const colorMap    = {}
   vizForAngle.forEach(v => { colorMap[v.color_id] = v.rendered_url })
 
-  // all available colors (from contractor_products catalog)
-  const allColors = colors || []
+  const activeViz      = selectedColor ? colorMap[selectedColor] : (vizForAngle[0]?.rendered_url || null)
+  const activeColorObj = allColors.find(c => c.id === selectedColor)
+    || (tier === 'ai' ? allColors.find(c => colorMap[c.id]) : allColors[0])
+    || null
 
-  const activeViz = selectedColor ? colorMap[selectedColor] : (vizForAngle[0]?.rendered_url || null)
-  const activeColorObj = allColors.find(c => c.id === selectedColor) || allColors.find(c => colorMap[c.id]) || null
+  const selectColor = (id) => { setSelectedColor(id); setLoveSaved(false) }
 
   const loveThisColor = async () => {
     if (!activeColorObj || !job?.id || loveSaved) return
@@ -736,23 +745,146 @@ function ColorsTab({ data, token }) {
           rendered_url: activeViz || null,
         }),
       })
-      setLovedColor(activeColorObj.id)
       setLoveSaved(true)
     } catch (_) {}
     setLoveSaving(false)
   }
 
+  // Shared swatch grid
+  const swatchGrid = allColors.length > 0 ? (
+    <div style={{ padding: '16px 20px 0' }}>
+      <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Available Colors</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        {allColors.map(color => {
+          const isSelected = (selectedColor || activeColorObj?.id) === color.id
+          const hasRender  = !!colorMap[color.id]
+          return (
+            <button
+              key={color.id}
+              onClick={() => selectColor(color.id)}
+              title={color.name}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', opacity: tier === 'ai' && vizForAngle.length > 0 && !hasRender ? 0.5 : 1 }}
+            >
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%',
+                background: color.hex_color || '#555',
+                border: isSelected ? `3px solid ${C.primary}` : `2px solid rgba(255,255,255,0.12)`,
+                boxShadow: isSelected ? `0 0 0 2px rgba(59,130,246,0.4)` : 'none',
+                transition: 'border 0.15s, box-shadow 0.15s',
+              }} />
+              <span style={{ fontSize: 10, color: isSelected ? C.primary : C.muted, fontWeight: isSelected ? 700 : 400, maxWidth: 48, textAlign: 'center', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {color.name}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
+
+  // Shared love CTA
+  const loveCTA = activeColorObj ? (
+    <div style={{ margin: '20px 20px 0' }}>
+      <button
+        onClick={loveThisColor}
+        disabled={loveSaving || loveSaved}
+        style={{
+          width: '100%', padding: '14px 20px', border: 'none', borderRadius: 14, cursor: loveSaved ? 'default' : 'pointer',
+          background: loveSaved ? 'rgba(16,185,129,0.15)' : 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))',
+          border: `1px solid ${loveSaved ? C.success : 'rgba(59,130,246,0.4)'}`,
+          color: loveSaved ? C.success : C.text,
+          fontSize: 15, fontWeight: 700, transition: 'all 0.2s',
+        }}
+      >
+        {loveSaved ? '✓ Saved! Your contractor will see this' : loveSaving ? 'Saving…' : `❤️ I Love ${activeColorObj.name}`}
+      </button>
+      {!loveSaved && (
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: C.muted, textAlign: 'center' }}>
+          Let your contractor know which color you love
+        </p>
+      )}
+    </div>
+  ) : null
+
+  // ── FREE TIER: swatches + upsell ──────────────────────────────────────────
+  if (tier === 'swatches') {
+    return (
+      <div style={{ padding: '20px 0 24px' }}>
+        <div style={{ padding: '0 20px 16px' }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
+          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Choose the perfect shingle color</p>
+        </div>
+        <div style={{ margin: '0 20px 20px', padding: '20px', background: 'rgba(59,130,246,0.06)', borderRadius: 16, border: '1px solid rgba(59,130,246,0.2)', textAlign: 'center' }}>
+          <p style={{ margin: '0 0 8px', fontSize: 24 }}>🔒</p>
+          <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: C.text }}>See these colors on your actual home</p>
+          <p style={{ margin: '0 0 16px', fontSize: 13, color: C.muted, lineHeight: 1.5 }}>Your contractor uses Roofing OS PRO — ask them to enable AI color previews for your project.</p>
+          <a href="https://roofingos.dev/pro" target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.primary, fontWeight: 600, textDecoration: 'none' }}>Learn more →</a>
+        </div>
+        {swatchGrid}
+        {loveCTA}
+      </div>
+    )
+  }
+
+  // ── STARTER TIER: photo tint overlay ──────────────────────────────────────
+  if (tier === 'basic') {
+    return (
+      <div style={{ padding: '20px 0 24px' }}>
+        <div style={{ padding: '0 20px 16px' }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
+          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Tap a color to preview on your home</p>
+        </div>
+        {heroPhoto ? (
+          <div style={{ position: 'relative', margin: '0 0 4px', overflow: 'hidden' }}>
+            <img src={heroPhoto} alt="Your roof" style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover', display: 'block' }} />
+            {activeColorObj && (
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: '55%',
+                background: activeColorObj.hex_color || 'transparent',
+                mixBlendMode: 'multiply',
+                opacity: 0.4,
+                pointerEvents: 'none',
+              }} />
+            )}
+            {activeColorObj && (
+              <div style={{
+                position: 'absolute', bottom: 12, left: 12, right: 12,
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'rgba(10,15,26,0.85)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                borderRadius: 12, padding: '10px 14px', border: `1px solid ${C.border}`,
+              }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: activeColorObj.hex_color || '#555', flexShrink: 0 }} />
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text }}>{activeColorObj.name}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ margin: '0 20px 16px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 4px', fontSize: 24 }}>🏠</p>
+            <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: C.text }}>Photos coming soon</p>
+            <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Your contractor will add roof photos to enable color preview.</p>
+          </div>
+        )}
+        <div style={{ margin: '12px 20px 4px', padding: '12px 16px', background: 'rgba(59,130,246,0.06)', borderRadius: 12, border: '1px solid rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⭐</span>
+          <p style={{ margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.4 }}>Want pixel-perfect renders? Ask your contractor to upgrade to <strong style={{ color: C.primary }}>PRO</strong>.</p>
+        </div>
+        {swatchGrid}
+        {loveCTA}
+      </div>
+    )
+  }
+
+  // ── AI TIER (pro/custom): full renders ────────────────────────────────────
   const hasViz = vizForAngle.length > 0
 
   return (
     <div style={{ padding: '20px 0 24px' }}>
-      {/* Heading */}
       <div style={{ padding: '0 20px 16px' }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 700, color: C.text }}>See Your New Roof</h3>
         <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Tap a color to preview it on your home</p>
       </div>
 
-      {/* Angle selector */}
       {angles.length > 1 && (
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 20px 16px', scrollbarWidth: 'none' }}>
           {angles.map(angle => (
@@ -772,7 +904,6 @@ function ColorsTab({ data, token }) {
         </div>
       )}
 
-      {/* Rendered image */}
       {hasViz && activeViz ? (
         <div style={{ position: 'relative', margin: '0 0 4px', overflow: 'hidden' }}>
           <img
@@ -805,76 +936,27 @@ function ColorsTab({ data, token }) {
         </div>
       )}
 
-      {/* Color swatches */}
-      {allColors.length > 0 && (
-        <div style={{ padding: '16px 20px 0' }}>
-          <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Available Colors</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            {allColors.map(color => {
-              const isSelected = (selectedColor || (vizForAngle[0]?.color_id)) === color.id
-              const hasRender  = !!colorMap[color.id]
-              return (
-                <button
-                  key={color.id}
-                  onClick={() => { setSelectedColor(color.id); setLoveSaved(false) }}
-                  title={color.name}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: '4px', opacity: hasViz && !hasRender ? 0.5 : 1 }}
-                >
-                  <div style={{
-                    width: 40, height: 40, borderRadius: '50%',
-                    background: color.hex_color || '#555',
-                    border: isSelected ? `3px solid ${C.primary}` : `2px solid rgba(255,255,255,0.12)`,
-                    boxShadow: isSelected ? `0 0 0 2px rgba(59,130,246,0.4)` : 'none',
-                    transition: 'border 0.15s, box-shadow 0.15s',
-                  }} />
-                  <span style={{ fontSize: 10, color: isSelected ? C.primary : C.muted, fontWeight: isSelected ? 700 : 400, maxWidth: 48, textAlign: 'center', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {color.name}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Love this color CTA */}
-      {activeColorObj && (
-        <div style={{ margin: '20px 20px 0' }}>
-          <button
-            onClick={loveThisColor}
-            disabled={loveSaving || loveSaved}
-            style={{
-              width: '100%', padding: '14px 20px', border: 'none', borderRadius: 14, cursor: loveSaved ? 'default' : 'pointer',
-              background: loveSaved ? 'rgba(16,185,129,0.15)' : 'linear-gradient(135deg,rgba(59,130,246,0.2),rgba(139,92,246,0.2))',
-              border: `1px solid ${loveSaved ? C.success : 'rgba(59,130,246,0.4)'}`,
-              color: loveSaved ? C.success : C.text,
-              fontSize: 15, fontWeight: 700, transition: 'all 0.2s',
-            }}
-          >
-            {loveSaved ? '✓ Saved! Your contractor will see this' : loveSaving ? 'Saving…' : `❤️ I Love ${activeColorObj.name}`}
-          </button>
-          {!loveSaved && (
-            <p style={{ margin: '8px 0 0', fontSize: 11, color: C.muted, textAlign: 'center' }}>
-              Let your contractor know which color you love
-            </p>
-          )}
-        </div>
-      )}
+      {swatchGrid}
+      {loveCTA}
     </div>
   )
 }
 
-function DarkTabBar({ tab, setTab }) {
+function DarkTabBar({ tab, setTab, plan }) {
+  const isAI = plan === 'pro' || plan === 'custom'
   return (
     <div style={{ flexShrink: 0, background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: `1px solid ${C.border}`, height: 72, paddingBottom: 'env(safe-area-inset-bottom,0px)', display: 'flex' }}>
       {TABS.map(t => {
         const active = tab === t.id
+        const aiColors = isAI && t.id === 'colors'
         return (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ flex: 1, border: 'none', background: 'none', cursor: 'pointer', padding: '10px 0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, position: 'relative' }}>
             {active && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, background: C.primary, borderRadius: '0 0 3px 3px' }} />}
             <t.Icon c={active ? C.primary : '#6b7280'} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: active ? C.primary : '#6b7280', letterSpacing: '0.01em' }}>{t.label}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: active ? C.primary : '#6b7280', letterSpacing: '0.01em' }}>
+              {t.label}{aiColors ? ' ✨' : ''}
+            </span>
           </button>
         )
       })}
@@ -923,7 +1005,7 @@ function ProPortalV2({ data, token, isDemo }) {
         )}
       </div>
 
-      <DarkTabBar tab={tab} setTab={setTab} />
+      <DarkTabBar tab={tab} setTab={setTab} plan={data.plan} />
     </div>
   )
 }
