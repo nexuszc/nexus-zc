@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 27, 2026 — v13
+# Last updated: May 27, 2026 — v14
 
 ---
 
@@ -695,6 +695,17 @@ Then productized and sold to other multi-business operators.
   - pro.html — $499/mo, MOST POPULAR badge, AI viz section, competitor replacement table (~~CompanyCam~~ ~~JobNimbus~~ etc. = ~$600+/mo vs $499)
   - custom.html — $3k–5k/mo, white-label, dedicated strategist, done-for-you content
   - All pages: dark #0a0f1a, Inter font, sticky mobile CTA bar, OG tags, 100% static HTML
+
+**roofingos.dev Landing Page Overhaul (May 27, 2026 — session 4):**
+- Hero: headline → "Run your entire roofing business from one place." / removed false "500+ contractors" claim → "Built for roofing contractors"
+- Nav: added "Start free →" CTA button alongside "Sign in"
+- New: 6-card features grid (SVG icons, no emoji in titles): Portal, AI Supplements, Storm Leads, CRM, Visualization, Aria AI
+- New: 3-step "How it works" section above pricing (Create job → Send portal → Get paid + reviewed)
+- Pricing cards: trimmed to 5 bullets max, 12px feature text, cleaner spacing
+- Social proof: honest — "Used by roofing contractors across Colorado and growing."
+- Demo button: links to /portal/demo (redirect already existed in _redirects → /portal/DEMO2026ROOFINGOS)
+- Footer: updated with address (1700 Lincoln St, Denver CO 80203) + 6 links (Plans/Blog/Login/Privacy/Terms/Unsubscribe)
+- SMS bubble: SVG chat icon replacing emoji; collapses to icon-only circle on mobile
 
 **NEXT:**
 1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
