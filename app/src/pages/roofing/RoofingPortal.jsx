@@ -4,24 +4,65 @@ import { useParams } from 'react-router-dom'
 const SUPA = import.meta.env.VITE_SUPABASE_URL
 const KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// ─── Design tokens (light theme, mobile-first) ────────────────────────────
+// ─── Dark design tokens ───────────────────────────────────────────────────
 const C = {
-  bg:      '#ffffff',
-  text:    '#0f1923',
-  primary: '#4a9eff',
-  success: '#22c55e',
-  warn:    '#f59e0b',
-  error:   '#ef4444',
-  border:  '#e5e7eb',
-  muted:   '#6b7280',
-  subtle:  '#f9fafb',
+  bg:          '#0a0f1a',
+  surface:     '#111827',
+  surface2:    '#1f2937',
+  border:      'rgba(255,255,255,0.08)',
+  primary:     '#3b82f6',
+  primaryGlow: 'rgba(59,130,246,0.3)',
+  text:        '#f9fafb',
+  muted:       '#9ca3af',
+  success:     '#10b981',
+  warning:     '#f59e0b',
+  error:       '#ef4444',
+}
+
+// ─── CSS injection ────────────────────────────────────────────────────────
+const PORTAL_CSS = `
+  @keyframes portalShimmer {
+    0%   { background-position: -200% center }
+    100% { background-position:  200% center }
+  }
+  @keyframes portalPulse {
+    0%, 100% { opacity: 1; transform: scale(1)   }
+    50%      { opacity: .5; transform: scale(1.5) }
+  }
+  @keyframes portalFadeUp {
+    from { opacity: 0; transform: translateY(20px) }
+    to   { opacity: 1; transform: translateY(0)    }
+  }
+  @keyframes livePulseRing {
+    0%   { transform: scale(1);   opacity: .5 }
+    100% { transform: scale(2.5); opacity: 0  }
+  }
+  .p-fade { animation: portalFadeUp .4s ease-out both }
+  .p-fade-1 { animation: portalFadeUp .4s .1s ease-out both }
+  .p-fade-2 { animation: portalFadeUp .4s .2s ease-out both }
+  .p-fade-3 { animation: portalFadeUp .4s .3s ease-out both }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box }
+`
+if (typeof document !== 'undefined' && !document.getElementById('portal-v2-css')) {
+  const s = document.createElement('style')
+  s.id = 'portal-v2-css'; s.textContent = PORTAL_CSS
+  document.head.appendChild(s)
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
-const dollars = (cents) => '$' + ((cents || 0) / 100).toLocaleString()
+const dollars  = (c) => '$' + ((c || 0) / 100).toLocaleString()
 const fmtDate  = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const fmtTime  = (d) => new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-const first    = (name) => name?.split(' ')[0] || name
+const firstName = (n) => n?.split(' ')[0] || n
+
+function timeAgo(ds) {
+  const m = Math.floor((Date.now() - new Date(ds)) / 60000)
+  if (m < 1)  return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
 
 function callPortalApi(path, opts = {}) {
   return fetch(`${SUPA}/functions/v1/${path}`, {
@@ -30,568 +71,551 @@ function callPortalApi(path, opts = {}) {
   })
 }
 
-// ─── Skeleton loading screen ──────────────────────────────────────────────
-const shimmerStyle = `@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`
-if (typeof document !== 'undefined' && !document.getElementById('portal-skel')) {
-  const s = document.createElement('style'); s.id = 'portal-skel'; s.textContent = shimmerStyle
-  document.head.appendChild(s)
+// ─── Static maps ──────────────────────────────────────────────────────────
+const STAGE_ORDER = ['scheduled', 'materials_ordered', 'in_progress', 'inspection', 'complete']
+const STAGE_LABELS = {
+  scheduled:         'Scheduled',
+  materials_ordered: 'Materials Ordered',
+  in_progress:       'Installation In Progress',
+  inspection:        'Final Inspection',
+  complete:          'Complete',
+  completed:         'Complete',
+  paid:              'Complete',
 }
-function Skel({ w = '100%', h = 16, r = 8, mb = 0 }) {
-  return <div style={{ width: w, height: h, borderRadius: r, marginBottom: mb, background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
+
+const PHASE_LABEL = {
+  pre_installation:     'Before',
+  damage_documentation: 'Before',
+  during_tearoff:       'Tear-off',
+  during_installation:  'Shingles',
+  post_installation:    'After',
 }
-function LoadingScreen() {
+
+const EDUCATION = {
+  scheduled:         { icon: '📅', title: 'Your job is scheduled',            body: 'Your contractor has everything booked and materials are being ordered. You\'ll receive updates as the job progresses.',                                                                                                                      time: null },
+  materials_ordered: { icon: '🚚', title: 'Materials on their way',           body: 'Your roofing materials have been ordered and will be delivered soon. Installation begins shortly after delivery.',                                                                                                                             time: '1-2 days' },
+  tear_off:          { icon: '🔨', title: 'Removing the old roof',            body: 'Your crew is removing the old roofing material right now. They\'re exposing the decking underneath to check for any damage before installation begins.',                                                                                       time: '2-4 hours' },
+  underlayment:      { icon: '🛡️', title: 'Installing the waterproof barrier', body: 'A waterproof barrier called underlayment is being installed. This protects your home even if a shingle gets damaged or blown off.',                                                                                                           time: '1-2 hours' },
+  shingles:          { icon: '🏠', title: 'Your new shingles are going on',   body: 'Your new shingles are being installed now. Your crew installs them from the bottom up to ensure proper overlap and water drainage.',                                                                                                            time: '4-8 hours' },
+  in_progress:       { icon: '🏗️', title: 'Installation in progress',         body: 'Your roof replacement is actively underway. Your crew is working systematically to ensure every component is installed correctly.',                                                                                                             time: '4-8 hours' },
+  cleanup:           { icon: '✨', title: 'Final cleanup underway',            body: 'The roofing work is complete. Your crew is doing a thorough cleanup — collecting all old materials, running a magnet for nails, and doing a final inspection.',                                                                                 time: '1-2 hours' },
+  inspection:        { icon: '🔍', title: 'Final inspection',                 body: 'Your crew is doing a final walkthrough to ensure everything meets quality standards. This is the last step before your new roof is complete.',                                                                                                   time: '30-60 min' },
+  complete:          { icon: '🎉', title: 'Your new roof is complete!',        body: null, time: null },
+  completed:         { icon: '🎉', title: 'Your new roof is complete!',        body: null, time: null },
+  paid:              { icon: '🎉', title: 'Your new roof is complete!',        body: null, time: null },
+}
+
+// ─── Dark skeleton ────────────────────────────────────────────────────────
+function DarkSkel({ w = '100%', h = 16, r = 8, mb = 0 }) {
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', maxWidth: 480, margin: '0 auto' }}>
-      <div style={{ background: C.subtle, padding: '20px', borderBottom: `1px solid ${C.border}` }}>
-        <Skel w="140px" h={24} r={6} mb={8} /><Skel w="200px" h={14} r={4} />
+    <div style={{
+      width: w, height: h, borderRadius: r, marginBottom: mb,
+      background: 'linear-gradient(90deg,#1f2937 25%,#374151 50%,#1f2937 75%)',
+      backgroundSize: '200% 100%', animation: 'portalShimmer 1.5s infinite',
+    }} />
+  )
+}
+
+function DarkLoadingScreen() {
+  return (
+    <div style={{ background: C.bg, minHeight: '100vh', maxWidth: 480, margin: '0 auto', fontFamily: "-apple-system,'Inter',system-ui,sans-serif" }}>
+      <div style={{ padding: '20px', borderBottom: `1px solid ${C.border}` }}>
+        <DarkSkel w="140px" h={28} r={8} mb={8} /><DarkSkel w="200px" h={14} r={4} />
       </div>
-      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Skel h={110} r={16} /><Skel h={64} r={12} /><Skel h={64} r={12} /><Skel h={64} r={12} />
+      <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <DarkSkel h={160} r={20} /><DarkSkel h={260} r={0} /><DarkSkel h={80} r={16} /><DarkSkel h={80} r={16} />
       </div>
     </div>
   )
 }
 
-// ─── Full-screen photo lightbox ───────────────────────────────────────────
-function Lightbox({ photo, onClose, allowDownload }) {
-  const dl = () => { const a = document.createElement('a'); a.href = photo.url; a.download = `photo.jpg`; a.target = '_blank'; a.click() }
+// ─── Lightbox (swipe-enabled) ─────────────────────────────────────────────
+function Lightbox({ photos, startIndex = 0, onClose }) {
+  const [idx, setIdx]    = useState(startIndex)
+  const touchX           = useRef(null)
+  const photo            = photos[idx] || photos[0]
+  const prev             = () => setIdx(i => Math.max(0, i - 1))
+  const next             = () => setIdx(i => Math.min(photos.length - 1, i + 1))
+
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'ArrowLeft') prev(); if (e.key === 'ArrowRight') next(); if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
+
+  if (!photo) return null
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <button onClick={onClose} style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '50%', width: 40, height: 40, cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-      <img src={photo.url} alt={photo.caption || ''} onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '72vh', objectFit: 'contain', borderRadius: 10 }} />
-      {(photo.caption || photo.taken_at) && (
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 14, textAlign: 'center', padding: '0 20px' }}>
-          {photo.caption && <p style={{ margin: 0, fontWeight: 600, color: '#fff' }}>{photo.caption}</p>}
-          {photo.taken_at && <p style={{ margin: '4px 0 0' }}>{fmtDate(photo.taken_at)} · {fmtTime(photo.taken_at)}</p>}
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.97)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+      onTouchStart={e => { touchX.current = e.touches[0].clientX }}
+      onTouchEnd={e => { const d = e.changedTouches[0].clientX - touchX.current; if (d > 50) prev(); else if (d < -50) next(); touchX.current = null }}
+    >
+      <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+      {idx > 0 && <button onClick={prev} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>}
+      {idx < photos.length - 1 && <button onClick={next} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', fontSize: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>}
+      <img src={photo.url} alt={photo.caption || ''} onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12 }} />
+      <div style={{ marginTop: 16, textAlign: 'center', padding: '0 24px' }}>
+        {photo.caption && <p style={{ margin: 0, fontWeight: 600, color: '#fff', fontSize: 14 }}>{photo.caption}</p>}
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+          {PHASE_LABEL[photo.phase] || photo.phase}{photo.taken_at ? ` · ${fmtDate(photo.taken_at)} at ${fmtTime(photo.taken_at)}` : ''}
+        </p>
+      </div>
+      {photos.length > 1 && (
+        <div style={{ display: 'flex', gap: 5, marginTop: 14, justifyContent: 'center' }}>
+          {photos.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: 6, height: 6, borderRadius: '50%', background: i === idx ? '#fff' : 'rgba(255,255,255,0.3)', cursor: 'pointer' }} />)}
         </div>
       )}
-      {allowDownload && (
-        <div style={{ display: 'flex', gap: 10, marginTop: 18 }} onClick={e => e.stopPropagation()}>
-          <button onClick={dl} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 10, padding: '12px 22px', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>⬇ Download</button>
-          {navigator.share && (
-            <button onClick={() => navigator.share({ url: photo.url, title: 'Project photo' }).catch(() => {})} style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 22px', fontSize: 14, cursor: 'pointer' }}>Share</button>
+    </div>
+  )
+}
+
+// ─── SVG tab icons ────────────────────────────────────────────────────────
+const HomeIcon   = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+const CameraIcon = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+const ChatIcon   = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+const DocIcon    = ({ c }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+const PhoneIcon  = ({ c }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.62 3.53 2 2 0 0 1 3.59 1.37h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+
+// ─── Portal header ────────────────────────────────────────────────────────
+function PortalHeader({ contractor }) {
+  const name    = contractor?.company_name || 'Your Portal'
+  const initial = name[0]?.toUpperCase()
+  const phone   = contractor?.owner_phone
+  return (
+    <div style={{ height: 64, background: C.bg, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
+      {contractor?.logo_url
+        ? <img src={contractor.logo_url} alt="logo" style={{ height: 36, width: 36, borderRadius: '50%', objectFit: 'cover' }} />
+        : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#fff', flexShrink: 0 }}>{initial}</div>
+      }
+      <span style={{ fontWeight: 700, fontSize: 15, color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      {phone && (
+        <a href={`tel:${phone}`} style={{ color: C.primary, fontWeight: 600, fontSize: 13, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5, minHeight: 44, flexShrink: 0 }}>
+          <PhoneIcon c={C.primary} />
+          <span>{phone.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}</span>
+        </a>
+      )}
+    </div>
+  )
+}
+
+// ─── Live status card ─────────────────────────────────────────────────────
+function LiveStatusCard({ job, stageLabel, dayNumber, currentStageIdx, estCompletion }) {
+  const isComplete = ['complete', 'completed', 'paid'].includes(job?.status)
+  const isActive   = ['in_progress', 'inspection'].includes(job?.status)
+  const pct        = Math.round(((currentStageIdx + 1) / STAGE_ORDER.length) * 100)
+
+  return (
+    <div className="p-fade-1" style={{ background: 'linear-gradient(135deg,rgba(59,130,246,0.15),rgba(59,130,246,0.05))', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 20, padding: 20, margin: '0 20px 24px' }}>
+      {/* Top row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isComplete ? (
+            <span style={{ color: C.success, fontWeight: 700, fontSize: 13 }}>✓ Complete</span>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, position: 'relative' }}>
+              <div style={{ position: 'relative', width: 10, height: 10, flexShrink: 0 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: isActive ? C.success : C.warning, position: 'absolute', zIndex: 1, animation: isActive ? 'portalPulse 2s infinite' : 'none' }} />
+                {isActive && <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', border: `2px solid ${C.success}`, animation: 'livePulseRing 2s infinite' }} />}
+              </div>
+              <span style={{ color: isActive ? C.success : C.warning, fontWeight: 700, fontSize: 13 }}>{isActive ? 'Live' : 'Active'}</span>
+            </div>
           )}
         </div>
-      )}
-    </div>
-  )
-}
-
-// ─── Status configuration ─────────────────────────────────────────────────
-function statusFor(s) {
-  const map = {
-    scheduled:        { emoji: '🔵', label: 'Scheduled',   bg: '#dbeafe', fg: '#1d4ed8', msg: 'Your roof replacement is scheduled.' },
-    materials_ordered:{ emoji: '🔵', label: 'Scheduled',   bg: '#dbeafe', fg: '#1d4ed8', msg: 'Materials ordered. Work begins soon.' },
-    in_progress:      { emoji: '🟡', label: 'In Progress', bg: '#fef3c7', fg: '#92400e', msg: 'Your roof replacement is underway.' },
-    inspection:       { emoji: '🟠', label: 'Inspection',  bg: '#ffedd5', fg: '#9a3412', msg: 'Final inspection is in progress.' },
-    complete:         { emoji: '🟢', label: 'Complete',    bg: '#dcfce7', fg: '#14532d', msg: 'Your new roof is complete!' },
-    paid:             { emoji: '🟢', label: 'Complete',    bg: '#dcfce7', fg: '#14532d', msg: 'Your new roof is complete!' },
-  }
-  return map[s] || { emoji: '🟡', label: 'In Progress', bg: '#fef3c7', fg: '#92400e', msg: 'Your project is in progress.' }
-}
-
-// ─── Phase label map ──────────────────────────────────────────────────────
-const PHASE_LABEL = {
-  pre_installation:    'Before',
-  damage_documentation:'Before',
-  during_tearoff:      'Tear-off',
-  during_installation: 'Shingles',
-  post_installation:   'After',
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// FREE PORTAL
-// ─────────────────────────────────────────────────────────────────────────
-function FreePortal({ data }) {
-  const { job, photos, timeline, documents } = data
-  const [lightbox, setLightbox] = useState(null)
-  const sd = statusFor(job?.status)
-  const recentPhotos = (photos || []).slice(0, 6)
-
-  // Build display timeline — done items + upcoming items
-  const doneItems = (timeline || []).filter(t => !t.raw_update || t.raw_update !== 'upcoming')
-  const upcomingItems = (timeline || []).filter(t => t.raw_update === 'upcoming')
-  const activeIdx = doneItems.length // first upcoming is "active"
-
-  return (
-    <div style={{ background: C.bg, minHeight: '100vh', color: C.text, fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto' }}>
-      {lightbox && <Lightbox photo={lightbox} onClose={() => setLightbox(null)} allowDownload={false} />}
-
-      {/* Header */}
-      <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em', color: C.primary }}>ROOFING OS</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', maxWidth: 180, lineHeight: 1.3 }}>{job?.property_address}</span>
+        {dayNumber !== null && dayNumber > 0 && (
+          <span style={{ color: C.muted, fontSize: 13 }}>Day {dayNumber} of installation</span>
+        )}
       </div>
 
-      {/* Hero status */}
-      <div style={{ padding: '28px 20px 24px', textAlign: 'center', borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: sd.bg, color: sd.fg, fontWeight: 700, fontSize: 15, padding: '10px 20px', borderRadius: 100, marginBottom: 14 }}>
-          {sd.emoji} {sd.label}
-        </div>
-        <p style={{ fontSize: 18, fontWeight: 600, color: C.text, margin: 0 }}>{sd.msg}</p>
+      {/* Stage name */}
+      <p style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 16px', lineHeight: 1.3 }}>{stageLabel}</p>
+
+      {/* Progress bar */}
+      <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#3b82f6,#60a5fa)', borderRadius: 4, backgroundSize: '200% 100%', animation: 'portalShimmer 2s infinite linear', transition: 'width 1s ease-out' }} />
       </div>
 
-      {/* Photo strip */}
-      {recentPhotos.length > 0 && (
-        <div style={{ padding: '20px 0 0' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', padding: '0 20px', marginBottom: 10 }}>Photos</p>
-          <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '0 20px 20px', scrollbarWidth: 'none' }}>
-            {recentPhotos.map(p => (
-              <div key={p.id} onClick={() => setLightbox(p)} style={{ flexShrink: 0, width: 110, height: 84, borderRadius: 10, overflow: 'hidden', background: C.subtle, cursor: 'pointer' }}>
-                <img src={p.url} alt={p.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Basic timeline */}
-      {(doneItems.length > 0 || upcomingItems.length > 0) && (
-        <div style={{ padding: '0 20px 20px' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Timeline</p>
-          {[...doneItems, ...upcomingItems].map((item, i) => {
-            const isDone = i < doneItems.length
-            const isActive = i === activeIdx && upcomingItems.length > 0
-            return (
-              <div key={item.id || i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < doneItems.length + upcomingItems.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{isDone ? '✅' : isActive ? '🔄' : '○'}</span>
-                <div>
-                  <p style={{ margin: 0, fontWeight: 600, fontSize: 15, color: isDone || isActive ? C.text : C.muted }}>{item.title}</p>
-                  {item.description && isDone && <p style={{ margin: '2px 0 0', fontSize: 13, color: C.muted }}>{item.description}</p>}
-                  {isDone && item.created_at && <p style={{ margin: '2px 0 0', fontSize: 12, color: C.success }}>✓ {fmtDate(item.created_at)}</p>}
-                  {isActive && <p style={{ margin: '2px 0 0', fontSize: 12, color: C.warn, fontWeight: 600 }}>In progress — today</p>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Documents — view only */}
-      {(documents || []).length > 0 && (
-        <div style={{ padding: '0 20px 20px' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Documents</p>
-          {documents.map((d, i) => (
-            <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 12, marginBottom: 8 }}>
-              <span style={{ fontSize: 20 }}>📄</span>
-              <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>{d.title}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>Document available — contact your contractor to request a copy.</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Locked upgrade sections */}
-      <div style={{ padding: '0 20px 20px' }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>More with Portal Pro</p>
-        {[
-          { icon: '⬇️', label: 'Download documents', sub: 'Available with Portal Pro — ask your contractor to upgrade.' },
-          { icon: '💬', label: 'Message your contractor', sub: 'Available with Portal Pro.' },
-          { icon: '⭐', label: 'Leave a review', sub: 'Available with Portal Pro.' },
-        ].map(({ icon, label, sub }) => (
-          <div key={label} style={{ background: C.subtle, border: `2px dashed ${C.border}`, borderRadius: 14, padding: '16px', textAlign: 'center', marginBottom: 10 }}>
-            <p style={{ fontSize: 22, margin: '0 0 6px' }}>{icon}</p>
-            <p style={{ fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 4px' }}>{label}</p>
-            <p style={{ fontSize: 13, color: C.muted, margin: '0 0 10px' }}>{sub}</p>
-            <a href="https://roofingos.dev/upgrade" target="_blank" rel="noreferrer" style={{ color: C.primary, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Learn more →</a>
+      {/* Stage dots */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: estCompletion ? 10 : 0 }}>
+        {STAGE_ORDER.map((_, i) => (
+          <div key={i} style={{ flex: 1, height: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{
+              width: i === currentStageIdx ? 10 : 7, height: i === currentStageIdx ? 10 : 7,
+              borderRadius: '50%',
+              background: i <= currentStageIdx ? C.primary : 'rgba(255,255,255,0.15)',
+              animation: i === currentStageIdx ? 'portalPulse 2s infinite' : 'none',
+              boxShadow: i === currentStageIdx ? `0 0 0 3px ${C.primaryGlow}` : 'none',
+              transition: 'all .3s',
+            }} />
           </div>
         ))}
       </div>
 
-      {/* Footer */}
-      <div style={{ padding: '20px', textAlign: 'center', borderTop: `1px solid ${C.border}` }}>
-        <p style={{ fontSize: 12, color: C.muted, margin: '0 0 2px' }}>Powered by <strong>Roofing OS</strong></p>
-        <a href="https://roofingos.dev" target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.primary, textDecoration: 'none' }}>roofingos.dev — free for contractors</a>
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: NOTIFICATION PROMPT
-// ─────────────────────────────────────────────────────────────────────────
-function NotifPrompt({ onDismiss }) {
-  return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.bg, borderTop: `1px solid ${C.border}`, borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', boxShadow: '0 -4px 28px rgba(0,0,0,0.1)', zIndex: 300 }}>
-      <p style={{ fontWeight: 700, fontSize: 18, margin: '0 0 8px', textAlign: 'center' }}>🔔 Stay in the loop</p>
-      <p style={{ fontSize: 14, color: C.muted, margin: '0 0 20px', textAlign: 'center' }}>Get updates when photos are added and your roof progresses.</p>
-      <button onClick={() => { Notification.requestPermission?.(); onDismiss() }} style={{ width: '100%', background: C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '15px', fontWeight: 700, fontSize: 16, cursor: 'pointer', marginBottom: 10, minHeight: 52 }}>
-        Enable notifications
-      </button>
-      <button onClick={onDismiss} style={{ width: '100%', background: 'transparent', color: C.muted, border: 'none', fontSize: 15, cursor: 'pointer', padding: '10px', minHeight: 48 }}>
-        No thanks
-      </button>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: COMPLETION FLOW (slides when job = complete)
-// ─────────────────────────────────────────────────────────────────────────
-function CompletionFlow({ data }) {
-  const [step, setStep] = useState(0)
-  const [copied, setCopied] = useState(false)
-  const { contractor } = data
-  const name = first(data.session?.homeowner_name)
-  const coName = contractor?.company_name || 'your contractor'
-
-  const copyLink = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
-  }
-
-  const slides = [
-    <div key="celebrate" style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 80, marginBottom: 16, lineHeight: 1 }}>🎉</div>
-      <h1 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 12px', lineHeight: 1.2 }}>Your new roof is complete!</h1>
-      <p style={{ fontSize: 16, color: C.muted, margin: '0 0 32px' }}>Thank you for trusting {coName} with your home, {name}.</p>
-      <button onClick={() => setStep(1)} style={{ width: '100%', background: C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '16px', fontWeight: 700, fontSize: 17, cursor: 'pointer', minHeight: 54 }}>Continue</button>
-    </div>,
-
-    <div key="review" style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 60, marginBottom: 14 }}>⭐</div>
-      <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 10px' }}>How did {coName} do?</h2>
-      <p style={{ fontSize: 15, color: C.muted, margin: '0 0 24px' }}>Your review helps them grow and helps other homeowners choose the right contractor.</p>
-      <a href="https://search.google.com/local/writereview" target="_blank" rel="noreferrer"
-        style={{ display: 'block', background: '#4285f4', color: '#fff', borderRadius: 14, padding: '16px', fontWeight: 700, fontSize: 17, textDecoration: 'none', marginBottom: 12, minHeight: 54, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        Leave a Google Review →
-      </a>
-      <button onClick={() => setStep(2)} style={{ width: '100%', background: 'transparent', color: C.muted, border: 'none', fontSize: 15, cursor: 'pointer', padding: '10px', minHeight: 48 }}>Skip</button>
-    </div>,
-
-    <div key="referral" style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 60, marginBottom: 14 }}>🏠</div>
-      <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 10px' }}>Know someone who needs a roof?</h2>
-      <p style={{ fontSize: 15, color: C.muted, margin: '0 0 24px' }}>Share {coName}'s portal and they'll get the same real-time updates you did.</p>
-      <button onClick={copyLink} style={{ width: '100%', background: C.success, color: '#fff', border: 'none', borderRadius: 14, padding: '16px', fontWeight: 700, fontSize: 17, cursor: 'pointer', marginBottom: 10, minHeight: 54 }}>
-        {copied ? '✓ Copied!' : 'Copy referral link'}
-      </button>
-      {navigator.share && (
-        <button onClick={() => navigator.share({ text: `Check out ${coName}`, url: window.location.href }).catch(() => {})}
-          style={{ width: '100%', background: C.subtle, color: C.text, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px', fontWeight: 600, fontSize: 16, cursor: 'pointer', marginBottom: 10, minHeight: 52 }}>
-          Share via text
-        </button>
+      {estCompletion && (
+        <p style={{ fontSize: 13, color: C.muted, margin: 0 }}>Est. completion: {estCompletion}</p>
       )}
-      <button onClick={() => setStep(3)} style={{ width: '100%', background: 'transparent', color: C.muted, border: 'none', fontSize: 15, cursor: 'pointer', padding: '10px', minHeight: 48 }}>Skip</button>
-    </div>,
+    </div>
+  )
+}
 
-    <div key="monitoring" style={{ textAlign: 'center' }}>
-      <div style={{ fontSize: 60, marginBottom: 14 }}>🌩️</div>
-      <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 10px' }}>1-Year Roof Monitoring — Activated</h2>
-      <p style={{ fontSize: 15, color: C.muted, margin: '0 0 24px' }}>We'll alert you if a storm damages your new roof. Keep your investment protected.</p>
-      <button onClick={() => Notification.requestPermission?.()}
-        style={{ width: '100%', background: C.warn, color: '#fff', border: 'none', borderRadius: 14, padding: '16px', fontWeight: 700, fontSize: 17, cursor: 'pointer', marginBottom: 12, minHeight: 54 }}>
-        Allow notifications
-      </button>
-      <button onClick={() => setStep(4)} style={{ width: '100%', background: 'transparent', color: C.muted, border: 'none', fontSize: 15, cursor: 'pointer', padding: '10px', minHeight: 48 }}>No thanks</button>
-    </div>,
-  ]
+// ─── Hero photo ───────────────────────────────────────────────────────────
+function HeroPhoto({ photos, onTap }) {
+  const latest           = photos?.[0]
+  const [loaded, setLoaded] = useState(false)
 
-  if (step >= slides.length) return null
+  if (!latest) {
+    return (
+      <div className="p-fade-2" style={{ width: '100%', height: 260, background: C.surface2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: C.muted, gap: 12, marginBottom: 28 }}>
+        <CameraIcon c={C.muted} />
+        <p style={{ fontSize: 14, textAlign: 'center', margin: 0, maxWidth: 220, lineHeight: 1.5 }}>Photos will appear here as your crew uploads them</p>
+      </div>
+    )
+  }
 
   return (
-    <div style={{ background: C.bg, minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '32px 24px', maxWidth: 480, margin: '0 auto', fontFamily: "-apple-system,'Inter',system-ui,sans-serif" }}>
-      {slides[step]}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 32 }}>
-        {slides.map((_, i) => <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i === step ? C.primary : C.border }} />)}
+    <div className="p-fade-2" onClick={() => onTap(0)} style={{ position: 'relative', width: '100%', height: 260, cursor: 'pointer', marginBottom: 28, overflow: 'hidden' }}>
+      {!loaded && (
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,#1f2937 25%,#374151 50%,#1f2937 75%)', backgroundSize: '200% 100%', animation: 'portalShimmer 1.5s infinite' }} />
+      )}
+      <img src={latest.url} alt="" onLoad={() => setLoaded(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: loaded ? 'block' : 'none' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110, background: 'linear-gradient(transparent,rgba(0,0,0,0.75))', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: 14, left: 16 }}>
+        <p style={{ margin: 0, fontSize: 11, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>Latest update</p>
+        <p style={{ margin: '2px 0 0', fontSize: 14, color: '#fff', fontWeight: 600 }}>
+          {latest.taken_at ? timeAgo(latest.taken_at) : 'Recently uploaded'}
+          {(PHASE_LABEL[latest.phase] || latest.phase) ? ` — ${PHASE_LABEL[latest.phase] || latest.phase}` : ''}
+        </p>
       </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: STATUS TAB (home)
-// ─────────────────────────────────────────────────────────────────────────
-function ProStatusTab({ data, onViewPhotos, onViewTimeline }) {
-  const { job, photos, timeline, payments, claim, contractor, session } = data
-  const [insOpen, setInsOpen] = useState(false)
-  const sd = statusFor(job?.status)
+// ─── Photo strip ──────────────────────────────────────────────────────────
+function PhotoStrip({ photos, onViewAll, onTap }) {
+  const visible = photos.slice(0, 8)
+  if (!visible.length) return null
+  return (
+    <div className="p-fade-3" style={{ marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', marginBottom: 12 }}>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: C.text }}>📸 All Photos ({photos.length})</p>
+        <button onClick={onViewAll} style={{ background: 'none', border: 'none', color: C.primary, fontWeight: 600, fontSize: 13, cursor: 'pointer', minHeight: 44, padding: '0 0 0 8px' }}>See all →</button>
+      </div>
+      <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '0 20px 6px', scrollbarWidth: 'none' }}>
+        {visible.map((p, i) => (
+          <div key={p.id || i} onClick={() => onTap(i)} style={{ flexShrink: 0, cursor: 'pointer' }}>
+            <div style={{ width: 100, height: 100, borderRadius: 12, overflow: 'hidden', background: C.surface2 }}>
+              <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 10, color: C.muted, textAlign: 'center' }}>{PHASE_LABEL[p.phase] || p.phase || ''}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
-  // Day X of Y
-  let dayLabel = ''
-  if (job?.actual_start_date && job?.scheduled_end) {
-    const start = new Date(job.actual_start_date)
-    const end   = new Date(job.scheduled_end)
-    const today = new Date()
-    const dayNum   = Math.max(1, Math.round((today - start) / 86400000) + 1)
-    const totalDays = Math.max(1, Math.round((end - start) / 86400000) + 1)
-    dayLabel = `Day ${dayNum} of ${totalDays}`
+// ─── Education card ───────────────────────────────────────────────────────
+function EducationCard({ job, contractor }) {
+  const [expanded, setExpanded] = useState(false)
+  const status = job?.status
+  const info   = EDUCATION[status] || EDUCATION.in_progress
+  const coName = contractor?.company_name || 'your contractor'
+  const body   = info.body || `Your new roof is installed and inspected. It comes with a manufacturer's warranty on materials and a workmanship warranty from ${coName}. Welcome to your new roof! 🎉`
+
+  return (
+    <div style={{ margin: '0 20px 24px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px' }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>🏠 What's happening on your roof</p>
+      <p style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: '0 0 8px', lineHeight: 1.3 }}>{info.icon} {info.title}</p>
+      <p style={{ fontSize: 14, color: C.muted, margin: 0, lineHeight: 1.6 }}>{body}</p>
+      {info.time && <p style={{ fontSize: 13, color: C.primary, fontWeight: 600, margin: '10px 0 0' }}>⏱ Typically takes {info.time}</p>}
+      {expanded && (
+        <p style={{ fontSize: 13, color: C.muted, margin: '12px 0 0', lineHeight: 1.6, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          Your crew follows industry best practices for every installation. If you have questions about the work being done, you can message {coName} directly from this portal at any time.
+        </p>
+      )}
+      <button onClick={() => setExpanded(v => !v)} style={{ background: 'none', border: 'none', color: C.primary, fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 0 0', minHeight: 40, display: 'block' }}>
+        {expanded ? 'Show less ↑' : 'Learn more about this stage →'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Documents section (shared between Status tab preview + Docs tab) ─────
+function DocumentsSection({ documents, token, preview = false }) {
+  const [signing, setSigning]       = useState(null)
+  const [sigText, setSigText]       = useState('')
+  const [localSigned, setLocalSigned] = useState({})
+
+  const submitSig = async () => {
+    if (!sigText.trim() || !signing) return
+    try {
+      await callPortalApi('portal-api', { method: 'POST', body: JSON.stringify({ token, action: 'sign_document', document_id: signing.id, document_title: signing.title, signature_data: sigText }) })
+      setLocalSigned(p => ({ ...p, [signing.id]: true }))
+      setSigning(null); setSigText('')
+    } catch {}
   }
 
-  // Current active stage label
-  const activeItem = (timeline || []).find(t => t.raw_update !== 'upcoming' && !t.completed_override)
-  const lastDoneItem = [...(timeline || [])].filter(t => t.raw_update !== 'upcoming').pop()
-  const stageLabel = lastDoneItem?.title || job?.status?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'In Progress'
+  const docs = preview ? (documents || []).slice(0, 3) : (documents || [])
 
-  // Progress dots (done items)
-  const doneItems     = (timeline || []).filter(t => t.raw_update !== 'upcoming')
-  const upcomingItems = (timeline || []).filter(t => t.raw_update === 'upcoming')
-  const allItems      = [...doneItems, ...upcomingItems]
+  if (!docs.length) {
+    return (
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '24px', textAlign: 'center' }}>
+        <p style={{ color: C.muted, fontSize: 14, margin: 0 }}>Documents will appear here as they're shared with you</p>
+      </div>
+    )
+  }
 
-  // Photo strip (last 5, newest first)
-  const recentPhotos = (photos || []).slice(0, 5)
-  const todayCount   = (photos || []).filter(p => p.taken_at && new Date(p.taken_at).toDateString() === new Date().toDateString()).length
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {docs.map((d, i) => {
+          const signed   = localSigned[d.id] || d.status === 'signed'
+          const needsSig = !signed && d.status === 'pending' && d.requires_homeowner_action
+          return (
+            <div key={i} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '14px' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: (d.url || needsSig) ? 12 : 0 }}>
+                <span style={{ fontSize: 22, flexShrink: 0 }}>📄</span>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</p>
+                  {d.created_at && <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{fmtDate(d.created_at)}</p>}
+                </div>
+                {signed && <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(16,185,129,0.15)', color: C.success, padding: '4px 10px', borderRadius: 100, flexShrink: 0 }}>Signed</span>}
+                {needsSig && <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: C.warning, padding: '4px 10px', borderRadius: 100, flexShrink: 0 }}>Sign needed</span>}
+              </div>
+              {(d.url || needsSig) && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {d.url && (
+                    <a href={d.url} target="_blank" rel="noreferrer" style={{ flex: 1, padding: '10px', borderRadius: 10, border: `1px solid ${C.border}`, color: C.text, fontSize: 13, fontWeight: 600, textDecoration: 'none', textAlign: 'center', display: 'block', minHeight: 44, lineHeight: '24px', background: 'transparent' }}>View</a>
+                  )}
+                  {needsSig && !preview && (
+                    <button onClick={() => setSigning(d)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: C.warning, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>Sign now</button>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
 
-  // Payment summary
-  const totalPaid = (payments || []).filter(p => p.paid_at || p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0)
-  const totalDue  = (payments || []).reduce((s, p) => s + (p.amount || 0), 0)
-  const pctPaid   = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0
+      {signing && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: 480, margin: '0 auto' }}>
+            <p style={{ fontWeight: 700, fontSize: 18, margin: '0 0 16px', color: C.text }}>Sign: {signing.title}</p>
+            <input value={sigText} onChange={e => setSigText(e.target.value)} placeholder="Type your full name to sign..."
+              style={{ width: '100%', padding: '14px', borderRadius: 12, border: `1px solid ${C.border}`, fontSize: 16, fontFamily: 'cursive', outline: 'none', minHeight: 52, background: C.surface2, color: C.text }} />
+            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+              <button onClick={() => setSigning(null)} style={{ flex: 1, padding: '14px', borderRadius: 12, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 15, minHeight: 52 }}>Cancel</button>
+              <button onClick={submitSig} style={{ flex: 2, padding: '14px', borderRadius: 12, border: 'none', background: C.primary, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 15, minHeight: 52 }}>Sign document</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ─── Payment section ──────────────────────────────────────────────────────
+function PaymentSection({ payments }) {
+  if (!payments?.length) return null
+  const totalPaid = payments.filter(p => p.paid_at || p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0)
+  const totalDue  = payments.reduce((s, p) => s + (p.amount || 0), 0)
+  const pct       = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0
+
+  return (
+    <div style={{ margin: '0 20px 24px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px' }}>
+      <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: '0 0 14px' }}>💳 Payment</p>
+      <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, marginBottom: 6, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#10b981,#34d399)', borderRadius: 4, transition: 'width 1s ease-out' }} />
+      </div>
+      <p style={{ fontSize: 12, color: C.muted, margin: '0 0 14px' }}>{pct}% paid</p>
+      {payments.map((p, i) => {
+        const paid    = p.paid_at || p.status === 'paid'
+        const overdue = !paid && p.due_date && new Date(p.due_date) < new Date()
+        const dueSoon = !paid && !overdue && p.due_date && new Date(p.due_date) <= new Date(Date.now() + 86400000 * 2)
+        return (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderTop: i > 0 ? `1px solid ${C.border}` : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>{paid ? '✅' : overdue ? '🔴' : dueSoon ? '🔄' : '⏳'}</span>
+              <span style={{ fontSize: 14, color: C.text }}>{p.description || (p.payment_type || '').replace(/_/g, ' ')}</span>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: C.text }}>{dollars(p.amount)}</p>
+              {paid && <p style={{ margin: 0, fontSize: 11, color: C.success }}>paid {fmtDate(p.paid_at)}</p>}
+              {!paid && p.due_date && <p style={{ margin: 0, fontSize: 11, color: overdue ? C.error : dueSoon ? C.warning : C.muted }}>due {fmtDate(p.due_date)}</p>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Satisfaction + review ────────────────────────────────────────────────
+function SatisfactionSection({ job, contractor }) {
+  const [rating, setRating] = useState(0)
+  const [hovered, setHovered] = useState(0)
+  const progressMap = { lead:5, assessment_scheduled:10, assessed:20, estimate_sent:30, contracted:40, insurance_submitted:50, materials_ordered:60, scheduled:70, in_progress:80, inspection:90, complete:100, completed:100, paid:100 }
+  const progress    = progressMap[job?.status] || 0
+  if (progress < 90) return null
+
+  const reviewLink = contractor?.google_review_link || 'https://search.google.com/local/writereview'
+  const coName     = contractor?.company_name || 'your contractor'
+
+  return (
+    <div style={{ margin: '0 20px 24px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px', textAlign: 'center' }}>
+      <p style={{ fontWeight: 700, fontSize: 16, color: C.text, margin: '0 0 6px' }}>How is everything going so far?</p>
+      <p style={{ fontSize: 13, color: C.muted, margin: '0 0 16px', lineHeight: 1.5 }}>Your feedback helps {coName} do their best work</p>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
+        {[1,2,3,4,5].map(s => (
+          <button key={s} onMouseEnter={() => setHovered(s)} onMouseLeave={() => setHovered(0)} onClick={() => setRating(s)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 34, padding: 2, color: s <= (hovered || rating) ? '#f59e0b' : 'rgba(255,255,255,0.15)', minHeight: 48, transition: 'color .15s' }}>★</button>
+        ))}
+      </div>
+      {rating >= 4 && (
+        <>
+          <p style={{ fontSize: 14, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>We're so glad! Would you mind leaving us a Google review? It helps us help more homeowners like you.</p>
+          <a href={reviewLink} target="_blank" rel="noreferrer" style={{ display: 'block', background: '#4285f4', color: '#fff', borderRadius: 14, padding: '14px', fontWeight: 700, fontSize: 15, textDecoration: 'none', minHeight: 52, lineHeight: '24px' }}>Leave a Review →</a>
+        </>
+      )}
+      {rating > 0 && rating < 4 && (
+        <>
+          <p style={{ fontSize: 14, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>We're sorry to hear that. Let us make it right.</p>
+          <button style={{ width: '100%', background: C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '14px', fontWeight: 700, fontSize: 15, cursor: 'pointer', minHeight: 52 }}>Message us directly</button>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Referral section ─────────────────────────────────────────────────────
+function ReferralSection({ contractor }) {
+  const coName     = contractor?.company_name || 'us'
+  const referralUrl = `https://roofingos.dev?ref=${contractor?.id || ''}`
+  const share = () => {
+    if (navigator.share) navigator.share({ title: `Check out ${coName}`, url: referralUrl }).catch(() => {})
+    else navigator.clipboard.writeText(referralUrl).catch(() => {})
+  }
+  return (
+    <div style={{ margin: '0 20px 24px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '18px' }}>
+      <p style={{ fontWeight: 700, fontSize: 15, color: C.text, margin: '0 0 6px' }}>Know someone who needs a roof?</p>
+      <p style={{ fontSize: 13, color: C.muted, margin: '0 0 14px', lineHeight: 1.5 }}>Share your referral link and {coName} will take great care of them.</p>
+      <button onClick={share} style={{ width: '100%', background: C.surface2, color: C.primary, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px', fontWeight: 600, fontSize: 14, cursor: 'pointer', minHeight: 48 }}>Share →</button>
+    </div>
+  )
+}
+
+// ─── STATUS TAB ───────────────────────────────────────────────────────────
+function StatusTab({ data, onViewPhotos, onLightbox, token }) {
+  const { job, photos, payments, contractor, session, documents } = data
+
+  // FIX: Day counter — days since job.created_at, not actual_start_date vs scheduled_end
+  const dayNumber = job?.created_at
+    ? Math.floor((Date.now() - new Date(job.created_at).getTime()) / (1000 * 60 * 60 * 24)) + 1
+    : null
+
+  // FIX: Stage label — actual status name, never "Leave Us a Review"
+  const stageLabel = STAGE_LABELS[job?.status]
+    || (job?.status || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    || 'In Progress'
+
+  const normalizedStatus = (job?.status === 'paid' || job?.status === 'completed') ? 'complete' : job?.status
+  const currentStageIdx  = Math.max(0, STAGE_ORDER.indexOf(normalizedStatus))
 
   const estCompletion = job?.scheduled_end
-    ? new Date(job.scheduled_end).toDateString() === new Date().toDateString()
-      ? 'Today'
-      : fmtDate(job.scheduled_end)
+    ? new Date(job.scheduled_end).toDateString() === new Date().toDateString() ? 'Today' : fmtDate(job.scheduled_end)
     : null
 
   return (
-    <div style={{ paddingBottom: 90 }}>
+    <div style={{ paddingBottom: 20 }}>
       {/* Greeting */}
-      <div style={{ padding: '22px 20px 0' }}>
-        <p style={{ fontSize: 26, fontWeight: 700, margin: '0 0 2px' }}>Hi {first(session?.homeowner_name)} 👋</p>
+      <div className="p-fade" style={{ padding: '24px 20px 0' }}>
+        <p style={{ fontSize: 28, fontWeight: 700, color: C.text, margin: '0 0 4px' }}>Hi {firstName(session?.homeowner_name)} 👋</p>
+        <p style={{ fontSize: 15, color: C.muted, margin: '0 0 24px' }}>{contractor?.company_name || 'Your contractor'} is working on your roof</p>
       </div>
 
-      {/* Status card */}
-      <div style={{ margin: '16px 20px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 20, padding: '20px' }}>
-        {contractor?.logo_url && <img src={contractor.logo_url} alt="logo" style={{ height: 32, objectFit: 'contain', marginBottom: 10 }} />}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: sd.bg, color: sd.fg, fontWeight: 700, fontSize: 13, padding: '5px 12px', borderRadius: 100, marginBottom: 10 }}>
-          {sd.emoji} {sd.label}
-        </div>
-        <p style={{ fontSize: 19, fontWeight: 700, margin: '0 0 14px', lineHeight: 1.3 }}>
-          {dayLabel && <span style={{ color: C.muted, fontWeight: 500, fontSize: 14 }}>{dayLabel} — </span>}{stageLabel}
-        </p>
-        {/* Progress bar segments */}
-        {allItems.length > 0 && (
-          <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
-            {allItems.map((t, i) => (
-              <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: i < doneItems.length ? C.primary : C.border }} />
-            ))}
-          </div>
-        )}
-        {estCompletion && (
-          <p style={{ fontSize: 13, color: C.muted, margin: '0 0 12px' }}>Est. completion: {estCompletion}</p>
-        )}
-        <button onClick={onViewTimeline} style={{ background: 'none', border: 'none', color: C.primary, fontWeight: 600, fontSize: 14, cursor: 'pointer', padding: 0, minHeight: 44 }}>
-          View full timeline →
-        </button>
+      <LiveStatusCard job={job} stageLabel={stageLabel} dayNumber={dayNumber} currentStageIdx={currentStageIdx} estCompletion={estCompletion} />
+
+      <HeroPhoto photos={photos || []} onTap={onLightbox} />
+
+      <PhotoStrip photos={photos || []} onViewAll={onViewPhotos} onTap={onLightbox} />
+
+      <EducationCard job={job} contractor={contractor} />
+
+      {/* Documents preview */}
+      <div style={{ margin: '0 20px 24px' }}>
+        <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: '0 0 12px' }}>📄 Documents</p>
+        <DocumentsSection documents={documents} token={token} preview={true} />
       </div>
 
-      {/* Photo strip */}
-      {recentPhotos.length > 0 && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px 10px' }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>
-              📸 {todayCount > 0 ? `${todayCount} photos today` : `${(photos || []).length} photos`}
-            </p>
-            <button onClick={onViewPhotos} style={{ background: 'none', border: 'none', color: C.primary, fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '4px 0', minHeight: 44 }}>
-              See all {(photos || []).length} →
-            </button>
-          </div>
-          <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '0 20px 18px', scrollbarWidth: 'none' }}>
-            {recentPhotos.map(p => (
-              <div key={p.id} onClick={onViewPhotos} style={{ flexShrink: 0, width: 96, height: 76, borderRadius: 10, overflow: 'hidden', background: C.subtle, cursor: 'pointer' }}>
-                <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <PaymentSection payments={payments} />
+      <SatisfactionSection job={job} contractor={contractor} />
+      <ReferralSection contractor={contractor} />
 
-      {/* Payment tracker */}
-      {(payments || []).length > 0 && (
-        <div style={{ margin: '0 20px 16px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 16, padding: '16px' }}>
-          <p style={{ fontWeight: 700, fontSize: 15, margin: '0 0 12px' }}>💳 Payment</p>
-          <div style={{ height: 8, background: C.border, borderRadius: 4, marginBottom: 6, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${pctPaid}%`, background: C.primary, borderRadius: 4, transition: 'width 0.8s' }} />
-          </div>
-          <p style={{ fontSize: 12, color: C.muted, margin: '0 0 12px' }}>{pctPaid}% paid</p>
-          {payments.map((p, i) => {
-            const paid    = p.paid_at || p.status === 'paid'
-            const dueSoon = !paid && p.due_date && new Date(p.due_date) <= new Date(Date.now() + 86400000 * 2)
-            return (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: i > 0 ? `1px solid ${C.border}` : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{paid ? '✅' : dueSoon ? '🔄' : '○'}</span>
-                  <span style={{ fontSize: 14 }}>{p.description || (p.payment_type || '').replace(/_/g, ' ')}</span>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{dollars(p.amount)}</p>
-                  {paid && <p style={{ margin: 0, fontSize: 11, color: C.success }}>paid {fmtDate(p.paid_at)}</p>}
-                  {!paid && p.due_date && <p style={{ margin: 0, fontSize: 11, color: dueSoon ? C.warn : C.muted }}>due {fmtDate(p.due_date)}</p>}
-                </div>
-              </div>
-            )
-          })}
+      {/* Footer */}
+      <div style={{ padding: '24px 20px 20px', textAlign: 'center', borderTop: `1px solid ${C.border}` }}>
+        <p style={{ fontSize: 12, color: C.muted, margin: '0 0 4px' }}>Powered by <strong style={{ color: C.text }}>Roofing OS</strong></p>
+        <a href="https://roofingos.dev" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.primary, textDecoration: 'none' }}>roofingos.dev</a>
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 12, color: C.muted, margin: '0 0 4px' }}>Are you a roofing contractor?</p>
+          <a href="https://roofingos.dev/signup" target="_blank" rel="noreferrer" style={{ fontSize: 13, color: C.primary, fontWeight: 600, textDecoration: 'none' }}>Get your free portal →</a>
         </div>
-      )}
-
-      {/* Insurance */}
-      {claim && (
-        <div style={{ margin: '0 20px 16px', background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 16, padding: '16px' }}>
-          <button onClick={() => setInsOpen(v => !v)} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, minHeight: 40 }}>
-            <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>🛡️ Insurance Claim</p>
-            <span style={{ color: C.muted, fontSize: 20, lineHeight: 1 }}>{insOpen ? '▲' : '▼'}</span>
-          </button>
-          {insOpen && (
-            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                ['Claim #', claim.claim_number],
-                ['Adjuster', claim.adjuster_name],
-                ['Phone', claim.adjuster_phone],
-                ['Carrier', claim.carrier_name],
-                ['RCV', dollars(claim.original_estimate)],
-                ['ACV paid', dollars(claim.net_payment)],
-                ['Depreciation held', dollars(claim.depreciation_held)],
-                ['Supplement', claim.supplement_requested > 0 ? `${dollars(claim.supplement_requested)} — Submitted, pending` : null],
-              ].filter(([, v]) => v && v !== '$0').map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 7 }}>
-                  <span style={{ color: C.muted }}>{label}</span>
-                  <span style={{ fontWeight: 600, maxWidth: '60%', textAlign: 'right' }}>{value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: PHOTOS TAB
-// ─────────────────────────────────────────────────────────────────────────
-function ProPhotosTab({ data }) {
-  const { photos } = data
+// ─── PHOTOS TAB ───────────────────────────────────────────────────────────
+function PhotosTab({ data }) {
+  const { photos }     = data
   const [filter, setFilter] = useState('all')
   const [lightbox, setLightbox] = useState(null)
 
   const available = ['all', ...new Set((photos || []).map(p => PHASE_LABEL[p.phase] || p.phase).filter(Boolean))]
-  const visible = filter === 'all' ? (photos || []) : (photos || []).filter(p => (PHASE_LABEL[p.phase] || p.phase) === filter)
+  const visible   = filter === 'all' ? (photos || []) : (photos || []).filter(p => (PHASE_LABEL[p.phase] || p.phase) === filter)
 
   return (
-    <div style={{ paddingBottom: 90 }}>
-      {lightbox && <Lightbox photo={lightbox} onClose={() => setLightbox(null)} allowDownload={true} />}
+    <div style={{ paddingBottom: 20 }}>
+      {lightbox !== null && <Lightbox photos={visible} startIndex={lightbox} onClose={() => setLightbox(null)} />}
 
-      {/* Stage filter chips */}
       <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '14px 20px', scrollbarWidth: 'none' }}>
         {available.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ flexShrink: 0, padding: '7px 16px', borderRadius: 100, border: `1px solid ${filter === f ? C.primary : C.border}`, background: filter === f ? C.primary : C.bg, color: filter === f ? '#fff' : C.muted, fontSize: 13, fontWeight: 500, cursor: 'pointer', minHeight: 36 }}>
+            style={{ flexShrink: 0, padding: '7px 16px', borderRadius: 100, border: `1px solid ${filter === f ? C.primary : C.border}`, background: filter === f ? C.primary : 'transparent', color: filter === f ? '#fff' : C.muted, fontSize: 13, fontWeight: 500, cursor: 'pointer', minHeight: 36 }}>
             {f === 'all' ? `All (${(photos || []).length})` : `${f} (${(photos || []).filter(p => (PHASE_LABEL[p.phase] || p.phase) === f).length})`}
           </button>
         ))}
       </div>
 
-      {/* 2-col grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '0 20px' }}>
-        {visible.map(p => (
-          <div key={p.id} onClick={() => setLightbox(p)}
-            style={{ borderRadius: 12, overflow: 'hidden', background: C.subtle, aspectRatio: '4/3', cursor: 'pointer', position: 'relative' }}>
-            <img src={p.url} alt={p.caption || ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.65), transparent)', padding: '20px 8px 7px' }}>
-              <p style={{ margin: 0, fontSize: 11, color: '#fff', fontWeight: 600 }}>{PHASE_LABEL[p.phase] || p.phase}</p>
-              {p.taken_at && <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(p.taken_at)}</p>}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {visible.length === 0 && (
+      {visible.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '56px 20px' }}>
           <p style={{ color: C.muted, fontSize: 16 }}>No photos in this category yet.</p>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Pull down to refresh.</p>
         </div>
-      )}
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: TIMELINE TAB
-// ─────────────────────────────────────────────────────────────────────────
-function ProTimelineTab({ data }) {
-  const { timeline, photos, job } = data
-  const startDate = job?.actual_start_date ? new Date(job.actual_start_date) : null
-
-  // Group by date string
-  const groups = {}
-  ;(timeline || []).forEach(item => {
-    const d = item.created_at ? new Date(item.created_at).toDateString() : 'Upcoming'
-    if (!groups[d]) groups[d] = []
-    groups[d].push(item)
-  })
-
-  const getDayNum = ds => {
-    if (!startDate || ds === 'Upcoming') return null
-    return Math.max(1, Math.round((new Date(ds) - startDate) / 86400000) + 1)
-  }
-
-  const photosOnDate = ds =>
-    (photos || []).filter(p => p.taken_at && new Date(p.taken_at).toDateString() === ds).slice(0, 3)
-
-  return (
-    <div style={{ padding: '16px 20px 90px' }}>
-      {Object.entries(groups).map(([ds, items]) => {
-        const dayNum = getDayNum(ds)
-        const dateLabel = ds === 'Upcoming'
-          ? 'Upcoming'
-          : new Date(ds).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-        return (
-          <div key={ds} style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 10px' }}>
-              {dayNum ? `Day ${dayNum} — ` : ''}{dateLabel}
-            </p>
-            <div style={{ borderLeft: `2px solid ${C.border}`, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {items.map((item, i) => {
-                const isUpcoming = item.raw_update === 'upcoming'
-                const pDay = isUpcoming ? [] : photosOnDate(ds)
-                return (
-                  <div key={item.id || i} style={{ position: 'relative' }}>
-                    <div style={{ position: 'absolute', left: -22, top: 4, width: 10, height: 10, borderRadius: '50%', background: isUpcoming ? C.border : C.success, border: '2px solid #fff' }} />
-                    <div style={{ background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                        <span style={{ fontSize: 18 }}>{item.icon || (isUpcoming ? '○' : '✅')}</span>
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: isUpcoming ? C.muted : C.text }}>{item.title}</p>
-                        {pDay.length > 0 && <span style={{ fontSize: 12, color: C.muted, marginLeft: 'auto' }}>{pDay.length} photos</span>}
-                      </div>
-                      {item.description && <p style={{ margin: '0 0 8px', fontSize: 13, color: C.muted }}>{item.description}</p>}
-                      {pDay.length > 0 && (
-                        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                          {pDay.map(p => (
-                            <div key={p.id} style={{ width: 64, height: 48, borderRadius: 8, overflow: 'hidden' }}>
-                              <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '0 20px' }}>
+          {visible.map((p, i) => (
+            <div key={p.id || i} onClick={() => setLightbox(i)}
+              style={{ borderRadius: 12, overflow: 'hidden', background: C.surface2, aspectRatio: '4/3', cursor: 'pointer', position: 'relative' }}>
+              <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(to top,rgba(0,0,0,0.65),transparent)', padding: '20px 8px 7px' }}>
+                <p style={{ margin: 0, fontSize: 11, color: '#fff', fontWeight: 600 }}>{PHASE_LABEL[p.phase] || p.phase}</p>
+                {p.taken_at && <p style={{ margin: 0, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>{fmtTime(p.taken_at)}</p>}
+              </div>
             </div>
-          </div>
-        )
-      })}
-      {(!timeline || timeline.length === 0) && (
-        <div style={{ textAlign: 'center', padding: '56px 0' }}>
-          <p style={{ color: C.muted }}>Timeline will appear as work progresses.</p>
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: MESSAGES TAB
-// ─────────────────────────────────────────────────────────────────────────
-function ProMessagesTab({ data, token }) {
-  const { contractor, session } = data
-  const [messages, setMessages] = useState(data.messages || [])
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const bottomRef = useRef(null)
-  const coName = contractor?.company_name || 'Your contractor'
+// ─── MESSAGES TAB ─────────────────────────────────────────────────────────
+function MessagesTab({ data, token }) {
+  const { contractor }             = data
+  const [messages, setMessages]    = useState(data.messages || [])
+  const [text, setText]            = useState('')
+  const [sending, setSending]      = useState(false)
+  const bottomRef                  = useRef(null)
+  const coName                     = contractor?.company_name || 'Your contractor'
+  const isComplete                 = ['complete', 'completed', 'paid'].includes(data.job?.status)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
@@ -599,24 +623,23 @@ function ProMessagesTab({ data, token }) {
     const msg = text.trim()
     if (!msg || sending) return
     setSending(true); setText('')
-    setMessages(prev => [...prev, { id: Date.now(), sender_type: 'homeowner', message: msg, created_at: new Date().toISOString() }])
+    setMessages(p => [...p, { id: Date.now(), sender_type: 'homeowner', message: msg, created_at: new Date().toISOString() }])
     try {
       const res = await callPortalApi('portal-api', { method: 'POST', body: JSON.stringify({ token, action: 'send_message', message: msg }) })
-      const d = await res.json()
-      if (d.aria_response) {
-        setMessages(prev => [...prev, { id: Date.now() + 1, sender_type: 'aria', sender_name: 'Aria', message: d.aria_response, created_at: new Date().toISOString() }])
-      }
+      const d   = await res.json()
+      if (d.aria_response) setMessages(p => [...p, { id: Date.now() + 1, sender_type: 'aria', sender_name: 'Aria', message: d.aria_response, created_at: new Date().toISOString() }])
     } catch {}
     setSending(false)
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 116px)' }}>
-      <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
-        <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>💬 {coName}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 16, color: C.text }}>{coName}</p>
         <p style={{ margin: '2px 0 0', fontSize: 13, color: C.muted }}>Messages go directly to your contractor</p>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <p style={{ color: C.muted, fontSize: 15 }}>No messages yet.</p>
@@ -624,221 +647,197 @@ function ProMessagesTab({ data, token }) {
           </div>
         )}
         {messages.map(m => {
-          const isMe   = m.sender_type === 'homeowner'
-          const isAria = m.sender_type === 'aria'
+          const isMe = m.sender_type === 'homeowner'
           return (
-            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
+            <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', animation: 'portalFadeUp .2s ease-out both' }}>
               {!isMe && <p style={{ fontSize: 11, color: C.muted, margin: '0 0 3px 4px' }}>{m.sender_name || coName}</p>}
-              <div style={{
-                maxWidth: '78%', padding: '11px 15px',
-                borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                background: isMe ? C.primary : isAria ? '#eff6ff' : C.subtle,
-                border: isAria ? `1px solid #bfdbfe` : 'none',
-                color: isMe ? '#fff' : C.text,
-                fontSize: 15, lineHeight: 1.4,
-              }}>{m.message}</div>
+              <div style={{ maxWidth: '78%', padding: '11px 15px', borderRadius: isMe ? '18px 18px 4px 18px' : '18px 18px 18px 4px', background: isMe ? C.primary : C.surface2, color: '#fff', fontSize: 15, lineHeight: 1.4 }}>
+                {m.message}
+              </div>
               {m.created_at && <p style={{ fontSize: 11, color: C.muted, margin: '3px 0 0', padding: isMe ? '0 4px 0 0' : '0 0 0 4px' }}>{fmtTime(m.created_at)}</p>}
             </div>
           )
         })}
         <div ref={bottomRef} />
       </div>
-      <div style={{ padding: '10px 16px 12px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 10, flexShrink: 0 }}>
-        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
-          placeholder={`Message ${coName}…`}
-          style={{ flex: 1, padding: '13px 16px', borderRadius: 28, border: `1px solid ${C.border}`, fontSize: 15, outline: 'none', background: C.subtle, color: C.text, minHeight: 48 }} />
-        <button onClick={send} disabled={sending || !text.trim()}
-          style={{ background: text.trim() ? C.primary : C.border, color: '#fff', border: 'none', borderRadius: '50%', width: 48, height: 48, cursor: text.trim() ? 'pointer' : 'default', fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {sending ? '…' : '↑'}
-        </button>
-      </div>
+
+      {!isComplete && (
+        <div style={{ padding: '10px 16px 12px', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 10, flexShrink: 0, background: C.bg }}>
+          <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
+            placeholder={`Reply to ${coName}…`}
+            style={{ flex: 1, padding: '13px 16px', borderRadius: 28, border: `1px solid ${C.border}`, fontSize: 15, outline: 'none', background: C.surface2, color: C.text, minHeight: 48 }} />
+          <button onClick={send} disabled={sending || !text.trim()}
+            style={{ background: text.trim() ? C.primary : 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: '50%', width: 48, height: 48, cursor: text.trim() ? 'pointer' : 'default', fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {sending ? '…' : '↑'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PRO: DOCUMENTS TAB
-// ─────────────────────────────────────────────────────────────────────────
-function ProDocsTab({ data, token }) {
-  const { documents } = data
-  const [signing, setSigning] = useState(null)
-  const [sigText, setSigText] = useState('')
-  const [localSigned, setLocalSigned] = useState({})
+// ─── DOCS TAB ─────────────────────────────────────────────────────────────
+function DocsTab({ data, token }) {
+  return (
+    <div style={{ padding: '16px 20px 20px' }}>
+      <p style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: '0 0 12px' }}>📄 Documents</p>
+      <DocumentsSection documents={data.documents} token={token} preview={false} />
+    </div>
+  )
+}
 
-  const submitSig = async () => {
-    if (!sigText.trim() || !signing) return
-    try {
-      await callPortalApi('portal-api', { method: 'POST', body: JSON.stringify({ token, action: 'sign_document', document_id: signing.id, document_title: signing.title, signature_data: sigText }) })
-      setLocalSigned(prev => ({ ...prev, [signing.id]: true }))
-      setSigning(null); setSigText('')
-    } catch {}
-  }
+// ─── Dark tab bar ─────────────────────────────────────────────────────────
+const TABS = [
+  { id: 'status',   label: 'Status',   Icon: HomeIcon   },
+  { id: 'photos',   label: 'Photos',   Icon: CameraIcon },
+  { id: 'messages', label: 'Messages', Icon: ChatIcon   },
+  { id: 'docs',     label: 'Docs',     Icon: DocIcon    },
+]
 
-  const getStatus = d => {
-    if (localSigned[d.id] || d.status === 'signed') return 'signed'
-    if (d.status === 'pending' && d.requires_homeowner_action) return 'action'
-    if (!d.url) return 'pending'
-    return 'ready'
-  }
+function DarkTabBar({ tab, setTab }) {
+  return (
+    <div style={{ flexShrink: 0, background: 'rgba(10,15,26,0.95)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: `1px solid ${C.border}`, height: 72, paddingBottom: 'env(safe-area-inset-bottom,0px)', display: 'flex' }}>
+      {TABS.map(t => {
+        const active = tab === t.id
+        return (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            style={{ flex: 1, border: 'none', background: 'none', cursor: 'pointer', padding: '10px 0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, position: 'relative' }}>
+            {active && <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: 28, height: 3, background: C.primary, borderRadius: '0 0 3px 3px' }} />}
+            <t.Icon c={active ? C.primary : '#6b7280'} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: active ? C.primary : '#6b7280', letterSpacing: '0.01em' }}>{t.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
-  const badge = s => ({
-    signed:  { label: 'Signed',           bg: '#dcfce7', color: '#14532d' },
-    action:  { label: 'Signature needed', bg: '#fef9c3', color: '#713f12' },
-    pending: { label: 'Pending',          bg: '#f3f4f6', color: C.muted   },
-    ready:   { label: 'Ready',            bg: '#e0f2fe', color: '#075985' },
-  }[s] || { label: s, bg: C.subtle, color: C.muted })
+// ─── Pro portal V2 ────────────────────────────────────────────────────────
+function ProPortalV2({ data, token, isDemo }) {
+  const [tab, setTab]                   = useState('status')
+  const [lightboxPhotos, setLightboxPhotos] = useState(null)
+  const [lightboxStart, setLightboxStart]   = useState(0)
+  const { contractor }                  = data
+
+  const openLightbox = (arr, i = 0) => { setLightboxPhotos(arr); setLightboxStart(i) }
 
   return (
-    <div style={{ padding: '16px 20px 90px' }}>
-      {signing && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
-          <div style={{ background: C.bg, borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', width: '100%', maxWidth: 480, margin: '0 auto', boxSizing: 'border-box' }}>
-            <p style={{ fontWeight: 700, fontSize: 18, margin: '0 0 16px' }}>Sign: {signing.title}</p>
-            <input value={sigText} onChange={e => setSigText(e.target.value)} placeholder="Type your full name to sign..."
-              style={{ width: '100%', padding: '14px', borderRadius: 12, border: `1px solid ${C.border}`, fontSize: 16, fontFamily: 'cursive', boxSizing: 'border-box', outline: 'none', minHeight: 52 }} />
-            <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-              <button onClick={() => setSigning(null)} style={{ flex: 1, padding: '14px', borderRadius: 12, border: `1px solid ${C.border}`, background: C.bg, cursor: 'pointer', fontSize: 15, minHeight: 52 }}>Cancel</button>
-              <button onClick={submitSig} style={{ flex: 2, padding: '14px', borderRadius: 12, border: 'none', background: C.primary, color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 15, minHeight: 52 }}>Sign document</button>
-            </div>
+    <div style={{ background: C.bg, display: 'flex', flexDirection: 'column', height: '100dvh', color: C.text, fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto', position: 'relative' }}>
+      {lightboxPhotos && <Lightbox photos={lightboxPhotos} startIndex={lightboxStart} onClose={() => setLightboxPhotos(null)} />}
+
+      {/* Demo banner — subtle dark pill */}
+      {isDemo && (
+        <div style={{ background: 'rgba(17,24,39,0.95)', borderBottom: `1px solid ${C.border}`, padding: '8px 20px', textAlign: 'center', fontSize: 12, color: C.muted, flexShrink: 0 }}>
+          👋 Demo — this is what your homeowners see
+        </div>
+      )}
+
+      <PortalHeader contractor={contractor} />
+
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* Status + Photos + Docs: scrollable */}
+        {tab !== 'messages' && (
+          <div style={{ height: '100%', overflowY: 'auto' }}>
+            {tab === 'status' && <StatusTab data={data} onViewPhotos={() => setTab('photos')} onLightbox={(i) => openLightbox(data.photos || [], i)} token={token} />}
+            {tab === 'photos' && <PhotosTab data={data} />}
+            {tab === 'docs'   && <DocsTab   data={data} token={token} />}
+          </div>
+        )}
+        {/* Messages: flex column with sticky input */}
+        {tab === 'messages' && (
+          <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <MessagesTab data={data} token={token} />
+          </div>
+        )}
+      </div>
+
+      <DarkTabBar tab={tab} setTab={setTab} />
+    </div>
+  )
+}
+
+// ─── Free portal (dark themed, simplified) ────────────────────────────────
+function FreePortal({ data }) {
+  const { job, photos, timeline, documents } = data
+  const [lightbox, setLightbox] = useState(null)
+  const recentPhotos = (photos || []).slice(0, 6)
+
+  const status = job?.status || 'in_progress'
+  const statusLabel = STAGE_LABELS[status] || status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  const isComplete = ['complete', 'completed', 'paid'].includes(status)
+
+  return (
+    <div style={{ background: C.bg, minHeight: '100vh', color: C.text, fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto' }}>
+      {lightbox !== null && <Lightbox photos={recentPhotos} startIndex={lightbox} onClose={() => setLightbox(null)} />}
+
+      <div style={{ padding: '18px 20px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.02em', color: C.primary }}>ROOFING OS</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: C.muted, textAlign: 'right', maxWidth: 180, lineHeight: 1.3 }}>{job?.property_address}</span>
+      </div>
+
+      <div style={{ padding: '28px 20px 24px', textAlign: 'center', borderBottom: `1px solid ${C.border}` }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: isComplete ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)', color: isComplete ? C.success : C.primary, fontWeight: 700, fontSize: 15, padding: '10px 20px', borderRadius: 100, marginBottom: 14 }}>
+          {isComplete ? '✅' : '🏗️'} {statusLabel}
+        </div>
+        <p style={{ fontSize: 18, fontWeight: 600, color: C.text, margin: 0 }}>
+          {isComplete ? 'Your new roof is complete!' : 'Your roof replacement is underway.'}
+        </p>
+      </div>
+
+      {recentPhotos.length > 0 && (
+        <div style={{ padding: '20px 0 0' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', padding: '0 20px', marginBottom: 10 }}>Photos</p>
+          <div style={{ overflowX: 'auto', display: 'flex', gap: 8, padding: '0 20px 20px', scrollbarWidth: 'none' }}>
+            {recentPhotos.map((p, i) => (
+              <div key={p.id || i} onClick={() => setLightbox(i)} style={{ flexShrink: 0, width: 110, height: 84, borderRadius: 10, overflow: 'hidden', background: C.surface2, cursor: 'pointer' }}>
+                <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {(documents || []).length === 0 && (
-        <div style={{ textAlign: 'center', padding: '56px 0' }}>
-          <p style={{ color: C.muted, fontSize: 16 }}>No documents yet.</p>
-          <p style={{ color: C.muted, fontSize: 13 }}>Documents will appear here once your contractor uploads them.</p>
+      {(timeline || []).length > 0 && (
+        <div style={{ padding: '0 20px 20px' }}>
+          <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Timeline</p>
+          {timeline.slice(0, 5).map((item, i) => (
+            <div key={item.id || i} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}>
+              <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{item.raw_update === 'upcoming' ? '○' : '✅'}</span>
+              <div>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 15, color: item.raw_update === 'upcoming' ? C.muted : C.text }}>{item.title}</p>
+                {item.created_at && item.raw_update !== 'upcoming' && <p style={{ margin: '2px 0 0', fontSize: 12, color: C.success }}>✓ {fmtDate(item.created_at)}</p>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {(documents || []).map((d, i) => {
-          const s  = getStatus(d)
-          const b  = badge(s)
-          return (
-            <div key={i} style={{ background: C.subtle, border: `1px solid ${C.border}`, borderRadius: 16, padding: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flex: 1 }}>
-                  <span style={{ fontSize: 24 }}>📄</span>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{d.title}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{(d.document_type || '').replace(/_/g, ' ')}</p>
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 700, background: b.bg, color: b.color, padding: '4px 10px', borderRadius: 100, flexShrink: 0 }}>{b.label}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {d.url && (
-                  <>
-                    <a href={d.url} target="_blank" rel="noreferrer"
-                      style={{ flex: 1, padding: '11px', borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 14, fontWeight: 600, textDecoration: 'none', textAlign: 'center', display: 'block', minHeight: 44 }}>
-                      View
-                    </a>
-                    <a href={d.url} download target="_blank" rel="noreferrer"
-                      style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: C.primary, color: '#fff', fontSize: 14, fontWeight: 600, textDecoration: 'none', textAlign: 'center', display: 'block', minHeight: 44 }}>
-                      Download
-                    </a>
-                  </>
-                )}
-                {s === 'action' && (
-                  <button onClick={() => setSigning(d)} style={{ flex: 1, padding: '11px', borderRadius: 10, border: 'none', background: C.warn, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>
-                    Sign now
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PRO PORTAL (full mobile app experience)
-// ─────────────────────────────────────────────────────────────────────────
-function ProPortal({ data, token }) {
-  const [tab, setTab] = useState('status')
-  const [showNotif, setShowNotif] = useState(() => !sessionStorage.getItem('roos_notif'))
-  const { job, contractor } = data
-
-  const isComplete = job?.status === 'complete' || job?.status === 'paid'
-  const [showCompletion] = useState(() => isComplete && !sessionStorage.getItem('roos_completion'))
-
-  const dismissNotif = () => { sessionStorage.setItem('roos_notif', '1'); setShowNotif(false) }
-
-  const progressMap = { lead:5, assessment_scheduled:10, assessed:20, estimate_sent:30, contracted:40, insurance_submitted:50, materials_ordered:60, scheduled:70, in_progress:80, inspection:90, complete:100, paid:100 }
-  const progress = progressMap[job?.status] || 0
-
-  const TABS = [
-    { id: 'status',   icon: '🏠', label: 'Status'   },
-    { id: 'photos',   icon: '📸', label: 'Photos'   },
-    { id: 'messages', icon: '💬', label: 'Messages' },
-    { id: 'docs',     icon: '📄', label: 'Docs'     },
-  ]
-
-  if (showCompletion) return <CompletionFlow data={data} />
-
-  return (
-    <div style={{ background: C.bg, minHeight: '100dvh', color: C.text, fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto', position: 'relative' }}>
-      {/* Top progress bar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: C.border, zIndex: 100, maxWidth: 480, margin: '0 auto' }}>
-        <div style={{ height: '100%', width: `${progress}%`, background: C.primary, transition: 'width 1.2s' }} />
-      </div>
-
-      {/* Header */}
-      <div style={{ padding: '16px 20px 14px', paddingTop: 19, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-        {contractor?.logo_url
-          ? <img src={contractor.logo_url} alt="logo" style={{ height: 30, objectFit: 'contain' }} />
-          : <span style={{ fontWeight: 800, fontSize: 15, color: C.primary }}>{contractor?.company_name || 'Your Portal'}</span>
-        }
-        {contractor?.logo_url && contractor?.company_name && (
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{contractor.company_name}</span>
-        )}
-        <span style={{ flex: 1 }} />
-        {contractor?.owner_phone && (
-          <a href={`tel:${contractor.owner_phone}`}
-            style={{ color: C.primary, fontWeight: 600, fontSize: 14, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, minHeight: 44 }}>
-            📞 {contractor.owner_phone.replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')}
-          </a>
-        )}
-      </div>
-
-      {/* Page content */}
-      <div style={{ overflowY: 'auto' }}>
-        {tab === 'status'   && <ProStatusTab   data={data} onViewPhotos={() => setTab('photos')} onViewTimeline={() => setTab('timeline')} />}
-        {tab === 'photos'   && <ProPhotosTab   data={data} />}
-        {tab === 'messages' && <ProMessagesTab data={data} token={token} />}
-        {tab === 'docs'     && <ProDocsTab     data={data} token={token} />}
-        {tab === 'timeline' && <ProTimelineTab data={data} />}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, maxWidth: 480, margin: '0 auto', background: C.bg, borderTop: `1px solid ${C.border}`, display: 'flex', paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ flex: 1, border: 'none', background: 'none', cursor: 'pointer', padding: '10px 0 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minHeight: 58 }}>
-            <span style={{ fontSize: 22 }}>{t.icon}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: tab === t.id ? C.primary : C.muted }}>{t.label}</span>
-            {tab === t.id && <span style={{ position: 'absolute', bottom: 0, width: 20, height: 2, background: C.primary, borderRadius: 1 }} />}
-          </button>
+      <div style={{ margin: '0 20px 20px' }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>More with Portal Pro</p>
+        {['💬 Message your contractor', '📄 Download documents', '⭐ Leave a review'].map(label => (
+          <div key={label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '14px', textAlign: 'center', marginBottom: 10 }}>
+            <p style={{ fontWeight: 600, fontSize: 14, color: C.text, margin: '0 0 4px' }}>{label}</p>
+            <a href="https://roofingos.dev/upgrade" target="_blank" rel="noreferrer" style={{ color: C.primary, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>Learn more →</a>
+          </div>
         ))}
       </div>
 
-      {/* Notification prompt */}
-      {showNotif && <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={dismissNotif}><NotifPrompt onDismiss={dismissNotif} /></div>}
+      <div style={{ padding: '20px', textAlign: 'center', borderTop: `1px solid ${C.border}` }}>
+        <p style={{ fontSize: 12, color: C.muted, margin: '0 0 2px' }}>Powered by <strong style={{ color: C.text }}>Roofing OS</strong></p>
+        <a href="https://roofingos.dev" target="_blank" rel="noreferrer" style={{ fontSize: 11, color: C.primary, textDecoration: 'none' }}>roofingos.dev</a>
+      </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// MAIN EXPORT
-// ─────────────────────────────────────────────────────────────────────────
+// ─── MAIN EXPORT ──────────────────────────────────────────────────────────
 export default function RoofingPortal() {
-  const { token } = useParams()
-  const [data, setData]     = useState(null)
+  const { token }         = useParams()
+  const [data, setData]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!token) { setError('No portal link provided.'); setLoading(false); return }
@@ -849,20 +848,14 @@ export default function RoofingPortal() {
     setLoading(true); setError('')
     try {
       const res = await callPortalApi(`portal-api?token=${encodeURIComponent(token)}&action=overview`)
-      const d = await res.json()
+      const d   = await res.json()
       if (!d.ok || d.error) { setError(d.error || 'Invalid portal link. Please contact your contractor.'); setLoading(false); return }
 
-      // Normalize photos: sort newest first
-      const photos = [...(d.photos || [])].sort((a, b) => new Date(b.taken_at || b.created_at) - new Date(a.taken_at || a.created_at))
-
-      // Normalize messages: oldest first
-      const messages = [...(d.messages || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-
-      // Normalize documents
+      const photos    = [...(d.photos   || [])].sort((a, b) => new Date(b.taken_at || b.created_at) - new Date(a.taken_at || a.created_at))
+      const messages  = [...(d.messages || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       const documents = (d.documents || []).map(doc => ({ ...doc, doc_type: doc.document_type || doc.doc_type }))
 
       setData({ ...d, photos, messages, documents })
-
       callPortalApi('roofing-notify', { method: 'POST', body: JSON.stringify({ event: 'portal_viewed', job_id: d.job?.id }) }).catch(() => {})
     } catch (e) {
       console.error(e)
@@ -871,12 +864,12 @@ export default function RoofingPortal() {
     setLoading(false)
   }
 
-  if (loading) return <LoadingScreen />
+  if (loading) return <DarkLoadingScreen />
 
   if (error) return (
-    <div style={{ background: C.bg, minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto' }}>
+    <div style={{ background: C.bg, minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "-apple-system,'Inter',system-ui,sans-serif", maxWidth: 480, margin: '0 auto', color: C.text }}>
       <div style={{ fontSize: 52, marginBottom: 16 }}>😕</div>
-      <p style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: '0 0 8px', textAlign: 'center' }}>{error}</p>
+      <p style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px', textAlign: 'center' }}>{error}</p>
       <p style={{ fontSize: 14, color: C.muted, margin: '0 0 28px', textAlign: 'center' }}>If this keeps happening, contact your contractor directly.</p>
       <button onClick={load} style={{ background: C.primary, color: '#fff', border: 'none', borderRadius: 14, padding: '14px 28px', fontWeight: 700, fontSize: 16, cursor: 'pointer', minHeight: 52 }}>Try again</button>
     </div>
@@ -884,29 +877,7 @@ export default function RoofingPortal() {
 
   const isDemo = token === 'DEMO2026ROOFINGOS'
 
-  return (
-    <>
-      {isDemo && (
-        <>
-          <style>{`
-            @media (max-width: 540px) {
-              .demo-banner { flex-direction: column !important; gap: 12px !important; height: auto !important; padding: 14px 16px !important; }
-              .demo-banner-btns { flex-direction: column !important; width: 100% !important; }
-              .demo-banner-btns a { text-align: center !important; }
-            }
-          `}</style>
-          <div className="demo-banner" style={{ background: '#4a9eff', width: '100%', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', gap: 16, boxSizing: 'border-box', fontFamily: "-apple-system,'Inter',system-ui,sans-serif" }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>👋 This is what your homeowners see</span>
-            <div className="demo-banner-btns" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <a href="https://roofingos.dev/signup" style={{ background: '#fff', color: '#4a9eff', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Create free account →</a>
-              <a href="https://roofingos.dev" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', border: '1px solid rgba(255,255,255,0.35)' }}>Back to site</a>
-            </div>
-          </div>
-        </>
-      )}
-      {data.plan === 'free'
-        ? <FreePortal data={data} />
-        : <ProPortal data={data} token={token} />}
-    </>
-  )
+  return data.plan === 'free'
+    ? <FreePortal data={data} />
+    : <ProPortalV2 data={data} token={token} isDemo={isDemo} />
 }
