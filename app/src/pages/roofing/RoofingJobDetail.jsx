@@ -376,7 +376,7 @@ export default function RoofingJobDetail() {
   const copyPortalLink = () => {
     const token = portalSession?.magic_link_token || job?.portal_token
     if (!token) return
-    const url = `https://app.nexuszc.com/roofing/portal/${token}`
+    const url = `https://roofingos.dev/portal/${token}`
     navigator.clipboard.writeText(url).then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000) })
   }
 
@@ -661,7 +661,7 @@ export default function RoofingJobDetail() {
     )
   }
 
-  const portalUrl = `https://app.nexuszc.com/roofing/portal/${portalSession?.magic_link_token || job.portal_token || ''}`
+  const portalUrl = `https://roofingos.dev/portal/${portalSession?.magic_link_token || job.portal_token || ''}`
   const unreadCount = messages.filter(m => m.sender_type === 'homeowner' && !m.is_read).length
   const show10PhotoBanner = photos.length >= 10 && !job.portal_sent
 

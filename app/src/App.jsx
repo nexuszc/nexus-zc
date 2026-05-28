@@ -14,6 +14,7 @@ import RoofingJobDetail from './pages/roofing/RoofingJobDetail'
 import RoofingNewJob from './pages/roofing/RoofingNewJob'
 import RoofingPortal from './pages/roofing/RoofingPortal'
 import RoofingLogin from './pages/roofing/RoofingLogin'
+import RoofingSignup from './pages/roofing/RoofingSignup'
 import RoofingSettings from './pages/roofing/RoofingSettings'
 import RoofingCrew from './pages/roofing/RoofingCrew'
 import RoofingOnboarding from './pages/roofing/RoofingOnboarding'
@@ -88,6 +89,7 @@ export default function App() {
         <Route path="/roofing/portal/:token" element={<RoofingPortal />} />
         <Route path="/roofing/crew/:token" element={<RoofingCrewMobile />} />
         <Route path="/roofing/login" element={<RoofingLogin />} />
+        <Route path="/roofing/signup" element={<RoofingSignup />} />
         <Route path="/roofing/ae" element={<AEDashboard />} />
         <Route path="/roofing/ae/login" element={<AELogin />} />
 

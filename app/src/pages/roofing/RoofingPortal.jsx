@@ -932,7 +932,7 @@ function ColorsTab({ data, token, isDemo }) {
           <h3 style={{ color: C.text, fontSize: 18, fontWeight: 800, margin: '0 0 8px', lineHeight: 1.3 }}>Your homeowners could have this.</h3>
           <p style={{ color: C.muted, fontSize: 13, margin: '0 0 6px', lineHeight: 1.6 }}>Set up your free Roofing OS account in 4 minutes. Your next homeowner gets a real-time portal like this one — photos, progress updates, color visualization, and more.</p>
           <p style={{ color: C.primary, fontSize: 13, fontWeight: 600, margin: '0 0 20px' }}>Free forever. No credit card. No time limit.</p>
-          <a href="https://app.nexuszc.com/roofing/signup" style={{ display: 'block', background: C.primary, color: '#fff', padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none', marginBottom: 10 }}>Create Free Account →</a>
+          <a href="https://roofingos.dev/signup" style={{ display: 'block', background: C.primary, color: '#fff', padding: '14px', borderRadius: 12, fontWeight: 700, fontSize: 15, textDecoration: 'none', marginBottom: 10 }}>Create Free Account →</a>
           <a href="https://roofingos.dev" style={{ display: 'block', color: C.muted, fontSize: 12, textDecoration: 'none' }}>Learn more about Roofing OS</a>
         </div>
       )}
@@ -982,7 +982,7 @@ function ProPortalV2({ data, token, isDemo }) {
             <p style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>👋 Demo Portal</p>
             <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>This is what your homeowners see</p>
           </div>
-          <a href="https://app.nexuszc.com/roofing/signup" style={{ background: C.primary, color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>Start free →</a>
+          <a href="https://roofingos.dev/signup" style={{ background: C.primary, color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>Start free →</a>
         </div>
       )}
 

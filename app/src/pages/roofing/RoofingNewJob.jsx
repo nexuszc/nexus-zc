@@ -260,7 +260,7 @@ export default function RoofingNewJob() {
               <div style={{ background: 'rgba(74,158,255,0.08)', border: '1px solid rgba(74,158,255,0.2)', borderRadius: '14px', padding: '16px', marginBottom: '16px' }}>
                 <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: '700', color: C.primary, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Portal Message Preview</p>
                 <div style={{ background: C.surface2, borderRadius: '10px', padding: '12px', fontSize: '13px', color: C.text, lineHeight: 1.5, border: `1px solid ${C.border}` }}>
-                  Hi {form.homeowner_name.split(' ')[0]}! Your roof job is set up and you can track progress here: app.nexuszc.com/roofing/portal/... — Your contractor
+                  Hi {form.homeowner_name.split(' ')[0]}! Your roof job is set up and you can track progress here: roofingos.dev/portal/... — Your contractor
                 </div>
                 <p style={{ margin: '8px 0 0', fontSize: '11px', color: C.muted }}>
                   Sent to: {[form.homeowner_email, form.homeowner_phone].filter(Boolean).join(', ')}

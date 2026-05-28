@@ -145,9 +145,13 @@ export default function RoofingLogin() {
               </button>
               <p style={{ textAlign: 'center', fontSize: '13px', color: '#8896a8', marginTop: '20px', marginBottom: 0 }}>
                 New here?{' '}
-                <a href="https://roofingos.dev/signup" style={{ color: '#4a9eff', textDecoration: 'none', fontWeight: '600' }}>
+                <a href="/roofing/signup" style={{ color: '#4a9eff', textDecoration: 'none', fontWeight: '600' }}>
                   Create free account →
                 </a>
+              </p>
+              <p style={{ textAlign: 'center', fontSize: '12px', color: 'rgba(136,150,168,0.5)', marginTop: '12px', marginBottom: 0 }}>
+                Need help?{' '}
+                <a href="tel:7205006668" style={{ color: '#4a9eff', textDecoration: 'none' }}>(720) 500-6668</a>
               </p>
             </form>
           )}

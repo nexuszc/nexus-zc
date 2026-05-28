@@ -8,11 +8,17 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'zach@roofingos.dev';
 const FROM_NAME  = 'Zach from Roofing OS';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': 'https://roofingos.dev',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+const ALLOWED_ORIGINS = new Set(['https://roofingos.dev', 'https://app.nexuszc.com']);
+
+function corsHeaders(req: Request) {
+  const origin = req.headers.get('origin') || '';
+  const allowed = ALLOWED_ORIGINS.has(origin) ? origin : 'https://roofingos.dev';
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+}
 
 async function sendTelegram(msg: string) {
   const token = Deno.env.get('TELEGRAM_BOT_TOKEN')!;
@@ -137,11 +143,11 @@ function generateMagicLinkEmail(firstName: string, magicLink: string, email: str
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   const body = await req.json().catch(() => ({}));
-  if (body.test) return Response.json({ ok: true, message: 'contractor-signup ready' }, { headers: corsHeaders });
+  if (body.test) return Response.json({ ok: true, message: 'contractor-signup ready' }, { headers: corsHeaders(req) });
 
   const {
     company_name,
@@ -160,7 +166,7 @@ Deno.serve(async (req) => {
   const signupSource = ref_source || 'direct';
 
   if (!company_name || !owner_email) {
-    return Response.json({ error: 'Company name and email required' }, { status: 400, headers: corsHeaders });
+    return Response.json({ error: 'Company name and email required' }, { status: 400, headers: corsHeaders(req) });
   }
 
   // Check for referral
@@ -281,7 +287,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (!contractor) {
-    return Response.json({ error: 'Failed to create account' }, { status: 500, headers: corsHeaders });
+    return Response.json({ error: 'Failed to create account' }, { status: 500, headers: corsHeaders(req) });
   }
 
   // Fire-and-forget side effects
@@ -408,5 +414,5 @@ Deno.serve(async (req) => {
     referral_code: referralCode,
     trial_ends_at: trialEndsAt,
     action_link,
-  }, { headers: corsHeaders });
+  }, { headers: corsHeaders(req) });
 });

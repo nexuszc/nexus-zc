@@ -25,6 +25,7 @@ export default function RoofingOnboardingSetup() {
   const [step, setStep] = useState(1)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
+    owner_phone: '',
     market_city: '',
     market_state: 'CO',
     google_review_link: '',
@@ -42,7 +43,7 @@ export default function RoofingOnboardingSetup() {
 
   const handleStep1 = async () => {
     if (!form.market_city.trim()) return
-    await save({ market_city: form.market_city.trim(), market_state: form.market_state })
+    await save({ market_city: form.market_city.trim(), market_state: form.market_state, owner_phone: form.owner_phone.trim() || null })
     setStep(2)
   }
 
@@ -87,9 +88,19 @@ export default function RoofingOnboardingSetup() {
         {/* Step 1 — Market */}
         {step === 1 && (
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '20px', padding: '24px' }}>
-            <p style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: C.text }}>📍 Where do you work?</p>
-            <p style={{ margin: '0 0 20px', fontSize: '14px', color: C.muted }}>This helps Aria target leads in your market.</p>
+            <p style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: '700', color: C.text }}>📍 Quick Setup</p>
+            <p style={{ margin: '0 0 20px', fontSize: '14px', color: C.muted }}>Tell us where you work and how to reach you.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <p style={{ margin: '0 0 5px', fontSize: '12px', color: C.muted, fontWeight: '600' }}>Your Phone <span style={{ color: 'rgba(136,150,168,0.5)' }}>(for SMS alerts)</span></p>
+                <input
+                  value={form.owner_phone}
+                  onChange={e => setForm(f => ({ ...f, owner_phone: e.target.value }))}
+                  placeholder="(720) 555-1234"
+                  type="tel"
+                  style={{ width: '100%', boxSizing: 'border-box', background: C.surface2, border: `1px solid ${C.border}`, borderRadius: '10px', padding: '12px 14px', fontSize: '15px', color: C.text, outline: 'none' }}
+                />
+              </div>
               <div>
                 <p style={{ margin: '0 0 5px', fontSize: '12px', color: C.muted, fontWeight: '600' }}>Primary City</p>
                 <input

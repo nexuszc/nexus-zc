@@ -224,9 +224,9 @@ export default function RoofingVertical() {
         bg-[rgba(10,13,26,0.92)] backdrop-blur-md border-b border-[rgba(74,158,255,0.2)]">
         <button
           onClick={() => navigate('/')}
-          className="text-[#7c3aed] hover:text-purple-300 text-sm font-medium transition-colors"
+          className="text-[#4a9eff] hover:text-blue-300 text-sm font-medium transition-colors"
         >
-          ← Nexus
+          ← Dashboard
         </button>
         <div className="text-white font-bold text-sm tracking-wide">ROOFING OS</div>
         <div className="bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] font-bold uppercase
@@ -290,7 +290,7 @@ export default function RoofingVertical() {
               ? ''
               : `${sections?.emailsSentTotal ?? 0} emails sent · ${sections?.emailsOpened30 ?? 0} opened · ${sections?.youtubeLive ?? 0} YouTube`
           }
-          accent="#7c3aed"
+          accent="#4a9eff"
           onClick={() => navigate('/roofing/marketing')}
           loading={loading}
         />

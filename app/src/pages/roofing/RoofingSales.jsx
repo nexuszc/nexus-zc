@@ -48,7 +48,7 @@ function ScoreBadge({ score }) {
 function Toast({ msg }) {
   if (!msg) return null
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#7c3aed' }}>
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#3b82f6' }}>
       {msg}
     </div>
   )

@@ -147,7 +147,7 @@ export default function RoofingCustomers() {
           <>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
               <StatCard label="Total" value={counts.total} accent="#4a9eff" />
-              <StatCard label="New This Week" value={counts.newWeek} accent="#7c3aed" />
+              <StatCard label="New This Week" value={counts.newWeek} accent="#3b82f6" />
               <StatCard label="Free" value={counts.free} />
               <StatCard label="Starter" value={counts.starter} accent="#60a5fa" />
               <StatCard label="Pro" value={counts.pro} accent="#a78bfa" />
