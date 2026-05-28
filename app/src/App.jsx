@@ -102,7 +102,7 @@ export default function App() {
             <Route path="/roofing/jobs/:id/inspection" element={<RoofingInspection />} />
             <Route path="/roofing/crew" element={<RoofingCrew />} />
             <Route path="/roofing/settings" element={<RoofingSettings />} />
-            <Route path="/roofing/onboarding" element={<Navigate to="/roofing/onboarding-setup" replace />} />
+            <Route path="/roofing/onboarding" element={<RoofingOnboarding />} />
             <Route path="/roofing/measurements" element={<RoofingMeasurements />} />
             <Route path="/roofing/integrations" element={<RoofingIntegrations />} />
             <Route path="/roofing/schedule" element={<RoofingSchedule />} />

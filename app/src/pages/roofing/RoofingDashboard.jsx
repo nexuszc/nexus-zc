@@ -419,7 +419,7 @@ export default function RoofingDashboard() {
 
   useEffect(() => {
     if (!loading && jobs.length === 0 && contractor && contractor.onboarding_complete === false) {
-      navigate('/roofing/onboarding-setup')
+      navigate('/roofing/onboarding')
     }
   }, [loading, jobs.length, contractor, navigate])
 
