@@ -119,6 +119,22 @@ Then productized and sold to other multi-business operators.
 
 ---
 
+## DOMAIN SEPARATION (CRITICAL — never mix these)
+
+| Product | Domain | Audience |
+|---------|--------|----------|
+| **Nexus** (admin) | `app.nexuszc.com` | Zach only — internal dashboard, purple `#7c3aed` |
+| **Roofing OS** (landing) | `roofingos.dev` | Public — marketing, blog, SEO |
+| **Roofing OS** (roofer app) | `app.roofingos.dev` | Roofer dashboard, signup, login |
+| **Roofing OS** (homeowner) | `portal.roofingos.dev` | Homeowner job portals |
+
+**Rule:** Any URL shown to a roofer or homeowner must use `roofingos.dev` — never `nexuszc.com`.  
+**Rule:** `app.nexuszc.com` is Zach-only admin. Never link to it from landing pages, emails, or roofer UI.  
+**Rule:** `_redirects` in `roofingos-landing/` must never reference `nexuszc.com`.  
+**Rule:** Do NOT add `/auth/verify /auth/verify.html 200` rewrite rules to `_redirects` — Cloudflare Clean URLs handles `.html` → clean URLs natively. Adding the rule creates an infinite redirect loop.
+
+---
+
 ## EDGE FUNCTIONS (all live, all deployed `--no-verify-jwt`)
 
 | Function | Purpose | Trigger |

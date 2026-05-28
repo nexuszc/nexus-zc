@@ -8,7 +8,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 const FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'zach@roofingos.dev';
 const FROM_NAME  = 'Zach from Roofing OS';
 
-const ALLOWED_ORIGINS = new Set(['https://roofingos.dev', 'https://app.nexuszc.com']);
+const ALLOWED_ORIGINS = new Set(['https://roofingos.dev', 'https://app.roofingos.dev']);
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get('origin') || '';

@@ -1,5 +1,2 @@
 /portal/demo /portal/DEMO2026ROOFINGOS 301
-/portal/:token https://app.nexuszc.com/roofing/portal/:token 301
-/upgrade https://app.nexuszc.com/roofing/upgrade 302
-/login https://app.nexuszc.com/roofing/login 302
-/signup https://app.nexuszc.com/roofing/signup 302
+/portal/:token https://app.roofingos.dev/roofing/portal/:token 301
