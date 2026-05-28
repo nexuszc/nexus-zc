@@ -697,20 +697,30 @@ const TABS = [
 ]
 
 // ─── Demo render URLs ────────────────────────────────────────────────────
-const DEMO_RENDER_BASE = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/storage/v1/object/public/demo-photos/demo/renders/sarah-johnson'
-const getDemoRender = (angleUrl, colorId) => `${DEMO_RENDER_BASE}/${getAngleKey(angleUrl)}/${colorId}.jpeg`
+const RENDER_BASE   = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/storage/v1/object/public/demo-photos/demo/renders/sarah-johnson'
+const ORIGINAL_BASE = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/storage/v1/object/public/demo-photos/demo/sarah-johnson'
+const getRenderUrl   = (angle, colorId) => `${RENDER_BASE}/${angle}/${colorId}.jpeg`
+const getOriginalUrl = (angle) => `${ORIGINAL_BASE}/${angle}.jpeg`
+
+const DEMO_ANGLES = [
+  { id: 'front',    label: 'Front' },
+  { id: 'left',     label: 'Left' },
+  { id: 'back',     label: 'Back' },
+  { id: 'right',    label: 'Right' },
+  { id: 'roofline', label: 'Roofline' },
+]
 
 // ─── Design tab constants ─────────────────────────────────────────────────
-const SHINGLES = [
-  { id: 'gaf-charcoal',  brand: 'GAF Timberline HDZ',    name: 'Charcoal',       hex: '#3d3d3d', badge: 'Most Popular' },
-  { id: 'gaf-weather',   brand: 'GAF Timberline HDZ',    name: 'Weathered Wood', hex: '#8b7355' },
-  { id: 'gaf-slate',     brand: 'GAF Timberline HDZ',    name: 'Slate',          hex: '#708090' },
-  { id: 'gaf-barkwood',  brand: 'GAF Timberline HDZ',    name: 'Barkwood',       hex: '#5c4a32' },
-  { id: 'gaf-pewter',    brand: 'GAF Timberline HDZ',    name: 'Pewter Gray',    hex: '#8a8a8a' },
-  { id: 'oc-estate',     brand: 'Owens Corning Duration', name: 'Estate Gray',    hex: '#6e7270', badge: '#1 Nationwide' },
+const SHINGLE_COLORS = [
+  { id: 'gaf-charcoal',  brand: 'GAF Timberline HDZ',     name: 'Charcoal',       hex: '#3d3d3d', badge: 'Popular' },
+  { id: 'gaf-weather',   brand: 'GAF Timberline HDZ',     name: 'Weathered Wood', hex: '#8b7355', badge: 'Popular' },
+  { id: 'gaf-slate',     brand: 'GAF Timberline HDZ',     name: 'Slate',          hex: '#708090' },
+  { id: 'gaf-barkwood',  brand: 'GAF Timberline HDZ',     name: 'Barkwood',       hex: '#5c4a32' },
+  { id: 'gaf-pewter',    brand: 'GAF Timberline HDZ',     name: 'Pewter Gray',    hex: '#8a8a8a' },
+  { id: 'oc-estate',     brand: 'Owens Corning Duration', name: 'Estate Gray',    hex: '#6e7270', badge: '#1 National' },
   { id: 'oc-onyx',       brand: 'Owens Corning Duration', name: 'Onyx Black',     hex: '#2c2c2c' },
   { id: 'oc-driftwood',  brand: 'Owens Corning Duration', name: 'Driftwood',      hex: '#9e8e7a' },
-  { id: 'oc-evergreen',  brand: 'Owens Corning Duration', name: 'Evergreen Mist', hex: '#5a7a5a', badge: '2026' },
+  { id: 'oc-evergreen',  brand: 'Owens Corning Duration', name: 'Evergreen Mist', hex: '#5a7a5a' },
 ]
 const METALS = [
   { id: 'white',      name: 'White',    hex: '#f0f0f0' },
@@ -743,35 +753,37 @@ const getVisualizationTier = (plan) => {
 }
 
 function ColorsTab({ data, token, isDemo }) {
-  const beforePhotos = (data.photos || []).filter(p => p.phase === 'before' || (p.url || '').includes('/demo/sarah-johnson'))
+  // Non-demo: derive angle list from uploaded job photos
+  const beforePhotos = (data.photos || []).filter(p => p.phase === 'before')
   const sortedPhotos = [...beforePhotos].sort((a, b) => {
     const ai = ANGLE_PRIORITY.indexOf(getAngleKey(a.url))
     const bi = ANGLE_PRIORITY.indexOf(getAngleKey(b.url))
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
   })
 
-  const [activeUrl, setActiveUrl]       = useState(sortedPhotos[0]?.url || null)
-  const [shingle, setShingle]           = useState(SHINGLES[0])
+  // Demo mode uses fixed angles; non-demo uses photo URL
+  const [activeAngle, setActiveAngle]   = useState('front')         // demo
+  const [activeUrl, setActiveUrl]       = useState(sortedPhotos[0]?.url || null) // non-demo
+  const [shingle, setShingle]           = useState(null)            // null = show original
   const [gutter, setGutter]             = useState(METALS[0])
   const [drip, setDrip]                 = useState(METALS[4])
   const [loveSaving, setLoveSaving]     = useState(false)
   const [loveSaved, setLoveSaved]       = useState(false)
   const [shared, setShared]             = useState(false)
-  const [renderReady, setRenderReady]   = useState({}) // { "url|colorId": true }
+  const [renderReady, setRenderReady]   = useState({}) // { "angleId|colorId": true }
 
-  // Preload all renders for current angle
+  // Preload all renders for current angle (demo only)
   useEffect(() => {
-    if (!isDemo || !activeUrl) return
-    SHINGLES.forEach(s => {
-      const renderUrl = getDemoRender(activeUrl, s.id)
-      const key = `${activeUrl}|${s.id}`
+    if (!isDemo) return
+    SHINGLE_COLORS.forEach(s => {
+      const key = `${activeAngle}|${s.id}`
       if (renderReady[key]) return
       const img = new window.Image()
       img.onload  = () => setRenderReady(p => ({ ...p, [key]: true }))
-      img.onerror = () => {} // fall back to CSS overlay
-      img.src = renderUrl
+      img.onerror = () => {}
+      img.src = getRenderUrl(activeAngle, s.id)
     })
-  }, [activeUrl, isDemo])
+  }, [activeAngle, isDemo])
 
   const tip = getContextTip(shingle, gutter)
 
@@ -829,46 +841,81 @@ function ColorsTab({ data, token, isDemo }) {
       </div>
 
       {/* Angle selector */}
-      {sortedPhotos.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 20px 0', scrollbarWidth: 'none' }}>
-          {sortedPhotos.map(p => {
-            const active = activeUrl === p.url
-            return (
-              <button key={p.url} onClick={() => setActiveUrl(p.url)}
-                style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? C.primary : C.border}`, background: active ? 'rgba(59,130,246,0.12)' : 'transparent', color: active ? C.primary : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34 }}>
-                {getAngleLabel(p.url)}
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 20px 0', scrollbarWidth: 'none' }}>
+        {isDemo
+          ? DEMO_ANGLES.map(a => (
+              <button key={a.id} onClick={() => setActiveAngle(a.id)}
+                style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${activeAngle === a.id ? C.primary : C.border}`, background: activeAngle === a.id ? 'rgba(59,130,246,0.12)' : 'transparent', color: activeAngle === a.id ? C.primary : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34 }}>
+                {a.label}
               </button>
-            )
-          })}
-        </div>
-      )}
+            ))
+          : sortedPhotos.length > 1 && sortedPhotos.map(p => {
+              const active = activeUrl === p.url
+              return (
+                <button key={p.url} onClick={() => setActiveUrl(p.url)}
+                  style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 20, border: `1px solid ${active ? C.primary : C.border}`, background: active ? 'rgba(59,130,246,0.12)' : 'transparent', color: active ? C.primary : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34 }}>
+                  {getAngleLabel(p.url)}
+                </button>
+              )
+            })
+        }
+      </div>
 
-      {/* Photo + color overlay (or real SAM render) */}
+      {/* Photo — real SAM render (demo) or CSS overlay (real job) */}
       {(() => {
+        if (isDemo) {
+          const hasRender = !!(shingle && renderReady[`${activeAngle}|${shingle.id}`])
+          const displayUrl = (shingle && hasRender)
+            ? getRenderUrl(activeAngle, shingle.id)
+            : getOriginalUrl(activeAngle)
+          return (
+            <div style={{ position: 'relative', margin: '12px 0 0', overflow: 'hidden' }}>
+              <img key={displayUrl} src={displayUrl} alt="Your home"
+                style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />
+              {/* CSS overlay: only when color picked but render not yet loaded */}
+              {shingle && !hasRender && (
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle.hex, mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
+              )}
+              {/* Label pill */}
+              <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(10,15,26,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: 10, padding: '8px 14px', border: `1px solid ${C.border}` }}>
+                {shingle ? (
+                  <>
+                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: shingle.hex, flexShrink: 0, border: '1px solid rgba(255,255,255,0.15)' }} />
+                    <div>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{shingle.name}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: hasRender ? C.success : '#f59e0b' }}>{hasRender ? '✓ AI render' : 'Loading…'}</p>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 12, color: C.muted }}>← Select a color below</p>
+                )}
+              </div>
+            </div>
+          )
+        }
+        // Non-demo: CSS overlay on job photos
         if (!activeUrl) return (
           <div style={{ margin: '12px 20px 0', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
             <p style={{ margin: '0 0 4px', fontSize: 22 }}>🏠</p>
             <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Photos will appear here after the inspection</p>
           </div>
         )
-        const renderKey = `${activeUrl}|${shingle?.id}`
-        const hasRender = isDemo && renderReady[renderKey]
-        const displayUrl = hasRender ? getDemoRender(activeUrl, shingle.id) : activeUrl
         return (
           <div style={{ position: 'relative', margin: '12px 0 0', overflow: 'hidden' }}>
-            <img key={displayUrl} src={displayUrl} alt="Your home" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s' }} />
-            {/* CSS overlay when no render yet */}
-            {!hasRender && (
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle?.hex || 'transparent', mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
+            <img key={activeUrl} src={activeUrl} alt="Your home"
+              style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />
+            {shingle && (
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle.hex, mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
             )}
-            {/* Label pill */}
-            <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(10,15,26,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: 10, padding: '8px 14px', border: `1px solid ${C.border}` }}>
-              <div style={{ width: 18, height: 18, borderRadius: '50%', background: shingle?.hex, flexShrink: 0, border: '1px solid rgba(255,255,255,0.15)' }} />
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{shingle?.name}</p>
-                <p style={{ margin: 0, fontSize: 10, color: hasRender ? C.success : C.muted }}>{hasRender ? '✓ AI render' : shingle?.brand}</p>
+            {shingle && (
+              <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(10,15,26,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: 10, padding: '8px 14px', border: `1px solid ${C.border}` }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: shingle.hex, flexShrink: 0, border: '1px solid rgba(255,255,255,0.15)' }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{shingle.name}</p>
+                  <p style={{ margin: 0, fontSize: 10, color: C.muted }}>{shingle.brand}</p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })()}
@@ -883,7 +930,7 @@ function ColorsTab({ data, token, isDemo }) {
       {/* Shingles */}
       <div style={{ padding: '20px 20px 0' }}>
         <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Shingles</p>
-        <SwatchRow items={SHINGLES} value={shingle} onChange={(s) => { setShingle(s); setLoveSaved(false) }} size={44} />
+        <SwatchRow items={SHINGLE_COLORS} value={shingle} onChange={(s) => { setShingle(s); setLoveSaved(false) }} size={44} />
       </div>
 
       {/* Gutters */}
