@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 28, 2026 — v16
+# Last updated: May 28, 2026 — v17
 
 ---
 
@@ -661,16 +661,14 @@ Then productized and sold to other multi-business operators.
 - DB: 6 tables — seo_pillars, seo_posts, seo_keyword_queue, seo_competitor_content, seo_performance, seo_internal_links
 - 6 edge functions deployed (all `--no-verify-jwt`, all verified with `{"test":true}`):
   - seo-pillar-builder: builds 4 cornerstone guides (3500+ words each), auto-skips if already published
-  - seo-keyword-finder: Google Autocomplete × 8 seeds × 13 letters + Reddit + 5 competitor blogs + portal_messages, saves top 20/run (score ≥8)
+  - seo-keyword-finder v4: Google Autocomplete × 8 seeds × 13 letters + Reddit + 5 competitor blogs + portal_messages, saves top 20/run (score ≥8); `.catch()` bug fixed May 28
   - seo-content-writer: pulls highest-score keyword → Claude with Zach voice → quality gate (0-7 score) → auto-rewrite at 5 → approved/needs_review
   - seo-internal-linker: single post mode (resolves [LINK:topic] placeholders + injects backlinks) and sweep mode (10 published posts with 0 links per run)
   - seo-performance-tracker: GSC JWT auth via Web Crypto RS256 → per-slug DB updates → content boosts + title rewrites → weekly snapshot
-  - seo-competitor-hunter: scrapes 5 competitor blogs as Googlebot, enqueues new keywords at intent_score:18, tracks counter-post coverage
+  - seo-competitor-hunter v5: scrapes 5 competitor blogs + sitemaps as Googlebot, enqueues new keywords at intent_score:18, tracks counter-post coverage; `.catch()` bug fixed May 28 (5 instances)
 - 5 pg_cron jobs (IDs 60-64): keyword-finder 11:00 UTC daily, content-writer 12:00 UTC daily, performance-tracker 13:00 UTC Monday, competitor-hunter 12:00 UTC Tue+Fri, internal-linker 13:00 UTC Sunday
 - Blog template: roofingos-landing/blog/_template.html — schema markup, sticky CTA sidebar, TOC, author bio, related posts, category pills
-- VPS publisher: vps/seo/publisher.js — polls approved posts/pillars, renders HTML via template, git commit + push, updates sitemap.xml, Telegram summary
-  - Deploy to VPS: copy to /opt/roofing/seo/publisher.js, pm2 start with cron "0 14 * * *"
-  - Requires: SEO_REPO_PATH=/path/to/roofingos-landing clone on VPS
+- VPS publisher: /opt/roofing/seo/publisher.js — polls approved posts/pillars, renders HTML via template, git commit + push, Telegram summary; cron "0 14 * * *" (8am MT); **exits after each run** — pm2 shows "stopped" between runs, that is correct
 - RoofingSEO.jsx: /roofing/seo — 5 tabs (Overview/Posts/Keywords/Competitors/Pillars), action buttons, live GSC data, quality check detail, write now + boost buttons
 - RoofingOS.jsx: SEO tab added (7 tabs now) between Marketing and Sales
 - REQUIRED MANUAL STEP: Set up Google Search Console service account + add GOOGLE_SC_CLIENT_EMAIL + GOOGLE_SC_PRIVATE_KEY to Supabase secrets for performance tracker to pull GSC data
@@ -738,6 +736,21 @@ Then productized and sold to other multi-business operators.
 - Kanban rewrite: 4 new columns (New / In Progress / Complete / Review Requested); priority assignment: `review_requested=true` takes top priority, then status-based bucketing; mobile-first single-column list at <768px with colored left border, 4-column grid at ≥768px.
 - Domain separation completed: all `app.nexuszc.com` refs removed from roofer-facing pages, landing pages, CORS origins; verify.html redirects to `app.roofingos.dev`; contractor auth flow updated in docs.
 
+**SEO Machine + Sitemap Overhaul (May 28, 2026 — session 2):**
+- sitemap-index.xml: removed 5 empty child sitemaps (blog/locations/vs/tools/homeowners all had 0 URLs); now references only sitemap.xml — GSC errors fixed
+- sitemap.xml: rebuilt with 58 URLs (added /plans/free, /plans/starter, /plans/pro, /plans/custom, /demo, /demo/contractor, /locations, /vs, /tools, /tools/supplement-checklist, /homeowners and all blog posts dated 2026-05-28)
+- RoofingJobDetail.jsx: prominent standalone Measurements CTA card added to Overview tab (before action grid); duplicate 📐 tile removed from action grid; shows "$25", "Order Measurements →", "✓ Measurement Report Ordered" states
+- seo-keyword-finder v4: fixed `.catch()` on PromiseLike — Supabase v2 PostgrestFilterBuilder has no `.catch()` method; replaced with `try { await ... } catch {}`
+- seo-competitor-hunter v5: same `.catch()` fix applied to all 5 instances (sendTelegram, analyzeCompetitorSitemap upsert, updateVsPagePricing, processCompetitor insert + upsert)
+- VPS content-generator: installed `@anthropic-ai/sdk` in `/opt/roofing/seo/` (was missing from package.json); fixed `SUPABASE_SERVICE_ROLE_KEY` → `SUPABASE_SERVICE_KEY` env var name mismatch; process now **online and generating pages** nightly
+- VPS seo-publisher: confirmed working — runs at 14:00 UTC daily, publishes approved posts to GitHub, exits after completion ("stopped" in pm2 is correct between runs); published `how-to-track-roofing-insurance-claim` and `storm-damage-roof-lead-generation` on May 28
+
+## SUPABASE V2 — CRITICAL PATTERN (permanent rule)
+- `supabase.from(...).insert/update/upsert/delete(...)` returns `PostgrestFilterBuilder` which is `PromiseLike` (has `.then()`) but NOT a full `Promise` (NO `.catch()` method)
+- **NEVER write:** `await supabase.from(...).insert({...}).catch(() => {})`
+- **ALWAYS write:** `try { await supabase.from(...).insert({...}) } catch {}`
+- This has crashed seo-keyword-finder and seo-competitor-hunter — do not repeat
+
 ## ROOFING OS — RLS NOTES (critical)
 - `roofing_jobs` INSERT/UPDATE/DELETE: policy checks `contractor_id IN (SELECT id FROM contractor_accounts WHERE owner_email = auth.jwt() ->> 'email')`
 - `roofing_jobs` SELECT: two permissive policies (`owner_select` = all authenticated, `anon portal read jobs` = all anon) — any logged-in user can SELECT all jobs; filtering happens in application layer
@@ -750,6 +763,8 @@ Then productized and sold to other multi-business operators.
 4. Draft operating agreement for Nexus ZC LLC
 5. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
 6. Check seo_pillars table — pillars were building in background (waitUntil) after May 26 session
+7. Add GOOGLE_SC_CLIENT_EMAIL + GOOGLE_SC_PRIVATE_KEY to Supabase secrets (GSC performance tracker)
+8. Add `https://roofingos.dev/auth/**` to Supabase Auth allowed redirect URLs (manual in Supabase dashboard)
 
 ---
 
