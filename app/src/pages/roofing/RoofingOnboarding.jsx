@@ -14,9 +14,9 @@ const C = {
 const F = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }
 
 const JOB_TYPES = [
-  { value: 'storm_damage',    icon: '⛈', label: 'Storm' },
   { value: 'insurance_claim', icon: '🏠', label: 'Insurance' },
   { value: 'retail',          icon: '💰', label: 'Retail' },
+  { value: 'repair',          icon: '🔧', label: 'Repair' },
 ]
 
 function inp(focused) {
