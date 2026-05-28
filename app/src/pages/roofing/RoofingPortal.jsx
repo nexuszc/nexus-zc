@@ -1026,12 +1026,15 @@ function ProPortalV2({ data, token, isDemo }) {
 
       {/* Demo banner — conversion bar */}
       {isDemo && (
-        <div style={{ background: '#0d1520', borderBottom: '1px solid rgba(59,130,246,0.18)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+        <div style={{ background: '#0d1520', borderBottom: '1px solid rgba(59,130,246,0.2)', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>👋 Demo Portal</p>
+            <p style={{ color: '#60a5fa', fontSize: 13, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>🏠 Homeowner Portal Demo</p>
             <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>This is what your homeowners see</p>
           </div>
-          <a href="https://roofingos.dev/signup" style={{ background: C.primary, color: '#fff', padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}>Start free →</a>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a href="https://roofingos.dev/demo/contractor" style={{ color: '#9ca3af', fontSize: 12, textDecoration: 'none', padding: '6px 12px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, whiteSpace: 'nowrap' }}>← Contractor view</a>
+            <a href="https://app.nexuszc.com/roofing/signup" style={{ background: C.primary, color: '#fff', padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Start free →</a>
+          </div>
         </div>
       )}
 

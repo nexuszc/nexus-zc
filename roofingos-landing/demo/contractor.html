@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Contractor Dashboard Demo — Roofing OS</title>
+<meta name="description" content="See how Apex Roofing runs their entire roofing business on Roofing OS. Real numbers. Real workflow.">
+<meta property="og:title" content="Contractor Dashboard Demo — Roofing OS">
+<meta property="og:description" content="Real jobs, real supplements, real storm leads. See Roofing OS from the contractor side.">
+<meta property="og:url" content="https://roofingos.dev/demo/contractor">
+<meta property="og:site_name" content="Roofing OS">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0f1a;color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;-webkit-font-smoothing:antialiased}
+nav{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(10,15,26,0.95);position:sticky;top:0;z-index:10;backdrop-filter:blur(20px)}
+.logo{font-size:18px;font-weight:800;color:#fff;text-decoration:none;letter-spacing:-0.5px}
+.logo span{color:#3b82f6}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-link{color:#9ca3af;font-size:13px;text-decoration:none}
+.nav-link:hover{color:#fff}
+.btn-nav{background:#3b82f6;color:#fff;padding:8px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap}
+.demo-banner{background:#0d1520;border-bottom:1px solid rgba(59,130,246,0.2);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.demo-banner p{font-size:13px;color:#60a5fa;font-weight:600;margin:0}
+.demo-banner span{font-size:11px;color:#6b7280;display:block}
+.switch-btn{font-size:13px;color:#9ca3af;text-decoration:none;white-space:nowrap;padding:6px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px}
+.switch-btn:hover{color:#fff;border-color:rgba(255,255,255,0.2)}
+section{padding:40px 24px;max-width:720px;margin:0 auto}
+.section-label{font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#3b82f6;margin-bottom:8px;display:block}
+h2{font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;line-height:1.2}
+.section-sub{font-size:14px;color:#6b7280;margin-bottom:24px}
+.card{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;margin-bottom:12px}
+.card--blue{border-color:rgba(59,130,246,0.3);background:linear-gradient(135deg,rgba(59,130,246,0.08),#111827)}
+.card--red{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.05)}
+.card--green{border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)}
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px}
+.stat-card{background:#111827;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px}
+.stat-number{font-size:28px;font-weight:900;color:#3b82f6;line-height:1;margin-bottom:4px;letter-spacing:-1px}
+.stat-number--green{color:#10b981}
+.stat-number--yellow{color:#f59e0b}
+.stat-label{font-size:12px;color:#6b7280;font-weight:500}
+.job-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.job-name{font-size:17px;font-weight:700;color:#fff}
+.job-addr{font-size:12px;color:#6b7280;margin-top:2px}
+.status-pill{font-size:11px;font-weight:700;padding:4px 10px;border-radius:100px;white-space:nowrap;flex-shrink:0}
+.pill-blue{background:rgba(59,130,246,0.2);color:#60a5fa}
+.pill-green{background:rgba(16,185,129,0.2);color:#10b981}
+.pill-yellow{background:rgba(245,158,11,0.2);color:#f59e0b}
+.job-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.job-stat{background:rgba(255,255,255,0.04);border-radius:8px;padding:8px;text-align:center}
+.job-stat-val{font-size:14px;font-weight:700;color:#fff}
+.job-stat-label{font-size:10px;color:#6b7280}
+.photo-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.photo-placeholder{width:64px;height:64px;border-radius:8px;flex-shrink:0;background:#1f2937;display:flex;align-items:center;justify-content:center;font-size:20px}
+.message-bubble{background:rgba(59,130,246,0.12);border-radius:10px;padding:10px 12px;margin-bottom:6px}
+.message-text{font-size:13px;color:#bfdbfe;margin:0}
+.message-meta{font-size:10px;color:#6b7280;margin-top:4px}
+.supplement-items{list-style:none}
+.supplement-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.supplement-item:last-child{border-bottom:none}
+.item-name{font-size:13px;color:#d1d5db}
+.item-amount{font-size:13px;font-weight:700;color:#10b981}
+.storm-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.storm-icon{font-size:28px}
+.storm-title{font-size:16px;font-weight:700;color:#fff}
+.storm-sub{font-size:12px;color:#6b7280}
+.storm-stats{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.storm-stat{font-size:13px;color:#9ca3af}
+.storm-stat strong{color:#fff;font-weight:700}
+.aria-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:8px 12px;font-size:13px;color:#60a5fa;font-weight:600}
+.pulse{width:8px;height:8px;background:#10b981;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.4)}}
+.pro-badge{display:inline-block;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:0.05em;margin-left:8px;vertical-align:middle}
+.section-sep{border:none;border-top:1px solid rgba(255,255,255,0.06);margin:0}
+.final-cta{background:linear-gradient(135deg,rgba(59,130,246,0.12),rgba(59,130,246,0.04));border:1px solid rgba(59,130,246,0.25);border-radius:20px;padding:40px 24px;text-align:center;margin:40px 24px}
+.final-cta h2{font-size:26px;margin-bottom:12px}
+.final-cta p{color:#9ca3af;font-size:15px;margin-bottom:24px;line-height:1.6}
+.cta-buttons{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-primary{display:inline-block;background:#3b82f6;color:#fff;padding:14px 28px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;transition:opacity 0.2s}
+.btn-primary:hover{opacity:0.85}
+.btn-secondary{display:inline-block;background:rgba(255,255,255,0.08);color:#fff;padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px;text-decoration:none;border:1px solid rgba(255,255,255,0.12);transition:opacity 0.2s}
+.btn-secondary:hover{opacity:0.7}
+footer{text-align:center;padding:24px;color:#374151;font-size:13px;border-top:1px solid rgba(255,255,255,0.06)}
+footer a{color:#4b5563;text-decoration:none}
+footer a:hover{color:#9ca3af}
+@media(max-width:480px){.stats-grid{grid-template-columns:repeat(2,1fr)}.job-stats{grid-template-columns:repeat(3,1fr)}.cta-buttons{flex-direction:column;align-items:center}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="https://roofingos.dev" class="logo">Roofing<span>OS</span></a>
+  <div class="nav-right">
+    <a href="/demo" class="nav-link">← Demo home</a>
+    <a href="https://app.nexuszc.com/roofing/signup" class="btn-nav">Start free →</a>
+  </div>
+</nav>
+
+<div class="demo-banner">
+  <div>
+    <p>👷 Contractor Dashboard Demo</p>
+    <span>Apex Roofing — Denver, CO</span>
+  </div>
+  <a href="/portal/DEMO2026ROOFINGOS" class="switch-btn">Switch to homeowner view →</a>
+</div>
+
+<!-- SECTION 1: DASHBOARD OVERVIEW -->
+<section>
+  <span class="section-label">Dashboard</span>
+  <h2>Apex Roofing — May 2026</h2>
+  <p class="section-sub">Running 8 active jobs this month across the Denver metro area</p>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">8</div>
+      <div class="stat-label">Active jobs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">$113k</div>
+      <div class="stat-label">Revenue this month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number stat-number--green">$18,700</div>
+      <div class="stat-label">Supplements recovered</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number stat-number--yellow">4.9★</div>
+      <div class="stat-label">Average Google review</div>
+    </div>
+  </div>
+
+  <div class="card card--blue">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div class="pulse"></div>
+      <span style="font-size:14px;font-weight:700;color:#60a5fa">Aria AI — active now</span>
+    </div>
+    <p style="font-size:13px;color:#9ca3af;margin:0">
+      Sent 47 follow-up messages today &nbsp;·&nbsp; 3 leads responded &nbsp;·&nbsp; 1 appointment scheduled
+    </p>
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- SECTION 2: ACTIVE JOB -->
+<section>
+  <span class="section-label">Active job</span>
+  <h2>Sarah Johnson</h2>
+  <p class="section-sub">123 Maple St, Lakewood CO — Insurance replacement</p>
+
+  <div class="card">
+    <div class="job-header">
+      <div>
+        <div class="job-name">Installation in progress</div>
+        <div class="job-addr">Started May 26 · Day 2 of 3</div>
+      </div>
+      <span class="status-pill pill-blue">🔵 Active</span>
+    </div>
+
+    <div class="job-stats">
+      <div class="job-stat">
+        <div class="job-stat-val">10</div>
+        <div class="job-stat-label">Photos</div>
+      </div>
+      <div class="job-stat">
+        <div class="job-stat-val">$14,200</div>
+        <div class="job-stat-label">Job value</div>
+      </div>
+      <div class="job-stat">
+        <div class="job-stat-val">$4,250</div>
+        <div class="job-stat-label">Supplement ✅</div>
+      </div>
+    </div>
+
+    <div class="photo-strip">
+      <div class="photo-placeholder">🏠</div>
+      <div class="photo-placeholder">🔨</div>
+      <div class="photo-placeholder">📋</div>
+      <div class="photo-placeholder">🏗️</div>
+      <div class="photo-placeholder">✅</div>
+    </div>
+
+    <div class="message-bubble">
+      <p class="message-text">"Hey Sarah — shingles going on now. About 60% done. Will send more photos this afternoon! 📸"</p>
+      <div class="message-meta">Apex Roofing · 2 hours ago · <span style="color:#10b981">✓ Homeowner viewed</span></div>
+    </div>
+
+    <div style="text-align:center">
+      <a href="/portal/DEMO2026ROOFINGOS" style="font-size:13px;color:#3b82f6;text-decoration:none;font-weight:600">
+        See Sarah's portal →
+      </a>
+    </div>
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- SECTION 3: STORM LEADS -->
+<section>
+  <span class="section-label">Storm leads <span class="pro-badge">PRO</span></span>
+  <h2>Hail hit Lakewood</h2>
+  <p class="section-sub">May 24, 2026 · 1.5 inch hail reported</p>
+
+  <div class="card card--red">
+    <div class="storm-header">
+      <div class="storm-icon">⛈️</div>
+      <div>
+        <div class="storm-title">Significant hail event</div>
+        <div class="storm-sub">Lakewood, Englewood, Littleton CO</div>
+      </div>
+    </div>
+    <div class="storm-stats">
+      <div class="storm-stat"><strong>47</strong> addresses in your territory</div>
+      <div class="storm-stat"><strong>1.5"</strong> hail size</div>
+      <div class="storm-stat"><strong>2 days</strong> ago</div>
+    </div>
+    <div class="aria-badge">
+      <div class="pulse"></div>
+      Aria queued 47 outreach calls
+    </div>
+  </div>
+
+  <div class="card">
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:12px">Top leads in your territory:</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">4821 Carr St, Lakewood</div>
+          <div style="font-size:12px;color:#6b7280">2,400 sq ft · Est. $15,800</div>
+        </div>
+        <span class="status-pill pill-yellow">New</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">7203 W Hampden Ave</div>
+          <div style="font-size:12px;color:#6b7280">1,900 sq ft · Est. $12,400</div>
+        </div>
+        <span class="status-pill pill-yellow">New</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">2156 S Kipling Pkwy</div>
+          <div style="font-size:12px;color:#6b7280">2,100 sq ft · Est. $14,100</div>
+        </div>
+        <span class="status-pill pill-blue">Aria called</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- SECTION 4: AI SUPPLEMENTS -->
+<section>
+  <span class="section-label">AI supplements <span class="pro-badge">STARTER+</span></span>
+  <h2>$18,700 recovered this month</h2>
+  <p class="section-sub">AI finds the line items adjusters miss. Average $4,250 per claim.</p>
+
+  <div class="card card--green">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:14px;font-weight:700;color:#fff">Sarah Johnson — supplement approved</span>
+      <span style="font-size:16px;font-weight:900;color:#10b981">+$4,250</span>
+    </div>
+    <ul class="supplement-items">
+      <li class="supplement-item">
+        <span class="item-name">Drip edge replacement</span>
+        <span class="item-amount">+$380</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Decking nailing pattern upgrade</span>
+        <span class="item-amount">+$620</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Ice &amp; water shield — full coverage</span>
+        <span class="item-amount">+$890</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Ridge vent installation</span>
+        <span class="item-amount">+$540</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Steep slope labor surcharge</span>
+        <span class="item-amount">+$750</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Permit fees — actual cost</span>
+        <span class="item-amount">+$420</span>
+      </li>
+      <li class="supplement-item">
+        <span class="item-name">Haul away / dumpster</span>
+        <span class="item-amount">+$650</span>
+      </li>
+    </ul>
+    <div style="padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:#6b7280">Written by Roofing OS AI in 3 minutes</span>
+      <span style="font-size:15px;font-weight:900;color:#10b981">Total: $4,250 ✅</span>
+    </div>
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- SECTION 5: PIPELINE -->
+<section>
+  <span class="section-label">Pipeline</span>
+  <h2>8 jobs this month</h2>
+  <p class="section-sub">Every job tracked from lead to Google review</p>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">Sarah Johnson</div>
+          <div style="font-size:12px;color:#6b7280">Lakewood · Insurance · $14,200</div>
+        </div>
+        <span class="status-pill pill-blue">Active</span>
+      </div>
+    </div>
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">Mike Rodriguez</div>
+          <div style="font-size:12px;color:#6b7280">Englewood · Storm · $16,800</div>
+        </div>
+        <span class="status-pill pill-blue">Active</span>
+      </div>
+    </div>
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:#fff">Jennifer Walsh</div>
+          <div style="font-size:12px;color:#6b7280">Centennial · Insurance · $13,400</div>
+        </div>
+        <span class="status-pill pill-green">Complete ⭐⭐⭐⭐⭐</span>
+      </div>
+    </div>
+    <div class="card" style="padding:14px;border-style:dashed;border-color:rgba(255,255,255,0.1)">
+      <div style="text-align:center;color:#4b5563;font-size:13px">+ 5 more active jobs</div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<div class="final-cta">
+  <h2>Run your business like this.</h2>
+  <p>Free to start. No credit card. Set up your first job in 4 minutes. Your homeowner gets a portal instantly.</p>
+  <div class="cta-buttons">
+    <a href="https://app.nexuszc.com/roofing/signup" class="btn-primary">Start free today →</a>
+    <a href="/portal/DEMO2026ROOFINGOS" class="btn-secondary">See homeowner view</a>
+  </div>
+  <p style="margin-top:16px;font-size:12px;color:#4b5563">
+    Have questions? Text Zach: <a href="tel:7205006668" style="color:#4b5563">(720) 500-6668</a>
+  </p>
+</div>
+
+<footer>
+  <p>
+    <a href="/demo">← Back to demo home</a>
+    &nbsp;·&nbsp;
+    <a href="https://roofingos.dev">roofingos.dev</a>
+    &nbsp;·&nbsp;
+    Roofing OS · Denver CO
+  </p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>See Roofing OS in Action — Free Demo</title>
+<meta name="description" content="See Roofing OS from both sides — the contractor dashboard and the homeowner portal. Free to start.">
+<meta property="og:title" content="See Roofing OS in Action — Free Demo">
+<meta property="og:description" content="See it from both sides. Contractor dashboard + homeowner portal. No login needed.">
+<meta property="og:url" content="https://roofingos.dev/demo">
+<meta property="og:site_name" content="Roofing OS">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#0a0f1a;
+  color:#f9fafb;
+  font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  -webkit-font-smoothing:antialiased
+}
+nav{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 24px;
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  background:rgba(10,15,26,0.95);
+  position:sticky;top:0;z-index:10;
+  backdrop-filter:blur(20px)
+}
+.logo{font-size:18px;font-weight:800;color:#fff;text-decoration:none;letter-spacing:-0.5px}
+.logo span{color:#3b82f6}
+.btn-nav{background:#3b82f6;color:#fff;padding:8px 20px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap}
+.hero{text-align:center;padding:64px 24px 48px;flex:1}
+.badge{
+  display:inline-block;
+  background:rgba(59,130,246,0.15);
+  border:1px solid rgba(59,130,246,0.3);
+  color:#60a5fa;
+  font-size:13px;font-weight:600;
+  padding:6px 16px;border-radius:100px;
+  margin-bottom:24px
+}
+h1{font-size:clamp(28px,6vw,48px);font-weight:900;line-height:1.1;letter-spacing:-1px;margin-bottom:16px}
+h1 span{color:#3b82f6}
+.subtitle{font-size:17px;color:#9ca3af;max-width:480px;margin:0 auto 48px;line-height:1.6}
+.demo-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:20px;
+  max-width:700px;
+  margin:0 auto 48px
+}
+.demo-card{
+  background:#111827;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:20px;
+  padding:32px 24px;
+  text-decoration:none;
+  display:block;
+  transition:all 0.2s;
+  text-align:left;
+  position:relative;
+  overflow:hidden
+}
+.demo-card:hover{border-color:rgba(59,130,246,0.4);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+.demo-card--contractor{border-color:rgba(59,130,246,0.3);background:linear-gradient(135deg,rgba(59,130,246,0.08),#111827)}
+.card-emoji{font-size:40px;margin-bottom:16px;display:block}
+.card-title{font-size:20px;font-weight:800;color:#fff;margin-bottom:8px}
+.card-desc{font-size:14px;color:#9ca3af;line-height:1.6;margin-bottom:20px}
+.card-features{list-style:none;margin-bottom:24px}
+.card-features li{font-size:13px;color:#d1d5db;padding:4px 0;display:flex;align-items:center;gap:8px}
+.card-features li::before{content:'✅';font-size:12px}
+.card-btn{display:block;text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;transition:opacity 0.2s}
+.card-btn:hover{opacity:0.85}
+.card-btn--blue{background:#3b82f6;color:#fff}
+.card-btn--outline{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15)}
+.divider{text-align:center;color:#4b5563;font-size:13px;margin:0 0 32px;padding:0 24px}
+.signup-cta{
+  background:rgba(59,130,246,0.08);
+  border:1px solid rgba(59,130,246,0.2);
+  border-radius:16px;
+  padding:32px 24px;
+  text-align:center;
+  max-width:500px;
+  margin:0 auto 48px
+}
+.signup-cta h3{font-size:20px;font-weight:800;color:#fff;margin-bottom:8px}
+.signup-cta p{color:#9ca3af;font-size:14px;margin-bottom:20px;line-height:1.6}
+.btn-primary{display:inline-block;background:#3b82f6;color:#fff;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;transition:opacity 0.2s}
+.btn-primary:hover{opacity:0.85}
+footer{text-align:center;padding:24px;color:#374151;font-size:13px;border-top:1px solid rgba(255,255,255,0.06)}
+footer a{color:#4b5563;text-decoration:none}
+footer a:hover{color:#9ca3af}
+@media(max-width:480px){.demo-cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="https://roofingos.dev" class="logo">Roofing<span>OS</span></a>
+  <a href="https://app.nexuszc.com/roofing/signup" class="btn-nav">Start free →</a>
+</nav>
+
+<div class="hero">
+  <div class="badge">⚡ Live demo — no login needed</div>
+
+  <h1>See Roofing OS<br><span>in action</span></h1>
+
+  <p class="subtitle">
+    See it from both sides — the contractor dashboard running a real business,
+    and the homeowner portal your customers will love.
+  </p>
+
+  <div class="demo-cards">
+
+    <a href="/demo/contractor" class="demo-card demo-card--contractor">
+      <span class="card-emoji">👷</span>
+      <div class="card-title">Contractor Dashboard</div>
+      <p class="card-desc">See how Apex Roofing runs their entire business from one place.</p>
+      <ul class="card-features">
+        <li>Active jobs and revenue</li>
+        <li>AI supplement recovery</li>
+        <li>Storm lead alerts</li>
+        <li>Aria AI follow-up</li>
+        <li>Homeowner portal management</li>
+      </ul>
+      <span class="card-btn card-btn--blue">See contractor view →</span>
+    </a>
+
+    <a href="/portal/DEMO2026ROOFINGOS" class="demo-card">
+      <span class="card-emoji">🏠</span>
+      <div class="card-title">Homeowner Portal</div>
+      <p class="card-desc">See what Sarah Johnson sees during her roof replacement.</p>
+      <ul class="card-features">
+        <li>Real-time photo updates</li>
+        <li>Job progress tracking</li>
+        <li>Direct contractor messaging</li>
+        <li>Document sharing</li>
+        <li>Review request at completion</li>
+      </ul>
+      <span class="card-btn card-btn--outline">See homeowner view →</span>
+    </a>
+
+  </div>
+
+  <div class="divider">
+    Both demos use real data from a real job. No login. No credit card.
+  </div>
+
+  <div class="signup-cta">
+    <h3>Ready to run your business like this?</h3>
+    <p>Free to start. No credit card. Takes 4 minutes to set up your first job.</p>
+    <a href="https://app.nexuszc.com/roofing/signup" class="btn-primary">Create free account →</a>
+  </div>
+</div>
+
+<footer>
+  <p>
+    <a href="https://roofingos.dev">← Back to roofingos.dev</a>
+    &nbsp;·&nbsp;
+    Roofing OS · 1700 Lincoln St · Denver CO 80203
+    &nbsp;·&nbsp;
+    <a href="https://roofingos.dev/unsubscribe.html">Unsubscribe</a>
+  </p>
+</footer>
+
+</body>
+</html>

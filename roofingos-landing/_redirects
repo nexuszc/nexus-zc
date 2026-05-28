@@ -4,6 +4,7 @@
 /dashboard https://app.nexuszc.com/roofing/jobs 302
 /upgrade https://app.nexuszc.com/roofing/upgrade 302
 /login https://app.nexuszc.com/roofing/login 302
-/demo https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS 302
+/demo /demo.html 200
+/demo/contractor /demo/contractor.html 200
 /portal/demo https://app.nexuszc.com/roofing/portal/DEMO2026ROOFINGOS 302
 /portal/:token https://app.nexuszc.com/roofing/portal/:token 301
