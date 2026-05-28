@@ -920,10 +920,36 @@ export default function RoofingJobDetail() {
               </div>
             )}
 
+            {/* Measurements CTA */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div>
+                  <p style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: C.text }}>📐 Aerial Measurements</p>
+                  <p style={{ margin: '3px 0 0', fontSize: '12px', color: C.muted }}>Squares, pitch, linear feet — delivered in 15–30 min</p>
+                </div>
+                <span style={{ background: 'rgba(245,158,11,0.15)', color: C.warning, fontSize: '11px', fontWeight: '700', padding: '3px 8px', borderRadius: '6px', flexShrink: 0 }}>$25</span>
+              </div>
+              <button
+                onClick={measureOrdered ? undefined : orderMeasurements}
+                disabled={orderingMeasure || measureOrdered}
+                style={{
+                  width: '100%', border: 'none', borderRadius: '10px', padding: '11px',
+                  background: measureOrdered ? 'rgba(34,197,94,0.15)' : orderingMeasure ? 'rgba(74,158,255,0.3)' : C.primary,
+                  color: measureOrdered ? C.success : '#fff',
+                  fontSize: '14px', fontWeight: '700', cursor: measureOrdered ? 'default' : 'pointer',
+                  transition: 'filter 0.15s',
+                }}
+                onMouseEnter={e => { if (!measureOrdered && !orderingMeasure) e.currentTarget.style.filter = 'brightness(1.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
+              >
+                {measureOrdered ? '✓ Measurement Report Ordered' : orderingMeasure ? 'Ordering…' : 'Order Measurements →'}
+              </button>
+              {!measureOrdered && <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'rgba(136,150,168,0.5)', textAlign: 'center' }}>PDF added to this job automatically</p>}
+            </div>
+
             {/* Action grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               {[
-                { icon: '📐', title: 'Measurements', price: '$25', action: () => orderMeasurements(), loading: orderingMeasure, done: measureOrdered, show: true },
                 { icon: '💰', title: 'Estimate Builder', price: null, action: () => navigate(`/roofing/estimate/${id}`), loading: false, done: false, show: true },
                 { icon: '🤖', title: 'Supplement AI', price: '$99', action: () => runSupplementAI('basic'), loading: suppLoading === 'basic', done: suppSuccess === 'basic', show: !!(claim || job.insurance_claim) },
                 { icon: '📋', title: 'Full AI Handling', price: '$329', action: () => runSupplementAI('full'), loading: suppLoading === 'full', done: suppSuccess === 'full', show: !!(claim || job.insurance_claim) },

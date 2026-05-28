@@ -46,7 +46,7 @@ async function ai(prompt: string, maxTokens = 4000): Promise<string> {
 }
 
 async function sendTelegram(msg: string) {
-  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
+  try { await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }) } catch {}
 }
 
 async function submitToGoogleIndexing(url: string): Promise<boolean> {
