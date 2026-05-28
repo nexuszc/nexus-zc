@@ -14,7 +14,6 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 const font = { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }
 
 const JOB_TYPES = [
-  { value: 'storm_damage',    icon: '⛈', label: 'Storm' },
   { value: 'insurance_claim', icon: '🏠', label: 'Insurance' },
   { value: 'retail',          icon: '💰', label: 'Retail' },
   { value: 'repair',          icon: '🔧', label: 'Repair' },

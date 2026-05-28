@@ -27,11 +27,18 @@ const STAGE_META = {
 const ACTIVE_KEYS = new Set(['lead','estimate_sent','contract_signed','materials_ordered','scheduled','in_progress','inspection'])
 
 const KANBAN_COLS = [
-  { label: 'Estimating', keys: ['lead','estimate_sent'] },
-  { label: 'Pre-Install', keys: ['contract_signed','materials_ordered','scheduled'] },
-  { label: 'Active', keys: ['in_progress','inspection'] },
-  { label: 'Done', keys: ['complete','invoiced','paid'] },
+  { key: 'new',              label: 'New',             color: '#8896a8', bg: 'rgba(136,150,168,0.15)' },
+  { key: 'in_progress',      label: 'In Progress',     color: '#4a9eff', bg: 'rgba(74,158,255,0.15)' },
+  { key: 'complete',         label: 'Complete',        color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+  { key: 'review_requested', label: 'Review Requested', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
 ]
+
+function getKanbanCol(job) {
+  if (job.review_requested) return 'review_requested'
+  if (['complete', 'invoiced', 'paid'].includes(job.status)) return 'complete'
+  if (job.status === 'lead') return 'new'
+  return 'in_progress'
+}
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -162,46 +169,120 @@ function JobCard({ job }) {
   )
 }
 
+function useIsDesktop() {
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' && window.innerWidth >= 768)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = e => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return isDesktop
+}
+
+const JOB_TYPE_LABELS = {
+  insurance_claim: 'Insurance',
+  retail: 'Retail',
+  repair: 'Repair',
+  storm_damage: 'Storm',
+}
+
 function KanbanView({ jobs }) {
   const navigate = useNavigate()
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
-      {KANBAN_COLS.map(col => {
-        const colJobs = jobs.filter(j => col.keys.includes(j.status))
-        return (
-          <div key={col.label}>
-            <p style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-              {col.label} <span style={{ color: 'rgba(136,150,168,0.6)', fontWeight: '400' }}>({colJobs.length})</span>
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minHeight: '80px' }}>
-              {colJobs.map(job => {
-                const s = stageMeta(job.status)
-                return (
-                  <div
-                    key={job.id}
-                    onClick={() => navigate(`/roofing/jobs/${job.id}`)}
-                    style={{
-                      background: C.surface, border: `1px solid ${C.border}`, borderRadius: '10px',
-                      padding: '10px 12px', cursor: 'pointer',
-                      transition: 'border-color 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(74,158,255,0.4)'}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
-                  >
-                    <p style={{ fontSize: '13px', fontWeight: '600', color: C.text, margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
-                    <p style={{ fontSize: '11px', color: C.muted, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address?.split(',')[0]}</p>
-                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 6px', borderRadius: '20px', background: s.bg, color: s.fg }}>{s.label}</span>
-                    {job.contract_amount > 0 && (
-                      <p style={{ fontSize: '11px', color: C.success, fontWeight: '600', margin: '4px 0 0' }}>${job.contract_amount.toLocaleString()}</p>
-                    )}
+  const isDesktop = useIsDesktop()
+
+  const colMap = {}
+  for (const col of KANBAN_COLS) colMap[col.key] = []
+  for (const job of jobs) {
+    const key = getKanbanCol(job)
+    if (colMap[key]) colMap[key].push(job)
+  }
+
+  const KanbanCard = ({ job, col }) => {
+    const days = daysAgo(job.created_at)
+    const typeLabel = JOB_TYPE_LABELS[job.job_type] || job.job_type || ''
+    return (
+      <div
+        onClick={() => navigate(`/roofing/jobs/${job.id}`)}
+        style={{
+          background: C.surface,
+          border: `1px solid ${C.border}`,
+          borderLeft: `4px solid ${col.color}`,
+          borderRadius: '10px',
+          padding: '12px 12px 10px',
+          cursor: 'pointer',
+          transition: 'border-color 0.15s, box-shadow 0.15s',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(74,158,255,0.4)'; e.currentTarget.style.borderLeftColor = col.color; e.currentTarget.style.boxShadow = '0 2px 12px rgba(74,158,255,0.1)' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.borderLeftColor = col.color; e.currentTarget.style.boxShadow = 'none' }}
+      >
+        <p style={{ fontSize: '14px', fontWeight: '700', color: C.text, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.homeowner_name}</p>
+        <p style={{ fontSize: '12px', color: C.muted, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.property_address?.split(',')[0]}</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {typeLabel && (
+              <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: col.bg, color: col.color }}>{typeLabel}</span>
+            )}
+            {days && <span style={{ fontSize: '10px', color: C.muted }}>{days}</span>}
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); navigate(`/roofing/jobs/${job.id}`) }}
+            style={{ fontSize: '11px', color: C.primary, background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600', padding: '2px 0', flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            Open →
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isDesktop) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
+        {KANBAN_COLS.map(col => {
+          const colJobs = colMap[col.key] || []
+          return (
+            <div key={col.key}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+                <p style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                  {col.label}
+                </p>
+                <span style={{ fontSize: '10px', color: 'rgba(136,150,168,0.5)', fontWeight: '400' }}>({colJobs.length})</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minHeight: '80px' }}>
+                {colJobs.map(job => <KanbanCard key={job.id} job={job} col={col} />)}
+                {colJobs.length === 0 && (
+                  <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px dashed ${C.border}`, borderRadius: '10px', padding: '20px', textAlign: 'center' }}>
+                    <p style={{ fontSize: '11px', color: 'rgba(136,150,168,0.4)', margin: 0 }}>—</p>
                   </div>
-                )
-              })}
-              {colJobs.length === 0 && (
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px dashed ${C.border}`, borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
-                  <p style={{ fontSize: '11px', color: C.muted, margin: 0 }}>—</p>
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {KANBAN_COLS.map(col => {
+        const colJobs = colMap[col.key] || []
+        if (colJobs.length === 0) return null
+        return (
+          <div key={col.key}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: col.color, flexShrink: 0 }} />
+              <p style={{ fontSize: '11px', fontWeight: '700', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0 }}>
+                {col.label} <span style={{ color: 'rgba(136,150,168,0.5)', fontWeight: '400' }}>({colJobs.length})</span>
+              </p>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {colJobs.map(job => <KanbanCard key={job.id} job={job} col={col} />)}
             </div>
           </div>
         )
@@ -385,7 +466,7 @@ export default function RoofingDashboard() {
     const cid = contractor?.id
     const ccid = contractorClientId
 
-    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id, lead_score, supplement_status_flag, payment_dot, weather_warning').order('created_at', { ascending: false })
+    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id, lead_score, supplement_status_flag, payment_dot, weather_warning, review_requested, job_type').order('created_at', { ascending: false })
     if (cid) query = query.eq('contractor_id', cid)
     else if (ccid) query = query.eq('client_id', ccid)
 
