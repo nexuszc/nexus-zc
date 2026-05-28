@@ -655,7 +655,7 @@ Then productized and sold to other multi-business operators.
   - _redirects: NO .html rewrite rules — Cloudflare Clean URLs serves verify.html natively at /auth/verify (adding 200 rewrite causes infinite redirect loop)
   - contractor-signup: generates magic link with redirectTo=roofingos.dev/auth/verify; sends simple welcome email; FROM "Zach from Roofing OS <zach@roofingos.dev>"
   - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false
-  - REQUIRED MANUAL STEP: Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add https://roofingos.dev/auth/** (needed for client-side OTP to honor the redirectTo)
+  - Supabase auth redirect URLs locked down May 28: uri_allow_list = roofingos.dev/**, app.roofingos.dev/**, portal.roofingos.dev/**; site_url = https://roofingos.dev (set via management API)
 
 **Roofing OS SEO Machine (May 26, 2026):**
 - DB: 6 tables — seo_pillars, seo_posts, seo_keyword_queue, seo_competitor_content, seo_performance, seo_internal_links
@@ -764,7 +764,6 @@ Then productized and sold to other multi-business operators.
 5. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
 6. Check seo_pillars table — pillars were building in background (waitUntil) after May 26 session
 7. Add GOOGLE_SC_CLIENT_EMAIL + GOOGLE_SC_PRIVATE_KEY to Supabase secrets (GSC performance tracker)
-8. Add `https://roofingos.dev/auth/**` to Supabase Auth allowed redirect URLs (manual in Supabase dashboard)
 
 ---
 
