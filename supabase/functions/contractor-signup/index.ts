@@ -203,14 +203,34 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Create contractor account
+  // If account already exists — return a fresh magic link instead of an error
+  const { data: existingContractor } = await supabase
+    .from('contractor_accounts')
+    .select('id')
+    .eq('owner_email', owner_email)
+    .maybeSingle();
+
+  if (existingContractor) {
+    let action_link: string | null = null;
+    try {
+      const { data: linkData } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: owner_email,
+        options: { redirectTo: 'https://roofingos.dev/auth/verify' },
+      });
+      action_link = linkData?.properties?.action_link || null;
+    } catch { /* non-fatal */ }
+    return Response.json({ ok: true, action_link, existing: true }, { headers: corsHeaders(req) });
+  }
+
+  // Create contractor account — phone NOT stored on signup (collected inside dashboard)
   const { data: contractor } = await supabase
     .from('contractor_accounts')
     .insert({
       company_name,
       owner_name,
       owner_email,
-      owner_phone,
+      owner_phone: null,
       primary_zip,
       plan,
       plan_price_cents: planPrices[plan] || 29900,
@@ -294,20 +314,8 @@ Deno.serve(async (req) => {
     })
   }).catch(() => {});
 
-  // Welcome call + SMS (parallel, non-blocking)
+  // Welcome SMS only — NO Aria voice call on signup
   await Promise.allSettled([
-    owner_phone ? fetch(`${SUPABASE_URL}/functions/v1/roofing-aria-engine`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${SERVICE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        call_type: 'contractor_welcome',
-        contact_phone: owner_phone,
-        contact_name: owner_name,
-        contact_type: 'new_contractor',
-        metadata: { company_name, plan, contractor_name: 'Roofing OS' }
-      })
-    }).catch(() => {}) : Promise.resolve(),
-
     owner_phone && Deno.env.get('TWILIO_ACCOUNT_SID') ? (() => {
       const sid = Deno.env.get('TWILIO_ACCOUNT_SID')!;
       const token = Deno.env.get('TWILIO_AUTH_TOKEN')!;

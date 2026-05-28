@@ -228,9 +228,20 @@ function localHourToUTC(nearDate: Date, timezone: string, _dateStr: string, loca
   return estimate;
 }
 
+// GLOBAL KILL SWITCH — set false only after dedup fix is verified
+const ARIA_GLOBALLY_PAUSED = true;
+
 Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   if (body.test) return Response.json({ ok: true, message: 'aria-call-gate ready' });
+
+  if (ARIA_GLOBALLY_PAUSED) {
+    return Response.json({
+      allowed: false,
+      reason: 'globally_paused',
+      reason_detail: 'Aria calls are globally paused. Do not call.',
+    });
+  }
 
   const { contact_phone, call_type = 'cold_outbound_contractor', check_time } = body;
 
