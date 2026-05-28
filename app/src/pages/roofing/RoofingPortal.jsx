@@ -186,7 +186,7 @@ function PortalHeader({ contractor }) {
     <div style={{ height: 64, background: C.bg, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0 }}>
       {contractor?.logo_url
         ? <img src={contractor.logo_url} alt="logo" style={{ height: 36, width: 36, borderRadius: '50%', objectFit: 'cover' }} />
-        : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#fff', flexShrink: 0 }}>{initial}</div>
+        : <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#fff', flexShrink: 0 }}>{initial}</div>
       }
       <span style={{ fontWeight: 700, fontSize: 15, color: C.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       {phone && (
