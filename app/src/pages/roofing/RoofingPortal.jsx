@@ -691,7 +691,9 @@ function DocsTab({ data, token }) {
 const TABS = [
   { id: 'status',   label: 'Status',   Icon: HomeIcon    },
   { id: 'photos',   label: 'Photos',   Icon: CameraIcon  },
-  { id: 'colors',   label: 'Design',   Icon: PaletteIcon },
+  // Design tab hidden — SAM tuning needed
+  // Re-enable when roof segmentation correctly isolates shingles from trees
+  // { id: 'colors',   label: 'Design',   Icon: PaletteIcon },
   { id: 'messages', label: 'Messages', Icon: ChatIcon    },
   { id: 'docs',     label: 'Docs',     Icon: DocIcon     },
 ]
@@ -1042,7 +1044,8 @@ function ProPortalV2({ data, token, isDemo }) {
           <div style={{ height: '100%', overflowY: 'auto' }}>
             {tab === 'status'  && <StatusTab   data={data} onViewPhotos={() => setTab('photos')} onLightbox={(i) => openLightbox(data.photos || [], i)} token={token} />}
             {tab === 'photos'  && <PhotosTab   data={data} />}
-            {tab === 'colors'  && <ColorsTab   data={data} token={token} isDemo={isDemo} />}
+            {/* Design tab hidden — SAM tuning needed */}
+            {/* {tab === 'colors'  && <ColorsTab   data={data} token={token} isDemo={isDemo} />} */}
             {tab === 'docs'    && <DocsTab     data={data} token={token} />}
           </div>
         )}
