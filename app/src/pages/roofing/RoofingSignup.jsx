@@ -12,12 +12,19 @@ export default function RoofingSignup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.owner_name.trim() || !form.company_name.trim() || !form.owner_email.trim()) {
+      setError('Please fill in all fields')
+      return
+    }
     setLoading(true)
     setError('')
     try {
       const r = await fetch(`${SUPABASE_URL}/functions/v1/contractor-signup`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://roofingos.dev',
+        },
         body: JSON.stringify({
           owner_name: form.owner_name.trim(),
           company_name: form.company_name.trim(),
@@ -27,13 +34,15 @@ export default function RoofingSignup() {
         }),
       })
       const data = await r.json().catch(() => ({}))
-      if (!r.ok) {
-        setError(data.error || 'Something went wrong. Please try again.')
-      } else {
+      if (data.ok && data.action_link) {
+        window.location.href = data.action_link
+      } else if (data.ok) {
         setSent(true)
+      } else {
+        setError(data.error || 'Something went wrong. Text us: (720) 500-6668')
       }
     } catch {
-      setError('Network error. Check your connection and try again.')
+      setError('Connection error. Please try again.')
     }
     setLoading(false)
   }
@@ -58,14 +67,12 @@ export default function RoofingSignup() {
 
         {sent ? (
           <div style={{ background: '#1a2535', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', padding: '36px 28px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📬</div>
-            <p style={{ color: '#22c55e', fontSize: '20px', fontWeight: '800', margin: '0 0 10px' }}>Check your email</p>
-            <p style={{ color: '#8896a8', fontSize: '14px', margin: '0 0 4px' }}>Dashboard link sent to</p>
-            <p style={{ color: '#fff', fontSize: '15px', fontWeight: '700', margin: '0 0 20px' }}>{form.owner_email}</p>
-            <p style={{ color: '#8896a8', fontSize: '13px', margin: 0, lineHeight: 1.6 }}>
-              Email comes from <strong style={{ color: '#fff' }}>zach@roofingos.dev</strong>.<br />
-              Tap the button in the email to open your dashboard.
-            </p>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📧</div>
+            <p style={{ color: '#22c55e', fontSize: '20px', fontWeight: '800', margin: '0 0 10px' }}>Check your email!</p>
+            <p style={{ color: '#8896a8', fontSize: '14px', margin: '0 0 20px', lineHeight: 1.6 }}>We sent you a login link.</p>
+            <a href="/roofing/login" style={{ display: 'inline-block', color: '#4a9eff', fontSize: '15px', fontWeight: '600', textDecoration: 'none' }}>
+              Go to login →
+            </a>
           </div>
         ) : (
           <form onSubmit={handleSubmit} style={{ background: '#1a2535', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', padding: '28px' }}>

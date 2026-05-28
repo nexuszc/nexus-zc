@@ -30,7 +30,7 @@ async function sendTelegram(msg: string) {
   }).catch(() => {});
 }
 
-function generateMagicLinkEmail(firstName: string, magicLink: string, email: string): string {
+function generateWelcomeEmail(firstName: string, ownerName: string, email: string): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -43,8 +43,6 @@ function generateMagicLinkEmail(firstName: string, magicLink: string, email: str
       <td align="center" style="padding:40px 20px">
         <table width="560" cellpadding="0" cellspacing="0"
                style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)">
-
-          <!-- Header -->
           <tr>
             <td style="background:#0a0f1a;padding:32px 40px;text-align:center">
               <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">
@@ -52,79 +50,24 @@ function generateMagicLinkEmail(firstName: string, magicLink: string, email: str
               </div>
             </td>
           </tr>
-
-          <!-- Body -->
           <tr>
             <td style="padding:40px">
-              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#0a0f1a;line-height:1.2">
-                Hey ${firstName} — your dashboard is ready 👋
-              </h1>
-              <p style="margin:0 0 32px;font-size:16px;color:#6b7a8d;line-height:1.6">
-                Tap the button below to open your Roofing OS dashboard.
-                No password needed — ever.
+              <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6">Hey ${firstName},</p>
+              <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6">Your Roofing OS account is live.</p>
+              <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6">
+                Login anytime at:<br>
+                <a href="https://roofingos.dev/login" style="color:#4a9eff;text-decoration:none;font-weight:600">
+                  roofingos.dev/login
+                </a>
               </p>
-
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center">
-                    <a href="${magicLink}"
-                       style="display:inline-block;background:#4a9eff;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;padding:16px 40px;border-radius:12px;letter-spacing:-0.2px">
-                      Open My Dashboard →
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- What to expect -->
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="margin:32px 0;background:#f8fafc;border-radius:12px">
-                <tr>
-                  <td style="padding:24px">
-                    <p style="margin:0 0 16px;font-size:13px;font-weight:600;color:#0a0f1a;text-transform:uppercase;letter-spacing:0.05em">
-                      What to do first:
-                    </p>
-                    <table width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="padding:6px 0">
-                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">1</span>
-                          <span style="color:#374151;font-size:15px">Click "Open My Dashboard" above</span>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0">
-                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">2</span>
-                          <span style="color:#374151;font-size:15px">Create your first job — takes 2 minutes</span>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding:6px 0">
-                          <span style="color:#4a9eff;font-weight:700;margin-right:12px">3</span>
-                          <span style="color:#374151;font-size:15px">Your homeowner gets a real-time portal instantly</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Security note -->
-              <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.5">
-                This link expires in 24 hours and can only be used once.
-                If you didn't sign up for Roofing OS, you can ignore this email.
-              </p>
+              <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6">Questions? Text me: <a href="tel:7205006668" style="color:#4a9eff;text-decoration:none">(720) 500-6668</a></p>
+              <p style="margin:0;font-size:16px;color:#374151;line-height:1.6">— Zach</p>
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td style="padding:24px 40px;border-top:1px solid #f1f5f9;text-align:center">
               <p style="margin:0;font-size:13px;color:#9ca3af">
-                Roofing OS · 1700 Lincoln St · Denver, CO 80203
-              </p>
-              <p style="margin:8px 0 0;font-size:13px;color:#9ca3af">
-                Questions? Reply to this email or text
-                <a href="tel:7205006668" style="color:#4a9eff;text-decoration:none">(720) 500-6668</a>
+                Roofing OS · 1700 Lincoln St · Denver CO 80203
               </p>
               <p style="margin:8px 0 0;font-size:12px">
                 <a href="https://roofingos.dev/unsubscribe?email=${encodeURIComponent(email)}"
@@ -132,7 +75,6 @@ function generateMagicLinkEmail(firstName: string, magicLink: string, email: str
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -336,8 +278,8 @@ Deno.serve(async (req) => {
     action_link = linkData?.properties?.action_link || null;
   } catch { /* non-fatal */ }
 
-  // Send the beautiful dashboard-ready email (with embedded magic link)
-  await fetch('https://api.resend.com/emails', {
+  // Fire-and-forget welcome email (token already consumed by direct redirect)
+  fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
@@ -347,12 +289,8 @@ Deno.serve(async (req) => {
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       reply_to: 'zach@roofingos.dev',
       to: owner_email,
-      subject: 'Your Roofing OS dashboard is ready →',
-      html: generateMagicLinkEmail(
-        firstName,
-        action_link || 'https://roofingos.dev/login',
-        owner_email
-      ),
+      subject: 'Welcome to Roofing OS!',
+      html: generateWelcomeEmail(firstName, owner_name || '', owner_email),
     })
   }).catch(() => {});
 

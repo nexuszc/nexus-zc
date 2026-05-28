@@ -1,71 +1,61 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width">
-  <title>Opening Roofing OS...</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0f1a;
-      color: #ffffff;
-      font-family: -apple-system, 'Inter', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      flex-direction: column;
-      gap: 24px;
-    }
-    .logo {
-      font-size: 24px;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.5px;
-    }
-    .logo span { color: #4a9eff; }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(74,158,255,0.2);
-      border-top-color: #4a9eff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .message {
-      font-size: 16px;
-      color: #8896a8;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<title>Signing you in — Roofing OS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#0a0f1a;color:#fff;
+  font-family:-apple-system,sans-serif;
+  display:flex;align-items:center;
+  justify-content:center;min-height:100vh;
+  text-align:center;padding:24px;
+}
+.spinner{
+  width:48px;height:48px;
+  border:3px solid rgba(255,255,255,0.1);
+  border-top:3px solid #4a9eff;
+  border-radius:50%;
+  animation:spin 0.8s linear infinite;
+  margin:0 auto 24px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+h1{font-size:22px;font-weight:700;margin-bottom:8px}
+p{font-size:14px;color:#6b7280;line-height:1.6;margin-top:8px}
+.logo{font-size:20px;font-weight:800;color:#fff;margin-bottom:32px;display:block;text-decoration:none}
+.logo span{color:#4a9eff}
+</style>
 </head>
 <body>
-  <div class="logo">Roofing<span>OS</span></div>
+<div>
+  <a class="logo" href="https://roofingos.dev">Roofing<span>OS</span></a>
   <div class="spinner"></div>
-  <p class="message">Opening your dashboard...</p>
+  <h1>Signing you in...</h1>
+  <p>Opening your dashboard now.</p>
+</div>
+<script>
+  const hash = window.location.hash.substring(1)
+  const hashParams = new URLSearchParams(hash)
+  const queryParams = new URLSearchParams(window.location.search)
 
-  <script>
-    const hash = window.location.hash;
+  const token = hashParams.get('access_token') || queryParams.get('access_token')
+  const error = hashParams.get('error') || queryParams.get('error')
 
-    if (hash && hash.includes('access_token')) {
-      window.location.replace(
-        'https://app.nexuszc.com/roofing/jobs' + hash
-      );
-    } else if (hash && hash.includes('error')) {
-      document.querySelector('.message').textContent =
-        'Link expired. Please request a new one.';
-      document.querySelector('.spinner').style.display = 'none';
-
-      const btn = document.createElement('a');
-      btn.href = 'https://roofingos.dev/login';
-      btn.style.cssText = 'background:#4a9eff;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:8px';
-      btn.textContent = 'Get a new link →';
-      document.body.appendChild(btn);
-    } else {
-      window.location.replace('https://roofingos.dev/login');
-    }
-  </script>
+  if (error) {
+    document.querySelector('h1').textContent = 'Link expired'
+    document.querySelector('p').innerHTML =
+      'This link has expired.<br>' +
+      '<a href="https://roofingos.dev/login" style="color:#4a9eff">Request a new one →</a>'
+    document.querySelector('.spinner').style.display = 'none'
+  } else {
+    window.location.replace(
+      'https://app.nexuszc.com/roofing/jobs' +
+      window.location.hash +
+      (window.location.hash ? '' : window.location.search)
+    )
+  }
+</script>
 </body>
 </html>
