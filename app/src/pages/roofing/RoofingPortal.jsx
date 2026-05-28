@@ -696,6 +696,10 @@ const TABS = [
   { id: 'docs',     label: 'Docs',     Icon: DocIcon     },
 ]
 
+// ─── Demo render URLs ────────────────────────────────────────────────────
+const DEMO_RENDER_BASE = 'https://koqpbnxkhgbsnbdjwldx.supabase.co/storage/v1/object/public/demo-photos/demo/renders/sarah-johnson'
+const getDemoRender = (angleUrl, colorId) => `${DEMO_RENDER_BASE}/${getAngleKey(angleUrl)}/${colorId}.jpeg`
+
 // ─── Design tab constants ─────────────────────────────────────────────────
 const SHINGLES = [
   { id: 'gaf-charcoal',  brand: 'GAF Timberline HDZ',    name: 'Charcoal',       hex: '#3d3d3d', badge: 'Most Popular' },
@@ -753,6 +757,21 @@ function ColorsTab({ data, token, isDemo }) {
   const [loveSaving, setLoveSaving]     = useState(false)
   const [loveSaved, setLoveSaved]       = useState(false)
   const [shared, setShared]             = useState(false)
+  const [renderReady, setRenderReady]   = useState({}) // { "url|colorId": true }
+
+  // Preload all renders for current angle
+  useEffect(() => {
+    if (!isDemo || !activeUrl) return
+    SHINGLES.forEach(s => {
+      const renderUrl = getDemoRender(activeUrl, s.id)
+      const key = `${activeUrl}|${s.id}`
+      if (renderReady[key]) return
+      const img = new window.Image()
+      img.onload  = () => setRenderReady(p => ({ ...p, [key]: true }))
+      img.onerror = () => {} // fall back to CSS overlay
+      img.src = renderUrl
+    })
+  }, [activeUrl, isDemo])
 
   const tip = getContextTip(shingle, gutter)
 
@@ -824,27 +843,35 @@ function ColorsTab({ data, token, isDemo }) {
         </div>
       )}
 
-      {/* Photo + color overlay */}
-      <div style={{ position: 'relative', margin: '12px 0 0', overflow: 'hidden' }}>
-        {activeUrl ? (
-          <>
-            <img src={activeUrl} alt="Your home" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block' }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle?.hex || 'transparent', mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
+      {/* Photo + color overlay (or real SAM render) */}
+      {(() => {
+        if (!activeUrl) return (
+          <div style={{ margin: '12px 20px 0', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
+            <p style={{ margin: '0 0 4px', fontSize: 22 }}>🏠</p>
+            <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Photos will appear here after the inspection</p>
+          </div>
+        )
+        const renderKey = `${activeUrl}|${shingle?.id}`
+        const hasRender = isDemo && renderReady[renderKey]
+        const displayUrl = hasRender ? getDemoRender(activeUrl, shingle.id) : activeUrl
+        return (
+          <div style={{ position: 'relative', margin: '12px 0 0', overflow: 'hidden' }}>
+            <img key={displayUrl} src={displayUrl} alt="Your home" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s' }} />
+            {/* CSS overlay when no render yet */}
+            {!hasRender && (
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '52%', background: shingle?.hex || 'transparent', mixBlendMode: 'multiply', opacity: 0.38, pointerEvents: 'none', transition: 'background 0.22s' }} />
+            )}
+            {/* Label pill */}
             <div style={{ position: 'absolute', bottom: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(10,15,26,0.88)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderRadius: 10, padding: '8px 14px', border: `1px solid ${C.border}` }}>
               <div style={{ width: 18, height: 18, borderRadius: '50%', background: shingle?.hex, flexShrink: 0, border: '1px solid rgba(255,255,255,0.15)' }} />
               <div>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{shingle?.name}</p>
-                <p style={{ margin: 0, fontSize: 10, color: C.muted }}>{shingle?.brand}</p>
+                <p style={{ margin: 0, fontSize: 10, color: hasRender ? C.success : C.muted }}>{hasRender ? '✓ AI render' : shingle?.brand}</p>
               </div>
             </div>
-          </>
-        ) : (
-          <div style={{ margin: '0 20px', padding: '32px 20px', background: C.surface, borderRadius: 16, textAlign: 'center', border: `1px solid ${C.border}` }}>
-            <p style={{ margin: '0 0 4px', fontSize: 22 }}>🏠</p>
-            <p style={{ margin: 0, fontSize: 13, color: C.muted }}>Photos will appear here after the inspection</p>
           </div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* Context tip */}
       {tip && activeUrl && (
