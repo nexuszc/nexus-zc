@@ -656,6 +656,9 @@ Then productized and sold to other multi-business operators.
   - contractor-signup: generates magic link with redirectTo=roofingos.dev/auth/verify; sends simple welcome email; FROM "Zach from Roofing OS <zach@roofingos.dev>"
   - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false
   - Supabase auth redirect URLs locked down May 28: uri_allow_list = roofingos.dev/**, app.roofingos.dev/**, portal.roofingos.dev/**; site_url = https://roofingos.dev (set via management API)
+  - Custom SMTP configured May 28: smtp.resend.com:465, user=resend, sender="Zach from Roofing OS", admin=zach@roofingos.dev — magic links now send from roofingos.dev not noreply@mail.supabase.io
+  - Magic link email template branded May 28: subject "Open your Roofing OS dashboard", RoofingOS dark header + blue CTA, Denver address, unsubscribe link — no Supabase branding anywhere
+  - roofingos.dev verified in Resend (us-east-1); nexuszc.com also verified
 
 **Roofing OS SEO Machine (May 26, 2026):**
 - DB: 6 tables — seo_pillars, seo_posts, seo_keyword_queue, seo_competitor_content, seo_performance, seo_internal_links
