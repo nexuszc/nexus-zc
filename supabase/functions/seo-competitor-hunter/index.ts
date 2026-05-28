@@ -72,7 +72,7 @@ type Competitor = typeof COMPETITORS[number];
 // ---------------------------------------------------------------------------
 
 async function sendTelegram(msg: string) {
-  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
+  try { await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }) } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -250,10 +250,12 @@ async function analyzeCompetitorSitemap(competitor: Competitor): Promise<{
 
     // High-priority gaps → keyword queue
     if (score >= 8) {
-      await supabase.from("seo_keyword_queue").upsert(
-        { keyword, source: "competitor_sitemap", intent_score: 15, status: "pending" },
-        { onConflict: "keyword" },
-      ).catch(() => {});
+      try {
+        await supabase.from("seo_keyword_queue").upsert(
+          { keyword, source: "competitor_sitemap", intent_score: 15, status: "pending" },
+          { onConflict: "keyword" },
+        );
+      } catch {}
       gapsQueued++;
     }
   }
@@ -349,11 +351,12 @@ async function scrapeCompetitorPricing(competitor: Competitor): Promise<string[]
 
 async function updateVsPagePricing(competitorName: string, prices: string[]): Promise<void> {
   if (prices.length === 0) return;
-  await supabase
-    .from("seo_vs_pages")
-    .update({ pricing_raw: prices, pricing_updated_at: new Date().toISOString() })
-    .eq("competitor", competitorName)
-    .catch(() => {});
+  try {
+    await supabase
+      .from("seo_vs_pages")
+      .update({ pricing_raw: prices, pricing_updated_at: new Date().toISOString() })
+      .eq("competitor", competitorName);
+  } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -374,15 +377,21 @@ async function processCompetitor(competitor: Competitor): Promise<{
   let newBlogPosts = 0;
   for (const post of blogPosts) {
     const keyword = extractKeywordFromTitle(post.title);
-    const { error } = await supabase.from("seo_competitor_content").insert({
-      competitor: competitor.name, url: post.url, title: post.title, keyword,
-    }).catch(() => ({ error: { code: "err" } }));
-    if (!error) {
+    let insertError: { code?: string } | null = null;
+    try {
+      const { error } = await supabase.from("seo_competitor_content").insert({
+        competitor: competitor.name, url: post.url, title: post.title, keyword,
+      });
+      insertError = error;
+    } catch { insertError = { code: "err" }; }
+    if (!insertError) {
       newBlogPosts++;
-      await supabase.from("seo_keyword_queue").upsert(
-        { keyword, source: "competitor_blog", intent_score: 18, status: "pending" },
-        { onConflict: "keyword" },
-      ).catch(() => {});
+      try {
+        await supabase.from("seo_keyword_queue").upsert(
+          { keyword, source: "competitor_blog", intent_score: 18, status: "pending" },
+          { onConflict: "keyword" },
+        );
+      } catch {}
     }
   }
 
