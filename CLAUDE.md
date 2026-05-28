@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 27, 2026 — v15
+# Last updated: May 28, 2026 — v16
 
 ---
 
@@ -467,8 +467,8 @@ Then productized and sold to other multi-business operators.
 | Step | URL | Notes |
 |------|-----|-------|
 | Signup | `roofingos.dev/signup` | Creates `contractor_accounts` row, sends welcome email/SMS |
-| Login | `app.nexuszc.com/roofing/login` | Email magic link via Supabase OTP |
-| Dashboard | `app.nexuszc.com/roofing/jobs` | React app, requires Supabase session |
+| Login | `app.roofingos.dev/roofing/login` | Email magic link via Supabase OTP |
+| Dashboard | `app.roofingos.dev/roofing/jobs` | React app, requires Supabase session |
 
 **Auth implementation details:**
 - `ContractorContext.jsx` calls `contractor-auth` with `action: get_contractor` on every load
@@ -651,10 +651,10 @@ Then productized and sold to other multi-business operators.
 - Full 20-item smoke test: **20/20 PASS** (legal, revenue, system, security, content, Aria TCPA — all green)
 - NOTE: hail-trigger and lead-sniper are stopped on VPS (intentional during Aria emergency stop — re-enable after dedup fix)
 - Magic link UX: roofingos.dev/auth/verify handles all auth redirects — zero Supabase branding
-  - roofingos-landing/auth/verify.html — branded loading page, reads #access_token, redirects to app.nexuszc.com/roofing/jobs
-  - _redirects: /auth/verify → verify.html (200 rewrite), /auth/* → verify.html (200 rewrite)
-  - contractor-signup: generates magic link with redirectTo=roofingos.dev/auth/verify; sends beautiful HTML email "Your Roofing OS dashboard is ready →" with embedded button; FROM "Zach from Roofing OS <zach@roofingos.dev>"
-  - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false, "Send my dashboard link →", success message names zach@roofingos.dev sender
+  - roofingos-landing/auth/verify.html — branded loading page, reads #access_token, redirects to app.roofingos.dev/roofing/jobs
+  - _redirects: NO .html rewrite rules — Cloudflare Clean URLs serves verify.html natively at /auth/verify (adding 200 rewrite causes infinite redirect loop)
+  - contractor-signup: generates magic link with redirectTo=roofingos.dev/auth/verify; sends simple welcome email; FROM "Zach from Roofing OS <zach@roofingos.dev>"
+  - RoofingLogin: emailRedirectTo=roofingos.dev/auth/verify, shouldCreateUser=false
   - REQUIRED MANUAL STEP: Supabase Dashboard → Authentication → URL Configuration → Redirect URLs → add https://roofingos.dev/auth/** (needed for client-side OTP to honor the redirectTo)
 
 **Roofing OS SEO Machine (May 26, 2026):**
@@ -732,13 +732,24 @@ Then productized and sold to other multi-business operators.
 - Phase 6 (Dashboard): RoofingSEO.jsx — 6 new stat cards (Location Pages X/50, VS Pages X/6, Competitor Gaps N, Questions Queued N, Free Tools X/5); Content Map tab: location page grid with hail badges + Build buttons, VS page cards with Write Now, tools table, competitor gaps table with priority score + Write Counter, questions queue with Write Now
 - CRITICAL MODEL RULES: Haiku (claude-haiku-4-5-20251001) for location pages + questions + homeowner posts. Sonnet (claude-sonnet-4-6) for VS comparison pages only.
 
+**Roofing OS — Job Creation + UX Fixes (May 28, 2026):**
+- BUG FIX: `roofing_jobs` RLS INSERT policy was permanently broken — `contractor_auth` table had 0 rows and `contractor_accounts` has no `client_id` column, so every insert silently failed. Replaced with: `contractor_id IN (SELECT id FROM contractor_accounts WHERE owner_email = auth.jwt() ->> 'email')`. Migration: `fix_roofing_jobs_rls_insert`.
+- Removed `storm_damage` job type from `RoofingNewJob.jsx` and `RoofingOnboarding.jsx` — new jobs now offer Insurance / Retail / Repair only. Old jobs with `storm_damage` still display via `JOB_TYPE_LABELS` map in KanbanView.
+- Kanban rewrite: 4 new columns (New / In Progress / Complete / Review Requested); priority assignment: `review_requested=true` takes top priority, then status-based bucketing; mobile-first single-column list at <768px with colored left border, 4-column grid at ≥768px.
+- Domain separation completed: all `app.nexuszc.com` refs removed from roofer-facing pages, landing pages, CORS origins; verify.html redirects to `app.roofingos.dev`; contractor auth flow updated in docs.
+
+## ROOFING OS — RLS NOTES (critical)
+- `roofing_jobs` INSERT/UPDATE/DELETE: policy checks `contractor_id IN (SELECT id FROM contractor_accounts WHERE owner_email = auth.jwt() ->> 'email')`
+- `roofing_jobs` SELECT: two permissive policies (`owner_select` = all authenticated, `anon portal read jobs` = all anon) — any logged-in user can SELECT all jobs; filtering happens in application layer
+- `contractor_auth` table exists but is empty — do NOT write RLS policies that depend on it
+
 **NEXT:**
-1. Pillars are building in background right now (triggered via waitUntil) — check seo_pillars table for results
-2. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
-4. Add Self-Learning Pattern Recognition
-5. Add memory consolidation ability
-6. Draft operating agreement for Nexus ZC LLC
-7. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
+1. Re-enable Aria calling — requires: (a) dedup guard in queue processor, (b) max 3 attempts/contact/30 days cap, (c) audit aria-queue-processor for re-queuing loop; then restart hail-trigger + lead-sniper on VPS
+2. Add Self-Learning Pattern Recognition
+3. Add memory consolidation ability
+4. Draft operating agreement for Nexus ZC LLC
+5. Delete stale YouTube video YF63mpQB7_g manually via YouTube Studio (OAuth lacks delete scope)
+6. Check seo_pillars table — pillars were building in background (waitUntil) after May 26 session
 
 ---
 
