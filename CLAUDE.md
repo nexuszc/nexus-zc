@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 30, 2026 — v18
+# Last updated: May 30, 2026 — v19
 
 ---
 
@@ -548,6 +548,18 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 30, 2026)
 
+**Nexus Admin UX Simplification (May 30, 2026):**
+- Killed the dual-dashboard problem: /roofing (RoofingOS shell) retired as nav hub; /roofing/dashboard is the one true admin home
+- RoofingVertical: Operations card removed (was navigating to /roofing/admin/jobs — wrong context for admin); SEO card added (green #10b981 accent → /roofing/seo) with live post/keyword/video counts from seo_posts + seo_keyword_queue queries
+- RoofingVertical: Marketing subtitle changed to descriptive "Email · YouTube · Social · Outreach"; Product & System subtitle updated to "Feature status · Health · Fixes"
+- nexus_verticals DB: slug='roofing' route updated from /roofing/admin/jobs to /roofing/dashboard
+- RoofingOS shell: System tab fixed from dead /roofing/system to /roofing/product-status
+- RoofingSEO: back nav fixed from / ("← Dashboard") to /roofing/dashboard ("← Roofing OS")
+- RoofingSales: "Force 20 Calls" button replaced with ⏸ ARIA PAUSED warning block (Aria still under emergency stop)
+- RoofingFinance: bar chart label corrected from "REVENUE — LAST 30 DAYS" to "CONTRACTOR SIGNUPS — LAST 30 DAYS"
+- RoofingCustomers: "View →" button removed (was navigating to all jobs unfiltered, not contractor-specific)
+- All other back-navs (Marketing, Sales, Finance, Customers) were already pointing to /roofing/dashboard — no changes needed
+
 **Social Monitoring Dashboard (May 30, 2026):**
 - DB: social_posts, social_opportunities, social_queue tables (created prior session); social_queue.slug + social_queue.post_title columns added this session
 - Edge: social-reddit-monitor — scans 8 subreddits × 13 keywords via Serper (`site:reddit.com/r/<sub>` prefix, `tbs:qdr:w` past week), scores threads by intent (recommend +3, alternative +4, competitor mention +5, etc.), drafts Haiku reply for score≥5 only, saves to social_opportunities; NO Telegram — dashboard only; cron job #84 (0 8,14,20 * * *)
@@ -711,16 +723,33 @@ Then productized and sold to other multi-business operators.
 - supabase.js storageKey: nexus-admin-session
 - briefing v5 deployed: email 24h (sent/opened/clicked/HOT openers), YouTube live count + views, funnel movement 24h
 
-## NEXUS ADMIN NAVIGATION (as of May 24, 2026)
-- `/` → NexusDashboard (Nexus admin home — portfolio view)
-- `/roofing/dashboard` → RoofingVertical (standalone, has own back nav to /)
-- `/roofing/marketing` → RoofingMarketing (standalone, 4 tabs)
-- `/roofing/sales` → RoofingSales (standalone)
-- `/roofing/finance` → RoofingFinance (standalone)
-- `/roofing/customers` → RoofingCustomers (standalone)
-- `/roofing` → RoofingOS (admin shell, now 6-tab nav pointing to standalone pages)
-- `/home` → redirects to / (NexusDashboard)
-- Standalone pages have their own sticky headers with "← Nexus" back nav to /
+## NEXUS ADMIN NAVIGATION (as of May 30, 2026)
+
+**The one true path:**
+```
+/ → click Roofing OS → /roofing/dashboard → click section card → section page → ← Roofing OS → /roofing/dashboard → ← Dashboard → /
+```
+
+**Route map:**
+- `/` → NexusDashboard (portfolio home — revenue banner, verticals grid, brain stats)
+- `/roofing/dashboard` → RoofingVertical — THE ONE TRUE ADMIN HOME for Roofing OS
+  - 6 stat cards: Revenue / Contractors / Hot Leads / Emails Opened / Aria Calls / Supplements
+  - 6 section cards: Marketing / Sales / SEO / Finance / Customers / Product & System
+  - Back nav: ← Dashboard → /
+- `/roofing/marketing` → RoofingMarketing (4 tabs: Email/YouTube/Outreach/Content)
+- `/roofing/sales` → RoofingSales (whale leads, hot leads, funnel, Aria queue)
+- `/roofing/seo` → RoofingSEO (5+ tabs: Overview/Posts/Keywords/Competitors/Pillars/Content Map)
+- `/roofing/finance` → RoofingFinance (MRR, contractor signups chart, billing table)
+- `/roofing/customers` → RoofingCustomers (contractor list, plan counts, magic link)
+- `/roofing/social` → RoofingSocial (Reddit opportunities, post queue — 3 tabs)
+- `/roofing/product-status` → RoofingRoadmap (feature status, click-to-edit version/status)
+- `/roofing` → RoofingOS (old admin shell — RETIRED as nav hub, still in code; System tab → /roofing/product-status)
+
+**Rules:**
+- All standalone pages back-nav to `/roofing/dashboard` with label "← Roofing OS"
+- nexus_verticals.route for slug='roofing' is '/roofing/dashboard' (updated in DB May 30)
+- /roofing (RoofingOS shell) is no longer linked from anywhere — nothing navigates to it
+- Operations card was removed from RoofingVertical (was linking to /roofing/admin/jobs — wrong context)
 - All under ProtectedRoute (Supabase admin session), no Layout shell
 
 **Master Fix Session (May 26, 2026):**
