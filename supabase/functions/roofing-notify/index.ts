@@ -75,8 +75,8 @@ Deno.serve(async (req) => {
   if (!job) return json({ error: "Job not found" }, 404);
 
   const contractor = job.clients;
-  const portalUrl = `https://app.nexuszc.com/roofing/portal/${job.portal_token}`;
-  const jobUrl = `https://app.nexuszc.com/roofing/jobs/${job_id}`;
+  const portalUrl = `https://roofingos.dev/portal/${job.portal_token}`;
+  const jobUrl = `https://app.roofingos.dev/roofing/jobs/${job_id}`;
 
   // ── PORTAL LIMIT (free tier: 3 portals/month) ────────────────────────────
   if (event === "portal_link") {
@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
     if (job.homeowner_phone) {
       notifications.push(sendSMS(
         job.homeowner_phone,
-        `Hi ${job.homeowner_name}! ${contractor.name} has set up your roofing project portal. Track progress, photos, and documents here: ${portalUrl}`
+        `Hi ${job.homeowner_name}! ${contractor?.name || 'Your contractor'} has set up your roofing project portal. Track progress, photos, and documents here: ${portalUrl}`
       ));
     }
   }

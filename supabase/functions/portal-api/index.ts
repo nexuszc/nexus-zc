@@ -115,12 +115,38 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { data: session } = await supabase
+  const { data: sessionRow } = await supabase
     .from("homeowner_sessions")
     .select("*, roofing_jobs(*)")
     .eq("magic_link_token", token)
     .gt("magic_link_expires_at", new Date().toISOString())
     .maybeSingle();
+
+  // Fallback: look up by roofing_jobs.portal_token for jobs that have no session row yet
+  // eslint-disable-next-line prefer-const
+  let session: typeof sessionRow = sessionRow;
+  if (!session) {
+    const { data: jobByToken } = await supabase
+      .from("roofing_jobs")
+      .select("*")
+      .eq("portal_token", token)
+      .maybeSingle();
+    if (jobByToken) {
+      session = {
+        id: null,
+        job_id: jobByToken.id,
+        roofing_jobs: jobByToken,
+        access_count: 0,
+        homeowner_name: jobByToken.homeowner_name,
+        homeowner_phone: jobByToken.homeowner_phone,
+        homeowner_email: jobByToken.homeowner_email || "",
+        preferred_language: "en",
+        notification_preferences: { sms: true, email: true, major_only: false },
+        last_accessed_at: null,
+        created_at: jobByToken.created_at,
+      } as typeof session;
+    }
+  }
 
   if (!session) {
     return Response.json({ error: "Invalid or expired link" }, {
@@ -129,13 +155,15 @@ Deno.serve(async (req) => {
     });
   }
 
-  await supabase
-    .from("homeowner_sessions")
-    .update({
-      last_accessed_at: new Date().toISOString(),
-      access_count: (session.access_count || 0) + 1
-    })
-    .eq("id", session.id);
+  if (session.id) {
+    await supabase
+      .from("homeowner_sessions")
+      .update({
+        last_accessed_at: new Date().toISOString(),
+        access_count: (session.access_count || 0) + 1
+      })
+      .eq("id", session.id);
+  }
 
   const jobId = session.job_id;
   const job = session.roofing_jobs as Record<string, unknown> | null;

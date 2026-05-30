@@ -308,7 +308,6 @@ function BottomNav() {
     { icon: '🏠', label: 'Jobs', path: '/roofing/jobs' },
     { icon: '＋', label: 'New Job', path: '/roofing/jobs/new' },
     { icon: '🚪', label: 'Canvass', path: '/roofing/canvass' },
-    { icon: '👥', label: 'Crew', path: '/roofing/crew' },
     { icon: '⚙️', label: 'Settings', path: '/roofing/settings' },
   ]
   return (
@@ -316,7 +315,7 @@ function BottomNav() {
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
       background: C.surface,
       borderTop: `1px solid ${C.border}`,
-      display: 'grid', gridTemplateColumns: `repeat(5, 1fr)`,
+      display: 'grid', gridTemplateColumns: `repeat(4, 1fr)`,
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       height: '64px',
     }}>
@@ -510,7 +509,7 @@ export default function RoofingDashboard() {
 
   useEffect(() => {
     if (!loading && jobs.length === 0 && contractor && contractor.onboarding_complete === false) {
-      navigate('/roofing/onboarding')
+      navigate('/roofing/onboarding-setup')
     }
   }, [loading, jobs.length, contractor, navigate])
 
