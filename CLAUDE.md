@@ -573,6 +573,15 @@ Then productized and sold to other multi-business operators.
 - VPS env var: SUPABASE_SERVICE_KEY (NOT SUPABASE_SERVICE_ROLE_KEY — that's for edge functions only)
 - All 4 new DB tables have: GRANT ALL ON <table> TO anon, authenticated, service_role
 
+**SEO + YouTube V10 — Full Autonomous Loop (May 30, 2026):**
+- Edge: seo-orchestrator — master brain, runs every 6h; reads health (posts/keywords/videos/backlinks), decides and fires needed functions autonomously; sends Telegram summary (cron job #82, every 6h)
+- Edge: nexus-seo-advisor — Sonnet-powered COO advisory MWF 13:30 UTC; analyzes full SEO state (posts/videos/backlinks/GSC/trending), sends actionable briefing to Telegram; saves to entries table (cron job #83)
+- Telegram commands added: "seo boost" → orchestrator, "seo brief" → advisor, "seo backlinks" → backlink-engine, "seo write [topic]" → content-writer, "youtube now" → youtube-script-engine v2
+- VPS: /opt/roofing/seo/master.js — PM2 ID 11, cron 0 5 * * * (11pm MT); pulls latest, runs worker-manager then youtube-producer-v3 sequentially; reports run results to seo_vps_runs table
+- DB: seo_vps_runs — nightly VPS run tracking (run_at, results jsonb, pages_generated, videos_produced)
+- First run: orchestrator fired (content-writer + internal-linker), advisory sent to Telegram; master.js ran worker-manager (building location/carrier/material/state pages)
+- Full closed loop: keywords → content → publish → IndexNow → GSC → optimizer → rewrite → republish
+
 **SEO + YouTube V8 — Self-Optimizing Machine (May 30, 2026):**
 - DB: seo_posts.original_title column added (stores pre-rewrite title for rollback/tracking)
 - Edge: seo-self-optimizer — rewrites weak titles (pos 10-20, CTR <3%, >50 impressions), expands thin posts (<800 words, +300-word H2 section), queues trending keywords, triggers seo-internal-linker sweep; cron Monday 14 UTC (job #78)

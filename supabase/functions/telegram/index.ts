@@ -488,15 +488,15 @@ Deno.serve(async (req) => {
     // youtube now
     if (/^youtube now$/i.test(text)) {
       EdgeRuntime.waitUntil((async () => {
-        await sendTelegramMessage(chatId, `🎬 Generating 8 YouTube scripts... (3-5 min)`);
+        await sendTelegramMessage(chatId, `🎬 Generating 5 YouTube scripts...\nVideos will render next producer cycle.`);
         try {
-          await fetch(`${SUPABASE_URL}/functions/v1/roofing-youtube-engine`, {
+          await fetch(`${SUPABASE_URL}/functions/v1/youtube-script-engine`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({}),
+            body: JSON.stringify({ scheduled: true }),
           });
         } catch (e) {
-          await sendTelegramMessage(chatId, `❌ YouTube engine failed: ${e}`);
+          await sendTelegramMessage(chatId, `❌ YouTube script engine failed: ${e}`);
         }
       })());
       return new Response("ok");
@@ -604,6 +604,62 @@ Deno.serve(async (req) => {
         } catch (e) {
           await sendTelegramMessage(chatId, `❌ YouTube publisher failed: ${e}`);
         }
+      })());
+      return new Response("ok");
+    }
+
+    // ── SEO COMMANDS ─────────────────────────────────────────────────────────────
+
+    // seo boost → run full orchestrator
+    if (/^seo boost$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `🚀 SEO Orchestrator running...\nWill update in ~2 minutes.`);
+        fetch(`${SUPABASE_URL}/functions/v1/seo-orchestrator`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled: true }),
+        }).catch(() => {});
+      })());
+      return new Response("ok");
+    }
+
+    // seo brief → nexus advisory
+    if (/^seo brief$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `📊 Generating SEO brief...`);
+        fetch(`${SUPABASE_URL}/functions/v1/nexus-seo-advisor`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled: true }),
+        }).catch(() => {});
+      })());
+      return new Response("ok");
+    }
+
+    // seo backlinks → draft outreach
+    if (/^seo backlinks$/i.test(text)) {
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `🔗 Drafting backlink outreach...`);
+        fetch(`${SUPABASE_URL}/functions/v1/seo-backlink-engine`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ limit: 5, scheduled: true }),
+        }).catch(() => {});
+      })());
+      return new Response("ok");
+    }
+
+    // seo write [topic] → write post now
+    const seoWriteMatch = text.match(/^seo write (.+)$/i);
+    if (seoWriteMatch) {
+      const topic = seoWriteMatch[1].trim();
+      EdgeRuntime.waitUntil((async () => {
+        await sendTelegramMessage(chatId, `✍️ Writing post about: ${topic}\nWill be live in ~5 minutes.`);
+        fetch(`${SUPABASE_URL}/functions/v1/seo-content-writer`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ keyword: topic, scheduled: true }),
+        }).catch(() => {});
       })());
       return new Response("ok");
     }
