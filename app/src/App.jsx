@@ -28,6 +28,7 @@ import RoofingTeam from './pages/roofing/RoofingTeam'
 import RoofingInspection from './pages/roofing/RoofingInspection'
 import RoofingOnboardingSetup from './pages/roofing/RoofingOnboardingSetup'
 import RoofingUpgrade from './pages/roofing/RoofingUpgrade'
+import RoofingRoadmap from './pages/roofing/RoofingRoadmap'
 import OutreachDashboard from './pages/OutreachDashboard'
 import { ContractorProvider } from './context/ContractorContext'
 import Layout from './components/Layout'
@@ -111,6 +112,7 @@ export default function App() {
             <Route path="/roofing/canvass" element={<RoofingCanvass />} />
             <Route path="/roofing/onboarding-setup" element={<RoofingOnboardingSetup />} />
             <Route path="/roofing/upgrade" element={<RoofingUpgrade />} />
+            <Route path="/roofing/roadmap" element={<RoofingRoadmap />} />
           </Route>
         </Route>
 

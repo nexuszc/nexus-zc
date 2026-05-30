@@ -426,6 +426,7 @@ export default function RoofingSettings() {
           {[
             { label: 'Roof Measurements', desc: 'Aerial measurements & material estimates', path: '/roofing/measurements', icon: '📐' },
             { label: 'Integrations', desc: 'Connect CompanyCam, Stripe, and more', path: '/roofing/integrations', icon: '🔌' },
+            { label: 'Product Roadmap', desc: 'See every feature and what you have unlocked', path: '/roofing/roadmap', icon: '🗺️' },
           ].map(tool => (
             <div
               key={tool.path}
