@@ -1,6 +1,17 @@
 User-agent: *
 Allow: /
-Disallow: /dashboard
 
-Sitemap: https://roofingos.dev/sitemap-index.xml
+# Block low-value pages
+Disallow: /auth/
+Disallow: /portal/
+
+# Prioritize these for crawling
+Allow: /blog/
+Allow: /locations/
+Allow: /vs/
+Allow: /carriers/
+Allow: /materials/
+Allow: /states/
+Allow: /plans/
+
 Sitemap: https://roofingos.dev/sitemap.xml
