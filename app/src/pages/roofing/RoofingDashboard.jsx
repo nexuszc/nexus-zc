@@ -362,35 +362,48 @@ function FirstJobExperience({ contractorId, contractorClientId, contractorName }
     setSaving(true)
     setError('')
     try {
-      const { data: acct } = await supabase.from('contractor_accounts').select('plan, job_limit, jobs_used').eq('id', contractorId).single()
+      // Plan check is best-effort — never blocks the insert
+      let acct = null
+      try {
+        const { data } = await supabase.from('contractor_accounts').select('plan, job_limit, jobs_used').eq('id', contractorId).single()
+        acct = data
+      } catch (_) {}
+
       if (acct?.plan === 'free') {
         const used = acct.jobs_used || 0
         const limit = acct.job_limit || 5
         if (used >= limit) {
           setError(`You've used all ${limit} free jobs. Upgrade to Starter ($149/mo) for unlimited jobs.`)
-          setSaving(false)
           window.open(`https://roofingos.dev/upgrade?contractor_id=${contractorId}`, '_blank')
           return
         }
       }
+
       const { data: job, error: err } = await supabase.from('roofing_jobs').insert({
         homeowner_name: form.name.trim(), property_address: form.address.trim(),
         homeowner_email: form.email.trim() || null, homeowner_phone: form.phone.trim() || null,
         contractor_id: contractorId, client_id: contractorClientId || null, status: 'lead',
       }).select().single()
       if (err) throw err
-      if (acct) await supabase.from('contractor_accounts').update({ jobs_used: (acct.jobs_used || 0) + 1 }).eq('id', contractorId)
+
+      // Fire-and-forget side effects — never block or throw
+      if (acct) {
+        try { await supabase.from('contractor_accounts').update({ jobs_used: (acct.jobs_used || 0) + 1 }).eq('id', contractorId) } catch (_) {}
+      }
       if (form.email || form.phone) {
-        await fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
+        fetch(`${SUPABASE_URL}/functions/v1/roofing-notify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
           body: JSON.stringify({ event: 'portal_link', job_id: job.id }),
         }).catch(() => {})
       }
+
       setCreated(job)
       setTimeout(() => navigate(`/roofing/jobs/${job.id}`), 2000)
-    } catch {
+    } catch (err) {
+      console.error('handleCreate failed:', err)
       setError('Could not create job. Try again.')
+    } finally {
       setSaving(false)
     }
   }
