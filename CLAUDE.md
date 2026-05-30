@@ -573,6 +573,15 @@ Then productized and sold to other multi-business operators.
 - VPS env var: SUPABASE_SERVICE_KEY (NOT SUPABASE_SERVICE_ROLE_KEY — that's for edge functions only)
 - All 4 new DB tables have: GRANT ALL ON <table> TO anon, authenticated, service_role
 
+**SEO + YouTube V8 — Self-Optimizing Machine (May 30, 2026):**
+- DB: seo_posts.original_title column added (stores pre-rewrite title for rollback/tracking)
+- Edge: seo-self-optimizer — rewrites weak titles (pos 10-20, CTR <3%, >50 impressions), expands thin posts (<800 words, +300-word H2 section), queues trending keywords, triggers seo-internal-linker sweep; cron Monday 14 UTC (job #78)
+- Edge: seo-trend-detector — 8 Serper news searches daily, extracts 3-5 blog keywords per search via Haiku, upserts to seo_keyword_queue; cron daily 8 UTC (job #79)
+- Edge: youtube-performance — polls YouTube Data API for view/like/comment stats on published videos, upserts youtube_videos, sends weekly digest to telegram_digest_queue; cron Monday 9 UTC (job #80)
+- Edge: seo-daily-brief — gathers stats from 6 tables, generates 100-word brief via Haiku, sends to Telegram at 7:30am MT (13:30 UTC); cron daily 13:30 UTC (job #81)
+- All 4 edge functions: SUPABASE_SERVICE_ROLE_KEY (Deno runtime)
+- First run results: self-optimizer expanded 5 thin posts; daily brief sent to Telegram (13 posts, 128 pending keywords, 10 ready outreach, 5 YouTube videos live)
+
 **SEO V5 — Authority / Backlink Machine (May 30, 2026):**
 - DB: seo_backlink_targets — 21 high-DA targets seeded (DA 34–91; Capterra, G2, This Old House, Angi, Insurance Journal, etc.)
 - DB: seo_haro_opportunities — HARO/Connectively opportunity queue
