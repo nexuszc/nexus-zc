@@ -60,8 +60,10 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 200, headers: CORS_HEADERS });
   }
 
+  try {
+
   const body = await req.json().catch(() => ({}));
-  if (body.test) return json({ ok: true, message: "roofing-notify v47 ready" });
+  if (body.test) return json({ ok: true, message: "roofing-notify v48 ready" });
 
   const { event, job_id, data } = body;
   if (!job_id) return json({ error: "job_id required" }, 400);
@@ -74,7 +76,31 @@ Deno.serve(async (req) => {
 
   if (!job) return json({ error: "Job not found" }, 404);
 
-  const contractor = job.clients;
+  // Resolve contractor: prefer legacy clients row, fall back to contractor_accounts
+  let contractor = job.clients as Record<string, unknown> | null;
+  if (!contractor && job.contractor_id) {
+    const { data: acct } = await supabase
+      .from("contractor_accounts")
+      .select("company_name, owner_email, owner_phone, primary_color, logo_url")
+      .eq("id", job.contractor_id)
+      .maybeSingle();
+    if (acct) {
+      contractor = {
+        name: acct.company_name,
+        phone: acct.owner_phone,
+        notification_email: acct.owner_email,
+        notify_sms: true,
+        notify_email: true,
+        primary_color: acct.primary_color,
+        logo_url: acct.logo_url,
+        company_tagline: null,
+      };
+    }
+  }
+  if (!contractor) {
+    contractor = { name: "Your Contractor", phone: null, notification_email: null, notify_sms: false, notify_email: false, primary_color: "#1a1a1a", logo_url: null, company_tagline: null };
+  }
+
   const portalUrl = `https://roofingos.dev/portal/${job.portal_token}`;
   const jobUrl = `https://app.roofingos.dev/roofing/jobs/${job_id}`;
 
@@ -268,4 +294,9 @@ Deno.serve(async (req) => {
 
   await Promise.allSettled(notifications);
   return json({ ok: true, event, notifications_sent: notifications.length });
+
+  } catch (err) {
+    console.error("roofing-notify error:", err);
+    return json({ error: "internal error", detail: String(err) }, 500);
+  }
 });
