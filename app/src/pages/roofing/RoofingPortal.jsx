@@ -1148,6 +1148,14 @@ export default function RoofingPortal() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(reg => reg.unregister()))
+        .catch(() => {})
+    }
+  }, [])
+
+  useEffect(() => {
     if (!token) { setError('No portal link provided.'); setLoading(false); return }
     load()
   }, [token])

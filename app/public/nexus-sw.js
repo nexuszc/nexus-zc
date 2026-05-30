@@ -19,6 +19,11 @@ self.addEventListener('fetch', e => {
   const { request } = e
   const url = new URL(request.url)
 
+  // Skip portal routes entirely — SW interference causes "Response body already used" crash
+  if (url.pathname.includes('/roofing/portal/') || url.pathname.includes('/portal/')) {
+    return
+  }
+
   if (request.method !== 'GET' || url.hostname.includes('supabase') || url.hostname.includes('anthropic')) return
 
   if (request.mode === 'navigate') {
