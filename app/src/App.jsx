@@ -47,8 +47,15 @@ import RoofingFinancePage from './pages/roofing/RoofingFinance'
 import RoofingCustomersPage from './pages/roofing/RoofingCustomers'
 import RoofingSEO from './pages/roofing/RoofingSEO'
 
+const ADMIN_EMAILS = ['zach@nexuszc.com']
+
 function ContractorRoute({ session }) {
   if (!session) return <Navigate to="/roofing/login" />
+  if (ADMIN_EMAILS.includes(session.user?.email?.toLowerCase())) {
+    const path = window.location.pathname
+    if (path === '/roofing/settings') return <Navigate to="/roofing/admin/settings" replace />
+    return <Navigate to="/roofing/dashboard" replace />
+  }
   return <Outlet />
 }
 
@@ -113,6 +120,7 @@ export default function App() {
             <Route path="/roofing/onboarding-setup" element={<RoofingOnboardingSetup />} />
             <Route path="/roofing/upgrade" element={<RoofingUpgrade />} />
             <Route path="/roofing/roadmap" element={<RoofingRoadmap />} />
+            <Route path="/roofing/team" element={<RoofingTeam />} />
           </Route>
         </Route>
 
@@ -149,7 +157,6 @@ export default function App() {
             <Route path="/documents" element={<Documents />} />
             <Route path="/va" element={<VAInterface />} />
             <Route path="/outreach" element={<OutreachDashboard />} />
-            <Route path="/roofing/team" element={<RoofingTeam />} />
 
           </Route>
         </Route>
