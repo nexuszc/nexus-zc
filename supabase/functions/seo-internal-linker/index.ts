@@ -42,7 +42,7 @@ interface LinkResult {
 // ---------------------------------------------------------------------------
 
 async function sendTelegram(msg: string) {
-  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
+  try { await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }); } catch { /* ignore */ }
 }
 
 /**
@@ -309,10 +309,13 @@ Deno.serve(async (req) => {
     }
 
     // ------------------------------------------------------------------
-    // SWEEP MODE — posts published 7+ days ago with 0 internal links
+    // SWEEP MODE — posts with 0 internal links
+    // scheduled:true is an alias for sweep (used by pg_cron)
     // ------------------------------------------------------------------
-    if (body.sweep) {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    if (body.sweep || body.scheduled) {
+      // Use 1-day threshold for scheduled runs; 7-day for manual sweeps
+      const thresholdMs = body.scheduled ? 1 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+      const sevenDaysAgo = new Date(Date.now() - thresholdMs).toISOString();
 
       const { data: stalePosts, error: sweepError } = await supabase
         .from("seo_posts")
