@@ -573,6 +573,15 @@ Then productized and sold to other multi-business operators.
 - VPS env var: SUPABASE_SERVICE_KEY (NOT SUPABASE_SERVICE_ROLE_KEY — that's for edge functions only)
 - All 4 new DB tables have: GRANT ALL ON <table> TO anon, authenticated, service_role
 
+**SEO V5 — Authority / Backlink Machine (May 30, 2026):**
+- DB: seo_backlink_targets — 21 high-DA targets seeded (DA 34–91; Capterra, G2, This Old House, Angi, Insurance Journal, etc.)
+- DB: seo_haro_opportunities — HARO/Connectively opportunity queue
+- DB: seo_outreach_log — every outreach email drafted + sent
+- Edge: seo-haro-monitor — drafts Sonnet responses for HARO queries, sends to Telegram for approval; cron 4x daily (6/12/18/22 UTC)
+- Edge: seo-backlink-engine — competitor backlink hijacker; drafts personalized outreach (Haiku) for high-DA sites, saves to seo_outreach_log; cron MWF 9am UTC; first run: 10 emails drafted (DA 72–91)
+- Edge: seo-review-campaign — sends G2/Capterra review requests to real contractors weekly (Monday 10 UTC); first run: 5 sent
+- All 3 edge functions: SUPABASE_SERVICE_ROLE_KEY (Deno runtime, not VPS service key)
+
 **PREVIOUS SESSIONS (as of May 24, 2026)
 
 **DONE this session (Marketing V1 — May 24):**
