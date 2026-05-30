@@ -6,132 +6,17 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/vs/</loc>
+    <loc>https://roofingos.dev/signup</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/vs/roofing-os-vs-acculynx</loc>
+    <loc>https://roofingos.dev/demo</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/vs/roofing-os-vs-companycam</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/vs/roofing-os-vs-eagleview</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/vs/roofing-os-vs-jobnimbus</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-albuquerque-nm</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-austin-tx</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-charlotte-nc</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-chicago-il</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-columbus-oh</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-dallas-tx</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-denver-co</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-detroit-mi</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-fort-worth-tx</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-houston-tx</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-indianapolis-in</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-las-vegas-nv</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-louisville-ky</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-memphis-tn</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-milwaukee-wi</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-nashville-tn</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-oklahoma-city-ok</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-phoenix-az</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-portland-or</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/locations/roofing-software-san-antonio-tx</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://roofingos.dev/plans/custom</loc>
+    <loc>https://roofingos.dev/demo/contractor</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.8</priority>
   </url>
@@ -141,19 +26,49 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/plans/pro</loc>
-    <lastmod>2026-05-30</lastmod>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://roofingos.dev/plans/starter</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/tools/supplement-checklist</loc>
+    <loc>https://roofingos.dev/plans/pro</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/plans/custom</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/blog</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/locations</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/vs</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/tools</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/tools/supplement-checklist</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/homeowners</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://roofingos.dev/blog/acculynx-alternative</loc>
@@ -196,6 +111,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://roofingos.dev/blog/construction</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://roofingos.dev/blog/denver-roofers-are-pulling-ahead-with-this</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.7</priority>
@@ -221,6 +141,11 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://roofingos.dev/blog/homeowners</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://roofingos.dev/blog/how-to-track-roofing-insurance-claim</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.7</priority>
@@ -231,7 +156,7 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/blog/</loc>
+    <loc>https://roofingos.dev/blog/insurance-pros</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.7</priority>
   </url>
@@ -247,6 +172,11 @@
   </url>
   <url>
     <loc>https://roofingos.dev/blog/lost-a-22k-job-because-you-replied-4-hours-late</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/blog/product-updates</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.7</priority>
   </url>
@@ -371,102 +301,123 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/audit</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-albuquerque-nm</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/auth/verify</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-austin-tx</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/dashboard/</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-charlotte-nc</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/demo/contractor</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-chicago-il</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/demo</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-columbus-oh</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/homeowners/</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-dallas-tx</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/locations/</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-denver-co</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/login</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-detroit-mi</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/partners/uncle</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-fort-worth-tx</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/portal/</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-houston-tx</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/privacy</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-indianapolis-in</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/signup</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-las-vegas-nv</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/terms</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-louisville-ky</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/tools/</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-memphis-tn</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/upgrade</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-milwaukee-wi</loc>
     <lastmod>2026-05-30</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/blog/construction</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-nashville-tn</loc>
     <lastmod>2026-05-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/blog/homeowners</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-oklahoma-city-ok</loc>
     <lastmod>2026-05-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/blog/product-updates</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-phoenix-az</loc>
     <lastmod>2026-05-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://roofingos.dev/blog/insurance-pros</loc>
+    <loc>https://roofingos.dev/locations/roofing-software-portland-or</loc>
     <lastmod>2026-05-30</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/locations/roofing-software-san-antonio-tx</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/vs/roofing-os-vs-acculynx</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/vs/roofing-os-vs-companycam</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/vs/roofing-os-vs-eagleview</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://roofingos.dev/vs/roofing-os-vs-jobnimbus</loc>
+    <lastmod>2026-05-30</lastmod>
+    <priority>0.9</priority>
   </url>
 </urlset>
