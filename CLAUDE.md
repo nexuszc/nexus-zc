@@ -582,6 +582,16 @@ Then productized and sold to other multi-business operators.
 - Edge: seo-review-campaign — sends G2/Capterra review requests to real contractors weekly (Monday 10 UTC); first run: 5 sent
 - All 3 edge functions: SUPABASE_SERVICE_ROLE_KEY (Deno runtime, not VPS service key)
 
+**YouTube V10 — Full Scale (May 30, 2026):**
+- DB: youtube_playlists — 4 playlists seeded (comparison/tutorial/educational/local)
+- DB: youtube_videos — performance tracking table (views, likes, comments, subscribers_gained)
+- DB: youtube_video_queue — added video_type, seo_description, seo_tags columns
+- Edge: youtube-script-engine v2 — 5 video types: comparison (Sonnet), tutorial (Haiku), educational (Sonnet), local (Haiku), short (Haiku); rotates competitors/topics/cities to avoid repeats; cron 11 UTC daily
+- Edge: youtube-seo-optimizer — optimizes title/description/tags per video before upload; runs on pending queue
+- VPS: /opt/roofing/youtube/producer-v3.js — PM2 ID 10, cron 0 */6 * * *; thumbnails via ffmpeg lavfi+drawtext (NOT imagemagick — not installed); OpenAI TTS fallback when ElevenLabs fails; auto-triggers script engine when queue empty
+- CRITICAL: VPS has NO imagemagick. Use ffmpeg lavfi for thumbnail generation. Font: /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+- First run: 5 videos published in one run — SpJ8u7Q8U-o, XdzJRvwNl1A, 5Hm-tmgRMy0, 02kq0LZnz_4, 1wOQu7InSCc
+
 **PREVIOUS SESSIONS (as of May 24, 2026)
 
 **DONE this session (Marketing V1 — May 24):**
