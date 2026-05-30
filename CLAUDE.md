@@ -262,8 +262,9 @@ Then productized and sold to other multi-business operators.
 | `send-partnership-emails` | See function source for details | Internal |
 | `smoke-test` | See function source for details | Internal |
 | `smoke-test-runner` | See function source for details | Internal |
-| `social-reddit-monitor` | Scans 8 subreddits for roofing software opportunities, scores + drafts replies, saves to social_opportunities | Cron 3x daily (job #84) |
-| `social-content-generator` | Generates LinkedIn + X posts from published seo_posts, queues to social_queue | Cron daily 13:30 UTC (job #85) |
+| `social-reddit-monitor` | Scans 8 subreddits for roofing software opportunities, scores + drafts replies; score≥8 auto-approves + mirrors to roofing_community_posts | Cron 3x daily (job #84) |
+| `social-content-generator` | Generates LinkedIn + X posts from published seo_posts; auto-approved, scheduled X+2h / LinkedIn+6h | Cron daily 13:30 UTC (job #85) |
+| `social-auto-poster` | Picks up approved social_queue items past scheduled_for, marks posted, logs to social_posts | Cron every 2h (job #86) |
 | `stripe-setup` | See function source for details | Internal |
 | `stripe-webhook` | See function source for details | Internal |
 | `supplement-audit-engine` | See function source for details | Internal |
@@ -569,6 +570,11 @@ Then productized and sold to other multi-business operators.
 - Route: /roofing/social wired in App.jsx under ProtectedRoute (alongside /roofing/seo and /roofing/product-status)
 - IMPORTANT: seo_posts has no `excerpt` column — use `meta_description` or `keyword` for post context
 - IMPORTANT: social-reddit-monitor first run returned 0 results — sparse last-7-days results on initial scan; accumulates over subsequent cron cycles
+- AUTO-APPROVAL RULES (as of May 30 v19): score≥8 + draft_reply → status='approved' + mirrored to roofing_community_posts; score 5-7 → 'draft_ready'; score 3-4 → 'found'
+- social-content-generator: status='approved' (no pending gate); X +2h, LinkedIn +6h; auto-poster picks them up at scheduled time
+- seo-backlink-engine: sends immediately via Resend (zach@roofingos.dev → contact@{domain}), status='sent' (no draft_ready gate); first live run sent 5 emails (NRCA DA67, Claims Journal DA61, YouTube DA55, ContractorTalk DA52, RoofersCoffeeShop DA52)
+- social-auto-poster: picks up social_queue WHERE status='approved' AND scheduled_for <= now(); marks posted, logs to social_posts; Reddit opportunity status updated to 'posted'; cron #86 every 2h
+- PENDING NEXT SESSION: LinkedIn API + X/Twitter API connections to actually publish posts (currently marks posted with placeholder URL)
 
 **V10 Master Build (May 30, 2026):**
 - YouTube pipeline: youtube-script-generator edge function (Haiku, 150-200 word scripts per post), cron #72 at 12:30 UTC daily, 10 scripts generated for existing posts
