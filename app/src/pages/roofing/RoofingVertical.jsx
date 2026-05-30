@@ -90,6 +90,8 @@ export default function RoofingVertical() {
         activeJobsRes,
         totalContractorsRes,
         portalsSentRes,
+        seoPostsRes,
+        seoKeywordsRes,
       ] = await Promise.all([
         supabase
           .from('job_payments')
@@ -178,6 +180,16 @@ export default function RoofingVertical() {
           .from('homeowner_sessions')
           .select('id', { count: 'exact', head: true })
           .catch(() => ({ count: 0 })),
+        supabase
+          .from('seo_posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'published')
+          .catch(() => ({ count: 0 })),
+        supabase
+          .from('seo_keyword_queue')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending')
+          .catch(() => ({ count: 0 })),
       ])
 
       const revenueCents = (jobPaymentsRes.data || []).reduce(
@@ -210,6 +222,8 @@ export default function RoofingVertical() {
         activeJobs: activeJobsRes.count ?? 0,
         totalContractors: totalContractorsRes.count ?? 0,
         portalsSent: portalsSentRes.count ?? 0,
+        seoPosts: seoPostsRes.count ?? 0,
+        seoKeywords: seoKeywordsRes.count ?? 0,
       })
 
       setLoading(false)
@@ -285,11 +299,7 @@ export default function RoofingVertical() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pb-6">
         <SectionCard
           title="Marketing"
-          subtitle={
-            loading
-              ? ''
-              : `${sections?.emailsSentTotal ?? 0} emails sent · ${sections?.emailsOpened30 ?? 0} opened · ${sections?.youtubeLive ?? 0} YouTube`
-          }
+          subtitle="Email · YouTube · Social · Outreach"
           accent="#4a9eff"
           onClick={() => navigate('/roofing/marketing')}
           loading={loading}
@@ -313,14 +323,14 @@ export default function RoofingVertical() {
           loading={loading}
         />
         <SectionCard
-          title="Operations"
+          title="SEO"
           subtitle={
             loading
               ? ''
-              : `${sections?.activeJobs ?? 0} active jobs · track crew and jobs`
+              : `${sections?.seoPosts ?? 0} posts · ${sections?.seoKeywords ?? 0} keywords queued · ${sections?.youtubeLive ?? 0} videos`
           }
-          accent="#4a9eff"
-          onClick={() => navigate('/roofing/admin/jobs')}
+          accent="#10b981"
+          onClick={() => navigate('/roofing/seo')}
           loading={loading}
         />
         <SectionCard
@@ -347,7 +357,7 @@ export default function RoofingVertical() {
         />
         <SectionCard
           title="Product & System"
-          subtitle="Functions · health · deploy log"
+          subtitle="Feature status · Health · Fixes"
           accent="#6b7a9d"
           onClick={() => navigate('/roofing/product-status')}
           loading={loading}

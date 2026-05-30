@@ -402,14 +402,15 @@ export default function RoofingSales() {
                 <span className="text-[10px] uppercase tracking-wider" style={{ color: '#6b7a9d' }}>Failed</span>
               </div>
               <div className="ml-auto">
-                <button
-                  onClick={forceBatch}
-                  disabled={ariaLoading}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
-                  style={{ background: 'rgba(124,58,237,0.25)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.3)' }}
-                >
-                  {ariaLoading ? 'Queuing…' : 'Force 20 Calls'}
-                </button>
+                <div style={{
+                  background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.3)',
+                  borderRadius: 8, padding: '8px 14px',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                }}>
+                  <span style={{ color: '#ef4444', fontSize: 12, fontWeight: 700 }}>⏸ ARIA PAUSED</span>
+                  <span style={{ color: '#6b7280', fontSize: 12 }}>Dedup fix needed before re-enabling</span>
+                </div>
               </div>
             </div>
 

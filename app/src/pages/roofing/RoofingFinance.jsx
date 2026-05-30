@@ -166,7 +166,7 @@ export default function RoofingFinance() {
 
             <div className="rounded-2xl p-5 space-y-4" style={{ background: '#12172b', border: '1px solid rgba(74,158,255,0.15)' }}>
               <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: '#6b7a9d' }}>
-                REVENUE — LAST 30 DAYS
+                CONTRACTOR SIGNUPS — LAST 30 DAYS
               </p>
               <p className="text-xs" style={{ color: '#6b7a9d' }}>Contractor signups per day</p>
               <div className="relative">

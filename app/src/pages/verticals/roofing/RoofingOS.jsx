@@ -14,7 +14,7 @@ const TABS = [
   { key: 'sales',      label: 'Sales',      path: '/roofing/sales'      },
   { key: 'finance',    label: 'Finance',    path: '/roofing/finance'    },
   { key: 'customers',  label: 'Customers',  path: '/roofing/customers'  },
-  { key: 'system',     label: 'System',     path: '/roofing/system'     },
+  { key: 'system',     label: 'System',     path: '/roofing/product-status' },
 ]
 
 function activeTab(pathname) {

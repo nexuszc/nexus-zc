@@ -1856,7 +1856,7 @@ export default function RoofingSEO() {
         <div style={{ maxWidth: 1280, margin: '0 auto', height: 60, display: 'flex', alignItems: 'center', gap: 16 }}>
           {/* Back */}
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/roofing/dashboard')}
             style={{
               background: 'transparent',
               color: '#9ca3af',
@@ -1870,7 +1870,7 @@ export default function RoofingSEO() {
               flexShrink: 0,
             }}
           >
-            ← Dashboard
+            ← Roofing OS
           </button>
 
           {/* Logo + Title */}

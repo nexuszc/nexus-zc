@@ -234,13 +234,6 @@ export default function RoofingCustomers() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                               <button
-                                onClick={() => navigate('/roofing/admin/jobs')}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-opacity hover:opacity-80"
-                                style={{ background: 'rgba(74,158,255,0.15)', color: '#4a9eff', border: '1px solid rgba(74,158,255,0.25)' }}
-                              >
-                                View →
-                              </button>
-                              <button
                                 onClick={e => handleMagicLink(e, r)}
                                 className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-opacity hover:opacity-80"
                                 style={{ background: 'rgba(124,58,237,0.15)', color: '#a78bfa', border: '1px solid rgba(124,58,237,0.25)' }}
