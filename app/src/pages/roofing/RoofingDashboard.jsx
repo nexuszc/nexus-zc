@@ -141,6 +141,16 @@ function JobCard({ job }) {
               ◐ Partial
             </span>
           )}
+          {job.portal_sent && (
+            <span title="Portal sent to homeowner" style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: 'rgba(74,158,255,0.1)', color: '#4a9eff' }}>
+              ● Portal sent
+            </span>
+          )}
+          {job.measurements_ordered && (
+            <span title="Aerial measurements ordered" style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: 'rgba(20,184,166,0.1)', color: '#2dd4bf' }}>
+              📐 Measured
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }} onClick={e => e.stopPropagation()}>
@@ -466,7 +476,7 @@ export default function RoofingDashboard() {
     const cid = contractor?.id
     const ccid = contractorClientId
 
-    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, contractor_id, client_id, lead_score, supplement_status_flag, payment_dot, weather_warning, review_requested, job_type').order('created_at', { ascending: false })
+    let query = supabase.from('roofing_jobs').select('id, homeowner_name, property_address, status, contract_amount, amount_paid, actual_start_date, created_at, insurance_claim, portal_token, portal_sent, contractor_id, client_id, lead_score, supplement_status_flag, payment_dot, weather_warning, review_requested, job_type, measurements_ordered').order('created_at', { ascending: false })
     if (cid) query = query.eq('contractor_id', cid)
     else if (ccid) query = query.eq('client_id', ccid)
 

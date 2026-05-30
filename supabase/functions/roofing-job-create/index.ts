@@ -64,13 +64,15 @@ Deno.serve(async (req) => {
     const jobLimit = account.job_limit || 5;
 
     if (account.plan === "free" && jobsUsed >= jobLimit) {
-      await supabase.from("monetization_events").insert({
-        contractor_id: session.contractor_id,
-        event_type: "job_limit_hit",
-        trigger_value: String(jobLimit),
-        upgrade_to: "pro",
-        metadata: { jobs_used: jobsUsed, job_limit: jobLimit },
-      }).catch(() => {});
+      try {
+        await supabase.from("monetization_events").insert({
+          contractor_id: session.contractor_id,
+          event_type: "job_limit_hit",
+          trigger_value: String(jobLimit),
+          upgrade_to: "pro",
+          metadata: { jobs_used: jobsUsed, job_limit: jobLimit },
+        });
+      } catch { /* non-critical */ }
 
       return Response.json({
         error: "job_limit_reached",
@@ -100,7 +102,7 @@ Deno.serve(async (req) => {
       job_type: damage_type || null,
       notes: notes || null,
       scheduled_start: scheduled_start || null,
-      status: "active",
+      status: "lead",
     })
     .select("id")
     .single();
@@ -137,7 +139,7 @@ Deno.serve(async (req) => {
     created_by: "Roofing OS",
   });
 
-  const portalUrl = `https://roofingos.dev/portal/?token=${token}`;
+  const portalUrl = `https://roofingos.dev/portal/${token}`;
 
   // Send homeowner portal email
   if (homeowner_email) {
@@ -165,13 +167,14 @@ Deno.serve(async (req) => {
   }
 
   // Increment jobs_used and total_jobs
-  await supabase.from("contractor_accounts")
-    .update({
-      jobs_used: (account?.jobs_used || 0) + 1,
-      total_jobs: (account?.total_jobs || 0) + 1,
-    })
-    .eq("id", session.contractor_id)
-    .catch(() => {});
+  try {
+    await supabase.from("contractor_accounts")
+      .update({
+        jobs_used: (account?.jobs_used || 0) + 1,
+        total_jobs: (account?.total_jobs || 0) + 1,
+      })
+      .eq("id", session.contractor_id);
+  } catch { /* non-critical */ }
 
   // Advance onboarding on first job
   const { count } = await supabase
