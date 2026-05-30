@@ -6,8 +6,9 @@ const supabase = createClient(
 );
 
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
-const TELEGRAM_BOT = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const TELEGRAM_CHAT = Deno.env.get("TELEGRAM_CHAT_ID")!;
+const RESEND_API_KEY = (Deno.env.get("RESEND_API_KEY") || "").trim();
+const FROM_EMAIL = "zach@roofingos.dev";
+const FROM_NAME = "Zach from Roofing OS";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +66,27 @@ Return JSON only:
   }
 }
 
+async function sendEmail(to: string, subject: string, body: string): Promise<boolean> {
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to: [to],
+        subject,
+        text: body,
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
@@ -73,7 +95,6 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, message: "seo-backlink-engine ready" }, { headers: CORS });
   }
 
-  // Get pending targets, prioritized by domain authority
   const { data: targets } = await supabase
     .from("seo_backlink_targets")
     .select("*")
@@ -85,44 +106,39 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true, message: "No pending targets" }, { headers: CORS });
   }
 
-  const drafted: Array<{ domain: string; da: number; subject: string }> = [];
+  const sent: Array<{ domain: string; da: number; subject: string; delivered: boolean }> = [];
 
   for (const target of targets) {
     const email = await draftOutreachEmail(target);
+    const to = `contact@${target.domain}`;
+    const delivered = await sendEmail(to, email.subject, email.body);
+
+    const now = new Date().toISOString();
 
     try {
       await supabase
         .from("seo_backlink_targets")
-        .update({ status: "draft_ready" })
+        .update({ status: "sent" })
         .eq("id", target.id);
 
       await supabase
         .from("seo_outreach_log")
         .insert({
           target_id: target.id,
-          email_to: `contact@${target.domain}`,
+          email_to: to,
           subject: email.subject,
           body: email.body,
+          sent_at: delivered ? now : null,
         });
     } catch { /* non-critical */ }
 
-    drafted.push({
+    sent.push({
       domain: target.domain as string,
       da: target.domain_authority as number,
       subject: email.subject,
+      delivered,
     });
   }
 
-  const digestMsg = `🔗 Backlink outreach drafted for ${drafted.length} sites:\n` +
-    drafted.map((d) => `• ${d.domain} (DA ${d.da}) — ${d.subject}`).join("\n") +
-    "\n\nReview in dashboard → approve to send";
-
-  try {
-    await supabase.from("telegram_digest_queue").insert({
-      message: digestMsg,
-      category: "seo",
-    });
-  } catch { /* non-critical */ }
-
-  return Response.json({ ok: true, drafted: drafted.length, targets: drafted }, { headers: CORS });
+  return Response.json({ ok: true, sent: sent.length, targets: sent }, { headers: CORS });
 });

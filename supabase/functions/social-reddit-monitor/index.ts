@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
   const existingUrls = await getExistingUrls();
   let saved = 0;
   let drafted = 0;
+  let autoApproved = 0;
 
   for (const subreddit of SUBREDDITS) {
     for (const keyword of ROOFING_KEYWORDS.slice(0, 5)) {
@@ -147,6 +148,10 @@ Deno.serve(async (req) => {
           drafted++;
         }
 
+        // score >= 8 with a reply → auto-approve for posting
+        const autoApprove = score >= 8 && !!draft_reply;
+        const status = autoApprove ? "approved" : draft_reply ? "draft_ready" : "found";
+
         try {
           await supabase.from("social_opportunities").insert({
             platform: "reddit",
@@ -156,9 +161,27 @@ Deno.serve(async (req) => {
             subreddit,
             score,
             draft_reply,
-            status: draft_reply ? "draft_ready" : "found",
+            status,
           });
           saved++;
+
+          // Mirror high-score approved items into roofing_community_posts
+          if (autoApprove && draft_reply) {
+            try {
+              await supabase.from("roofing_community_posts").insert({
+                platform: "reddit",
+                thread_url: result.url,
+                thread_title: result.title,
+                thread_content: result.snippet,
+                our_response: draft_reply,
+                status: "approved",
+                confidence_score: score,
+                auto_posted: true,
+                approved_at: new Date().toISOString(),
+              });
+            } catch { /* non-critical */ }
+            autoApproved++;
+          }
         } catch { /* skip duplicates */ }
       }
 
@@ -166,5 +189,5 @@ Deno.serve(async (req) => {
     }
   }
 
-  return Response.json({ ok: true, saved, drafted }, { headers: CORS });
+  return Response.json({ ok: true, saved, drafted, auto_approved: autoApproved }, { headers: CORS });
 });

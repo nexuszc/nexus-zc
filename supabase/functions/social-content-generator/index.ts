@@ -14,7 +14,7 @@ const CORS = {
 
 const BLOG_BASE = "https://roofingos.dev/blog";
 
-async function generateLinkedIn(title: string, excerpt: string, slug: string): Promise<string> {
+async function generateLinkedIn(title: string, context: string, slug: string): Promise<string> {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -30,7 +30,7 @@ async function generateLinkedIn(title: string, excerpt: string, slug: string): P
         content: `Write a LinkedIn post for a roofing software company blog post.
 
 Blog title: "${title}"
-Excerpt: "${excerpt}"
+Context: "${context}"
 URL: ${BLOG_BASE}/${slug}
 
 Rules:
@@ -110,13 +110,14 @@ Deno.serve(async (req) => {
   const existingSlugs = new Set((existing || []).map((r: { slug: string }) => r.slug));
 
   let generated = 0;
+  const now = new Date();
 
   for (const post of posts) {
     if (existingSlugs.has(post.slug)) continue;
 
-    const now = new Date();
-    const xTime = new Date(now.getTime() + 12 * 60 * 60 * 1000);
-    const liTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    // X posts go out in 2 hours, LinkedIn in 6 hours — auto-approved, no gate
+    const xTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const liTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);
 
     const context = post.meta_description || post.keyword || "";
     const [linkedin, xPost] = await Promise.all([
@@ -132,7 +133,7 @@ Deno.serve(async (req) => {
           slug: post.slug,
           post_title: post.title,
           scheduled_for: liTime.toISOString(),
-          status: "pending",
+          status: "approved",
         },
         {
           platform: "x",
@@ -140,7 +141,7 @@ Deno.serve(async (req) => {
           slug: post.slug,
           post_title: post.title,
           scheduled_for: xTime.toISOString(),
-          status: "pending",
+          status: "approved",
         },
       ]);
       generated++;
