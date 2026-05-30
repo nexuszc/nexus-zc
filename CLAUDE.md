@@ -559,6 +559,20 @@ Then productized and sold to other multi-business operators.
 - Schedule: 30 12 * * * (12:30 UTC daily, 6:30am MT)
 - Generates scripts for 5 posts per run, targets posts with most impressions first
 
+**SEO V4 — Scale to 20 pages/day (May 30, 2026):**
+- DB: seo_location_pages — 179 cities seeded (50 original + 129 new; hail risk + population prioritized)
+- DB: seo_carrier_pages — 25 carriers seeded (State Farm, Allstate, USAA, Farmers, Liberty Mutual, Travelers, Nationwide, etc.)
+- DB: seo_material_pages — 20 materials seeded (GAF, Owens Corning, CertainTeed, Atlas, IKO, TAMKO, Metal, TPO, EPDM, Tile, Slate, Cedar, etc.)
+- DB: seo_state_pages — 30 states seeded (contractor license + insurance claim law guides)
+- VPS: /opt/roofing/seo/worker-manager.js — PM2 ID 9, cron 0 5 * * * (11pm MT)
+  - 10 parallel workers: buildLocationPages(4) + buildCarrierPages(2) + buildMaterialPages(2) + buildStatePages(2) + buildVSPages(1) + triggerContentWriter(3) = 14+ pages/night
+  - publishAllGenerated() renders to HTML, git pull --rebase, git push
+  - rebuildSitemap() auto-discovers all new pages
+  - submitIndexNow() submits new pages to Bing/Yandex instantly
+- First run: 10 pages published in 125s, 95 URLs in sitemap, pushed to GitHub
+- VPS env var: SUPABASE_SERVICE_KEY (NOT SUPABASE_SERVICE_ROLE_KEY — that's for edge functions only)
+- All 4 new DB tables have: GRANT ALL ON <table> TO anon, authenticated, service_role
+
 **PREVIOUS SESSIONS (as of May 24, 2026)
 
 **DONE this session (Marketing V1 — May 24):**
