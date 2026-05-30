@@ -46,6 +46,7 @@ import RoofingSalesPage from './pages/roofing/RoofingSales'
 import RoofingFinancePage from './pages/roofing/RoofingFinance'
 import RoofingCustomersPage from './pages/roofing/RoofingCustomers'
 import RoofingSEO from './pages/roofing/RoofingSEO'
+import RoofingSocial from './pages/roofing/RoofingSocial'
 
 const ADMIN_EMAILS = ['zach@nexuszc.com']
 
@@ -132,6 +133,7 @@ export default function App() {
           <Route path="/roofing/finance"   element={<RoofingFinancePage />} />
           <Route path="/roofing/customers" element={<RoofingCustomersPage />} />
           <Route path="/roofing/seo"            element={<RoofingSEO />} />
+          <Route path="/roofing/social"         element={<RoofingSocial />} />
           <Route path="/roofing/product-status" element={<RoofingRoadmap />} />
         </Route>
 

@@ -295,6 +295,13 @@ export default function RoofingVertical() {
           loading={loading}
         />
         <SectionCard
+          title="Social"
+          subtitle="Reddit opportunities · LinkedIn · X post queue"
+          accent="#ff4500"
+          onClick={() => navigate('/roofing/social')}
+          loading={loading}
+        />
+        <SectionCard
           title="Sales"
           subtitle={
             loading
