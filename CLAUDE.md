@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 30, 2026 — v19
+# Last updated: May 31, 2026 — v20
 
 ---
 
@@ -546,6 +546,19 @@ Then productized and sold to other multi-business operators.
 - 20 photos, $4,200 supplement approved, insurance claim fully paid ($18,400 total)
 - 6 messages (realistic conversation), 9 activities
 - Contractor: Apex Roofing (contractor_id: d2eabbb4-e221-4ca2-ad65-6bedfec6517d)
+
+## CURRENT BUILD PRIORITIES (as of May 31, 2026)
+
+**Demo Path Stabilization (May 31, 2026):**
+- GOAL: 5-screen demo path (signup → dashboard → create job → send portal → view portal) working reliably, zero errors
+- FIX 1: `RoofingDashboard.jsx` — onboarding redirect changed from `/roofing/onboarding` (old, 277-line) to `/roofing/onboarding-setup` (clean 3-step wizard)
+- FIX 2: `RoofingDashboard.jsx` BottomNav — Crew tab removed (not built, not for demo); grid drops from `repeat(5,1fr)` to `repeat(4,1fr)`
+- FIX 3: `portal-api` — added fallback lookup by `roofing_jobs.portal_token` when no `homeowner_sessions` row exists (new jobs never had sessions → "Invalid or expired link" for every fresh job); synthetic session built from job fields so all session.* references still resolve
+- FIX 4: `roofing-notify` — portal URL changed from `app.nexuszc.com/roofing/portal/TOKEN` to `roofingos.dev/portal/TOKEN`; job URL changed to `app.roofingos.dev/roofing/jobs/ID`; `contractor?.name` null guard added (new contractors have no `clients` row → crash on SMS template)
+- PAUSED: `social-auto-poster` cron #86 — permanently removed (unscheduled) until after Monday demo; recreate with `SELECT cron.schedule('social-auto-poster', '0 */2 * * *', ...)` to re-enable
+- PAUSED: `seo-backlink-engine` cron #74 — permanently removed (unscheduled) until after Monday demo; recreate to re-enable
+- CONFIRMED WORKING: `contractor-signup`, `contractor-auth`, `auth/verify.html`, `_redirects` portal routing, `roofing_jobs` RLS (`ALL` policy via contractor_accounts.owner_email), `RoofingOnboardingSetup` → `/roofing/jobs` flow
+- NOTE: `homeowner_sessions.homeowner_email` is NOT NULL — cannot upsert session rows for jobs created without homeowner email; the `portal-api` fallback is the right fix
 
 ## CURRENT BUILD PRIORITIES (as of May 30, 2026)
 
