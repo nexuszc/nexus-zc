@@ -65,10 +65,15 @@ export default function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setLoading(false)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+        setLoading(false)
+      })
+      .catch(() => {
+        setSession(null)
+        setLoading(false)
+      })
     const ADMIN_EMAILS = ['zach@nexuszc.com']
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
