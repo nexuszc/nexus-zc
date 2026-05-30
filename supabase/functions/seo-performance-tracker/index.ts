@@ -4,9 +4,10 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
-const GSC_CLIENT_EMAIL = Deno.env.get("GOOGLE_SC_CLIENT_EMAIL");
-const GSC_PRIVATE_KEY  = Deno.env.get("GOOGLE_SC_PRIVATE_KEY");
-const GSC_PROPERTY     = Deno.env.get("GOOGLE_SC_PROPERTY_URL") || "https://roofingos.dev";
+const GSC_CLIENT_ID     = Deno.env.get("GOOGLE_SC_CLIENT_ID");
+const GSC_CLIENT_SECRET = Deno.env.get("GOOGLE_SC_CLIENT_SECRET");
+const GSC_REFRESH_TOKEN = Deno.env.get("GOOGLE_SC_REFRESH_TOKEN");
+const GSC_PROPERTY      = Deno.env.get("GOOGLE_SC_PROPERTY_URL") || "https://roofingos.dev";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -32,7 +33,7 @@ async function ai(prompt: string, maxTokens = 3000): Promise<string> {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-5",
+        model: "claude-sonnet-4-6",
         max_tokens: maxTokens,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -50,65 +51,34 @@ async function ai(prompt: string, maxTokens = 3000): Promise<string> {
 }
 
 async function sendTelegram(msg: string) {
-  await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }).catch(() => {});
+  try { await supabase.from("telegram_digest_queue").insert({ message: msg, category: "seo" }); } catch { /* ignore */ }
 }
 
 // ---------------------------------------------------------------------------
-// Google Search Console JWT + token
+// Google Search Console — OAuth refresh token exchange
 // ---------------------------------------------------------------------------
 
 async function getGSCToken(): Promise<string | null> {
-  if (!GSC_CLIENT_EMAIL || !GSC_PRIVATE_KEY) return null;
+  if (!GSC_CLIENT_ID || !GSC_CLIENT_SECRET || !GSC_REFRESH_TOKEN) return null;
 
   try {
-    const now = Math.floor(Date.now() / 1000);
-    const header  = { alg: "RS256", typ: "JWT" };
-    const payload = {
-      iss:   GSC_CLIENT_EMAIL,
-      scope: "https://www.googleapis.com/auth/webmasters.readonly",
-      aud:   "https://oauth2.googleapis.com/token",
-      exp:   now + 3600,
-      iat:   now,
-    };
-
-    const pemKey  = GSC_PRIVATE_KEY.replace(/\\n/g, "\n");
-    const keyData = pemKey
-      .replace(/-----BEGIN PRIVATE KEY-----/g, "")
-      .replace(/-----END PRIVATE KEY-----/g, "")
-      .replace(/\s/g, "");
-
-    const binaryKey = Uint8Array.from(atob(keyData), c => c.charCodeAt(0));
-    const cryptoKey = await crypto.subtle.importKey(
-      "pkcs8",
-      binaryKey.buffer,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-
-    const enc        = new TextEncoder();
-    const headerB64  = btoa(JSON.stringify(header)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    const payloadB64 = btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    const sigInput   = enc.encode(`${headerB64}.${payloadB64}`);
-    const signature  = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, sigInput);
-    const sigB64     = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-    const jwt        = `${headerB64}.${payloadB64}.${sigB64}`;
-
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        assertion:  jwt,
+        client_id:     GSC_CLIENT_ID,
+        client_secret: GSC_CLIENT_SECRET,
+        refresh_token: GSC_REFRESH_TOKEN,
+        grant_type:    "refresh_token",
       }),
     });
 
-    if (!tokenRes.ok) {
-      console.error("GSC token exchange failed:", tokenRes.status, await tokenRes.text());
+    if (!res.ok) {
+      console.error("GSC token exchange failed:", res.status, await res.text());
       return null;
     }
-    const tokenData = await tokenRes.json();
-    return tokenData.access_token || null;
+    const data = await res.json();
+    return data.access_token || null;
   } catch (err) {
     console.error("GSC token error:", err);
     return null;
@@ -129,14 +99,7 @@ async function queryGSC(token: string, startDate: string, endDate: string): Prom
           startDate,
           endDate,
           dimensions: ["page", "query"],
-          rowLimit:   500,
-          dimensionFilterGroups: [{
-            filters: [{
-              dimension:  "page",
-              operator:   "contains",
-              expression: "/blog/",
-            }],
-          }],
+          rowLimit:   1000,
         }),
       },
     );
