@@ -483,8 +483,8 @@ Then productized and sold to other multi-business operators.
 ## VPS STACK (Hostinger — 31.220.60.77)
 
 - SSH key: `~/.ssh/hostinger_vps` — alias `hostinger-vps`
-- pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *), `youtube-recorder` (cron: 0 12 * * 1)
-- Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`, `/opt/roofing/youtube/recorder.js`
+- pm2 processes: `nexus-worker`, `hail-trigger` (cron: */30 * * * *), `lead-sniper` (cron: 0 */6 * * *), `video-renderer` (cron: 0 * * * *), `youtube-recorder` (cron: 0 12 * * 1), `youtube-producer` (PM2 ID 8, cron: 0 */4 * * *)
+- Files: `/root/nexus-worker/index.js`, `/opt/roofing/sniper/hail-trigger.js`, `/opt/roofing/sniper/lead-sniper.js`, `/opt/roofing/sniper/video-renderer.js`, `/opt/roofing/youtube/recorder.js`, `/opt/roofing/youtube/producer.js`
 - Env: `/opt/roofing/.env` — contains ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SERPER_API_KEY, OPENAI_API_KEY, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN, YOUTUBE_CHANNEL_ID, YOUTUBE_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID
 - nginx serves `/health` at port 80 → `{"ok":true,"service":"roofing-vps"}`
 - nexus-worker v3: 4-hour build dedup, smoke-test exclusion in reflection prompt, extractJSON() handles trailing text after Claude JSON responses
@@ -539,9 +539,29 @@ Then productized and sold to other multi-business operators.
 - 6 messages (realistic conversation), 9 activities
 - Contractor: Apex Roofing (contractor_id: d2eabbb4-e221-4ca2-ad65-6bedfec6517d)
 
-## CURRENT BUILD PRIORITIES (as of May 24, 2026)
+## CURRENT BUILD PRIORITIES (as of May 30, 2026)
 
-**DONE this session (Marketing V1):**
+**V10 Master Build (May 30, 2026):**
+- YouTube pipeline: youtube-script-generator edge function (Haiku, 150-200 word scripts per post), cron #72 at 12:30 UTC daily, 10 scripts generated for existing posts
+- VPS YouTube producer (PM2 ID 8, cron 0 */4 * * *): ElevenLabs voiceover → ffmpeg render → YouTube Data API upload; picks up seo_posts WHERE youtube_script IS NOT NULL AND youtube_id IS NULL
+- Schema markup: Article schema injected into 29 blog posts; SoftwareApplication schema added to index.html (Free/Starter/Pro offers)
+- Bug fix: roofing-job-create status 'active' → 'lead' (jobs were invisible in active filter), portal URL format fixed to path-based /portal/:token
+- Bug fix: roofing-job-create .catch() anti-pattern fixed (x2)
+- Dashboard: JobCard now shows "● Portal sent" (blue) and "📐 Measured" (teal) badges when applicable
+
+**VPS YouTube pipeline (PM2 ID 8):**
+- /opt/roofing/youtube/producer.js — runs every 4 hours
+- Picks up: seo_posts WHERE status=published AND youtube_script IS NOT NULL AND youtube_id IS NULL
+- Flow: ElevenLabs TTS → ffmpeg (thumbnail + looped video + audio) → YouTube Data API OAuth2 upload → saves youtube_id to seo_posts
+- Max 3 videos per run to avoid quota issues
+
+**youtube-script-generator cron (job #72):**
+- Schedule: 30 12 * * * (12:30 UTC daily, 6:30am MT)
+- Generates scripts for 5 posts per run, targets posts with most impressions first
+
+**PREVIOUS SESSIONS (as of May 24, 2026)
+
+**DONE this session (Marketing V1 — May 24):**
 - Phase 1: VPS YouTube recorder — /opt/roofing/youtube/recorder.js, Playwright + ElevenLabs + ffmpeg + YouTube OAuth, pm2 cron "0 12 * * 1" (Monday 6am MT), 5 videos queued. BLOCKED: needs ELEVENLABS_API_KEY + YOUTUBE_* keys in /opt/roofing/.env (get from Supabase vault)
 - Phase 2: email_templates touches 1-5 rewritten — new Hormozi subjects + 5-sentence bodies
 - Phase 3: outreach-sequencer v18 deployed — FROM_NAME "Zach from Roofing OS", plain-text fallback, List-Unsubscribe header
