@@ -119,7 +119,6 @@ export default function App() {
             <Route path="/roofing/canvass" element={<RoofingCanvass />} />
             <Route path="/roofing/onboarding-setup" element={<RoofingOnboardingSetup />} />
             <Route path="/roofing/upgrade" element={<RoofingUpgrade />} />
-            <Route path="/roofing/roadmap" element={<RoofingRoadmap />} />
             <Route path="/roofing/team" element={<RoofingTeam />} />
           </Route>
         </Route>
@@ -132,7 +131,8 @@ export default function App() {
           <Route path="/roofing/sales"     element={<RoofingSalesPage />} />
           <Route path="/roofing/finance"   element={<RoofingFinancePage />} />
           <Route path="/roofing/customers" element={<RoofingCustomersPage />} />
-          <Route path="/roofing/seo"       element={<RoofingSEO />} />
+          <Route path="/roofing/seo"            element={<RoofingSEO />} />
+          <Route path="/roofing/product-status" element={<RoofingRoadmap />} />
         </Route>
 
         <Route element={<ProtectedRoute session={session} />}>

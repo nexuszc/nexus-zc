@@ -342,7 +342,7 @@ export default function RoofingVertical() {
           title="Product & System"
           subtitle="Functions · health · deploy log"
           accent="#6b7a9d"
-          onClick={() => navigate('/roofing/system')}
+          onClick={() => navigate('/roofing/product-status')}
           loading={loading}
         />
       </div>
