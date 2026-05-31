@@ -89,7 +89,9 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) return (
+  // Portal routes are public — don't block them waiting for auth session
+  const isPortalRoute = window.location.pathname.includes('/portal/')
+  if (loading && !isPortalRoute) return (
     <div className="flex items-center justify-center h-screen bg-[#0a0a0f] text-white">
       <div className="text-gray-600 text-sm">Loading…</div>
     </div>

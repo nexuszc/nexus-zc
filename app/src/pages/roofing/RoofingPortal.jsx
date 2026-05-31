@@ -1147,19 +1147,6 @@ export default function RoofingPortal() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations()
-        .then(regs => regs.forEach(reg => reg.unregister()))
-        .catch(() => {})
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!token) { setError('No portal link provided.'); setLoading(false); return }
-    load()
-  }, [token])
-
   const load = async () => {
     setLoading(true); setError('')
     try {
@@ -1179,6 +1166,20 @@ export default function RoofingPortal() {
     }
     setLoading(false)
   }
+
+  // Unregister any stale service workers — they intercept fetches and crash with "body already used"
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(reg => reg.unregister()))
+        .catch(() => {})
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!token) { setError('No portal link provided.'); setLoading(false); return }
+    load()
+  }, [token])
 
   if (loading) return <DarkLoadingScreen />
 
