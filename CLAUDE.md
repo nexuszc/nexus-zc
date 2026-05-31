@@ -1,6 +1,6 @@
 # NEXUS ZC -- CLAUDE.md
 # Master context file. Read this at the start of every session.
-# Last updated: May 31, 2026 — v20
+# Last updated: May 31, 2026 — v21
 
 ---
 
@@ -549,16 +549,24 @@ Then productized and sold to other multi-business operators.
 
 ## CURRENT BUILD PRIORITIES (as of May 31, 2026)
 
-**Demo Path Stabilization (May 31, 2026):**
+**Demo Path Stabilization (May 31, 2026) — COMPLETE:**
 - GOAL: 5-screen demo path (signup → dashboard → create job → send portal → view portal) working reliably, zero errors
+- STATUS: ALL 5 STEPS CONFIRMED WORKING
 - FIX 1: `RoofingDashboard.jsx` — onboarding redirect changed from `/roofing/onboarding` (old, 277-line) to `/roofing/onboarding-setup` (clean 3-step wizard)
 - FIX 2: `RoofingDashboard.jsx` BottomNav — Crew tab removed (not built, not for demo); grid drops from `repeat(5,1fr)` to `repeat(4,1fr)`
 - FIX 3: `portal-api` — added fallback lookup by `roofing_jobs.portal_token` when no `homeowner_sessions` row exists (new jobs never had sessions → "Invalid or expired link" for every fresh job); synthetic session built from job fields so all session.* references still resolve
 - FIX 4: `roofing-notify` — portal URL changed from `app.nexuszc.com/roofing/portal/TOKEN` to `roofingos.dev/portal/TOKEN`; job URL changed to `app.roofingos.dev/roofing/jobs/ID`; `contractor?.name` null guard added (new contractors have no `clients` row → crash on SMS template)
+- FIX 5: `roofing_jobs` RLS — GRANT INSERT/UPDATE/DELETE added for `authenticated` role (was SELECT-only; all inserts 403'd)
+- FIX 6: `roofing-notify` — wrapped entire handler in try/catch so 500 errors return CORS headers (previously CORS was stripped from uncaught exceptions)
+- FIX 7: `App.jsx` — added `.catch()` to `getSession().then()` so loading always clears on auth error
+- FIX 8: `nexus-sw.js` — skip /portal/ routes entirely to prevent "Response body already used" crash; `main.jsx` skips SW registration on portal routes; `RoofingPortal` unregisters any stale SW on mount
+- FIX 9: `App.jsx` — bypass `if (loading)` guard for portal routes so `RoofingPortal` mounts immediately without waiting for `getSession()` (session fetch blocking component mount = useEffect never fired = portal-api never called)
+- FIX 10: `RoofingPortal` — moved `const load` before the useEffects that reference it
 - PAUSED: `social-auto-poster` cron #86 — permanently removed (unscheduled) until after Monday demo; recreate with `SELECT cron.schedule('social-auto-poster', '0 */2 * * *', ...)` to re-enable
 - PAUSED: `seo-backlink-engine` cron #74 — permanently removed (unscheduled) until after Monday demo; recreate to re-enable
-- CONFIRMED WORKING: `contractor-signup`, `contractor-auth`, `auth/verify.html`, `_redirects` portal routing, `roofing_jobs` RLS (`ALL` policy via contractor_accounts.owner_email), `RoofingOnboardingSetup` → `/roofing/jobs` flow
+- CONFIRMED WORKING: `contractor-signup`, `contractor-auth`, `auth/verify.html`, `_redirects` portal routing, `roofing_jobs` RLS, `RoofingOnboardingSetup` → `/roofing/jobs` flow, homeowner portal end-to-end
 - NOTE: `homeowner_sessions.homeowner_email` is NOT NULL — cannot upsert session rows for jobs created without homeowner email; the `portal-api` fallback is the right fix
+- CRITICAL PATTERN: `App.jsx` loading guard blocks ALL routes including public ones — always check this when a public route won't render
 
 ## CURRENT BUILD PRIORITIES (as of May 30, 2026)
 
