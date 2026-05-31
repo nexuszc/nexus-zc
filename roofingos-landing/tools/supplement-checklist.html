@@ -15,7 +15,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:#0a0f1a;color:#f1f5f9;line-height:1.6}
 nav{position:sticky;top:0;z-index:100;background:rgba(10,15,26,.95);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06);padding:0 24px}
 .nav-inner{max-width:1100px;margin:0 auto;height:60px;display:flex;align-items:center;justify-content:space-between}
-.nav-logo{font-size:17px;font-weight:800;color:#fff;letter-spacing:-.5px;text-decoration:none}
+.nav-logo{font-size:17px;font-weight:800;color:#fff;letter-spacing:-.5px}
 .nav-logo span{color:#3b82f6}
 .nav-cta{background:#3b82f6;color:#fff;padding:8px 18px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none}
 .nav-cta:hover{background:#2563eb}
@@ -40,7 +40,7 @@ h1{font-size:clamp(26px,5vw,38px);font-weight:800;color:#fff;margin-bottom:12px;
 .item.checked .item-value{color:#22c55e}
 .item-value.pct{color:#f59e0b;font-size:12px}
 .actions{display:flex;gap:12px;margin-bottom:40px;flex-wrap:wrap}
-.btn{display:inline-block;padding:12px 24px;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:background .2s;font-family:inherit}
+.btn{display:inline-block;padding:12px 24px;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;border:none;transition:background .2s}
 .btn-primary{background:#3b82f6;color:#fff}
 .btn-primary:hover{background:#2563eb}
 .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.15);color:#94a3b8}
@@ -67,7 +67,7 @@ footer a{color:#64748b;margin:0 10px}
 <body>
 <nav>
   <div class="nav-inner">
-    <a href="/" class="nav-logo">Roofing<span>OS</span></a>
+    <a href="/" class="nav-logo" style="text-decoration:none">Roofing<span>OS</span></a>
     <a href="https://app.roofingos.dev/roofing/signup" class="nav-cta">Start free →</a>
   </div>
 </nav>
@@ -155,49 +155,7 @@ async function unlockChecklist(e) {
 
 initGate();
 
-const ITEMS = [
-  { item: 'Drip edge (eave and rake)', value: 280 },
-  { item: 'Ice & water shield (first 3 feet)', value: 420 },
-  { item: 'Ice & water shield (valleys)', value: 340 },
-  { item: 'Synthetic underlayment', value: 380 },
-  { item: 'Ridge cap shingles', value: 290 },
-  { item: 'High-nail starter strip', value: 180 },
-  { item: 'Pipe jack flashings', value: 120 },
-  { item: 'Step flashing (per chimney)', value: 340 },
-  { item: 'Counter flashing', value: 280 },
-  { item: 'Chimney cricket', value: 450 },
-  { item: 'Ventilation: ridge vent', value: 310 },
-  { item: 'Ventilation: off-ridge vents', value: 240 },
-  { item: 'Gutters: removal & reset', value: 680 },
-  { item: 'Gutter guards replacement', value: 420 },
-  { item: 'Satellite dish: removal & reset', value: 180 },
-  { item: 'Skylight flashing', value: 320 },
-  { item: 'Caulking/sealant (all penetrations)', value: 160 },
-  { item: 'O&P (overhead & profit) 20%', value: 0 },
-  { item: 'Permit fees', value: 350 },
-  { item: 'Dumpster/haul-away', value: 480 },
-  { item: 'Decking: replace rotted sheathing (per sheet)', value: 120 },
-  { item: 'Additional layers: tear-off 2nd layer', value: 580 },
-  { item: 'Hip cap shingles', value: 220 },
-  { item: 'Valley metal/open valley', value: 380 },
-  { item: 'Steep slope labor (7/12+ pitch)', value: 640 },
-  { item: 'Detach & reset solar panels', value: 1200 },
-  { item: 'Detach & reset HVAC equipment', value: 280 },
-  { item: 'Mansard or flat section', value: 820 },
-  { item: 'Snow guard removal & reset', value: 240 },
-  { item: 'Fascia board replacement (per LF)', value: 14 },
-  { item: 'Soffit replacement (per SF)', value: 12 },
-  { item: 'Lead flashing (where required)', value: 280 },
-  { item: 'Code upgrade: egress window flashing', value: 380 },
-  { item: 'Power washing (post-install)', value: 220 },
-  { item: 'Landscaping protection/cleanup', value: 180 },
-  { item: 'Nails through decking (extra fasteners)', value: 140 },
-  { item: 'Peel & stick underlayment (full)', value: 680 },
-  { item: 'High-wind fastener pattern (per code)', value: 320 },
-  { item: 'Heat cable removal & reset', value: 460 },
-  { item: 'Final inspection fee', value: 150 },
-];
-
+const ITEMS = [{"item":"Drip edge (eave and rake)","value":280},{"item":"Ice & water shield (first 3 feet)","value":420},{"item":"Ice & water shield (valleys)","value":340},{"item":"Synthetic underlayment","value":380},{"item":"Ridge cap shingles","value":290},{"item":"High-nail starter strip","value":180},{"item":"Pipe jack flashings","value":120},{"item":"Step flashing (per chimney)","value":340},{"item":"Counter flashing","value":280},{"item":"Chimney cricket","value":450},{"item":"Ventilation: ridge vent","value":310},{"item":"Ventilation: off-ridge vents","value":240},{"item":"Gutters: removal & reset","value":680},{"item":"Gutter guards replacement","value":420},{"item":"Satellite dish: removal & reset","value":180},{"item":"Skylight flashing","value":320},{"item":"Caulking/sealant (all penetrations)","value":160},{"item":"O&P (overhead & profit) 20%","value":0},{"item":"Permit fees","value":350},{"item":"Dumpster/haul-away","value":480},{"item":"Decking: replace rotted sheathing (per sheet)","value":120},{"item":"Additional layers: tear-off 2nd layer","value":580},{"item":"Hip cap shingles","value":220},{"item":"Valley metal/open valley","value":380},{"item":"Steep slope labor (7/12+ pitch)","value":640},{"item":"Detach & reset solar panels","value":1200},{"item":"Detach & reset HVAC equipment","value":280},{"item":"Mansard or flat section","value":820},{"item":"Snow guard removal & reset","value":240},{"item":"Fascia board replacement (per LF)","value":14},{"item":"Soffit replacement (per SF)","value":12},{"item":"Lead flashing (where required)","value":280},{"item":"Code upgrade: egress window flashing","value":380},{"item":"Power washing (post-install)","value":220},{"item":"Landscaping protection/cleanup","value":180},{"item":"Nails through decking (extra fasteners)","value":140},{"item":"Peel & stick underlayment (full)","value":680},{"item":"High-wind fastener pattern (per code)","value":320},{"item":"Heat cable removal & reset","value":460},{"item":"Final inspection fee","value":150}];
 const STORAGE_KEY = 'supplement-checklist-v1';
 
 function loadState() {
