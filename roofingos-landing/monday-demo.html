@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Monday Demo Script — Roofing OS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0f1a;color:#fff;font-family:-apple-system,'Inter',system-ui,sans-serif;max-width:620px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;font-weight:800;color:#3b82f6;margin-bottom:4px}
+.sub{color:#6b7280;font-size:14px;margin-bottom:28px}
+.step{background:#111827;border-radius:14px;padding:18px;margin-bottom:14px;border-left:4px solid #3b82f6;position:relative}
+.step.close{border-left-color:#f59e0b}
+.step-label{font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.time{color:#4b5563;font-weight:700;font-size:11px}
+.step h2{font-size:19px;font-weight:800;color:#fff;margin-bottom:10px}
+.say{background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.15);border-radius:10px;padding:12px 14px;font-size:15px;color:#93c5fd;line-height:1.65;margin-bottom:10px;font-style:italic}
+.say::before{content:'"';font-size:20px;color:#3b82f6;font-style:normal;margin-right:2px}
+.say::after{content:'"';font-size:20px;color:#3b82f6;font-style:normal;margin-left:2px}
+.meta{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.action{font-size:13px;color:#6b7280}
+.action span{font-weight:600;color:#9ca3af}
+.outcome{font-size:13px;color:#22c55e;font-weight:600}
+.btn{display:inline-block;background:#3b82f6;color:#fff;padding:9px 18px;border-radius:8px;font-size:14px;font-weight:700;text-decoration:none;margin-top:6px;white-space:nowrap}
+.btn.green{background:#16a34a}
+.btn.yellow{background:#d97706}
+.links{background:#111827;border-radius:14px;padding:18px;margin-top:8px}
+.links h3{font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.link-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)}
+.link-row:last-child{border-bottom:none}
+.link-label{font-size:13px;color:#9ca3af}
+.link-row a{font-size:13px;color:#60a5fa;text-decoration:none;font-weight:600}
+.divider{height:1px;background:rgba(255,255,255,0.06);margin:24px 0}
+.total{background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:14px 16px;text-align:center;margin-bottom:16px}
+.total p{color:#93c5fd;font-size:14px;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>🎯 Monday Demo Script</h1>
+<p class="sub">5 steps · 5 minutes · one close</p>
+
+<div class="total">
+  <p>Goal: contractor is signed up and has sent a portal before the call ends.</p>
+</div>
+
+<div class="step">
+  <div class="step-label">Step 1 <span class="time">~30 sec</span></div>
+  <h2>🌐 The Landing Page</h2>
+  <div class="say">Before I show you anything — just pull up roofingos.dev on your phone. Just the homepage.</div>
+  <div class="meta">
+    <div class="action"><span>They do:</span> go to roofingos.dev</div>
+    <div class="outcome">✓ They see the landing page — professional, fast, no clutter</div>
+  </div>
+  <a href="https://roofingos.dev" target="_blank" class="btn">Open roofingos.dev →</a>
+</div>
+
+<div class="step">
+  <div class="step-label">Step 2 <span class="time">~60 sec</span></div>
+  <h2>📝 Sign Up Free</h2>
+  <div class="say">Hit Start Free. Three fields — company name, your name, email. No credit card. You're in your dashboard in 30 seconds.</div>
+  <div class="meta">
+    <div class="action"><span>They do:</span> fill 3 fields, submit</div>
+    <div class="outcome">✓ Magic link to their inbox — one click → live dashboard</div>
+  </div>
+  <a href="https://app.roofingos.dev/roofing/signup" target="_blank" class="btn">Open Signup →</a>
+</div>
+
+<div class="step">
+  <div class="step-label">Step 3 <span class="time">~60 sec</span></div>
+  <h2>🏠 Create First Job</h2>
+  <div class="say">Now create a job — put in any homeowner name and address. Pick Insurance. Hit Create Job. Takes 20 seconds.</div>
+  <div class="meta">
+    <div class="action"><span>They do:</span> fill name + address + type → tap Create</div>
+    <div class="outcome">✓ Job appears instantly — kanban card, job detail view</div>
+  </div>
+  <a href="https://app.roofingos.dev/roofing/jobs/new" target="_blank" class="btn">Open New Job →</a>
+</div>
+
+<div class="step">
+  <div class="step-label">Step 4 <span class="time">~60 sec</span></div>
+  <h2>📱 Send Homeowner Portal</h2>
+  <div class="say">Tap the job. Hit Send Portal. Your homeowner gets a text and email with a link — no app download, no login. They just tap and see their job.</div>
+  <div class="meta">
+    <div class="action"><span>They do:</span> open job → tap Send Portal button</div>
+    <div class="outcome">✓ Homeowner gets text + email with their portal link</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-label">Step 5 <span class="time">~60 sec</span></div>
+  <h2>🎉 What the Homeowner Sees</h2>
+  <div class="say">This is exactly what your homeowner sees when they tap that link. Real-time status, photos, insurance updates, documents, direct messaging. All from their phone. No app.</div>
+  <div class="meta">
+    <div class="action"><span>They do:</span> watch you open the demo portal</div>
+    <div class="outcome">✓ They see a professional, branded portal with real data</div>
+  </div>
+  <a href="https://roofingos.dev/portal/DEMO2026ROOFINGOS" target="_blank" class="btn green">Open Demo Portal →</a>
+</div>
+
+<div class="step close">
+  <div class="step-label">The Close</div>
+  <h2>💰 Free. No Catch.</h2>
+  <div class="say">It's free. You just used the entire product in 4 minutes. JobNimbus charges $200 a month for less than this. What questions do you have?</div>
+  <div class="meta">
+    <div class="action"><span>Let them talk.</span> Don't fill silence.</div>
+    <div class="outcome">✓ Then ask: "Want me to set up your first real job right now?"</div>
+  </div>
+  <a href="https://roofingos.dev/portal/MONDAYDEMO2026" target="_blank" class="btn yellow">Monday Demo Portal →</a>
+</div>
+
+<div class="divider"></div>
+
+<div class="links">
+  <h3>Quick Links</h3>
+  <div class="link-row">
+    <span class="link-label">Landing page</span>
+    <a href="https://roofingos.dev" target="_blank">roofingos.dev</a>
+  </div>
+  <div class="link-row">
+    <span class="link-label">Signup</span>
+    <a href="https://app.roofingos.dev/roofing/signup" target="_blank">app.roofingos.dev/roofing/signup</a>
+  </div>
+  <div class="link-row">
+    <span class="link-label">Demo portal (Sarah Johnson)</span>
+    <a href="https://roofingos.dev/portal/DEMO2026ROOFINGOS" target="_blank">DEMO2026ROOFINGOS</a>
+  </div>
+  <div class="link-row">
+    <span class="link-label">Monday demo portal</span>
+    <a href="https://roofingos.dev/portal/MONDAYDEMO2026" target="_blank">MONDAYDEMO2026</a>
+  </div>
+  <div class="link-row">
+    <span class="link-label">Contractor demo view</span>
+    <a href="https://roofingos.dev/demo/contractor" target="_blank">roofingos.dev/demo/contractor</a>
+  </div>
+</div>
+
+</body>
+</html>

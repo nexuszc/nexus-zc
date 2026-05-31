@@ -584,6 +584,16 @@ export default function RoofingDashboard() {
         </div>
       </div>
 
+      {/* Demo Mode banner */}
+      {(contractor?.owner_email?.includes('demo') || contractor?.company_name?.toLowerCase().includes('demo')) && (
+        <div style={{ margin: '12px 20px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '12px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '16px' }}>🎯</span>
+          <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#4ade80', lineHeight: 1.4 }}>
+            Demo Mode — showing you what Roofing OS looks like with real data
+          </p>
+        </div>
+      )}
+
       {/* Pending messages banner */}
       {pendingMessages > 0 && (
         <div style={{ margin: '12px 20px', background: 'rgba(74,158,255,0.08)', border: '1px solid rgba(74,158,255,0.2)', borderRadius: '12px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
